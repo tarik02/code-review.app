@@ -1,11 +1,12 @@
 import type { GitStatusEntry } from "@pierre/trees";
 import { PullRequestBadgeStatus } from "../../electron/shared/types";
 import type {
-  CliStatus,
-  CliStatusKind,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
   PrPatch,
+  ProviderAccount,
+  ProviderAuthStatus,
+  ProviderAuthStatusKind,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,
@@ -23,12 +24,13 @@ type FileStatsEntry = {
 
 export { PullRequestBadgeStatus };
 export type {
-  CliStatus,
-  CliStatusKind,
   CreatePullRequestReviewCommentInput,
   FileStatsEntry,
   ForgeProviderKind,
   PrPatch,
+  ProviderAccount,
+  ProviderAuthStatus,
+  ProviderAuthStatusKind,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,

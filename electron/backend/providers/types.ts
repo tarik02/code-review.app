@@ -2,8 +2,8 @@ import type { Effect } from "effect";
 import type { ProviderError } from "../errors";
 import type { RepoId } from "../repo-id";
 import type {
-  CliStatus,
   PullRequestSummary,
+  ProviderAuthStatus,
   RepoSummary,
   ReviewThread,
 } from "../../shared/types";
@@ -21,18 +21,18 @@ type ReviewThreadInput = {
 };
 
 type ForgeProvider = {
-  cliStatus(host: string): Effect.Effect<CliStatus, ProviderError>;
-  viewerLogin(host: string): Effect.Effect<string, ProviderError>;
+  authStatus(accountId: string): Effect.Effect<ProviderAuthStatus, ProviderError>;
+  viewerLogin(accountId: string): Effect.Effect<string, ProviderError>;
   listInitialRepos(
-    host: string,
+    accountId: string,
     limit: number,
   ): Effect.Effect<RepoSummary[], ProviderError>;
   searchRepos(
-    host: string,
+    accountId: string,
     query: string,
     limit: number,
   ): Effect.Effect<RepoSummary[], ProviderError>;
-  validateRepo(host: string, input: string): Effect.Effect<RepoSummary, ProviderError>;
+  validateRepo(accountId: string, input: string): Effect.Effect<RepoSummary, ProviderError>;
   listPullRequests(repo: RepoId): Effect.Effect<PullRequestSummary[], ProviderError>;
   getPullRequest(
     repo: RepoId,

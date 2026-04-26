@@ -9,6 +9,7 @@ import type { PrPatch, PullRequestSummary } from "../../shared/types";
 type PullRequestServiceShape = {
   listCached(repoId: string): Effect.Effect<PullRequestSummary[], Error, CacheService>;
   list(repoId: string): Effect.Effect<PullRequestSummary[], Error, CacheService>;
+  get(repoId: string, number: number): Effect.Effect<PullRequestSummary, Error>;
   getPatch(
     repoId: string,
     number: number,
@@ -51,6 +52,12 @@ function createPullRequestService(): PullRequestServiceShape {
         yield* cache.writePullRequestsCache(trimmedRepoId, pullRequests);
         yield* cache.updateRepoAccessTimestamp(trimmedRepoId);
         return pullRequests;
+      }),
+
+    get: (repoId, number) =>
+      Effect.gen(function* () {
+        const repo = parseRepoId(requireRepoId(repoId));
+        return yield* providerFor(repo.provider).getPullRequest(repo, number);
       }),
 
     getPatch: (repoId, number, headSha) =>

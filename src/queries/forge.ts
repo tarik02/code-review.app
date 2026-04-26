@@ -2,7 +2,6 @@ import { queryOptions } from "@tanstack/react-query";
 import { trpc } from "../lib/trpc";
 import type {
   CreatePullRequestReviewCommentInput,
-  ForgeProviderKind,
   ReplyToPullRequestReviewCommentInput,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
@@ -13,16 +12,17 @@ const SEARCH_REPO_LIMIT = 20;
 
 const forgeKeys = {
   all: ["forge"] as const,
+  auth: () => [...forgeKeys.all, "auth"] as const,
   repos: () => [...forgeKeys.all, "repos"] as const,
-  cliStatuses: (gitlabHost: string) =>
-    [...forgeKeys.all, "cli-statuses", gitlabHost] as const,
+  providerAccounts: () => [...forgeKeys.auth(), "provider-accounts"] as const,
+  providerStatuses: () => [...forgeKeys.auth(), "provider-statuses"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
-  initialRepos: (provider: string, host: string) =>
-    [...forgeKeys.repos(), "initial", provider, host] as const,
-  searchRepos: (provider: string, host: string, query: string) =>
-    [...forgeKeys.repos(), "search", provider, host, query] as const,
-  viewerLogin: (provider: string, host: string) =>
-    [...forgeKeys.repos(), "viewer-login", provider, host] as const,
+  initialRepos: (accountId: string) =>
+    [...forgeKeys.repos(), "initial", accountId] as const,
+  searchRepos: (accountId: string, query: string) =>
+    [...forgeKeys.repos(), "search", accountId, query] as const,
+  viewerLogin: (accountId: string) =>
+    [...forgeKeys.repos(), "viewer-login", accountId] as const,
   pullRequests: () => [...forgeKeys.all, "pull-requests"] as const,
   pullRequestList: (repoId: string) => [...forgeKeys.pullRequests(), "list", repoId] as const,
   pullRequestCachedList: (repoId: string) =>
@@ -50,37 +50,38 @@ function savedReposQueryOptions() {
   });
 }
 
-function cliStatusesQueryOptions(gitlabHost: string) {
+function providerAccountsQueryOptions() {
   return queryOptions({
-    queryKey: forgeKeys.cliStatuses(gitlabHost),
-    queryFn: () => trpc.preflight.getCliStatuses.query({ gitlabHost }),
+    queryKey: forgeKeys.providerAccounts(),
+    queryFn: () => trpc.auth.listProviderAccounts.query(),
     staleTime: 0,
   });
 }
 
-function viewerLoginQueryOptions(
-  provider: ForgeProviderKind = "github",
-  host = "github.com",
-) {
+function providerStatusesQueryOptions() {
   return queryOptions({
-    queryKey: forgeKeys.viewerLogin(provider, host),
+    queryKey: forgeKeys.providerStatuses(),
+    queryFn: () => trpc.auth.getProviderStatuses.query(),
+    staleTime: 0,
+  });
+}
+
+function viewerLoginQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: forgeKeys.viewerLogin(accountId),
     queryFn: async () => {
-      return trpc.reviewComments.getViewerLogin.query({ provider, host });
+      return trpc.reviewComments.getViewerLogin.query({ accountId });
     },
     staleTime: 60 * 60 * 1000,
   });
 }
 
-function initialReposQueryOptions(
-  provider: ForgeProviderKind = "github",
-  host = "github.com",
-) {
+function initialReposQueryOptions(accountId: string) {
   return queryOptions({
-    queryKey: forgeKeys.initialRepos(provider, host),
+    queryKey: forgeKeys.initialRepos(accountId),
     queryFn: () =>
       trpc.repos.listInitial.query({
-        provider,
-        host,
+        accountId,
         limit: INITIAL_REPO_LIMIT,
       }),
     staleTime: 5 * 60 * 1000,
@@ -89,25 +90,23 @@ function initialReposQueryOptions(
 
 function searchReposQueryOptions(
   query: string,
-  provider: ForgeProviderKind = "github",
-  host = "github.com",
+  accountId: string,
+  provider: string,
 ) {
   return queryOptions({
-    queryKey: forgeKeys.searchRepos(provider, host, query),
+    queryKey: forgeKeys.searchRepos(accountId, query),
     queryFn: async () => {
       const trimmedQuery = query.trim();
       if (provider === "gitlab" && trimmedQuery.includes("/")) {
         const repo = await trpc.repos.validate.query({
-          provider,
-          host,
+          accountId,
           repo: trimmedQuery,
         });
         return [repo];
       }
 
       return trpc.repos.search.query({
-        provider,
-        host,
+        accountId,
         query,
         limit: SEARCH_REPO_LIMIT,
       });
@@ -217,10 +216,11 @@ async function updatePullRequestReviewComment(
 }
 
 export {
-  cliStatusesQueryOptions,
   createPullRequestReviewComment,
   forgeKeys,
   initialReposQueryOptions,
+  providerAccountsQueryOptions,
+  providerStatusesQueryOptions,
   pullRequestCachedListQueryOptions,
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,

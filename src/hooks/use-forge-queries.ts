@@ -127,31 +127,27 @@ function useSavedRepos() {
 }
 
 function parseRepoId(repoId: string | null): {
-  provider: ForgeProviderKind;
-  host: string;
+  accountId: string;
 } {
   if (!repoId) {
-    return { provider: "github", host: "github.com" };
+    return { accountId: "" };
   }
 
-  const [provider = "github", encodedHost = "github.com"] = repoId.split(":");
-  return {
-    provider: provider === "gitlab" ? "gitlab" : "github",
-    host: decodeURIComponent(encodedHost),
-  };
+  const [, , encodedAccountId = ""] = repoId.split(":");
+  return { accountId: decodeURIComponent(encodedAccountId) };
 }
 
 function useRepoPickerRepos(
   debouncedQuery: string,
-  provider: string,
-  host: string,
+  accountId: string,
+  provider: ForgeProviderKind,
   enabled = true,
 ) {
   const queryClient = useQueryClient();
   const trimmedQuery = debouncedQuery.trim();
 
   const { data: initialRepos = [], isPending: isInitialLoading } = useQuery({
-    ...initialReposQueryOptions(provider, host),
+    ...initialReposQueryOptions(accountId),
     enabled,
   });
 
@@ -160,7 +156,7 @@ function useRepoPickerRepos(
     error: searchError,
     isPending: isSearchLoading,
   } = useQuery({
-    ...searchReposQueryOptions(debouncedQuery, provider, host),
+    ...searchReposQueryOptions(debouncedQuery, accountId, provider),
     enabled: enabled && trimmedQuery.length > 0,
   });
 
@@ -169,8 +165,8 @@ function useRepoPickerRepos(
       return;
     }
 
-    void queryClient.prefetchQuery(initialReposQueryOptions(provider, host));
-  }, [enabled, host, provider, queryClient]);
+    void queryClient.prefetchQuery(initialReposQueryOptions(accountId));
+  }, [accountId, enabled, queryClient]);
 
   const availableRepos = trimmedQuery.length > 0 ? searchRepos : initialRepos;
   const isLoadingRepos =
@@ -364,9 +360,10 @@ function usePullRequestReviewCommentMutations(
   const queryClient = useQueryClient();
   const selectedRepoId = selectedPr?.repoId ?? null;
   const viewerProvider = parseRepoId(selectedRepoId);
-  const viewerLoginQuery = useQuery(
-    viewerLoginQueryOptions(viewerProvider.provider, viewerProvider.host),
-  );
+  const viewerLoginQuery = useQuery({
+    ...viewerLoginQueryOptions(viewerProvider.accountId),
+    enabled: selectedPr !== null,
+  });
   const viewerLogin = viewerLoginQuery.data?.login ?? "You";
 
   const reviewThreadsQueryKey = selectedPr

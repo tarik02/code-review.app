@@ -1,9 +1,9 @@
 import { Effect, Layer } from "effect";
-import { normalizeHost, parseProviderKind, parseRepoId } from "../repo-id";
+import { parseRepoId } from "../repo-id";
 import { providerFor } from "../providers/registry";
+import { getStoredAuthToken } from "../auth/token-store";
 import type {
   CreatePullRequestReviewCommentInput,
-  ForgeProviderKind,
   ReplyToPullRequestReviewCommentInput,
   ReviewThread,
   UpdatePullRequestReviewCommentInput,
@@ -11,10 +11,7 @@ import type {
 } from "../../shared/types";
 
 type ReviewCommentServiceShape = {
-  getViewerLogin(
-    provider?: ForgeProviderKind,
-    host?: string,
-  ): Effect.Effect<ViewerLogin, Error>;
+  getViewerLogin(accountId: string): Effect.Effect<ViewerLogin, Error>;
   listThreads(repoId: string, number: number): Effect.Effect<ReviewThread[], Error>;
   create(input: CreatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
   reply(input: ReplyToPullRequestReviewCommentInput): Effect.Effect<void, Error>;
@@ -28,16 +25,13 @@ class ReviewCommentService extends Effect.Tag("ReviewCommentService")<
   static Live = Layer.succeed(this, createReviewCommentService());
 }
 
-function defaultHost(provider: ForgeProviderKind, host?: string) {
-  return normalizeHost(host ?? (provider === "github" ? "github.com" : "gitlab.com"));
-}
-
 function createReviewCommentService(): ReviewCommentServiceShape {
   return {
-    getViewerLogin: (providerInput, hostInput) =>
+    getViewerLogin: (accountId) =>
       Effect.gen(function* () {
-        const provider = parseProviderKind(providerInput ?? "github");
-        const login = yield* providerFor(provider).viewerLogin(defaultHost(provider, hostInput));
+        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+        if (!account) throw new Error("Provider account is not signed in.");
+        const login = yield* providerFor(account.provider).viewerLogin(accountId);
         return { login };
       }),
 

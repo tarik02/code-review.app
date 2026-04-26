@@ -4,6 +4,8 @@ type RepoSummary = {
   id: string;
   provider: ForgeProviderKind;
   host: string;
+  providerAccountId: string;
+  providerAccountLabel: string;
   name: string;
   nameWithOwner: string;
   description: string | null;
@@ -54,15 +56,24 @@ type ViewerLogin = {
   login: string;
 };
 
-type CliStatusKind =
+type ProviderAuthStatusKind =
   | "ready"
-  | "missing_cli"
   | "not_authenticated"
   | "unknown_error";
 
-type CliStatus = {
-  status: CliStatusKind;
+type ProviderAuthStatus = {
+  status: ProviderAuthStatusKind;
   message: string | null;
+};
+
+type ProviderAccount = {
+  id: string;
+  provider: ForgeProviderKind;
+  host: string;
+  clientId: string;
+  viewerLogin: string | null;
+  label: string;
+  createdAt: number;
 };
 
 type ReviewCommentSide = "LEFT" | "RIGHT";
@@ -143,11 +154,12 @@ type UpdateEvent =
 export { PullRequestBadgeStatus };
 export type {
   AvailableUpdate,
-  CliStatus,
-  CliStatusKind,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
   PrPatch,
+  ProviderAccount,
+  ProviderAuthStatus,
+  ProviderAuthStatusKind,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,

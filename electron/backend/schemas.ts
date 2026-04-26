@@ -7,6 +7,8 @@ const repoSummarySchema = z.object({
   id: z.string(),
   provider: forgeProviderKindSchema,
   host: z.string(),
+  providerAccountId: z.string(),
+  providerAccountLabel: z.string(),
   name: z.string(),
   nameWithOwner: z.string(),
   description: z.string().nullable(),
@@ -31,10 +33,19 @@ const pullRequestSummarySchema = z.object({
   baseSha: z.string().nullable(),
 });
 
-const providerHostLimitSchema = z.object({
-  provider: forgeProviderKindSchema.optional(),
-  host: z.string().optional(),
-  limit: z.number().int().positive().optional(),
+const providerHostSchema = z.object({
+  provider: forgeProviderKindSchema,
+  host: z.string(),
+  clientId: z.string().optional().default(""),
+});
+
+const completeOAuthSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
+
+const providerAccountSchema = z.object({
+  accountId: z.string().min(1),
 });
 
 const repoIdSchema = z.object({
@@ -72,9 +83,11 @@ const updatePullRequestReviewCommentInputSchema =
   });
 
 export {
+  completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
   forgeProviderKindSchema,
-  providerHostLimitSchema,
+  providerAccountSchema,
+  providerHostSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,

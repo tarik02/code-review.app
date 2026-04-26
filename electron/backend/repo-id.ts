@@ -4,6 +4,7 @@ import type { ForgeProviderKind } from "../shared/types";
 type RepoId = {
   provider: ForgeProviderKind;
   host: string;
+  accountId: string;
   path: string;
   key: string;
 };
@@ -49,14 +50,20 @@ function decodeKeyComponent(value: string) {
 function createRepoId(
   provider: ForgeProviderKind,
   host: string,
+  accountId: string,
   path: string,
 ): RepoId {
   const normalizedHost = normalizeHost(host);
+  const normalizedAccountId = accountId.trim();
   const normalizedPath = normalizePath(path);
-  const key = `${providerKey(provider)}:${encodeKeyComponent(normalizedHost)}:${normalizedPath}`;
+  if (!normalizedAccountId) {
+    throw new ValidationError("Repo id account is required");
+  }
+  const key = `${providerKey(provider)}:${encodeKeyComponent(normalizedHost)}:${encodeKeyComponent(normalizedAccountId)}:${normalizedPath}`;
   return {
     provider,
     host: normalizedHost,
+    accountId: normalizedAccountId,
     path: normalizedPath,
     key,
   };
@@ -66,21 +73,24 @@ function parseRepoId(key: string): RepoId {
   const trimmed = key.trim();
   const firstSeparator = trimmed.indexOf(":");
   const secondSeparator = firstSeparator === -1 ? -1 : trimmed.indexOf(":", firstSeparator + 1);
-  if (firstSeparator === -1 || secondSeparator === -1) {
-    throw new ValidationError("Repo id is missing provider or host");
+  const thirdSeparator = secondSeparator === -1 ? -1 : trimmed.indexOf(":", secondSeparator + 1);
+  if (firstSeparator === -1 || secondSeparator === -1 || thirdSeparator === -1) {
+    throw new ValidationError("Repo id is missing provider, host, or account");
   }
 
   const providerRaw = trimmed.slice(0, firstSeparator);
   const encodedHost = trimmed.slice(firstSeparator + 1, secondSeparator);
-  const path = trimmed.slice(secondSeparator + 1);
+  const encodedAccountId = trimmed.slice(secondSeparator + 1, thirdSeparator);
+  const path = trimmed.slice(thirdSeparator + 1);
   const provider = parseProviderKind(providerRaw);
   const host = decodeKeyComponent(encodedHost);
+  const accountId = decodeKeyComponent(encodedAccountId);
 
   if (path.trim().length === 0) {
     throw new ValidationError("Repo id path is required");
   }
 
-  return createRepoId(provider, host, path);
+  return createRepoId(provider, host, accountId, path);
 }
 
 function parseOwnerRepo(repo: string): [string, string] {

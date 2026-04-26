@@ -1,10 +1,11 @@
 import { Effect } from "effect";
 import { ProviderError } from "../errors";
 import { parseOwnerRepo } from "../repo-id";
-import { runGh, runGhWithTimeout } from "../cli/github";
 import { createRepoId } from "../repo-id";
+import { providerJson, providerText } from "../auth/http";
+import { getStoredAuthToken, updateViewerLogin } from "../auth/provider-auth";
 import type {
-  CliStatus,
+  ProviderAuthStatus,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -16,21 +17,35 @@ import type { RepoId } from "../repo-id";
 type GhActor = {
   login: string;
   avatarUrl?: string | null;
-};
-
-type GhRepoSummary = {
-  name: string;
-  nameWithOwner: string;
-  description: string | null;
-  isPrivate: boolean | null;
-  owner?: GhActor | null;
+  avatar_url?: string | null;
 };
 
 type GhSearchRepo = {
   name: string;
-  fullName: string;
+  full_name: string;
   description: string | null;
-  isPrivate: boolean | null;
+  private: boolean | null;
+  owner?: GhActor | null;
+};
+
+type GhRestRepo = {
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean | null;
+  owner?: GhActor | null;
+};
+
+type GhRestUser = {
+  login: string;
+};
+
+type GhSearchResponse = {
+  items: GhSearchRepo[];
+};
+
+type GhChangedFile = {
+  filename: string;
 };
 
 type GhPullRequest = {
@@ -104,6 +119,8 @@ type GraphQlReviewComment = {
 };
 
 type UserContext = {
+  accountId: string;
+  login: string;
   owners: string[];
   fetchedAt: number;
 };
@@ -125,20 +142,12 @@ function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("not logged") ||
-    normalized.includes("gh auth login") ||
+    normalized.includes("bad credentials") ||
+    normalized.includes("401") ||
+    normalized.includes("unauthorized") ||
     normalized.includes("authenticate") ||
     (normalized.includes("github.com") && normalized.includes("login"))
   );
-}
-
-function parseJson<T>(input: string, context: string): T {
-  try {
-    return JSON.parse(input) as T;
-  } catch (error) {
-    throw new ProviderError(
-      `${context}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
 }
 
 function graphqlErrors<T>(response: GraphQlResponse<T>) {
@@ -147,29 +156,78 @@ function graphqlErrors<T>(response: GraphQlResponse<T>) {
   throw new ProviderError(message || "GitHub returned an unknown GraphQL error");
 }
 
-async function runGhGraphql(args: string[]) {
-  return runGh(args);
+function githubApiBase(host: string) {
+  return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
 }
 
-async function ensureUserContext() {
-  if (userContext && Date.now() - userContext.fetchedAt < USER_CONTEXT_TTL_MS) {
+function githubGraphqlUrl(host: string) {
+  return host === "github.com" ? "https://api.github.com/graphql" : `https://${host}/api/graphql`;
+}
+
+async function githubJson<T>(
+  accountId: string,
+  host: string,
+  path: string,
+  init?: RequestInit,
+) {
+  return providerJson<T>(accountId, `${githubApiBase(host)}${path}`, {
+    ...init,
+    headers: {
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+  });
+}
+
+async function githubText(accountId: string, host: string, path: string, accept: string) {
+  return providerText(accountId, `${githubApiBase(host)}${path}`, {
+    accept,
+    headers: {
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+}
+
+async function githubGraphql<T>(
+  accountId: string,
+  host: string,
+  query: string,
+  variables: Record<string, string | number | boolean | null>,
+) {
+  const response = await providerJson<GraphQlResponse<T>>(accountId, githubGraphqlUrl(host), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  graphqlErrors(response);
+  return response;
+}
+
+async function ensureUserContext(accountId: string, host: string) {
+  if (
+    userContext &&
+    userContext.accountId === accountId &&
+    Date.now() - userContext.fetchedAt < USER_CONTEXT_TTL_MS
+  ) {
     return userContext.owners;
   }
 
-  const username = (await runGh(["api", "user", "--jq", ".login"])).trim();
-  const owners = [username];
+  const user = await githubJson<GhRestUser>(accountId, host, "/user");
+  const owners = [user.login];
 
   try {
-    const orgsStdout = await runGh(["api", "user/orgs", "--jq", ".[].login"]);
-    for (const org of orgsStdout.split("\n")) {
-      const trimmed = org.trim();
-      if (trimmed.length > 0) owners.push(trimmed);
+    const orgs = await githubJson<GhRestUser[]>(accountId, host, "/user/orgs?per_page=100");
+    for (const org of orgs) {
+      if (org.login.trim().length > 0) owners.push(org.login);
     }
   } catch {
-    // Organization lookup is best-effort, matching the Rust implementation.
+    // Organization lookup is best-effort.
   }
 
-  userContext = { owners, fetchedAt: Date.now() };
+  await updateViewerLogin(accountId, user.login);
+  userContext = { accountId, login: user.login, owners, fetchedAt: Date.now() };
   return owners;
 }
 
@@ -185,23 +243,11 @@ query($owner: String!, $name: String!, $number: Int!) {
 }
 `;
 
-  const stdout = await runGhGraphql([
-    "api",
-    "graphql",
-    "-f",
-    `owner=${owner}`,
-    "-f",
-    `name=${name}`,
-    "-F",
-    `number=${number}`,
-    "-f",
-    `query=${query}`,
-  ]);
-  const response = parseJson<GraphQlResponse<PullRequestNodeIdQueryData>>(
-    stdout,
-    "Failed to parse pull request id",
-  );
-  graphqlErrors(response);
+  const response = await githubGraphql<PullRequestNodeIdQueryData>(repo.accountId, repo.host, query, {
+    owner,
+    name,
+    number,
+  });
 
   const id = response.data?.repository?.pullRequest?.id?.trim();
   if (!id) {
@@ -210,29 +256,33 @@ query($owner: String!, $name: String!, $number: Int!) {
   return id;
 }
 
-function repoSummaryFromGh(repo: GhRepoSummary): RepoSummary {
+function repoSummaryFromSearch(accountId: string, host: string, label: string, repo: GhSearchRepo): RepoSummary {
   return {
-    id: createRepoId("github", "github.com", repo.nameWithOwner).key,
+    id: createRepoId("github", host, accountId, repo.full_name).key,
     provider: "github",
-    host: "github.com",
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
     name: repo.name,
-    nameWithOwner: repo.nameWithOwner,
+    nameWithOwner: repo.full_name,
     description: repo.description,
-    isPrivate: repo.isPrivate,
-    avatarUrl: repo.owner?.avatarUrl ?? null,
+    isPrivate: repo.private,
+    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
   };
 }
 
-function repoSummaryFromSearch(repo: GhSearchRepo): RepoSummary {
+function repoSummaryFromRest(accountId: string, host: string, label: string, repo: GhRestRepo): RepoSummary {
   return {
-    id: createRepoId("github", "github.com", repo.fullName).key,
+    id: createRepoId("github", host, accountId, repo.full_name).key,
     provider: "github",
-    host: "github.com",
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
     name: repo.name,
-    nameWithOwner: repo.fullName,
+    nameWithOwner: repo.full_name,
     description: repo.description,
-    isPrivate: repo.isPrivate,
-    avatarUrl: null,
+    isPrivate: repo.private,
+    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
   };
 }
 
@@ -257,186 +307,206 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
 }
 
 class GitHubProvider implements ForgeProvider {
-  cliStatus(_host: string) {
-    return providerEffect<CliStatus>(async () => {
-      const versionOutput = await runGhWithTimeout(["--version"]);
-      if (!versionOutput.ok) {
-        if (versionOutput.kind === "missing") {
+  authStatus(accountId: string) {
+    return providerEffect<ProviderAuthStatus>(async () => {
+      try {
+        const token = await getStoredAuthToken(accountId);
+        if (!token) {
           return {
-            status: "missing_cli",
-            message: "GitHub CLI is not installed or not available on PATH.",
+            status: "not_authenticated",
+            message: "Sign in with GitHub to load repositories.",
+          };
+        }
+        await Effect.runPromise(this.viewerLogin(accountId));
+        return { status: "ready", message: null };
+      } catch (error) {
+        if (isNotAuthenticatedMessage(error instanceof Error ? error.message : String(error))) {
+          return {
+            status: "not_authenticated",
+            message: "Sign in with GitHub again.",
           };
         }
         return {
           status: "unknown_error",
-          message: `Couldn't verify GitHub CLI: ${versionOutput.message}`,
+          message: error instanceof Error ? error.message : String(error),
         };
       }
-
-      const authOutput = await runGhWithTimeout(["auth", "status"]);
-      if (authOutput.ok) return { status: "ready", message: null };
-
-      if (authOutput.kind === "missing") {
-        return {
-          status: "missing_cli",
-          message: "GitHub CLI is not installed or not available on PATH.",
-        };
-      }
-      if (isNotAuthenticatedMessage(authOutput.message)) {
-        return {
-          status: "not_authenticated",
-          message: "Authenticate GitHub CLI with `gh auth login`.",
-        };
-      }
-      return { status: "unknown_error", message: authOutput.message };
     });
   }
 
-  viewerLogin(_host: string) {
+  viewerLogin(accountId: string) {
     return providerEffect(async () => {
-      const owners = await ensureUserContext();
-      const login = owners[0];
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitHub is not signed in.");
+      await ensureUserContext(accountId, token.host);
+      const login = userContext?.login;
       if (!login) throw new ProviderError("Unable to determine GitHub viewer login");
       return login;
     });
   }
 
-  listInitialRepos(_host: string, limit: number) {
+  listInitialRepos(accountId: string, limit: number) {
     return providerEffect(async () => {
-      const stdout = await runGh([
-        "repo",
-        "list",
-        "--json",
-        "name,nameWithOwner,description,isPrivate,owner",
-        "--limit",
-        String(limit),
-      ]);
-      return parseJson<GhRepoSummary[]>(stdout, "Failed to parse repos").map(
-        repoSummaryFromGh,
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitHub is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+      const repos = await githubJson<GhRestRepo[]>(
+        accountId,
+        token.host,
+        `/user/repos?per_page=${limit}&sort=updated&affiliation=owner,collaborator,organization_member`,
       );
+      return repos.map((repo) => repoSummaryFromRest(accountId, token.host, label, repo));
     });
   }
 
-  searchRepos(_host: string, query: string, limit: number) {
+  searchRepos(accountId: string, query: string, limit: number) {
     return providerEffect(async () => {
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitHub is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
       if (query.trim().length === 0) {
-        return await Effect.runPromise(this.listInitialRepos("github.com", limit));
+        return await Effect.runPromise(this.listInitialRepos(accountId, limit));
       }
 
-      const owners = await ensureUserContext();
-      const args = [
-        "search",
-        "repos",
-        query,
-        "--limit",
-        String(limit),
-        "--json",
-        "name,fullName,description,isPrivate",
-        "--match",
-        "name",
-      ];
+      const owners = await ensureUserContext(accountId, token.host);
+      const repos: GhSearchRepo[] = [];
       for (const owner of owners) {
-        args.push("--owner", owner);
+        const qualifier = owner === userContext?.login ? "user" : "org";
+        const response = await githubJson<GhSearchResponse>(
+          accountId,
+          token.host,
+          `/search/repositories?q=${encodeURIComponent(`${query.trim()} in:name ${qualifier}:${owner}`)}&per_page=${limit}`,
+        );
+        repos.push(...response.items);
+        if (repos.length >= limit) break;
       }
-      const stdout = await runGh(args);
-      const repos = parseJson<GhSearchRepo[]>(
-        stdout,
-        "Failed to parse search results",
-      );
       const seen = new Set<string>();
       return repos.flatMap((repo) => {
-        if (seen.has(repo.fullName)) return [];
-        seen.add(repo.fullName);
-        return [repoSummaryFromSearch(repo)];
+        if (seen.has(repo.full_name) || seen.size >= limit) return [];
+        seen.add(repo.full_name);
+        return [repoSummaryFromSearch(accountId, token.host, label, repo)];
       });
     });
   }
 
-  validateRepo(_host: string, input: string) {
+  validateRepo(accountId: string, input: string) {
     return providerEffect(async () => {
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitHub is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
       const repo = input.trim();
       if (repo.split("/").length !== 2 || repo.startsWith("/") || repo.endsWith("/")) {
         throw new ProviderError("Enter a repo as owner/name");
       }
-      const stdout = await runGh([
-        "repo",
-        "view",
-        repo,
-        "--json",
-        "name,nameWithOwner,description,isPrivate,owner",
-      ]);
-      return repoSummaryFromGh(
-        parseJson<GhRepoSummary>(stdout, "Failed to parse repo details"),
-      );
+      const [owner, name] = parseOwnerRepo(repo);
+      const details = await githubJson<GhRestRepo>(accountId, token.host, `/repos/${owner}/${name}`);
+      return repoSummaryFromRest(accountId, token.host, label, details);
     });
   }
 
   listPullRequests(repo: RepoId) {
     return providerEffect(async () => {
-      const stdout = await runGh([
-        "pr",
-        "list",
-        "-R",
-        repo.path,
-        "--state",
-        "open",
-        "--limit",
-        "100",
-        "--json",
-        "number,title,state,isDraft,mergeStateStatus,mergeable,additions,deletions,author,updatedAt,url,headRefOid,baseRefOid",
-      ]);
-      return parseJson<GhPullRequest[]>(
-        stdout,
-        "Failed to parse pull requests",
-      ).map(toPullRequestSummary);
+      const [owner, name] = parseOwnerRepo(repo.path);
+      const query = `
+query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 100, orderBy: { field: UPDATED_AT, direction: DESC }) {
+      nodes {
+        number
+        title
+        state
+        isDraft
+        mergeStateStatus
+        mergeable
+        additions
+        deletions
+        author { login }
+        updatedAt
+        url
+        headRefOid
+        baseRefOid
+      }
+    }
+  }
+}
+`;
+      const response = await githubGraphql<{
+        repository?: { pullRequests: { nodes: GhPullRequest[] } } | null;
+      }>(repo.accountId, repo.host, query, { owner, name });
+      return (response.data?.repository?.pullRequests.nodes ?? []).map(
+        toPullRequestSummary,
+      );
     });
   }
 
   getPullRequest(repo: RepoId, number: number) {
     return providerEffect(async () => {
-      const stdout = await runGh([
-        "pr",
-        "view",
-        String(number),
-        "-R",
-        repo.path,
-        "--json",
-        "number,title,state,isDraft,mergeStateStatus,mergeable,additions,deletions,author,updatedAt,url,headRefOid,baseRefOid,mergedAt",
-      ]);
-      return toPullRequestSummary(
-        parseJson<GhPullRequest>(
-          stdout,
-          `Failed to parse pull request #${number}`,
-        ),
-      );
+      const [owner, name] = parseOwnerRepo(repo.path);
+      const query = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number
+      title
+      state
+      isDraft
+      mergeStateStatus
+      mergeable
+      additions
+      deletions
+      author { login }
+      updatedAt
+      url
+      headRefOid
+      baseRefOid
+      mergedAt
+    }
+  }
+}
+`;
+      const response = await githubGraphql<{
+        repository?: { pullRequest?: GhPullRequest | null } | null;
+      }>(repo.accountId, repo.host, query, { owner, name, number });
+      const pullRequest = response.data?.repository?.pullRequest;
+      if (!pullRequest) throw new ProviderError(`Pull request #${number} not found`);
+      return toPullRequestSummary(pullRequest);
     });
   }
 
   fetchPatch(repo: RepoId, number: number) {
-    return providerEffect(() =>
-      runGh(["pr", "diff", String(number), "-R", repo.path, "--color", "never"]),
-    );
+    return providerEffect(async () => {
+      const [owner, name] = parseOwnerRepo(repo.path);
+      return githubText(
+        repo.accountId,
+        repo.host,
+        `/repos/${owner}/${name}/pulls/${number}`,
+        "application/vnd.github.diff",
+      );
+    });
   }
 
   fetchChangedFiles(repo: RepoId, number: number) {
     return providerEffect(async () => {
-      const stdout = await runGh([
-        "pr",
-        "diff",
-        String(number),
-        "-R",
-        repo.path,
-        "--name-only",
-        "--color",
-        "never",
-      ]);
+      const [owner, name] = parseOwnerRepo(repo.path);
       const seen = new Set<string>();
-      return stdout.split("\n").flatMap((line) => {
-        const item = line.trim();
-        if (!item || seen.has(item)) return [];
-        seen.add(item);
-        return [item];
-      });
+      const files: string[] = [];
+      let page = 1;
+      while (true) {
+        const items = await githubJson<GhChangedFile[]>(
+          repo.accountId,
+          repo.host,
+          `/repos/${owner}/${name}/pulls/${number}/files?per_page=100&page=${page}`,
+        );
+        if (items.length === 0) break;
+        for (const item of items) {
+          if (!seen.has(item.filename)) {
+            seen.add(item.filename);
+            files.push(item.filename);
+          }
+        }
+        page += 1;
+      }
+      return files;
     });
   }
 
@@ -485,23 +555,11 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 }
 `;
-      const stdout = await runGhGraphql([
-        "api",
-        "graphql",
-        "-f",
-        `owner=${owner}`,
-        "-f",
-        `name=${name}`,
-        "-F",
-        `number=${number}`,
-        "-f",
-        `query=${query}`,
-      ]);
-      const response = parseJson<GraphQlResponse<ReviewThreadsQueryData>>(
-        stdout,
-        "Failed to parse review threads",
-      );
-      graphqlErrors(response);
+      const response = await githubGraphql<ReviewThreadsQueryData>(repo.accountId, repo.host, query, {
+        owner,
+        name,
+        number,
+      });
 
       return (
         response.data?.repository?.pullRequest?.reviewThreads.nodes ?? []
@@ -581,25 +639,16 @@ mutation(
 }
 `;
 
-      const args = [
-        "api",
-        "graphql",
-        "-f",
-        `pullRequestId=${pullRequestId}`,
-        "-f",
-        `body=${body}`,
-        "-f",
-        `path=${targetPath}`,
-        "-f",
-        `subjectType=${input.subjectType.toUpperCase()}`,
-        "-f",
-        `query=${query}`,
-      ];
-      if (input.line != null) args.push("-F", `line=${input.line}`);
-      if (input.side) args.push("-f", `side=${input.side}`);
-      if (input.startLine != null) args.push("-F", `startLine=${input.startLine}`);
-      if (input.startSide) args.push("-f", `startSide=${input.startSide}`);
-      await runGhGraphql(args);
+      await githubGraphql(repo.accountId, repo.host, query, {
+        pullRequestId,
+        body,
+        path: targetPath,
+        line: input.line,
+        side: input.side,
+        startLine: input.startLine,
+        startSide: input.startSide,
+        subjectType: input.subjectType.toUpperCase(),
+      });
     });
   }
 
@@ -622,18 +671,11 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
 }
 `;
       const pullRequestId = await getPullRequestNodeId(repo, number);
-      await runGhGraphql([
-        "api",
-        "graphql",
-        "-f",
-        `pullRequestId=${pullRequestId}`,
-        "-f",
-        `pullRequestReviewThreadId=${threadId.trim()}`,
-        "-f",
-        `body=${trimmedBody}`,
-        "-f",
-        `query=${query}`,
-      ]);
+      await githubGraphql(repo.accountId, repo.host, query, {
+        pullRequestId,
+        pullRequestReviewThreadId: threadId.trim(),
+        body: trimmedBody,
+      });
     });
   }
 
@@ -656,16 +698,10 @@ mutation($id: ID!, $body: String!) {
   }
 }
 `;
-      await runGhGraphql([
-        "api",
-        "graphql",
-        "-f",
-        `id=${commentId.trim()}`,
-        "-f",
-        `body=${trimmedBody}`,
-        "-f",
-        `query=${query}`,
-      ]);
+      await githubGraphql(_repo.accountId, _repo.host, query, {
+        id: commentId.trim(),
+        body: trimmedBody,
+      });
     });
   }
 }

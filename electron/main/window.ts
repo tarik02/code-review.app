@@ -27,7 +27,7 @@ async function createMainWindow() {
     height: 900,
     minWidth: 1400,
     minHeight: 900,
-    title: "rudu",
+    title: "code-review.app",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(currentDirectory, "../preload/index.mjs"),

@@ -84,6 +84,8 @@ function getDatabase() {
       repo_key TEXT PRIMARY KEY,
       provider TEXT NOT NULL,
       host TEXT NOT NULL,
+      provider_account_id TEXT NOT NULL DEFAULT '',
+      provider_account_label TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       name_with_owner TEXT NOT NULL,
       description TEXT,
@@ -94,7 +96,7 @@ function getDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_repos_provider_host
-      ON repos (provider, host, name_with_owner);
+      ON repos (provider, host, provider_account_id, name_with_owner);
 
     CREATE TABLE IF NOT EXISTS repo_pull_requests (
       repo_key TEXT NOT NULL,
@@ -164,6 +166,16 @@ function getDatabase() {
     CREATE INDEX IF NOT EXISTS idx_tracked_pull_requests_repo_added
       ON tracked_pull_requests (repo_key, added_at DESC);
   `);
+  try {
+    db.exec("ALTER TABLE repos ADD COLUMN provider_account_id TEXT NOT NULL DEFAULT '';");
+  } catch {
+    // Column already exists.
+  }
+  try {
+    db.exec("ALTER TABLE repos ADD COLUMN provider_account_label TEXT NOT NULL DEFAULT '';");
+  } catch {
+    // Column already exists.
+  }
 
   return db;
 }
@@ -223,7 +235,8 @@ function createCacheService(): CacheServiceShape {
         const rows = getDatabase()
           .prepare(
             `
-            SELECT repo_key, provider, host, name, name_with_owner, description, is_private, avatar_url
+            SELECT repo_key, provider, host, provider_account_id, provider_account_label,
+              name, name_with_owner, description, is_private, avatar_url
             FROM repos
             ORDER BY added_at ASC
             `,
@@ -234,6 +247,8 @@ function createCacheService(): CacheServiceShape {
           id: String(row.repo_key),
           provider: String(row.provider) as ForgeProviderKind,
           host: String(row.host),
+          providerAccountId: String(row.provider_account_id),
+          providerAccountLabel: String(row.provider_account_label),
           name: String(row.name),
           nameWithOwner: String(row.name_with_owner),
           description: row.description === null ? null : String(row.description),
@@ -248,22 +263,31 @@ function createCacheService(): CacheServiceShape {
         const repoKey =
           repo.id.trim().length > 0
             ? repo.id
-            : createRepoId(repo.provider, repo.host, repo.nameWithOwner).key;
+            : createRepoId(
+                repo.provider,
+                repo.host,
+                repo.providerAccountId,
+                repo.nameWithOwner,
+              ).key;
         getDatabase()
           .prepare(
             `
             INSERT INTO repos (
-              repo_key, provider, host, name, name_with_owner, description, is_private,
-              avatar_url, added_at, last_opened_at
+              repo_key, provider, host, provider_account_id, provider_account_label,
+              name, name_with_owner, description, is_private, avatar_url, added_at,
+              last_opened_at
             )
             VALUES (
-              @repo_key, @provider, @host, @name, @name_with_owner, @description,
+              @repo_key, @provider, @host, @provider_account_id,
+              @provider_account_label, @name, @name_with_owner, @description,
               @is_private, @avatar_url, @timestamp, @timestamp
             )
             ON CONFLICT(repo_key)
             DO UPDATE SET
               provider = excluded.provider,
               host = excluded.host,
+              provider_account_id = excluded.provider_account_id,
+              provider_account_label = excluded.provider_account_label,
               name = excluded.name,
               name_with_owner = excluded.name_with_owner,
               description = excluded.description,
@@ -275,6 +299,8 @@ function createCacheService(): CacheServiceShape {
             repo_key: repoKey,
             provider: repo.provider,
             host: repo.host,
+            provider_account_id: repo.providerAccountId,
+            provider_account_label: repo.providerAccountLabel,
             name: repo.name,
             name_with_owner: repo.nameWithOwner,
             description: repo.description,

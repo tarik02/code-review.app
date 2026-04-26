@@ -1,9 +1,10 @@
 import { Effect } from "effect";
 import { ProviderError } from "../errors";
 import { createRepoId, normalizeHost, normalizePath } from "../repo-id";
-import { runGlabApi, runGlabApiMethod, runGlabWithTimeout } from "../cli/gitlab";
+import { providerJson, providerText } from "../auth/http";
+import { getStoredAuthToken, updateViewerLogin } from "../auth/provider-auth";
 import type {
-  CliStatus,
+  ProviderAuthStatus,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -105,22 +106,11 @@ function providerEffect<A>(operation: () => Promise<A>) {
   });
 }
 
-function parseJson<T>(input: string, context: string): T {
-  try {
-    return JSON.parse(input) as T;
-  } catch (error) {
-    throw new ProviderError(
-      `${context}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
-
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
     normalized.includes("not logged") ||
     normalized.includes("not authenticated") ||
-    normalized.includes("glab auth login") ||
     normalized.includes("authenticate") ||
     normalized.includes("401") ||
     normalized.includes("unauthorized")
@@ -133,6 +123,43 @@ function projectEndpoint(repo: RepoId, suffix: string) {
 
 function projectPathEndpoint(path: string) {
   return `projects/${encodeURIComponent(path)}`;
+}
+
+function gitlabApiUrl(host: string, endpoint: string) {
+  return `https://${normalizeHost(host)}/api/v4/${endpoint}`;
+}
+
+async function gitlabJson<T>(
+  accountId: string,
+  host: string,
+  endpoint: string,
+  init?: RequestInit,
+) {
+  return providerJson<T>(accountId, gitlabApiUrl(host, endpoint), {
+    ...init,
+    headers: init?.headers as Record<string, string> | undefined,
+  });
+}
+
+async function gitlabText(accountId: string, host: string, endpoint: string) {
+  return providerText(accountId, gitlabApiUrl(host, endpoint));
+}
+
+async function gitlabForm(
+  host: string,
+  accountId: string,
+  method: string,
+  endpoint: string,
+  forms: Array<[string, string]>,
+) {
+  const body = new FormData();
+  for (const [key, value] of forms) {
+    body.set(key, value);
+  }
+  await gitlabJson<unknown>(accountId, host, endpoint, {
+    method,
+    body,
+  });
 }
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
@@ -154,12 +181,19 @@ function parseGitLabRepoInput(host: string, input: string): [string, string] {
   return [normalizeHost(host), path];
 }
 
-function repoSummaryFromProject(host: string, project: GitLabProject): RepoSummary {
+function repoSummaryFromProject(
+  accountId: string,
+  host: string,
+  label: string,
+  project: GitLabProject,
+): RepoSummary {
   const normalizedHost = normalizeHost(host);
   return {
-    id: createRepoId("gitlab", normalizedHost, project.path_with_namespace).key,
+    id: createRepoId("gitlab", normalizedHost, accountId, project.path_with_namespace).key,
     provider: "gitlab",
     host: normalizedHost,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
     name: project.name,
     nameWithOwner: project.path_with_namespace,
     description: project.description,
@@ -286,120 +320,108 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
 }
 
 class GitLabProvider implements ForgeProvider {
-  cliStatus(host: string) {
-    return providerEffect<CliStatus>(async () => {
-      const versionOutput = await runGlabWithTimeout(["--version"]);
-      if (!versionOutput.ok) {
-        if (versionOutput.kind === "missing") {
+  authStatus(accountId: string) {
+    return providerEffect<ProviderAuthStatus>(async () => {
+      try {
+        const token = await getStoredAuthToken(accountId);
+        if (!token) {
           return {
-            status: "missing_cli",
-            message: "GitLab CLI is not installed or not available on PATH.",
+            status: "not_authenticated",
+            message: "Sign in with GitLab to load projects.",
           };
         }
-        return {
-          status: "unknown_error",
-          message: `Couldn't verify GitLab CLI: ${versionOutput.message}`,
-        };
+        await Effect.runPromise(this.viewerLogin(accountId));
+        return { status: "ready", message: null };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isNotAuthenticatedMessage(message)) {
+          return {
+            status: "not_authenticated",
+            message: "Sign in with GitLab again.",
+          };
+        }
+        return { status: "unknown_error", message };
       }
-
-      const authOutput = await runGlabWithTimeout([
-        "auth",
-        "status",
-        "--hostname",
-        normalizeHost(host),
-      ]);
-      if (authOutput.ok) return { status: "ready", message: null };
-
-      if (normalizeHost(host) === "gitlab.com") {
-        const anyHostAuthOutput = await runGlabWithTimeout(["auth", "status"]);
-        if (anyHostAuthOutput.ok) return { status: "ready", message: null };
-      }
-
-      if (authOutput.kind === "missing") {
-        return {
-          status: "missing_cli",
-          message: "GitLab CLI is not installed or not available on PATH.",
-        };
-      }
-      if (isNotAuthenticatedMessage(authOutput.message)) {
-        return {
-          status: "not_authenticated",
-          message: `Authenticate GitLab CLI with \`glab auth login --hostname ${normalizeHost(host)}\`.`,
-        };
-      }
-      return { status: "unknown_error", message: authOutput.message };
     });
   }
 
-  viewerLogin(host: string) {
+  viewerLogin(accountId: string) {
     return providerEffect(async () => {
-      const stdout = await runGlabApi(host, "user");
-      return parseJson<GitLabUser>(stdout, "Failed to parse GitLab viewer").username;
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitLab is not signed in.");
+      const username = (await gitlabJson<GitLabUser>(accountId, token.host, "user")).username;
+      await updateViewerLogin(accountId, username);
+      return username;
     });
   }
 
-  listInitialRepos(host: string, limit: number) {
+  listInitialRepos(accountId: string, limit: number) {
     return providerEffect(async () => {
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitLab is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
       const endpoint = `projects?membership=true&simple=true&per_page=${limit}`;
-      const stdout = await runGlabApi(host, endpoint);
-      return parseJson<GitLabProject[]>(
-        stdout,
-        "Failed to parse GitLab projects",
-      ).map((project) => repoSummaryFromProject(host, project));
+      return (await gitlabJson<GitLabProject[]>(accountId, token.host, endpoint)).map((project) =>
+        repoSummaryFromProject(accountId, token.host, label, project),
+      );
     });
   }
 
-  searchRepos(host: string, query: string, limit: number) {
+  searchRepos(accountId: string, query: string, limit: number) {
     return providerEffect(async () => {
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitLab is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
       if (query.trim().length === 0) {
-        return await Effect.runPromise(this.listInitialRepos(host, limit));
+        return await Effect.runPromise(this.listInitialRepos(accountId, limit));
       }
 
       const endpoint = `projects?membership=true&search=${encodeURIComponent(
         query.trim(),
       )}&simple=true&per_page=${limit}`;
-      const stdout = await runGlabApi(host, endpoint);
-      return parseJson<GitLabProject[]>(
-        stdout,
-        "Failed to parse GitLab project search results",
-      ).map((project) => repoSummaryFromProject(host, project));
+      return (await gitlabJson<GitLabProject[]>(accountId, token.host, endpoint)).map((project) =>
+        repoSummaryFromProject(accountId, token.host, label, project),
+      );
     });
   }
 
-  validateRepo(host: string, input: string) {
+  validateRepo(accountId: string, input: string) {
     return providerEffect(async () => {
-      const [validatedHost, projectPath] = parseGitLabRepoInput(host, input);
-      const stdout = await runGlabApi(validatedHost, projectPathEndpoint(projectPath));
+      const token = await getStoredAuthToken(accountId);
+      if (!token) throw new ProviderError("GitLab is not signed in.");
+      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+      const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
+      if (validatedHost !== normalizeHost(token.host)) {
+        throw new ProviderError("Project URL host must match the selected GitLab account.");
+      }
       return repoSummaryFromProject(
+        accountId,
         validatedHost,
-        parseJson<GitLabProject>(stdout, "Failed to parse GitLab project"),
+        label,
+        await gitlabJson<GitLabProject>(accountId, validatedHost, projectPathEndpoint(projectPath)),
       );
     });
   }
 
   listPullRequests(repo: RepoId) {
     return providerEffect(async () => {
-      const stdout = await runGlabApi(
-        repo.host,
-        projectEndpoint(repo, "merge_requests?state=opened&per_page=100"),
-      );
-      return parseJson<GitLabMergeRequest[]>(
-        stdout,
-        "Failed to parse GitLab merge requests",
+      return (
+        await gitlabJson<GitLabMergeRequest[]>(
+          repo.accountId,
+          repo.host,
+          projectEndpoint(repo, "merge_requests?state=opened&per_page=100"),
+        )
       ).map(toPullRequestSummary);
     });
   }
 
   getPullRequest(repo: RepoId, number: number) {
     return providerEffect(async () => {
-      const stdout = await runGlabApi(
-        repo.host,
-        projectEndpoint(repo, `merge_requests/${number}`),
-      );
       return toPullRequestSummary(
-        parseJson<GitLabMergeRequest>(
-          stdout,
-          `Failed to parse GitLab merge request #${number}`,
+        await gitlabJson<GitLabMergeRequest>(
+          repo.accountId,
+          repo.host,
+          projectEndpoint(repo, `merge_requests/${number}`),
         ),
       );
     });
@@ -407,7 +429,7 @@ class GitLabProvider implements ForgeProvider {
 
   fetchPatch(repo: RepoId, number: number) {
     return providerEffect(() =>
-      runGlabApi(repo.host, projectEndpoint(repo, `merge_requests/${number}/raw_diffs`)),
+      gitlabText(repo.accountId, repo.host, projectEndpoint(repo, `merge_requests/${number}/raw_diffs`)),
     );
   }
 
@@ -417,13 +439,10 @@ class GitLabProvider implements ForgeProvider {
       const seen = new Set<string>();
       let page = 1;
       while (true) {
-        const stdout = await runGlabApi(
+        const diffs = await gitlabJson<GitLabDiff[]>(
+          repo.accountId,
           repo.host,
           projectEndpoint(repo, `merge_requests/${number}/diffs?per_page=100&page=${page}`),
-        );
-        const diffs = parseJson<GitLabDiff[]>(
-          stdout,
-          "Failed to parse GitLab merge request diffs",
         );
         if (diffs.length === 0) break;
         for (const diff of diffs) {
@@ -443,16 +462,13 @@ class GitLabProvider implements ForgeProvider {
       const threads: ReviewThread[] = [];
       let page = 1;
       while (true) {
-        const stdout = await runGlabApi(
+        const discussions = await gitlabJson<GitLabDiscussion[]>(
+          repo.accountId,
           repo.host,
           projectEndpoint(
             repo,
             `merge_requests/${number}/discussions?per_page=100&page=${page}`,
           ),
-        );
-        const discussions = parseJson<GitLabDiscussion[]>(
-          stdout,
-          "Failed to parse GitLab discussions",
         );
         if (discussions.length === 0) break;
         for (const discussion of discussions) {
@@ -471,13 +487,12 @@ class GitLabProvider implements ForgeProvider {
       const body = input.body.trim();
       if (!body) throw new ProviderError("Comment body is required");
 
-      const versionsStdout = await runGlabApi(
-        repo.host,
-        projectEndpoint(repo, `merge_requests/${number}/versions`),
-      );
-      const version = parseJson<GitLabMrVersion[]>(
-        versionsStdout,
-        "Failed to parse GitLab merge request versions",
+      const version = (
+        await gitlabJson<GitLabMrVersion[]>(
+          repo.accountId,
+          repo.host,
+          projectEndpoint(repo, `merge_requests/${number}/versions`),
+        )
       )[0];
       if (!version) throw new ProviderError("GitLab merge request has no diff versions");
 
@@ -506,8 +521,9 @@ class GitLabProvider implements ForgeProvider {
         }
       }
 
-      await runGlabApiMethod(
+      await gitlabForm(
         repo.host,
+        repo.accountId,
         "POST",
         projectEndpoint(repo, `merge_requests/${number}/discussions`),
         forms,
@@ -521,8 +537,9 @@ class GitLabProvider implements ForgeProvider {
       const trimmedBody = body.trim();
       if (!trimmedThreadId) throw new ProviderError("Thread id is required");
       if (!trimmedBody) throw new ProviderError("Reply body is required");
-      await runGlabApiMethod(
+      await gitlabForm(
         repo.host,
+        repo.accountId,
         "POST",
         projectEndpoint(
           repo,
@@ -547,8 +564,9 @@ class GitLabProvider implements ForgeProvider {
       if (!trimmedThreadId) throw new ProviderError("Thread id is required");
       if (!trimmedCommentId) throw new ProviderError("Comment id is required");
       if (!trimmedBody) throw new ProviderError("Comment body is required");
-      await runGlabApiMethod(
+      await gitlabForm(
         repo.host,
+        repo.accountId,
         "PUT",
         projectEndpoint(
           repo,

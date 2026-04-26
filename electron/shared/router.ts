@@ -14,9 +14,10 @@ import {
   subscribeToUpdateEvents,
 } from "../main/updater";
 import {
+  completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
-  forgeProviderKindSchema,
-  providerHostLimitSchema,
+  providerAccountSchema,
+  providerHostSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
@@ -27,6 +28,12 @@ import {
 } from "../backend/schemas";
 import { z } from "zod";
 import { app } from "electron";
+import { completeOAuth, startOAuth } from "../backend/auth/oauth";
+import { deleteStoredAuthToken } from "../backend/auth/token-store";
+import {
+  subscribeToDeepLinks,
+  subscribeToOAuthCallbacks,
+} from "../main/oauth-callback";
 import type { UpdateEvent } from "./types";
 
 type Context = {
@@ -55,60 +62,103 @@ async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>) {
 }
 
 const router = t.router({
-  preflight: t.router({
-    getCliStatuses: t.procedure
-      .input(z.object({ gitlabHost: z.string().optional() }))
+  auth: t.router({
+    listProviderAccounts: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* RepoService;
+          return yield* service.listProviderAccounts();
+        }),
+      ),
+    ),
+    getProviderStatuses: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* RepoService;
+          return yield* service.getProviderStatuses();
+        }),
+      ),
+    ),
+    startOAuth: t.procedure.input(providerHostSchema).mutation(({ input }) =>
+      startOAuth(input.provider, input.host, input.clientId),
+    ),
+    completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
+      try {
+        const session = await completeOAuth(input.code, input.state);
+        const statuses = await runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            return yield* service.getProviderStatuses();
+          }),
+        );
+        const status = statuses[session.accountId];
+        if (!status) {
+          throw new Error("Provider auth status was not returned.");
+        }
+        return status;
+      } catch (error) {
+        throw mapError(error);
+      }
+    }),
+    signOut: t.procedure.input(providerAccountSchema).mutation(async ({ input }) => {
+      try {
+        await deleteStoredAuthToken(input.accountId);
+      } catch (error) {
+        throw mapError(error);
+      }
+    }),
+    oauthCallbacks: t.procedure.subscription(() =>
+      observable<string>((emit) => {
+        const unsubscribe = subscribeToOAuthCallbacks((url) => emit.next(url));
+        return unsubscribe;
+      }),
+    ),
+  }),
+
+  deepLinks: t.router({
+    urls: t.procedure.subscription(() =>
+      observable<string>((emit) => {
+        const unsubscribe = subscribeToDeepLinks((url) => emit.next(url));
+        return unsubscribe;
+      }),
+    ),
+  }),
+
+  repos: t.router({
+    listInitial: t.procedure
+      .input(providerAccountSchema.extend({ limit: z.number().int().positive().optional() }))
       .query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
-            return yield* service.getCliStatuses(input.gitlabHost);
+            return yield* service.listInitialRepos(input.accountId, input.limit);
           }),
         ),
       ),
-  }),
-
-  repos: t.router({
-    listInitial: t.procedure.input(providerHostLimitSchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* RepoService;
-          return yield* service.listInitialRepos(input.provider, input.host, input.limit);
-        }),
-      ),
-    ),
     search: t.procedure
       .input(
-        providerHostLimitSchema.extend({
+        providerAccountSchema.extend({
           query: z.string(),
+          limit: z.number().int().positive().optional(),
         }),
       )
       .query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
-            return yield* service.searchRepos(
-              input.provider,
-              input.host,
-              input.query,
-              input.limit,
-            );
+            return yield* service.searchRepos(input.accountId, input.query, input.limit);
           }),
         ),
       ),
     validate: t.procedure
       .input(
-        z.object({
-          provider: forgeProviderKindSchema.optional(),
-          host: z.string().optional(),
-          repo: z.string(),
-        }),
+        providerAccountSchema.extend({ repo: z.string() }),
       )
       .query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
-            return yield* service.validateRepo(input.provider, input.host, input.repo);
+            return yield* service.validateRepo(input.accountId, input.repo);
           }),
         ),
       ),
@@ -146,6 +196,14 @@ const router = t.router({
         Effect.gen(function* () {
           const service = yield* PullRequestService;
           return yield* service.list(input.repoId);
+        }),
+      ),
+    ),
+    get: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* PullRequestService;
+          return yield* service.get(input.repoId, input.number);
         }),
       ),
     ),
@@ -212,17 +270,12 @@ const router = t.router({
 
   reviewComments: t.router({
     getViewerLogin: t.procedure
-      .input(
-        z.object({
-          provider: forgeProviderKindSchema.optional(),
-          host: z.string().optional(),
-        }),
-      )
+      .input(providerAccountSchema)
       .query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
-            return yield* service.getViewerLogin(input.provider, input.host);
+            return yield* service.getViewerLogin(input.accountId);
           }),
         ),
       ),

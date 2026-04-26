@@ -1,29 +1,27 @@
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
-import { normalizeHost, parseProviderKind } from "../repo-id";
 import { providerFor } from "../providers/registry";
+import { getStoredAuthToken, listProviderAccounts } from "../auth/token-store";
 import type {
-  CliStatus,
-  ForgeProviderKind,
+  ProviderAccount,
+  ProviderAuthStatus,
   RepoSummary,
 } from "../../shared/types";
 
 type RepoServiceShape = {
-  getCliStatuses(gitlabHost?: string): Effect.Effect<Record<string, CliStatus>, Error>;
+  listProviderAccounts(): Effect.Effect<ProviderAccount[], Error>;
+  getProviderStatuses(): Effect.Effect<Record<string, ProviderAuthStatus>, Error>;
   listInitialRepos(
-    provider?: ForgeProviderKind,
-    host?: string,
+    accountId: string,
     limit?: number,
   ): Effect.Effect<RepoSummary[], Error>;
   searchRepos(
-    provider: ForgeProviderKind | undefined,
-    host: string | undefined,
+    accountId: string,
     query: string,
     limit?: number,
   ): Effect.Effect<RepoSummary[], Error>;
   validateRepo(
-    provider: ForgeProviderKind | undefined,
-    host: string | undefined,
+    accountId: string,
     repo: string,
   ): Effect.Effect<RepoSummary, Error>;
   listSavedRepos(): Effect.Effect<RepoSummary[], Error, CacheService>;
@@ -34,46 +32,39 @@ class RepoService extends Effect.Tag("RepoService")<RepoService, RepoServiceShap
   static Live = Layer.succeed(this, createRepoService());
 }
 
-function defaultHost(provider: ForgeProviderKind, host?: string) {
-  return normalizeHost(host ?? (provider === "github" ? "github.com" : "gitlab.com"));
-}
-
-function normalizeProvider(provider?: ForgeProviderKind) {
-  return parseProviderKind(provider ?? "github");
-}
-
 function createRepoService(): RepoServiceShape {
   return {
-    getCliStatuses: (gitlabHost) =>
+    listProviderAccounts: () => Effect.promise(() => listProviderAccounts()),
+
+    getProviderStatuses: () =>
       Effect.gen(function* () {
-        const host = normalizeHost(gitlabHost ?? "gitlab.com");
-        const githubStatus = yield* providerFor("github").cliStatus("github.com");
-        const gitlabStatus = yield* providerFor("gitlab").cliStatus(host);
-        return {
-          "github:github.com": githubStatus,
-          [`gitlab:${host}`]: gitlabStatus,
-        };
+        const accounts = yield* Effect.promise(() => listProviderAccounts());
+        const statuses: Record<string, ProviderAuthStatus> = {};
+        for (const account of accounts) {
+          statuses[account.id] = yield* providerFor(account.provider).authStatus(account.id);
+        }
+        return statuses;
       }),
 
-    listInitialRepos: (providerInput, hostInput, limit = 5) =>
+    listInitialRepos: (accountId, limit = 5) =>
       Effect.gen(function* () {
-        const provider = normalizeProvider(providerInput);
-        const host = defaultHost(provider, hostInput);
-        return yield* providerFor(provider).listInitialRepos(host, limit);
+        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+        if (!account) return [];
+        return yield* providerFor(account.provider).listInitialRepos(accountId, limit);
       }),
 
-    searchRepos: (providerInput, hostInput, query, limit = 20) =>
+    searchRepos: (accountId, query, limit = 20) =>
       Effect.gen(function* () {
-        const provider = normalizeProvider(providerInput);
-        const host = defaultHost(provider, hostInput);
-        return yield* providerFor(provider).searchRepos(host, query, limit);
+        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+        if (!account) return [];
+        return yield* providerFor(account.provider).searchRepos(accountId, query, limit);
       }),
 
-    validateRepo: (providerInput, hostInput, repo) =>
+    validateRepo: (accountId, repo) =>
       Effect.gen(function* () {
-        const provider = normalizeProvider(providerInput);
-        const host = defaultHost(provider, hostInput);
-        return yield* providerFor(provider).validateRepo(host, repo);
+        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+        if (!account) throw new Error("Provider account is not signed in.");
+        return yield* providerFor(account.provider).validateRepo(accountId, repo);
       }),
 
     listSavedRepos: () =>
