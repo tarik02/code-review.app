@@ -172,7 +172,7 @@ function ReviewThreadCard({
 
   return (
     <div
-      className="rounded-lg border border-ink-200 bg-canvas p-3 text-sm text-ink-800 shadow-sm"
+      className="rounded-lg border border-ink-200 bg-canvas p-3 text-sm text-ink-800 shadow-xs"
       ref={containerRef}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-ink-500">

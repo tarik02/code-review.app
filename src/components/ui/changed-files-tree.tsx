@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree } from "@pierre/trees/react";
 import type { FileStatsEntry } from "../../types/forge";
+import { TopBar } from "./top-bar";
 
 type ChangedFilesTreeProps = {
   files: string[];
@@ -113,11 +114,11 @@ function ChangedFilesTree({
     <section
       className={
         showContainer
-          ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border"
+          ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-ink-200"
           : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       }
     >
-      <div className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500 flex justify-between">
+      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500 flex items-center justify-between app-region-drag">
         <p className="text-sm text-ink-900">
           Changed files{" "}
           <span className="ml-2 text-ink-500">{files.length}</span>
@@ -134,7 +135,7 @@ function ChangedFilesTree({
             </span>
           ) : null}
         </div>
-      </div>
+      </TopBar>
 
       <div className="min-h-0 flex-1 overflow-auto scrollbar-hidden">
         {!hasSelection ? (

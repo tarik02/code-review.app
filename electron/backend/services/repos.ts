@@ -3,6 +3,7 @@ import { CacheService } from "../cache";
 import { providerFor } from "../providers/registry";
 import { getStoredAuthToken, listProviderAccounts } from "../auth/token-store";
 import type {
+  ProviderProfile,
   ProviderAccount,
   ProviderAuthStatus,
   RepoSummary,
@@ -11,6 +12,7 @@ import type {
 type RepoServiceShape = {
   listProviderAccounts(): Effect.Effect<ProviderAccount[], Error>;
   getProviderStatuses(): Effect.Effect<Record<string, ProviderAuthStatus>, Error>;
+  getProviderProfile(accountId: string): Effect.Effect<ProviderProfile, Error>;
   listInitialRepos(
     accountId: string,
     limit?: number,
@@ -44,6 +46,14 @@ function createRepoService(): RepoServiceShape {
           statuses[account.id] = yield* providerFor(account.provider).authStatus(account.id);
         }
         return statuses;
+      }),
+
+    getProviderProfile: (accountId) =>
+      Effect.gen(function* () {
+        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+        if (!account) throw new Error("Provider account is not signed in.");
+        const login = yield* providerFor(account.provider).viewerLogin(accountId);
+        return { accountId, login };
       }),
 
     listInitialRepos: (accountId, limit = 5) =>

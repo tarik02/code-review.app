@@ -9,6 +9,14 @@ import "@fontsource/geist-mono/700.css";
 import App from "./App";
 import "./index.css";
 import PierreDiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker";
+import { isElectron, syncDocumentPlatformClass } from "./lib/platform";
+import { syncDocumentWindowControlsOverlayClass } from "./lib/wco";
+
+syncDocumentPlatformClass();
+
+if (isElectron) {
+  syncDocumentWindowControlsOverlayClass();
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

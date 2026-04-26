@@ -56,6 +56,16 @@ type ViewerLogin = {
   login: string;
 };
 
+type AccountVisibilitySettings = {
+  enabledAccountIds: string[];
+  disabledAccountIds: string[];
+};
+
+type ProviderProfile = {
+  accountId: string;
+  login: string;
+};
+
 type ProviderAuthStatusKind =
   | "ready"
   | "not_authenticated"
@@ -153,6 +163,7 @@ type UpdateEvent =
 
 export { PullRequestBadgeStatus };
 export type {
+  AccountVisibilitySettings,
   AvailableUpdate,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
@@ -160,6 +171,7 @@ export type {
   ProviderAccount,
   ProviderAuthStatus,
   ProviderAuthStatusKind,
+  ProviderProfile,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,

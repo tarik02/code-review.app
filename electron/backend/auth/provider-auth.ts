@@ -21,7 +21,7 @@ type OAuthTokenResponse = {
   error_description?: string;
 };
 
-const DEFAULT_REDIRECT_URI = "rudu://oauth/callback";
+const DEFAULT_REDIRECT_URI = "code-review.app://oauth/callback";
 const REFRESH_SKEW_MS = 60_000;
 
 function redirectUri() {

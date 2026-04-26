@@ -4,6 +4,7 @@ import { DiffDataService } from "./services/diff-data";
 import { PullRequestService } from "./services/pull-requests";
 import { RepoService } from "./services/repos";
 import { ReviewCommentService } from "./services/review-comments";
+import { SettingsService } from "./services/settings";
 import { TrackedPullRequestService } from "./services/tracked-pull-requests";
 
 const AppLayer = Layer.mergeAll(
@@ -13,6 +14,7 @@ const AppLayer = Layer.mergeAll(
   PullRequestService.Live,
   TrackedPullRequestService.Live,
   ReviewCommentService.Live,
+  SettingsService.Live,
 );
 
 const runtime = ManagedRuntime.make(AppLayer);

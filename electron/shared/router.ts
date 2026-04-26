@@ -7,6 +7,7 @@ import { BackendError, getErrorMessage } from "../backend/errors";
 import { PullRequestService } from "../backend/services/pull-requests";
 import { RepoService } from "../backend/services/repos";
 import { ReviewCommentService } from "../backend/services/review-comments";
+import { SettingsService } from "../backend/services/settings";
 import { TrackedPullRequestService } from "../backend/services/tracked-pull-requests";
 import {
   checkForUpdate,
@@ -15,8 +16,10 @@ import {
 } from "../main/updater";
 import {
   completeOAuthSchema,
+  accountVisibilitySettingsSchema,
   createPullRequestReviewCommentInputSchema,
   providerAccountSchema,
+  providerProfileSchema,
   providerHostSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
@@ -34,7 +37,7 @@ import {
   subscribeToDeepLinks,
   subscribeToOAuthCallbacks,
 } from "../main/oauth-callback";
-import type { UpdateEvent } from "./types";
+import type { ProviderProfile, UpdateEvent } from "./types";
 
 type Context = {
   getWindow(): BrowserWindow | null;
@@ -79,6 +82,18 @@ const router = t.router({
         }),
       ),
     ),
+    getProviderProfile: t.procedure
+      .input(providerAccountSchema)
+      .query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            const profile = yield* service.getProviderProfile(input.accountId);
+            const parsed: ProviderProfile = providerProfileSchema.parse(profile);
+            return parsed;
+          }),
+        ),
+      ),
     startOAuth: t.procedure.input(providerHostSchema).mutation(({ input }) =>
       startOAuth(input.provider, input.host, input.clientId),
     ),
@@ -113,6 +128,27 @@ const router = t.router({
         return unsubscribe;
       }),
     ),
+  }),
+
+  settings: t.router({
+    getAccountVisibility: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          return yield* service.getAccountVisibility();
+        }),
+      ),
+    ),
+    setAccountVisibility: t.procedure
+      .input(accountVisibilitySettingsSchema)
+      .mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setAccountVisibility(input.enabledAccountIds);
+          }),
+        ),
+      ),
   }),
 
   deepLinks: t.router({

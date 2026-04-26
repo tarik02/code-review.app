@@ -48,6 +48,15 @@ const providerAccountSchema = z.object({
   accountId: z.string().min(1),
 });
 
+const accountVisibilitySettingsSchema = z.object({
+  enabledAccountIds: z.array(z.string()),
+});
+
+const providerProfileSchema = z.object({
+  accountId: z.string(),
+  login: z.string(),
+});
+
 const repoIdSchema = z.object({
   repoId: z.string().min(1),
 });
@@ -83,10 +92,12 @@ const updatePullRequestReviewCommentInputSchema =
   });
 
 export {
+  accountVisibilitySettingsSchema,
   completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
   forgeProviderKindSchema,
   providerAccountSchema,
+  providerProfileSchema,
   providerHostSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,

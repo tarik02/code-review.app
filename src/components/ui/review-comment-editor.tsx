@@ -66,7 +66,7 @@ function ReviewCommentEditor({
     <div
       className={
         framed
-          ? "rounded-lg border border-ink-200 bg-canvas p-3 shadow-sm font-sans"
+          ? "rounded-lg border border-ink-200 bg-canvas p-3 shadow-xs font-sans"
           : "font-sans"
       }
     >
@@ -77,7 +77,7 @@ function ReviewCommentEditor({
       ) : null}
       <textarea
         ref={textareaRef}
-        className="min-h-[96px] w-full resize-y rounded-lg  bg-surface px-3 py-2 text-sm leading-6 text-ink-900 outline-none transition placeholder:text-ink-500 focus:border-zinc-400"
+        className="min-h-[96px] w-full resize-y rounded-lg  bg-surface px-3 py-2 text-sm leading-6 text-ink-900 outline-hidden transition placeholder:text-ink-500 focus:border-zinc-400"
         disabled={isPending}
         onChange={(event) => setBody(event.currentTarget.value)}
         placeholder={placeholder}

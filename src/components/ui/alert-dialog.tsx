@@ -1,9 +1,6 @@
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
-
-function cx(...classes: Array<string | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
+import { cx } from "../../lib/cx";
 
 function toClassName(className: unknown) {
   return typeof className === "string" ? className : undefined;

@@ -6,6 +6,7 @@ import type {
   ProviderAuthStatus,
   ProviderAuthStatusKind,
 } from "../../types/forge";
+import { TopBar } from "./top-bar";
 
 type AuthGateScreenProps = {
   status: ProviderAuthStatusKind;
@@ -78,6 +79,8 @@ function AuthGateScreen({
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
 
+      <TopBar className="relative z-10 app-region-drag" position="left" />
+
       <div className="relative z-10 flex h-full items-end justify-center">
         <div className="w-full px-6 pb-16 sm:px-10 sm:pb-24">
           <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
@@ -87,7 +90,7 @@ function AuthGateScreen({
             <div className="mt-6 w-full max-w-lg rounded-md border border-white/15 bg-black/40 p-3 text-left">
               <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
                 <select
-                  className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-none"
+                  className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden"
                   disabled={isChecking || isSigningIn}
                   onChange={(event) =>
                     setProvider(event.currentTarget.value as ForgeProviderKind)
@@ -98,7 +101,7 @@ function AuthGateScreen({
                   <option value="gitlab">GitLab</option>
                 </select>
                 <input
-                  className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-none placeholder:text-white/45"
+                  className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden placeholder:text-white/45"
                   disabled={isChecking || isSigningIn}
                   onChange={(event) => setHost(event.currentTarget.value)}
                   placeholder={provider === "github" ? "github.com" : "gitlab.com"}
@@ -106,7 +109,7 @@ function AuthGateScreen({
                 />
               </div>
               <input
-                className="mt-2 w-full rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-none placeholder:text-white/45"
+                className="mt-2 w-full rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden placeholder:text-white/45"
                 disabled={isChecking || isSigningIn}
                 onChange={(event) => setClientId(event.currentTarget.value)}
                 placeholder={

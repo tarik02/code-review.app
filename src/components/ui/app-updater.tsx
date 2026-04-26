@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpCircleIcon } from "@heroicons/react/20/solid";
+import { cx } from "../../lib/cx";
 import { trpc } from "../../lib/trpc";
 import {
   AlertDialog,
@@ -47,10 +48,6 @@ function formatProgress(progress: DownloadProgress | null) {
     Math.round((progress.downloaded / progress.contentLength) * 100),
   );
   return `Downloaded ${percent}%`;
-}
-
-function cx(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(" ");
 }
 
 function AppUpdater({

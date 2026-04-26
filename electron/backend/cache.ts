@@ -47,6 +47,13 @@ type CacheServiceShape = {
     files: string[],
   ): Effect.Effect<void, CacheError>;
   updateRepoAccessTimestamp(repoId: string): Effect.Effect<void, CacheError>;
+  readProviderAccountVisibility(
+    accountIds: string[],
+  ): Effect.Effect<Record<string, boolean>, CacheError>;
+  setProviderAccountVisibility(
+    accountIds: string[],
+    enabledAccountIds: string[],
+  ): Effect.Effect<void, CacheError>;
 };
 
 class CacheService extends Effect.Tag("CacheService")<
@@ -165,6 +172,12 @@ function getDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_tracked_pull_requests_repo_added
       ON tracked_pull_requests (repo_key, added_at DESC);
+
+    CREATE TABLE IF NOT EXISTS provider_account_visibility (
+      provider_account_id TEXT PRIMARY KEY,
+      is_enabled INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
   try {
     db.exec("ALTER TABLE repos ADD COLUMN provider_account_id TEXT NOT NULL DEFAULT '';");
@@ -510,6 +523,52 @@ function createCacheService(): CacheServiceShape {
         getDatabase()
           .prepare("UPDATE repos SET last_opened_at = ? WHERE repo_key = ?")
           .run(nowUnixTimestamp(), repoId);
+      }),
+
+    readProviderAccountVisibility: (accountIds) =>
+      wrap(() => {
+        if (accountIds.length === 0) {
+          return {};
+        }
+
+        const rows = getDatabase()
+          .prepare(
+            `
+            SELECT provider_account_id, is_enabled
+            FROM provider_account_visibility
+            WHERE provider_account_id IN (${accountIds.map(() => "?").join(", ")})
+            `,
+          )
+          .all(...accountIds) as Record<string, unknown>[];
+
+        return Object.fromEntries(
+          rows.map((row) => [
+            String(row.provider_account_id),
+            Number(row.is_enabled) !== 0,
+          ]),
+        );
+      }),
+
+    setProviderAccountVisibility: (accountIds, enabledAccountIds) =>
+      wrap(() => {
+        const timestamp = nowUnixTimestamp();
+        const enabled = new Set(enabledAccountIds);
+        const insert = getDatabase().prepare(`
+          INSERT INTO provider_account_visibility (
+            provider_account_id, is_enabled, updated_at
+          )
+          VALUES (?, ?, ?)
+          ON CONFLICT(provider_account_id)
+          DO UPDATE SET
+            is_enabled = excluded.is_enabled,
+            updated_at = excluded.updated_at
+        `);
+
+        getDatabase().transaction(() => {
+          for (const accountId of accountIds) {
+            insert.run(accountId, enabled.has(accountId) ? 1 : 0, timestamp);
+          }
+        })();
       }),
   };
 }

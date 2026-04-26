@@ -14,6 +14,7 @@ import { ReviewCommentEditor } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
+import { cx } from "../../lib/cx";
 import {
   getFileReviewThreadsForPath,
   isActiveReviewThread,
@@ -94,10 +95,6 @@ type PatchViewerMainProps = {
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
 };
-
-function cx(...classes: Array<string | undefined | false>) {
-  return classes.filter(Boolean).join(" ");
-}
 
 function toGithubSide(side: SelectedLineRange["side"]): ReviewCommentSide {
   return side === "deletions" ? "LEFT" : "RIGHT";

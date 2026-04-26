@@ -1,7 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
 import { trpc } from "../lib/trpc";
 import type {
+  AccountVisibilitySettings,
   CreatePullRequestReviewCommentInput,
+  ProviderProfile,
   ReplyToPullRequestReviewCommentInput,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
@@ -16,6 +18,9 @@ const forgeKeys = {
   repos: () => [...forgeKeys.all, "repos"] as const,
   providerAccounts: () => [...forgeKeys.auth(), "provider-accounts"] as const,
   providerStatuses: () => [...forgeKeys.auth(), "provider-statuses"] as const,
+  providerProfile: (accountId: string) =>
+    [...forgeKeys.auth(), "provider-profile", accountId] as const,
+  accountVisibility: () => [...forgeKeys.auth(), "account-visibility"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
   initialRepos: (accountId: string) =>
     [...forgeKeys.repos(), "initial", accountId] as const,
@@ -64,6 +69,30 @@ function providerStatusesQueryOptions() {
     queryFn: () => trpc.auth.getProviderStatuses.query(),
     staleTime: 0,
   });
+}
+
+function providerProfileQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: forgeKeys.providerProfile(accountId),
+    queryFn: async (): Promise<ProviderProfile> => {
+      return trpc.auth.getProviderProfile.query({ accountId });
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+function accountVisibilityQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.accountVisibility(),
+    queryFn: async (): Promise<AccountVisibilitySettings> => {
+      return trpc.settings.getAccountVisibility.query();
+    },
+    staleTime: 0,
+  });
+}
+
+async function setAccountVisibility(enabledAccountIds: string[]) {
+  return trpc.settings.setAccountVisibility.mutate({ enabledAccountIds });
 }
 
 function viewerLoginQueryOptions(accountId: string) {
@@ -216,9 +245,11 @@ async function updatePullRequestReviewComment(
 }
 
 export {
+  accountVisibilityQueryOptions,
   createPullRequestReviewComment,
   forgeKeys,
   initialReposQueryOptions,
+  providerProfileQueryOptions,
   providerAccountsQueryOptions,
   providerStatusesQueryOptions,
   pullRequestCachedListQueryOptions,
@@ -230,6 +261,7 @@ export {
   replyToPullRequestReviewComment,
   savedReposQueryOptions,
   searchReposQueryOptions,
+  setAccountVisibility,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 };

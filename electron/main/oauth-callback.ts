@@ -9,7 +9,7 @@ const pendingDeepLinks: string[] = [];
 function isOAuthCallbackUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "rudu:" && parsed.hostname === "oauth" && parsed.pathname === "/callback";
+    return parsed.protocol === "code-review.app:" && parsed.hostname === "oauth" && parsed.pathname === "/callback";
   } catch {
     return false;
   }
@@ -42,7 +42,7 @@ function subscribeToOAuthCallbacks(listener: (url: string) => void) {
 function isDeepLinkUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "rudu:" && parsed.hostname === "open";
+    return parsed.protocol === "code-review.app:" && parsed.hostname === "open";
   } catch {
     return false;
   }

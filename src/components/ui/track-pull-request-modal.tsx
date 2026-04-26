@@ -121,7 +121,7 @@ function RepoSelectionStep({
         <div className="px-4 pt-3">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
             <select
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-none transition dark:border-neutral-700"
+              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition dark:border-neutral-700"
               disabled={providerAccounts.length === 0}
               onChange={(event) => onProviderAccountChange(event.currentTarget.value)}
               value={selectedAccount?.id ?? ""}
@@ -141,7 +141,7 @@ function RepoSelectionStep({
         <div className="mx-4 rounded-md border border-neutral-200 bg-canvas/60 p-2 dark:border-neutral-700">
           <div className="grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]">
             <select
-              className="rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-none transition dark:border-neutral-700"
+              className="rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition dark:border-neutral-700"
               disabled={isSigningIn}
               onChange={(event) =>
                 setNewProvider(event.currentTarget.value as ForgeProviderKind)
@@ -152,7 +152,7 @@ function RepoSelectionStep({
               <option value="gitlab">GitLab</option>
             </select>
             <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-none transition placeholder:text-neutral-400 dark:border-neutral-700"
+              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
               disabled={isSigningIn}
               onChange={(event) => setNewHost(event.currentTarget.value)}
               placeholder={newProvider === "github" ? "github.com" : "gitlab.com"}
@@ -161,7 +161,7 @@ function RepoSelectionStep({
           </div>
           <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
             <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-none transition placeholder:text-neutral-400 dark:border-neutral-700"
+              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
               disabled={isSigningIn}
               onChange={(event) => setNewClientId(event.currentTarget.value)}
               placeholder={
@@ -191,7 +191,7 @@ function RepoSelectionStep({
         ) : null}
         <input
           autoFocus
-          className="w-full border-b border-neutral-200 dark:border-neutral-700 bg-surface px-4 py-3 outline-none transition placeholder:text-neutral-400"
+          className="w-full border-b border-neutral-200 dark:border-neutral-700 bg-surface px-4 py-3 outline-hidden transition placeholder:text-neutral-400"
           disabled={!selectedAccount || isLoadingRepos || isSavingRepo}
           onChange={(event) => onSearchChange(event.currentTarget.value)}
           placeholder={

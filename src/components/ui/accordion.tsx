@@ -1,9 +1,6 @@
 import * as React from "react";
 import { Accordion } from "@base-ui/react/accordion";
-
-function cx(...classes: Array<string | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
+import { cx } from "../../lib/cx";
 
 function toClassName(className: unknown) {
   return typeof className === "string" ? className : undefined;
@@ -47,7 +44,7 @@ function AccordionTrigger({
   return (
     <Accordion.Trigger
       className={cx(
-        "flex w-full items-center gap-2.5 border text-ink-500 bg-canvas px-3 py-2.5 text-left text-sm [&[data-panel-open]]:border-zinc-400",
+        "flex w-full items-center gap-2.5 border border-ink-200 text-ink-500 bg-canvas px-3 py-2.5 text-left text-sm [&[data-panel-open]]:border-zinc-400",
         toClassName(className),
       )}
       {...props}
