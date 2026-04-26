@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getVersion } from "@tauri-apps/api/app";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
+import { ArrowUpCircleIcon } from "@heroicons/react/20/solid";
+import { trpc } from "../../lib/trpc";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,9 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./alert-dialog";
-import { ArrowUpCircleIcon } from "@heroicons/react/20/solid";
-
-type AvailableUpdate = NonNullable<Awaited<ReturnType<typeof check>>>;
+import type { AvailableUpdate, UpdateEvent } from "../../../electron/shared/types";
 
 type DownloadProgress = {
   downloaded: number;
@@ -71,7 +68,8 @@ function AppUpdater({
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
 
   useEffect(() => {
-    void getVersion()
+    void trpc.updates.getCurrentVersion
+      .query()
       .then((version) => setCurrentVersion(version))
       .catch(() => setCurrentVersion(null));
   }, []);
@@ -79,7 +77,39 @@ function AppUpdater({
   useEffect(() => {
     let isMounted = true;
 
-    void check()
+    const subscription = trpc.updates.events.subscribe(undefined, {
+      onData(event: UpdateEvent) {
+        if (!isMounted) return;
+
+        switch (event.type) {
+          case "available":
+          case "downloaded":
+            setAvailableUpdate(event.update);
+            break;
+          case "not_available":
+            setAvailableUpdate(null);
+            break;
+          case "progress":
+            setProgress({
+              downloaded: event.downloaded,
+              contentLength: event.contentLength,
+            });
+            break;
+          case "error":
+            setFeedback(`Update failed: ${event.message}`);
+            break;
+          case "checking":
+            break;
+        }
+      },
+      onError(error) {
+        if (!isMounted) return;
+        setFeedback(`Update events failed: ${getErrorMessage(error)}`);
+      },
+    });
+
+    void trpc.updates.check
+      .query()
       .then((update) => {
         if (!isMounted) return;
         setAvailableUpdate(update);
@@ -92,6 +122,7 @@ function AppUpdater({
 
     return () => {
       isMounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -107,28 +138,8 @@ function AppUpdater({
     setProgress({ downloaded: 0, contentLength: null });
 
     try {
-      await availableUpdate.downloadAndInstall((event) => {
-        switch (event.event) {
-          case "Started":
-            setProgress({
-              downloaded: 0,
-              contentLength: event.data.contentLength ?? null,
-            });
-            break;
-          case "Progress":
-            setProgress((current) => ({
-              downloaded: (current?.downloaded ?? 0) + event.data.chunkLength,
-              contentLength: current?.contentLength ?? null,
-            }));
-            break;
-          case "Finished":
-            setProgress((current) => current);
-            break;
-        }
-      });
-
+      await trpc.updates.install.mutate();
       setFeedback("Update installed. Relaunching Rudu...");
-      await relaunch();
     } catch (error) {
       setFeedback(`Update install failed: ${getErrorMessage(error)}`);
     } finally {

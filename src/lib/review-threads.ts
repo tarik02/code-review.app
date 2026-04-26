@@ -17,6 +17,7 @@ type ReviewComment = {
 
 type ReviewThread = {
   id: string;
+  provider: "github" | "gitlab";
   path: string;
   isResolved: boolean;
   isOutdated: boolean;

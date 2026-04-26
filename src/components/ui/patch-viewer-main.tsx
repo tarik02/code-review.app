@@ -12,7 +12,7 @@ import { FileDiff, Virtualizer } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { ReviewCommentEditor } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
-import { usePullRequestReviewCommentMutations } from "../../hooks/use-github-queries";
+import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
 import {
   getFileReviewThreadsForPath,
@@ -23,7 +23,7 @@ import {
   type ReviewThread,
   type ReviewThreadAnnotation,
 } from "../../lib/review-threads";
-import type { FileStatsEntry, ReviewCommentSide } from "../../types/github";
+import type { FileStatsEntry, ReviewCommentSide } from "../../types/forge";
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
@@ -46,7 +46,7 @@ const DIFF_FONT_STYLE = {
 } as CSSProperties;
 
 type SelectedPatch = {
-  repo: string;
+  repoId: string;
   number: number;
   headSha: string;
   patch: string;
@@ -268,7 +268,7 @@ function PatchViewerMain({
   } = usePullRequestReviewCommentMutations(
     selectedPatch
       ? {
-          repo: selectedPatch.repo,
+          repoId: selectedPatch.repoId,
           number: selectedPatch.number,
           headSha: selectedPatch.headSha,
         }
@@ -317,10 +317,12 @@ function PatchViewerMain({
 
     try {
       await createCommentMutation.mutateAsync({
-        repo: selectedPatch.repo,
+        repoId: selectedPatch.repoId,
         number: selectedPatch.number,
         body,
         path: draftCommentTarget.path,
+        oldPath: draftCommentTarget.path,
+        newPath: draftCommentTarget.path,
         line:
           draftCommentTarget.type === "line" ? draftCommentTarget.line : null,
         side:
@@ -353,6 +355,8 @@ function PatchViewerMain({
     }
 
     await replyCommentMutation.mutateAsync({
+      repoId: selectedPatch.repoId,
+      number: selectedPatch.number,
       threadId: thread.id,
       body,
     });
@@ -362,8 +366,17 @@ function PatchViewerMain({
     if (!selectedPatch || !comment.id) {
       throw new Error("This comment cannot be edited from the app.");
     }
+    const parentThread = reviewThreads.find((thread) =>
+      thread.comments.some((item) => item.id === comment.id),
+    );
+    if (!parentThread?.id) {
+      throw new Error("This comment cannot be edited from the app.");
+    }
 
     await updateCommentMutation.mutateAsync({
+      repoId: selectedPatch.repoId,
+      number: selectedPatch.number,
+      threadId: parentThread.id,
       commentId: comment.id,
       body,
     });
@@ -571,7 +584,7 @@ function PatchViewerMain({
                         return (
                           <div
                             data-file-path={fileDiff.name}
-                            key={`${selectedPatch.repo}-${selectedPatch.number}-${normalizePath(fileDiff.name)}`}
+                            key={`${selectedPatch.repoId}-${selectedPatch.number}-${normalizePath(fileDiff.name)}`}
                             ref={(node) =>
                               navigator.diff.registerDiffNode(
                                 fileDiff.name,

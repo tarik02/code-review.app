@@ -1,9 +1,10 @@
 import { MoonIcon, PlusIcon, SunIcon } from "@heroicons/react/20/solid";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Accordion } from "./accordion";
 import { AppUpdater } from "./app-updater";
 import { RepoSidebarItem, type PullRequestSummary } from "./repo-sidebar-item";
-import type { RepoSummary } from "../../types/github";
+import { trpc } from "../../lib/trpc";
+import type { RepoSummary } from "../../types/forge";
+import type { CSSProperties } from "react";
 
 type RepoSidebarProps = {
   repos: RepoSummary[];
@@ -34,21 +35,24 @@ function RepoSidebar({
   onRemovePr,
   onRepoOpenChange,
 }: RepoSidebarProps) {
-  const appWindow = getCurrentWindow();
+  const dragRegionStyle = {
+    WebkitAppRegion: "drag",
+  } as CSSProperties & { WebkitAppRegion: string };
+  const noDragRegionStyle = {
+    WebkitAppRegion: "no-drag",
+  } as CSSProperties & { WebkitAppRegion: string };
 
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-ink-300 bg-canvas md:border-b-0">
       <div
         aria-hidden="true"
         className="h-8 shrink-0 cursor-grab bg-canvas active:cursor-grabbing"
-        data-tauri-drag-region
+        style={dragRegionStyle}
         onMouseDown={(event) => {
           if (event.button !== 0) return;
           if (event.detail === 2) {
-            void appWindow.toggleMaximize();
-            return;
+            void trpc.window.toggleMaximize.mutate();
           }
-          void appWindow.startDragging();
         }}
       />
       <div className="sticky top-0 z-10 flex w-full items-center gap-2.5 border-b border-neutral-300 dark:border-neutral-700 bg-canvas px-3 py-2.5 text-sm font-medium">
@@ -64,6 +68,7 @@ function RepoSidebar({
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
             onClick={onToggleTheme}
+            style={noDragRegionStyle}
             type="button"
           >
             {isDark ? (
@@ -77,6 +82,7 @@ function RepoSidebar({
           aria-label="Add repo"
           className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
           onClick={onAddRepo}
+          style={noDragRegionStyle}
           type="button"
         >
           <PlusIcon className="size-5 shrink-0" />
@@ -87,17 +93,19 @@ function RepoSidebar({
         <Accordion multiple value={openValues}>
           {repos.map((repo) => (
             <RepoSidebarItem
-              key={repo.nameWithOwner}
-              value={repo.nameWithOwner}
+              key={repo.id}
+              value={repo.id}
+              avatarUrl={repo.avatarUrl}
+              host={repo.host}
               nameWithOwner={repo.nameWithOwner}
-              pullRequests={prsByRepo[repo.nameWithOwner]}
-              error={repoErrors[repo.nameWithOwner]}
+              pullRequests={prsByRepo[repo.id]}
+              error={repoErrors[repo.id]}
               selectedPrKey={selectedPrKey}
               onSelectPr={(name, pr) => onSelectPr(name, pr)}
               onAddPr={(name) => onAddPr(name)}
               onRemovePr={(name, pr) => onRemovePr(name, pr)}
               onOpenChange={(open) =>
-                onRepoOpenChange(repo.nameWithOwner, open)
+                onRepoOpenChange(repo.id, open)
               }
             />
           ))}

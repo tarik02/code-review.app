@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { useWorkerPool } from "@pierre/diffs/react";
 import {
   parsePatchFiles,
@@ -18,7 +17,7 @@ import type { GitStatusEntry } from "@pierre/trees";
 import { RepoSidebar } from "./components/ui/repo-sidebar";
 import { TrackPullRequestModal } from "./components/ui/track-pull-request-modal";
 import { PatchViewerMain } from "./components/ui/patch-viewer-main";
-import { GhCliGateScreen } from "./components/ui/gh-cli-gate-screen";
+import { CliGateScreen } from "./components/ui/cli-gate-screen";
 import PatchParserWorker from "./pierre-patch-parser-worker.ts?worker";
 import {
   getErrorMessage,
@@ -26,23 +25,25 @@ import {
   useSavedRepos,
   useSelectedPullRequestData,
   useTrackedPullRequests,
-} from "./hooks/use-github-queries";
+} from "./hooks/use-forge-queries";
 import { useTheme } from "./hooks/use-theme";
 import { buildReviewThreadsByFile } from "./lib/review-threads";
+import { trpc } from "./lib/trpc";
 import {
-  ghCliStatusQueryOptions,
-  githubKeys,
+  cliStatusesQueryOptions,
+  forgeKeys,
   pullRequestListQueryOptions,
   savedReposQueryOptions,
-} from "./queries/github";
+} from "./queries/forge";
 import type {
   FileStatsEntry,
-  GhCliStatus,
-  GhCliStatusKind,
+  ForgeProviderKind,
+  CliStatus,
+  CliStatusKind,
   PullRequestSummary,
   RepoSummary,
   SelectedPullRequest,
-} from "./types/github";
+} from "./types/forge";
 
 type ParsedPatchState = {
   fileDiffs: FileDiffMetadata[];
@@ -82,11 +83,19 @@ function parsePatchLocally(
 }
 
 const AGGRESSIVE_PATCH_CONTEXT_SIZE = 3;
-// Manual simulation override for GH CLI preflight.
+// Manual simulation override for provider CLI preflight.
 // Set to one of: "ready", "missing_cli", "not_authenticated", "unknown_error".
-const GH_CLI_STATUS_OVERRIDE: GhCliStatusKind | null = null;
+const CLI_STATUS_OVERRIDE: CliStatusKind | null = null;
 type PullRequestPickerMode = "repo-then-pr" | "pr-only";
 type PullRequestPickerStep = "repo" | "pull-request";
+
+function normalizeHostInput(host: string) {
+  return host
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
 
 function MainApp() {
   const queryClient = useQueryClient();
@@ -102,6 +111,9 @@ function MainApp() {
   );
   const [pickerStep, setPickerStep] = useState<PullRequestPickerStep>("repo");
   const [pickerRepo, setPickerRepo] = useState<RepoSummary | null>(null);
+  const [repoPickerProvider, setRepoPickerProvider] =
+    useState<ForgeProviderKind>("github");
+  const [gitlabHost, setGitlabHost] = useState("gitlab.com");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSavingRepo, setIsSavingRepo] = useState(false);
@@ -130,8 +142,26 @@ function MainApp() {
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const { repos = [] } = useSavedRepos();
+  const activePickerHost =
+    repoPickerProvider === "gitlab"
+      ? normalizeHostInput(gitlabHost) || "gitlab.com"
+      : "github.com";
+  const pickerCliStatusesQuery = useQuery({
+    ...cliStatusesQueryOptions(activePickerHost),
+    enabled: isPickerOpen,
+  });
+  const pickerProviderStatus =
+    pickerCliStatusesQuery.data?.[`${repoPickerProvider}:${activePickerHost}`] ??
+    null;
+  const canLoadPickerRepos =
+    isPickerOpen && pickerProviderStatus?.status === "ready";
   const { availableRepos, availableReposError, isLoadingRepos } =
-    useRepoPickerRepos(debouncedQuery);
+    useRepoPickerRepos(
+      debouncedQuery,
+      repoPickerProvider,
+      activePickerHost,
+      canLoadPickerRepos,
+    );
   const { prsByRepo, repoErrors, refreshTrackedPullRequests } =
     useTrackedPullRequests({
       repos,
@@ -225,7 +255,7 @@ function MainApp() {
   }, []);
 
   const selectedPrKey = selectedPr
-    ? `${selectedPr.repo}#${selectedPr.number}@${selectedPr.headSha}`
+    ? `${selectedPr.repoId}#${selectedPr.number}@${selectedPr.headSha}`
     : null;
   const {
     changedFiles,
@@ -244,32 +274,32 @@ function MainApp() {
   );
 
   const addedRepoKeys = useMemo(
-    () => new Set(repos.map((r) => r.nameWithOwner)),
+    () => new Set(repos.map((r) => r.id)),
     [repos],
   );
 
   const filteredRepos = useMemo(
-    () => availableRepos.filter((r) => !addedRepoKeys.has(r.nameWithOwner)),
+    () => availableRepos.filter((r) => !addedRepoKeys.has(r.id)),
     [availableRepos, addedRepoKeys],
   );
   const repoNames = useMemo(
-    () => repos.map((repo) => repo.nameWithOwner),
+    () => repos.map((repo) => repo.id),
     [repos],
   );
-  const pickerRepoName = pickerRepo?.nameWithOwner ?? null;
+  const pickerRepoId = pickerRepo?.id ?? null;
   const pickerOpenPullRequestsQuery = useQuery({
-    ...pullRequestListQueryOptions(pickerRepoName ?? "__idle__"),
+    ...pullRequestListQueryOptions(pickerRepoId ?? "__idle__"),
     enabled:
       isPickerOpen &&
       pickerStep === "pull-request" &&
-      pickerRepoName !== null,
+      pickerRepoId !== null,
   });
   const pickerOpenPullRequests = pickerOpenPullRequestsQuery.data ?? [];
   const trackedPrNumbersForPicker = useMemo(() => {
-    if (!pickerRepoName) return new Set<number>();
-    const trackedPullRequests = prsByRepo[pickerRepoName] ?? [];
+    if (!pickerRepoId) return new Set<number>();
+    const trackedPullRequests = prsByRepo[pickerRepoId] ?? [];
     return new Set(trackedPullRequests.map((pullRequest) => pullRequest.number));
-  }, [pickerRepoName, prsByRepo]);
+  }, [pickerRepoId, prsByRepo]);
   const addablePullRequests = useMemo(
     () =>
       pickerOpenPullRequests.filter(
@@ -331,7 +361,7 @@ function MainApp() {
       type: "parse-patch",
       requestId: parseRequestIdRef.current,
       patch: selectedPatch.patch,
-      cacheKeyPrefix: `${selectedPatch.repo}-${selectedPatch.number}-${selectedPatch.headSha}`,
+      cacheKeyPrefix: `${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}`,
       // Be aggressive here: the review UI only needs enough surrounding lines
       // to orient the reader before Pierre's expand/collapse affordances take over.
       contextSize: AGGRESSIVE_PATCH_CONTEXT_SIZE,
@@ -365,13 +395,13 @@ function MainApp() {
 
   useEffect(() => {
     for (const repo of repos) {
-      const repoName = repo.nameWithOwner;
-      if (refreshedReposRef.current.has(repoName)) {
+      const repoId = repo.id;
+      if (refreshedReposRef.current.has(repoId)) {
         continue;
       }
 
-      refreshedReposRef.current.add(repoName);
-      void refreshTrackedPullRequests(repoName);
+      refreshedReposRef.current.add(repoId);
+      void refreshTrackedPullRequests(repoId);
     }
   }, [refreshTrackedPullRequests, repos]);
 
@@ -415,17 +445,17 @@ function MainApp() {
     });
   }
 
-  function handleSelectPr(repo: string, pullRequest: PullRequestSummary) {
+  function handleSelectPr(repoId: string, pullRequest: PullRequestSummary) {
     setSelectedPr({
-      repo,
+      repoId,
       number: pullRequest.number,
       headSha: pullRequest.headSha,
     });
 
-    if (!refreshedReposRef.current.has(repo)) {
-      refreshedReposRef.current.add(repo);
+    if (!refreshedReposRef.current.has(repoId)) {
+      refreshedReposRef.current.add(repoId);
     }
-    void refreshTrackedPullRequests(repo);
+    void refreshTrackedPullRequests(repoId);
   }
 
   function resetPickerState() {
@@ -444,9 +474,13 @@ function MainApp() {
     setIsPickerOpen(true);
   }
 
-  function openRepoPullRequestPicker(repoNameWithOwner: string) {
-    const repo = repos.find((candidate) => candidate.nameWithOwner === repoNameWithOwner);
+  function openRepoPullRequestPicker(repoId: string) {
+    const repo = repos.find((candidate) => candidate.id === repoId);
     if (!repo) return;
+    setRepoPickerProvider(repo.provider);
+    if (repo.provider === "gitlab") {
+      setGitlabHost(repo.host);
+    }
     setPickerMode("pr-only");
     setPickerStep("pull-request");
     setPickerRepo(repo);
@@ -456,14 +490,14 @@ function MainApp() {
   async function handlePickRepo(repo: RepoSummary) {
     setIsSavingRepo(true);
     try {
-      const savedRepo = await invoke<RepoSummary>("save_repo", { repo });
+      const savedRepo = await trpc.repos.save.mutate({ repo });
       queryClient.setQueryData<RepoSummary[]>(
         savedReposQueryOptions().queryKey,
         (current) => {
           if (!current) return [savedRepo];
           if (
             current.some(
-              (item) => item.nameWithOwner === savedRepo.nameWithOwner,
+              (item) => item.id === savedRepo.id,
             )
           ) {
             return current;
@@ -475,9 +509,9 @@ function MainApp() {
       setPickerRepo(savedRepo);
       setPickerStep("pull-request");
       setOpenRepoValues((current) =>
-        current.includes(savedRepo.nameWithOwner)
+        current.includes(savedRepo.id)
           ? current
-          : [...current, savedRepo.nameWithOwner],
+          : [...current, savedRepo.id],
       );
     } finally {
       setIsSavingRepo(false);
@@ -485,16 +519,16 @@ function MainApp() {
   }
 
   async function handleTrackPullRequest(pullRequest: PullRequestSummary) {
-    if (!pickerRepoName) return;
+    if (!pickerRepoId) return;
 
     setIsTrackingPullRequest(true);
     try {
-      const trackedPullRequest = await invoke<PullRequestSummary>("track_pull_request", {
-        repo: pickerRepoName,
+      const trackedPullRequest = await trpc.tracked.track.mutate({
+        repoId: pickerRepoId,
         pullRequest,
       });
       queryClient.setQueryData<PullRequestSummary[]>(
-        githubKeys.trackedPullRequestList(pickerRepoName),
+        forgeKeys.trackedPullRequestList(pickerRepoId),
         (current) => {
           const list = current ?? [];
           const withoutCurrent = list.filter(
@@ -505,7 +539,7 @@ function MainApp() {
       );
 
       setSelectedPr({
-        repo: pickerRepoName,
+        repoId: pickerRepoId,
         number: trackedPullRequest.number,
         headSha: trackedPullRequest.headSha,
       });
@@ -517,22 +551,22 @@ function MainApp() {
   }
 
   async function handleRemoveTrackedPullRequest(
-    repo: string,
+    repoId: string,
     pullRequest: PullRequestSummary,
   ) {
-    await invoke("remove_tracked_pull_request", {
-      repo,
+    await trpc.tracked.remove.mutate({
+      repoId,
       number: pullRequest.number,
     });
     queryClient.setQueryData<PullRequestSummary[]>(
-      githubKeys.trackedPullRequestList(repo),
+      forgeKeys.trackedPullRequestList(repoId),
       (current) =>
         (current ?? []).filter((item) => item.number !== pullRequest.number),
     );
 
     setSelectedPr((current) => {
       if (!current) return current;
-      if (current.repo !== repo || current.number !== pullRequest.number) {
+      if (current.repoId !== repoId || current.number !== pullRequest.number) {
         return current;
       }
       return null;
@@ -594,6 +628,19 @@ function MainApp() {
         mode={pickerMode}
         step={pickerStep}
         selectedRepo={pickerRepo}
+        provider={repoPickerProvider}
+        gitlabHost={gitlabHost}
+        providerStatus={pickerProviderStatus}
+        onProviderChange={(provider) => {
+          setRepoPickerProvider(provider);
+          setSearchQuery("");
+          setDebouncedQuery("");
+        }}
+        onGitlabHostChange={(host) => {
+          setGitlabHost(host);
+          setSearchQuery("");
+          setDebouncedQuery("");
+        }}
         searchQuery={searchQuery}
         onSearchChange={updateSearch}
         isLoadingRepos={isLoadingRepos}
@@ -605,7 +652,7 @@ function MainApp() {
         isLoadingPullRequests={
           isPickerOpen &&
           pickerStep === "pull-request" &&
-          pickerRepoName !== null &&
+          pickerRepoId !== null &&
           pickerOpenPullRequestsQuery.isPending
         }
         pullRequestsError={pickerPullRequestsError}
@@ -624,43 +671,53 @@ function MainApp() {
 
 function App() {
   const queryClient = useQueryClient();
-  const ghCliStatusQuery = useQuery({
-    ...ghCliStatusQueryOptions(),
-    enabled: GH_CLI_STATUS_OVERRIDE === null,
+  const cliStatusesQuery = useQuery({
+    ...cliStatusesQueryOptions("gitlab.com"),
+    enabled: CLI_STATUS_OVERRIDE === null,
   });
-  const simulatedGhCliStatus: GhCliStatus | null = GH_CLI_STATUS_OVERRIDE
+  const simulatedCliStatus: CliStatus | null = CLI_STATUS_OVERRIDE
     ? {
-        status: GH_CLI_STATUS_OVERRIDE,
-        message: "Simulated via GH_CLI_STATUS_OVERRIDE in App.tsx.",
+        status: CLI_STATUS_OVERRIDE,
+        message: "Simulated via CLI_STATUS_OVERRIDE in App.tsx.",
       }
     : null;
-  const ghCliStatus = simulatedGhCliStatus ?? ghCliStatusQuery.data ?? null;
-  const isCheckingGhCli =
-    GH_CLI_STATUS_OVERRIDE === null &&
-    (ghCliStatusQuery.isPending || ghCliStatusQuery.isFetching);
-  const ghCliStatusMessage =
-    ghCliStatus?.message ?? (getErrorMessage(ghCliStatusQuery.error) || null);
+  const cliStatuses = cliStatusesQuery.data ?? {};
+  const providerStatuses = simulatedCliStatus
+    ? [simulatedCliStatus]
+    : Object.values(cliStatuses);
+  const hasReadyProvider = providerStatuses.some(
+    (status) => status.status === "ready",
+  );
+  const gateStatus =
+    providerStatuses.find((status) => status.status !== "missing_cli") ??
+    providerStatuses[0] ??
+    null;
+  const isCheckingCli =
+    CLI_STATUS_OVERRIDE === null &&
+    (cliStatusesQuery.isPending || cliStatusesQuery.isFetching);
+  const cliStatusMessage =
+    gateStatus?.message ?? (getErrorMessage(cliStatusesQuery.error) || null);
 
   const checkAgain = useCallback(() => {
     void queryClient.invalidateQueries({
-      queryKey: githubKeys.ghCliStatus(),
+      queryKey: forgeKeys.cliStatuses("gitlab.com"),
     });
   }, [queryClient]);
 
-  if (isCheckingGhCli) {
+  if (isCheckingCli && providerStatuses.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-black text-white">
-        <p className="text-center text-base">check for gh auth status</p>
+        <p className="text-center text-base">checking provider auth status</p>
       </div>
     );
   }
 
-  if (!ghCliStatus || ghCliStatus.status !== "ready") {
+  if (!hasReadyProvider) {
     return (
-      <GhCliGateScreen
-        status={ghCliStatus?.status ?? "unknown_error"}
-        message={ghCliStatusMessage}
-        isChecking={isCheckingGhCli}
+      <CliGateScreen
+        status={gateStatus?.status ?? "unknown_error"}
+        message={cliStatusMessage}
+        isChecking={isCheckingCli}
         onCheckAgain={checkAgain}
       />
     );

@@ -1,11 +1,13 @@
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
 import { AlertDialog, AlertDialogContent } from "./alert-dialog";
-import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/github-owner";
+import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
 import {
   PullRequestBadgeStatus,
+  type ForgeProviderKind,
+  type CliStatus,
   type PullRequestSummary,
   type RepoSummary,
-} from "../../types/github";
+} from "../../types/forge";
 import LucideGitBranch from "../../assets/icons/LucideGitBranch";
 import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
 import LucideGitMerge from "../../assets/icons/LucideGitMerge";
@@ -20,6 +22,11 @@ type TrackPullRequestModalProps = {
   mode: TrackPullRequestModalMode;
   step: TrackPullRequestModalStep;
   selectedRepo: RepoSummary | null;
+  provider: ForgeProviderKind;
+  gitlabHost: string;
+  providerStatus: CliStatus | null;
+  onProviderChange: (provider: ForgeProviderKind) => void;
+  onGitlabHostChange: (host: string) => void;
   searchQuery: string;
   onSearchChange: (value: string) => void;
   isLoadingRepos: boolean;
@@ -37,6 +44,11 @@ type TrackPullRequestModalProps = {
 
 type RepoSelectionStepProps = {
   searchQuery: string;
+  provider: ForgeProviderKind;
+  gitlabHost: string;
+  providerStatus: CliStatus | null;
+  onProviderChange: (provider: ForgeProviderKind) => void;
+  onGitlabHostChange: (host: string) => void;
   onSearchChange: (value: string) => void;
   isLoadingRepos: boolean;
   availableReposError: unknown;
@@ -47,6 +59,11 @@ type RepoSelectionStepProps = {
 
 function RepoSelectionStep({
   searchQuery,
+  provider,
+  gitlabHost,
+  providerStatus,
+  onProviderChange,
+  onGitlabHostChange,
   onSearchChange,
   isLoadingRepos,
   availableReposError,
@@ -64,12 +81,47 @@ function RepoSelectionStep({
       </AlertDialogHeader>*/}
 
       <div className="mb-4 flex min-h-0 flex-col gap-2.5">
+        <div className="flex items-center gap-2 px-4 pt-3">
+          {(["github", "gitlab"] as const).map((item) => (
+            <button
+              className={[
+                "rounded-md px-2.5 py-1 text-xs font-medium transition",
+                provider === item
+                  ? "bg-ink-900 text-white dark:bg-ink-200 dark:text-ink-900"
+                  : "bg-canvas text-ink-600 hover:bg-canvasDark",
+              ].join(" ")}
+              key={item}
+              onClick={() => onProviderChange(item)}
+              type="button"
+            >
+              {item === "github" ? "GitHub" : "GitLab"}
+            </button>
+          ))}
+        </div>
+        {provider === "gitlab" ? (
+          <input
+            className="mx-4 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-none transition placeholder:text-neutral-400 dark:border-neutral-700"
+            onChange={(event) => onGitlabHostChange(event.currentTarget.value)}
+            placeholder="gitlab.com"
+            value={gitlabHost}
+          />
+        ) : null}
+        {providerStatus && providerStatus.status !== "ready" ? (
+          <div className="mx-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            {providerStatus.message ??
+              `${provider === "github" ? "GitHub" : "GitLab"} CLI is not ready.`}
+          </div>
+        ) : null}
         <input
           autoFocus
           className="w-full border-b border-neutral-200 dark:border-neutral-700 bg-surface px-4 py-3 outline-none transition placeholder:text-neutral-400"
           disabled={isLoadingRepos || isSavingRepo}
           onChange={(event) => onSearchChange(event.currentTarget.value)}
-          placeholder="Search Repositories by title"
+          placeholder={
+            provider === "gitlab"
+              ? "Search projects or paste a GitLab project URL"
+              : "Search repositories by title"
+          }
           value={searchQuery}
         />
 
@@ -77,7 +129,7 @@ function RepoSelectionStep({
 
         {isLoadingRepos ? (
           <div className="px-4 py-3 text-sm text-ink-500">
-            Loading repos via gh...
+            Loading repositories...
           </div>
         ) : null}
 
@@ -100,7 +152,7 @@ function RepoSelectionStep({
                 <button
                   className="w-full rounded-lg  bg-surface py-2.5 px-2 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
                   disabled={isSavingRepo}
-                  key={repo.nameWithOwner}
+                  key={repo.id}
                   onClick={() => onPickRepo(repo)}
                   type="button"
                 >
@@ -109,7 +161,7 @@ function RepoSelectionStep({
                       alt={`${getOwnerLogin(repo.nameWithOwner)} avatar`}
                       className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
                       loading="lazy"
-                      src={getOwnerAvatarUrl(repo.nameWithOwner)}
+                      src={repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner)}
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 text-sm">
@@ -228,6 +280,30 @@ function PullRequestStatusIcon({ status }: { status: PullRequestBadgeStatus }) {
   }
 }
 
+function formatChangeSummary(pullRequest: PullRequestSummary) {
+  if (
+    pullRequest.additions !== null &&
+    pullRequest.deletions !== null
+  ) {
+    return (
+      <>
+        <span className="text-green-600 dark:text-green-300">
+          +{pullRequest.additions}
+        </span>{" "}
+        <span className="text-red-600 dark:text-red-300">
+          -{pullRequest.deletions}
+        </span>
+      </>
+    );
+  }
+
+  if (pullRequest.changeCount !== null) {
+    return <span className="text-ink-600">{pullRequest.changeCount} files</span>;
+  }
+
+  return <span className="text-ink-600">changes</span>;
+}
+
 function PullRequestSelectionStep({
   mode,
   selectedRepo,
@@ -300,12 +376,7 @@ function PullRequestSelectionStep({
                         </p>
                       </div>
                       <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">
-                        <span className="text-green-600 dark:text-green-300">
-                          +{pullRequest.additions}
-                        </span>{" "}
-                        <span className="text-red-600 dark:text-red-300">
-                          -{pullRequest.deletions}
-                        </span>
+                        {formatChangeSummary(pullRequest)}
                       </p>
                     </div>
                   </button>
@@ -325,6 +396,11 @@ function TrackPullRequestModal({
   mode,
   step,
   selectedRepo,
+  provider,
+  gitlabHost,
+  providerStatus,
+  onProviderChange,
+  onGitlabHostChange,
   searchQuery,
   onSearchChange,
   isLoadingRepos,
@@ -349,10 +425,15 @@ function TrackPullRequestModal({
           <RepoSelectionStep
             availableReposError={availableReposError}
             filteredRepos={filteredRepos}
+            gitlabHost={gitlabHost}
+            providerStatus={providerStatus}
             isLoadingRepos={isLoadingRepos}
             isSavingRepo={isSavingRepo}
             onPickRepo={onPickRepo}
+            onGitlabHostChange={onGitlabHostChange}
+            onProviderChange={onProviderChange}
             onSearchChange={onSearchChange}
+            provider={provider}
             searchQuery={searchQuery}
           />
         ) : null}

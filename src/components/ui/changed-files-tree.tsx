@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileTree } from "@pierre/trees/react";
-import type { FileStatsEntry } from "../../types/github";
+import type { FileStatsEntry } from "../../types/forge";
 
 type ChangedFilesTreeProps = {
   files: string[];

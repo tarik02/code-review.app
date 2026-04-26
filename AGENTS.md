@@ -1,12 +1,13 @@
 # AGENTS.md
 
 ## Purpose
-This project is a local Tauri app for browsing GitHub PRs and rendering diffs with Pierre components.
+This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rendering diffs with Pierre components.
 
 ## Stack
 - Frontend: React + TypeScript + Vite + Tailwind
-- Desktop shell: Tauri (Rust backend in `src-tauri`)
-- Data source: GitHub CLI (`gh`) invoked from Rust commands
+- Desktop shell: Electron
+- Backend: TypeScript in Electron main process, Effect services, tRPC over Electron IPC
+- Data source: GitHub CLI (`gh`) and GitLab CLI (`glab`) invoked from the Electron backend
 - JavaScript package manager/runtime: Bun
 
 ## Important Structure
@@ -14,10 +15,12 @@ This project is a local Tauri app for browsing GitHub PRs and rendering diffs wi
 - `src/components/ui/repo-sidebar.tsx`: repo + PR list/selection.
 - `src/components/ui/patch-viewer-main.tsx`: main patch area, tree/diff layout, tree hide/show UX.
 - `src/components/ui/changed-files-tree.tsx`: changed-files tree panel.
-- `src-tauri/src/lib.rs`: Tauri bootstrap, command registration, and top-level wiring.
-- `src-tauri/src/models/`: Rust app DTOs and GitHub wire/query structs.
-- `src-tauri/src/github/`: `gh` transport helpers and GitHub-focused utility functions.
-- `src-tauri/src/support/`: shared Rust helpers (`parse_repo`, small conversions/time helpers).
+- `src/queries/forge.ts`: renderer React Query options backed by tRPC.
+- `src/lib/trpc.ts`: renderer tRPC client.
+- `electron/main/`: Electron bootstrap, window security, updater, and tRPC IPC registration.
+- `electron/preload/`: isolated preload exposure for `electron-trpc`.
+- `electron/shared/`: shared DTOs and tRPC router type.
+- `electron/backend/`: Effect services, provider implementations, CLI execution, repo id helpers, and SQLite cache.
 
 ## Current UX Behavior (keep consistent)
 - App shell is fixed to viewport height (`h-screen`) with internal scrolling only.
@@ -26,9 +29,12 @@ This project is a local Tauri app for browsing GitHub PRs and rendering diffs wi
 - File tree can be hidden; hidden state uses Base UI Popover to access the tree.
 
 ## Backend Contract
-- `list_pull_requests(repo)` returns PR summaries.
-- `get_pull_request_patch(repo, number)` returns patch text for rendering.
-- `list_pull_request_changed_files(repo, number)` returns changed file paths (via `gh pr diff --name-only`).
+- `pullRequests.list(repoId)` returns PR/MR summaries and refreshes the repo cache.
+- `pullRequests.getPatch(repoId, number, headSha)` returns patch text for rendering.
+- `pullRequests.listChangedFiles(repoId, number, headSha)` returns changed file paths.
+- `tracked.*` owns tracked PR persistence.
+- `reviewComments.*` owns viewer login, review thread loading, creation, replies, and updates.
+- `preflight.getCliStatuses(gitlabHost)` reports provider CLI readiness.
 
 ## Dependency Notes
 - Use `@pierre/trees@0.0.1-beta.4`.
@@ -40,28 +46,29 @@ This project is a local Tauri app for browsing GitHub PRs and rendering diffs wi
 - Keep tree and diff states decoupled: one may fail while the other still renders.
 - Use Bun everywhere for JS tasks (`bun install`, `bun add`, `bun run ...`); do not use npm.
 
-## Rust Backend Architecture
-- `src-tauri/src/lib.rs`: app bootstrap only (plugins, `invoke_handler`, setup wiring).
-- `src-tauri/src/commands/`: Tauri command entrypoints only.
-  - `repos.rs`: list_initial_repos, search_repos, validate_repo, list_saved_repos, save_repo
-  - `pull_requests.rs`: list_cached_pull_requests, list_pull_requests, get_pull_request_patch, list_pull_request_changed_files
-  - `review_comments.rs`: create_pull_request_review_comment, reply_to_pull_request_review_comment, update_pull_request_review_comment, get_pull_request_review_threads, get_viewer_login
-- `src-tauri/src/github/`: `run_gh`, `run_gh_graphql`, `ensure_user_context`, `get_viewer_login_sync`, `get_pull_request_node_id_sync`
-- `src-tauri/src/cache/`: SQLite init, read/write for repos, PRs, patches, changed files
-- `src-tauri/src/models/`: app-facing DTOs (`PullRequestSummary`, `RepoSummary`, `ReviewThread`, …) + GitHub wire structs (`GhPullRequest`, `GraphQlReviewThread`, …)
-- `src-tauri/src/support/`: `parse_repo`, `now_unix_timestamp`, `bool_to_sql`, `sql_to_bool`
+## Electron Backend Architecture
+- `electron/main/index.ts`: app lifecycle only.
+- `electron/main/window.ts`: BrowserWindow creation, preload wiring, and navigation/window-open security.
+- `electron/main/trpc.ts`: tRPC IPC registration only.
+- `electron/main/updater.ts`: Electron updater integration.
+- `electron/shared/router.ts`: tRPC procedures as thin adapters over Effect services.
+- `electron/backend/cache.ts`: SQLite init and cache persistence.
+- `electron/backend/providers/`: forge provider implementations for GitHub and GitLab.
+- `electron/backend/cli/`: command execution helpers and CLI discovery.
+- `electron/backend/services/`: domain services for repos, PRs, tracked PRs, review comments, and diff data.
 
 ### Module Boundary Rules
-- Commands call services/helpers; commands should not contain SQL or large GraphQL strings.
-- Cache module should not depend on Tauri command macros.
-- GitHub module should own `run_gh` / `run_gh_graphql` and API payload parsing.
-- Keep frontend command names stable when refactoring (do not break `invoke("...")` contracts).
-- Prefer domain modules over generic `utils.rs` growth.
+- tRPC procedures call services; procedures should not contain SQL or large provider payload parsing.
+- Cache code should stay isolated from Electron window/UI concerns.
+- Provider modules own CLI commands and API/GraphQL payload parsing.
+- Keep renderer query keys stable when refactoring.
+- Prefer domain modules over generic utility growth.
 
 ## Build/Run Policy
 - NEVER build the app yourself.
 - Do not run build commands like:
   - `bun run build`
-  - `cargo build`
-  - `tauri build`
+  - `electron-vite build`
+  - `electron-builder`
+- Never start the dev server.
 - Only run build/check commands if the user explicitly asks for them in the current session.
