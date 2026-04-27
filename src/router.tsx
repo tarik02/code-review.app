@@ -7,6 +7,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { AuthRoute } from "./routes/auth-route";
+import { AppearanceRoute } from "./routes/appearance-route";
 import { HomeRoute } from "./routes/home-route";
 import { ProfilesRoute } from "./routes/profiles-route";
 import { SettingsLayout } from "./routes/settings-layout";
@@ -62,9 +63,15 @@ const settingsRoute = createRoute({
   component: SettingsLayout,
   beforeLoad: ({ location }) => {
     if (location.pathname === "/settings") {
-      throw redirect({ to: "/settings/profiles" });
+      throw redirect({ to: "/settings/appearance" });
     }
   },
+});
+
+const appearanceRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "appearance",
+  component: AppearanceRoute,
 });
 
 const profilesRoute = createRoute({
@@ -76,7 +83,7 @@ const profilesRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
-  settingsRoute.addChildren([profilesRoute]),
+  settingsRoute.addChildren([appearanceRoute, profilesRoute]),
 ]);
 
 const router = createRouter({

@@ -54,6 +54,11 @@ type CacheServiceShape = {
     accountIds: string[],
     enabledAccountIds: string[],
   ): Effect.Effect<void, CacheError>;
+  readAppSetting(key: string): Effect.Effect<string | null, CacheError>;
+  writeAppSetting(
+    key: string,
+    valueJson: string,
+  ): Effect.Effect<void, CacheError>;
 };
 
 class CacheService extends Effect.Tag("CacheService")<
@@ -174,6 +179,12 @@ function getDatabase() {
     CREATE TABLE IF NOT EXISTS provider_account_visibility (
       provider_account_id TEXT PRIMARY KEY,
       is_enabled INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
   `);
@@ -617,6 +628,43 @@ const makeCacheService = Effect.gen(function* () {
       }),
   );
 
+  const readAppSetting: CacheServiceShape["readAppSetting"] = Effect.fn(
+    "CacheService.readAppSetting",
+  )((key) =>
+      wrap(() => {
+        const row = getDatabase()
+          .prepare(
+            `
+            SELECT value_json
+            FROM app_settings
+            WHERE key = ?
+            `,
+          )
+          .get(key) as { value_json: string } | undefined;
+
+        return row?.value_json ?? null;
+      }),
+  );
+
+  const writeAppSetting: CacheServiceShape["writeAppSetting"] = Effect.fn(
+    "CacheService.writeAppSetting",
+  )((key, valueJson) =>
+      wrap(() => {
+        getDatabase()
+          .prepare(
+            `
+            INSERT INTO app_settings (key, value_json, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key)
+            DO UPDATE SET
+              value_json = excluded.value_json,
+              updated_at = excluded.updated_at
+            `,
+          )
+          .run(key, valueJson, nowUnixTimestamp());
+      }),
+  );
+
   return {
     listSavedRepos,
     saveRepo,
@@ -632,6 +680,8 @@ const makeCacheService = Effect.gen(function* () {
     updateRepoAccessTimestamp,
     readProviderAccountVisibility,
     setProviderAccountVisibility,
+    readAppSetting,
+    writeAppSetting,
   } satisfies CacheServiceShape;
 });
 

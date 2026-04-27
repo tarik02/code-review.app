@@ -58,6 +58,14 @@ const accountVisibilitySettingsSchema = z.object({
   enabledAccountIds: z.array(z.string()),
 });
 
+const appearanceBackgroundInputSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("default") }),
+  z.object({
+    kind: z.literal("solid"),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  }),
+]);
+
 const providerProfileSchema = z.object({
   accountId: z.string(),
   login: z.string(),
@@ -116,6 +124,7 @@ const updatePullRequestReviewCommentInputSchema =
 
 export {
   accountVisibilitySettingsSchema,
+  appearanceBackgroundInputSchema,
   completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
   forgeProviderKindSchema,

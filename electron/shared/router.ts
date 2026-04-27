@@ -1,4 +1,4 @@
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { Effect } from "effect";
@@ -17,6 +17,7 @@ import {
 import {
   completeOAuthSchema,
   accountVisibilitySettingsSchema,
+  appearanceBackgroundInputSchema,
   createPullRequestReviewCommentInputSchema,
   providerAccountSchema,
   providerProfileSchema,
@@ -32,7 +33,7 @@ import {
   updatePullRequestReviewCommentInputSchema,
 } from "../backend/schemas";
 import { z } from "zod";
-import { app } from "electron";
+import { app, dialog } from "electron";
 import { completeOAuth, pollDeviceOAuth, startOAuth } from "../backend/auth/oauth";
 import { AuthTokenStore } from "../backend/auth/token-store";
 import {
@@ -164,6 +165,50 @@ const router = t.router({
           }),
         ),
       ),
+    getAppearanceBackground: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          return yield* service.getAppearanceBackground();
+        }),
+      ),
+    ),
+    setAppearanceBackground: t.procedure
+      .input(appearanceBackgroundInputSchema)
+      .mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setAppearanceBackground(input);
+          }),
+        ),
+      ),
+    selectCustomBackgroundFile: t.procedure.mutation(async ({ ctx }) => {
+      const openDialogOptions = {
+        properties: ["openFile"],
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"],
+          },
+        ],
+      } satisfies OpenDialogOptions;
+      const window = ctx.getWindow();
+      const result = window
+        ? await dialog.showOpenDialog(window, openDialogOptions)
+        : await dialog.showOpenDialog(openDialogOptions);
+
+      return runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          if (result.canceled || result.filePaths.length === 0) {
+            return yield* service.getAppearanceBackground();
+          }
+
+          return yield* service.setCustomBackgroundFromPath(result.filePaths[0]);
+        }),
+      );
+    }),
   }),
 
   deepLinks: t.router({

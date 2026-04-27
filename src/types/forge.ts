@@ -2,6 +2,8 @@ import type { GitStatusEntry } from "@pierre/trees";
 import { PullRequestBadgeStatus } from "../../electron/shared/types";
 import type {
   AccountVisibilitySettings,
+  AppearanceBackgroundInput,
+  AppearanceBackgroundSettings,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
   OverviewPullRequestSummary,
@@ -30,6 +32,8 @@ type FileStatsEntry = {
 export { PullRequestBadgeStatus };
 export type {
   AccountVisibilitySettings,
+  AppearanceBackgroundInput,
+  AppearanceBackgroundSettings,
   CreatePullRequestReviewCommentInput,
   FileStatsEntry,
   ForgeProviderKind,

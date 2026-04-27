@@ -168,7 +168,7 @@ function MainApp() {
   const activeRouteSearch = useSearch({ from: "/" });
   const navigate = useNavigate({ from: "/" });
   const queryClient = useQueryClient();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark } = useTheme();
   const workerPool = useWorkerPool();
   const activeRepoId = activeRouteSearch.repo ?? null;
   const activePullRequestNumber = activeRouteSearch.pr ?? null;
@@ -931,7 +931,6 @@ function MainApp() {
             view={sidebarView}
             selectedPrKey={selectedPrKey}
             trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
-            isDark={isDark}
             emptyState={
               <div className="px-3 py-8 text-center text-sm text-ink-500">
                 No repos visible for the selected accounts.
@@ -940,9 +939,6 @@ function MainApp() {
             onAddRepo={openRepoPicker}
             onAddPr={(repo) => void openRepoPullRequestPicker(repo)}
             onViewChange={setSidebarView}
-            onToggleTheme={(trigger) =>
-              toggleTheme({ kind: "reveal", trigger })
-            }
             onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
             onTrackPr={(repo, pullRequest) =>
               void handleTrackFromOverview(repo, pullRequest)

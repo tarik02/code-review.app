@@ -8,7 +8,7 @@ import {
 import { flushSync } from "react-dom";
 
 type Theme = "light" | "dark";
-type ThemePreference = Theme | "system";
+type ThemePreference = Theme | "auto";
 type ThemeTransitionKind = "reveal" | "fade" | "none";
 type ThemeTransitionOptions = {
   kind?: ThemeTransitionKind;
@@ -35,7 +35,7 @@ function getSystemTheme(): Theme {
 
 function getStoredPreference(): ThemePreference {
   if (typeof window === "undefined") {
-    return "system";
+    return "auto";
   }
 
   try {
@@ -47,11 +47,11 @@ function getStoredPreference(): ThemePreference {
     // Ignore storage errors and fall back to the system preference.
   }
 
-  return "system";
+  return "auto";
 }
 
 function resolveTheme(preference: ThemePreference, systemTheme: Theme): Theme {
-  return preference === "system" ? systemTheme : preference;
+  return preference === "auto" ? systemTheme : preference;
 }
 
 function applyDocumentTheme(theme: Theme) {
@@ -100,7 +100,7 @@ function useTheme() {
 
   useEffect(() => {
     try {
-      if (preference === "system") {
+      if (preference === "auto") {
         window.localStorage.removeItem(THEME_STORAGE_KEY);
       } else {
         window.localStorage.setItem(THEME_STORAGE_KEY, preference);
@@ -252,7 +252,7 @@ function useTheme() {
 
       runThemeTransition({
         kind:
-          currentPreference === "system" && currentTheme !== nextTheme
+          currentPreference === "auto" && currentTheme !== nextTheme
             ? "fade"
             : "none",
         update,
@@ -268,22 +268,6 @@ function useTheme() {
     return () => mediaQuery.removeListener(handleChange);
   }, [runThemeTransition]);
 
-  const toggleTheme = useCallback(
-    (options: ThemeTransitionOptions = {}) => {
-      const currentTheme = resolveTheme(
-        preferenceRef.current,
-        systemThemeRef.current,
-      );
-      const nextPreference = currentTheme === "dark" ? "light" : "dark";
-
-      setPreference(nextPreference, {
-        kind: options.kind ?? (options.trigger ? "reveal" : "fade"),
-        trigger: options.trigger,
-      });
-    },
-    [setPreference],
-  );
-
   useEffect(() => {
     return () => {
       const root = document.documentElement;
@@ -296,7 +280,7 @@ function useTheme() {
     };
   }, []);
 
-  return { theme, isDark, preference, setPreference, toggleTheme };
+  return { theme, isDark, preference, setPreference };
 }
 
 export { useTheme };

@@ -84,6 +84,20 @@ type AccountVisibilitySettings = {
   disabledAccountIds: string[];
 };
 
+type AppearanceBackgroundSettings =
+  | { kind: "default" }
+  | { kind: "solid"; color: string }
+  | {
+      kind: "customFile";
+      fileName: string;
+      mimeType: string;
+      dataUrl: string | null;
+    };
+
+type AppearanceBackgroundInput =
+  | { kind: "default" }
+  | { kind: "solid"; color: string };
+
 type ProviderProfile = {
   accountId: string;
   login: string;
@@ -187,6 +201,8 @@ type UpdateEvent =
 export { PullRequestBadgeStatus };
 export type {
   AccountVisibilitySettings,
+  AppearanceBackgroundInput,
+  AppearanceBackgroundSettings,
   AvailableUpdate,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,

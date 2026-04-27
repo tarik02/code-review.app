@@ -41,6 +41,15 @@ function SettingsLayout() {
                 className: "bg-canvasDark text-ink-900",
               }}
               className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
+              to="/settings/appearance"
+            >
+              Appearance
+            </Link>
+            <Link
+              activeProps={{
+                className: "bg-canvasDark text-ink-900",
+              }}
+              className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
               to="/settings/profiles"
             >
               Profiles

@@ -10,10 +10,11 @@ import type {
   VirtualizerConfig,
 } from "@pierre/diffs";
 import { parseDiffFromFile } from "@pierre/diffs";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileDiff, Virtualizer } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
+import { AppearanceBackground } from "./appearance-background";
 import { ReviewCommentEditor } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
@@ -21,7 +22,10 @@ import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-quer
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
 import { cx } from "../../lib/cx";
 import { trpc } from "../../lib/trpc";
-import { forgeKeys } from "../../queries/forge";
+import {
+  appearanceBackgroundQueryOptions,
+  forgeKeys,
+} from "../../queries/forge";
 import {
   getFileReviewThreadsForPath,
   isActiveReviewThread,
@@ -695,6 +699,7 @@ function PatchViewerMain({
   gitStatus,
 }: PatchViewerMainProps) {
   const queryClient = useQueryClient();
+  const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const [draftCommentTarget, setDraftCommentTarget] =
     useState<DraftReviewCommentTarget | null>(null);
   const [draftCommentError, setDraftCommentError] = useState("");
@@ -1287,11 +1292,9 @@ function PatchViewerMain({
     return (
       <main className="h-full min-h-0 min-w-0 pl-0">
         <section className="h-full min-h-0 min-w-0 overflow-hidden">
-          <img
-            alt=""
-            aria-hidden="true"
+          <AppearanceBackground
+            background={backgroundQuery.data}
             className="h-full w-full object-cover"
-            src="/outerworld.jpg"
           />
         </section>
       </main>

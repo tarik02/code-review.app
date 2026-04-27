@@ -1,10 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Cog6ToothIcon,
-  MoonIcon,
-  PlusIcon,
-  SunIcon,
-} from "@heroicons/react/20/solid";
+import { Cog6ToothIcon, PlusIcon } from "@heroicons/react/20/solid";
 import { Accordion } from "./accordion";
 import { AppUpdater } from "./app-updater";
 import {
@@ -32,12 +27,10 @@ type RepoSidebarProps = {
   view: SidebarPullRequestView;
   selectedPrKey: string | null;
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
-  isDark: boolean;
   emptyState?: ReactNode;
   onAddRepo: () => void;
   onAddPr: (repo: string) => void;
   onViewChange: (view: SidebarPullRequestView) => void;
-  onToggleTheme: (trigger?: HTMLElement | null) => void;
   onSelectPr: (repo: string, pullRequest: PullRequestSummary) => void;
   onTrackPr: (repo: string, pullRequest: PullRequestSummary) => void;
   onRemovePr: (repo: string, pullRequest: PullRequestSummary) => void;
@@ -68,12 +61,10 @@ function RepoSidebar({
   view,
   selectedPrKey,
   trackedPullRequestNumbersByRepo,
-  isDark,
   emptyState,
   onAddRepo,
   onAddPr,
   onViewChange,
-  onToggleTheme,
   onSelectPr,
   onTrackPr,
   onRemovePr,
@@ -104,33 +95,21 @@ function RepoSidebar({
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-ink-300 bg-canvas md:border-b-0">
       <div className="sticky top-0 z-10 flex flex-col">
-        <TopBar position="left" className="cursor-grab app-region-drag flex items-center justify-between gap-2.5 px-3">
-            <div>code-review.app</div>
+        <TopBar
+          position="left"
+          className="cursor-grab app-region-drag flex items-center justify-between gap-2.5 px-3"
+        >
+          <div>code-review.app</div>
 
-            <div className="flex items-center gap-2.5">
-              <button
-                aria-label={
-                  isDark ? "Switch to light mode" : "Switch to dark mode"
-                }
-                className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-                onClick={(event) => onToggleTheme(event.currentTarget)}
-                style={noDragRegionStyle}
-                type="button"
-              >
-                {isDark ? (
-                  <SunIcon className="size-5 shrink-0" />
-                ) : (
-                  <MoonIcon className="size-5 shrink-0" />
-                )}
-              </button>
-              <Link
-                aria-label="Settings"
-                className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-                style={noDragRegionStyle}
-                to="/settings/profiles"
-              >
-                <Cog6ToothIcon className="size-5 shrink-0" />
-              </Link>
+          <div className="flex items-center gap-2.5">
+            <Link
+              aria-label="Settings"
+              className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
+              style={noDragRegionStyle}
+              to="/settings/appearance"
+            >
+              <Cog6ToothIcon className="size-5 shrink-0" />
+            </Link>
           </div>
         </TopBar>
 

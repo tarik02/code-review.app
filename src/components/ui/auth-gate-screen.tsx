@@ -1,11 +1,14 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { appearanceBackgroundQueryOptions } from "../../queries/forge";
 import type {
   ForgeProviderKind,
   ProviderAccount,
   ProviderAuthStatus,
   ProviderAuthStatusKind,
 } from "../../types/forge";
+import { AppearanceBackground } from "./appearance-background";
 import { TopBar } from "./top-bar";
 
 type AuthGateScreenProps = {
@@ -53,6 +56,7 @@ function AuthGateScreen({
   const [host, setHost] = useState("github.com");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
 
   useEffect(() => {
     setHost(provider === "github" ? "github.com" : "gitlab.com");
@@ -77,10 +81,9 @@ function AuthGateScreen({
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-black text-ink-50">
-      <img
-        alt="Outer world background"
+      <AppearanceBackground
+        background={backgroundQuery.data}
         className="absolute inset-0 h-full w-full object-cover"
-        src="/outerworld.jpg"
       />
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />

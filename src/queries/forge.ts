@@ -2,6 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { trpc } from "../lib/trpc";
 import type {
   AccountVisibilitySettings,
+  AppearanceBackgroundInput,
+  AppearanceBackgroundSettings,
   CreatePullRequestReviewCommentInput,
   PrFileChangeType,
   ProviderProfile,
@@ -16,12 +18,15 @@ const SEARCH_REPO_LIMIT = 20;
 const forgeKeys = {
   all: ["forge"] as const,
   auth: () => [...forgeKeys.all, "auth"] as const,
+  settings: () => [...forgeKeys.all, "settings"] as const,
   repos: () => [...forgeKeys.all, "repos"] as const,
   providerAccounts: () => [...forgeKeys.auth(), "provider-accounts"] as const,
   providerStatuses: () => [...forgeKeys.auth(), "provider-statuses"] as const,
   providerProfile: (accountId: string) =>
     [...forgeKeys.auth(), "provider-profile", accountId] as const,
   accountVisibility: () => [...forgeKeys.auth(), "account-visibility"] as const,
+  appearanceBackground: () =>
+    [...forgeKeys.settings(), "appearance-background"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
   initialRepos: (accountId: string) =>
     [...forgeKeys.repos(), "initial", accountId] as const,
@@ -114,8 +119,26 @@ function accountVisibilityQueryOptions() {
   });
 }
 
+function appearanceBackgroundQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.appearanceBackground(),
+    queryFn: async (): Promise<AppearanceBackgroundSettings> => {
+      return trpc.settings.getAppearanceBackground.query();
+    },
+    staleTime: 0,
+  });
+}
+
 async function setAccountVisibility(enabledAccountIds: string[]) {
   return trpc.settings.setAccountVisibility.mutate({ enabledAccountIds });
+}
+
+async function setAppearanceBackground(input: AppearanceBackgroundInput) {
+  return trpc.settings.setAppearanceBackground.mutate(input);
+}
+
+async function selectCustomBackgroundFile() {
+  return trpc.settings.selectCustomBackgroundFile.mutate();
 }
 
 function viewerLoginQueryOptions(accountId: string) {
@@ -277,6 +300,7 @@ async function updatePullRequestReviewComment(
 
 export {
   accountVisibilityQueryOptions,
+  appearanceBackgroundQueryOptions,
   createPullRequestReviewComment,
   forgeKeys,
   initialReposQueryOptions,
@@ -294,6 +318,8 @@ export {
   savedReposQueryOptions,
   searchReposQueryOptions,
   setAccountVisibility,
+  setAppearanceBackground,
+  selectCustomBackgroundFile,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 };
