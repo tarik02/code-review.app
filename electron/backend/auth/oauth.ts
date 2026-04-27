@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Effect } from "effect";
 import { normalizeHost } from "../repo-id";
 import { exchangeOAuthCode, oauthConfig } from "./provider-auth";
+import type { AuthTokenStore } from "./token-store";
 import type { ForgeProviderKind } from "../../shared/types";
 
 type OAuthSession = {
@@ -72,25 +74,27 @@ function startOAuth(provider: ForgeProviderKind, host: string, clientId: string)
   };
 }
 
-async function completeOAuth(
+function completeOAuth(
   code: string,
   state: string,
-) {
-  pruneExpiredSessions();
-  const session = sessions.get(state);
-  sessions.delete(state);
-  if (!session) {
-    throw new Error("OAuth sign in expired or has an invalid state.");
-  }
-  await exchangeOAuthCode(
-    session.accountId,
-    session.provider,
-    session.host,
-    session.clientId,
-    code,
-    session.codeVerifier,
-  );
-  return session;
+): Effect.Effect<OAuthSession, Error, AuthTokenStore> {
+  return Effect.gen(function* () {
+    pruneExpiredSessions();
+    const session = sessions.get(state);
+    sessions.delete(state);
+    if (!session) {
+      return yield* Effect.fail(new Error("OAuth sign in expired or has an invalid state."));
+    }
+    yield* exchangeOAuthCode(
+      session.accountId,
+      session.provider,
+      session.host,
+      session.clientId,
+      code,
+      session.codeVerifier,
+    );
+    return session;
+  });
 }
 
 export { completeOAuth, startOAuth };

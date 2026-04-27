@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { app, safeStorage } from "electron";
+import { Effect, Layer } from "effect";
 import { normalizeHost } from "../repo-id";
 import type { ForgeProviderKind, ProviderAccount } from "../../shared/types";
 
@@ -22,7 +23,23 @@ type StoredAuthTokenRecord = Omit<StoredAuthToken, "accessToken" | "refreshToken
   refreshToken: string | null;
 };
 
+type AuthTokenStoreShape = {
+  get(accountId: string): Effect.Effect<StoredAuthToken | null, Error>;
+  listAccounts(): Effect.Effect<ProviderAccount[], Error>;
+  save(token: StoredAuthToken): Effect.Effect<void, Error>;
+  delete(accountId: string): Effect.Effect<void, Error>;
+};
+
+class AuthTokenStore extends Effect.Tag("AuthTokenStore")<
+  AuthTokenStore,
+  AuthTokenStoreShape
+>() {}
+
 const TOKEN_FILE_NAME = "auth-tokens.json";
+
+function toError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error));
+}
 
 function tokenFilePath() {
   return path.join(app.getPath("userData"), TOKEN_FILE_NAME);
@@ -41,94 +58,143 @@ function assertEncryptionAvailable() {
   }
 }
 
-function encryptValue(value: string) {
-  assertEncryptionAvailable();
-  return safeStorage.encryptString(value).toString("base64");
+function encryptValue(value: string): Effect.Effect<string, Error> {
+  return Effect.try({
+    try: () => {
+      assertEncryptionAvailable();
+      return safeStorage.encryptString(value).toString("base64");
+    },
+    catch: toError,
+  });
 }
 
-function decryptValue(value: string) {
-  assertEncryptionAvailable();
-  return safeStorage.decryptString(Buffer.from(value, "base64"));
+function decryptValue(value: string): Effect.Effect<string, Error> {
+  return Effect.try({
+    try: () => {
+      assertEncryptionAvailable();
+      return safeStorage.decryptString(Buffer.from(value, "base64"));
+    },
+    catch: toError,
+  });
 }
 
-async function readTokenRecords(): Promise<StoredAuthTokenRecord[]> {
-  try {
-    const raw = await readFile(tokenFilePath(), "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as StoredAuthTokenRecord[]) : [];
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
+function readTokenRecords(): Effect.Effect<StoredAuthTokenRecord[], Error> {
+  return Effect.tryPromise({
+    try: async () => {
+      try {
+        const raw = await readFile(tokenFilePath(), "utf8");
+        try {
+          const parsed = JSON.parse(raw) as unknown;
+          return Array.isArray(parsed) ? (parsed as StoredAuthTokenRecord[]) : [];
+        } catch {
+          return [];
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return [];
+        }
+        throw error;
+      }
+    },
+    catch: toError,
+  });
 }
 
-async function writeTokenRecords(records: StoredAuthTokenRecord[]) {
-  const filePath = tokenFilePath();
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+function writeTokenRecords(
+  records: StoredAuthTokenRecord[],
+): Effect.Effect<void, Error> {
+  return Effect.tryPromise({
+    try: async () => {
+      const filePath = tokenFilePath();
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
+    },
+    catch: toError,
+  });
 }
 
-async function getStoredAuthToken(
-  accountId: string,
-): Promise<StoredAuthToken | null> {
-  const record = (await readTokenRecords()).find(
-    (item) => item.id === accountId,
+const makeAuthTokenStore = Effect.gen(function* () {
+  const get: AuthTokenStoreShape["get"] = Effect.fn(
+    "AuthTokenStore.get",
+  )(function* (accountId) {
+        const records = yield* readTokenRecords();
+        const record = records.find((item) => item.id === accountId);
+        if (!record) return null;
+
+        const accessToken = yield* decryptValue(record.accessToken);
+        const refreshToken = record.refreshToken
+          ? yield* decryptValue(record.refreshToken)
+          : null;
+
+        return {
+          ...record,
+          host: normalizeHost(record.host),
+          accessToken,
+          refreshToken,
+        };
+  });
+
+  const listAccounts: AuthTokenStoreShape["listAccounts"] = Effect.fn(
+    "AuthTokenStore.listAccounts",
+  )(() =>
+    Effect.map(readTokenRecords(), (records) =>
+      records.map((record) => {
+        const host = normalizeHost(record.host);
+        return {
+          id: record.id,
+          provider: record.provider,
+          host,
+          clientId: record.clientId,
+          viewerLogin: record.viewerLogin,
+          label: record.viewerLogin ? `${record.viewerLogin} @ ${host}` : host,
+          createdAt: record.createdAt,
+        };
+      }),
+    ),
   );
-  if (!record) return null;
+
+  const save: AuthTokenStoreShape["save"] = Effect.fn(
+    "AuthTokenStore.save",
+  )(function* (token) {
+        const normalizedHost = normalizeHost(token.host);
+        const accessToken = yield* encryptValue(token.accessToken);
+        const refreshToken = token.refreshToken
+          ? yield* encryptValue(token.refreshToken)
+          : null;
+        const nextRecord: StoredAuthTokenRecord = {
+          provider: token.provider,
+          host: normalizedHost,
+          id: token.id,
+          clientId: token.clientId,
+          accessToken,
+          refreshToken,
+          expiresAt: token.expiresAt,
+          scopes: token.scopes,
+          viewerLogin: token.viewerLogin,
+          createdAt: token.createdAt,
+        };
+        const records = yield* readTokenRecords();
+        const nextRecords = records.filter((item) => item.id !== token.id);
+        nextRecords.push(nextRecord);
+        yield* writeTokenRecords(nextRecords);
+  });
+
+  const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn(
+    "AuthTokenStore.delete",
+  )(function* (accountId) {
+        const records = yield* readTokenRecords();
+        yield* writeTokenRecords(records.filter((item) => item.id !== accountId));
+  });
 
   return {
-    ...record,
-    host: normalizeHost(record.host),
-    accessToken: decryptValue(record.accessToken),
-    refreshToken: record.refreshToken ? decryptValue(record.refreshToken) : null,
-  };
-}
+    get,
+    listAccounts,
+    save,
+    delete: deleteToken,
+  } satisfies AuthTokenStoreShape;
+});
 
-async function listProviderAccounts(): Promise<ProviderAccount[]> {
-  return (await readTokenRecords()).map((record) => ({
-    id: record.id,
-    provider: record.provider,
-    host: normalizeHost(record.host),
-    clientId: record.clientId,
-    viewerLogin: record.viewerLogin,
-    label: record.viewerLogin
-      ? `${record.viewerLogin} @ ${normalizeHost(record.host)}`
-      : normalizeHost(record.host),
-    createdAt: record.createdAt,
-  }));
-}
+const AuthTokenStoreLive = Layer.effect(AuthTokenStore, makeAuthTokenStore);
 
-async function saveStoredAuthToken(token: StoredAuthToken) {
-  const normalizedHost = normalizeHost(token.host);
-  const nextRecord: StoredAuthTokenRecord = {
-    provider: token.provider,
-    host: normalizedHost,
-    id: token.id,
-    clientId: token.clientId,
-    accessToken: encryptValue(token.accessToken),
-    refreshToken: token.refreshToken ? encryptValue(token.refreshToken) : null,
-    expiresAt: token.expiresAt,
-    scopes: token.scopes,
-    viewerLogin: token.viewerLogin,
-    createdAt: token.createdAt,
-  };
-  const records = await readTokenRecords();
-  const nextRecords = records.filter((item) => item.id !== token.id);
-  nextRecords.push(nextRecord);
-  await writeTokenRecords(nextRecords);
-}
-
-async function deleteStoredAuthToken(accountId: string) {
-  const records = await readTokenRecords();
-  await writeTokenRecords(records.filter((item) => item.id !== accountId));
-}
-
-export {
-  deleteStoredAuthToken,
-  getStoredAuthToken,
-  listProviderAccounts,
-  saveStoredAuthToken,
-};
+export { AuthTokenStore, AuthTokenStoreLive };
 export type { StoredAuthToken };

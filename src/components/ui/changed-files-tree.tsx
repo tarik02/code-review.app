@@ -118,7 +118,7 @@ function ChangedFilesTree({
           : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       }
     >
-      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500 flex items-center justify-between app-region-drag">
+      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500 flex items-center justify-between cursor-grab app-region-drag">
         <p className="text-sm text-ink-900">
           Changed files{" "}
           <span className="ml-2 text-ink-500">{files.length}</span>

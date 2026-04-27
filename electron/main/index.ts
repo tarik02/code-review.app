@@ -9,12 +9,12 @@ import {
   isOAuthCallbackUrl,
 } from "./oauth-callback";
 
-app.setName("rudu");
+app.setName("code-review.app");
 
 if (process.defaultApp && process.argv.length >= 2) {
-  app.setAsDefaultProtocolClient("rudu", process.execPath, [process.argv[1]]);
+  app.setAsDefaultProtocolClient("code-review.app", process.execPath, [process.argv[1]]);
 } else {
-  app.setAsDefaultProtocolClient("rudu");
+  app.setAsDefaultProtocolClient("code-review.app");
 }
 
 const singleInstanceLock = app.requestSingleInstanceLock();
@@ -58,6 +58,8 @@ function handleStartupProtocolUrls() {
     handlePotentialRuduUrl(item);
   }
 }
+
+console.log(1);
 
 app.whenReady().then(async () => {
   configureUpdater();

@@ -1,26 +1,26 @@
+import { HttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
 import { ValidationError } from "../errors";
 import { parseRepoId } from "../repo-id";
 import { providerFor } from "../providers/registry";
+import { AuthTokenStore } from "../auth/token-store";
 import type { PullRequestSummary } from "../../shared/types";
 
 type TrackedPullRequestServiceShape = {
-  list(repoId: string): Effect.Effect<PullRequestSummary[], Error, CacheService>;
+  list(repoId: string): Effect.Effect<PullRequestSummary[], Error>;
   track(
     repoId: string,
     pullRequest: PullRequestSummary,
-  ): Effect.Effect<PullRequestSummary, Error, CacheService>;
-  remove(repoId: string, number: number): Effect.Effect<void, Error, CacheService>;
-  refresh(repoId: string): Effect.Effect<PullRequestSummary[], Error, CacheService>;
+  ): Effect.Effect<PullRequestSummary, Error>;
+  remove(repoId: string, number: number): Effect.Effect<void, Error>;
+  refresh(repoId: string): Effect.Effect<PullRequestSummary[], Error>;
 };
 
 class TrackedPullRequestService extends Effect.Tag("TrackedPullRequestService")<
   TrackedPullRequestService,
   TrackedPullRequestServiceShape
->() {
-  static Live = Layer.succeed(this, createTrackedPullRequestService());
-}
+>() {}
 
 function requireRepoId(repoId: string) {
   const trimmed = repoId.trim();
@@ -28,37 +28,48 @@ function requireRepoId(repoId: string) {
   return trimmed;
 }
 
-function createTrackedPullRequestService(): TrackedPullRequestServiceShape {
-  return {
-    list: (repoId) =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        return yield* cache.readTrackedPullRequests(requireRepoId(repoId));
-      }),
+const makeTrackedPullRequestService = Effect.gen(function* () {
+  const cache = yield* CacheService;
+  const tokenStore = yield* AuthTokenStore;
+  const httpClient = yield* HttpClient.HttpClient;
 
-    track: (repoId, pullRequest) =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
+  const provideProviderDeps = <A, E>(
+    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
+  ) =>
+    effect.pipe(
+      Effect.provideService(AuthTokenStore, tokenStore),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+    );
+
+  const list: TrackedPullRequestServiceShape["list"] = Effect.fn(
+    "TrackedPullRequestService.list",
+  )(function* (repoId) {
+    return yield* cache.readTrackedPullRequests(requireRepoId(repoId));
+  });
+
+  const track: TrackedPullRequestServiceShape["track"] = Effect.fn(
+    "TrackedPullRequestService.track",
+  )(function* (repoId, pullRequest) {
         yield* cache.trackPullRequest(requireRepoId(repoId), pullRequest);
         return pullRequest;
-      }),
+  });
 
-    remove: (repoId, number) =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        yield* cache.removeTrackedPullRequest(requireRepoId(repoId), number);
-      }),
+  const remove: TrackedPullRequestServiceShape["remove"] = Effect.fn(
+    "TrackedPullRequestService.remove",
+  )(function* (repoId, number) {
+    yield* cache.removeTrackedPullRequest(requireRepoId(repoId), number);
+  });
 
-    refresh: (repoId) =>
-      Effect.gen(function* () {
+  const refresh: TrackedPullRequestServiceShape["refresh"] = Effect.fn(
+    "TrackedPullRequestService.refresh",
+  )(function* (repoId) {
         const trimmedRepoId = requireRepoId(repoId);
         const repo = parseRepoId(trimmedRepoId);
-        const cache = yield* CacheService;
         const tracked = yield* cache.readTrackedPullRequests(trimmedRepoId);
         if (tracked.length === 0) return [];
 
         const provider = providerFor(repo.provider);
-        const openPullRequests = yield* provider.listPullRequests(repo);
+        const openPullRequests = yield* provideProviderDeps(provider.listPullRequests(repo));
         const openByNumber = new Map(
           openPullRequests.map((pullRequest) => [pullRequest.number, pullRequest]),
         );
@@ -71,9 +82,9 @@ function createTrackedPullRequestService(): TrackedPullRequestServiceShape {
           }
 
           if (pullRequest.state === "OPEN") {
-            const verified = yield* provider.getPullRequest(repo, pullRequest.number).pipe(
-              Effect.catchAll(() => Effect.succeed(null)),
-            );
+            const verified = yield* provideProviderDeps(
+              provider.getPullRequest(repo, pullRequest.number),
+            ).pipe(Effect.catchAll(() => Effect.succeed(null)));
             if (verified) {
               yield* cache.trackPullRequest(trimmedRepoId, verified);
             }
@@ -82,8 +93,19 @@ function createTrackedPullRequestService(): TrackedPullRequestServiceShape {
 
         yield* cache.updateRepoAccessTimestamp(trimmedRepoId);
         return yield* cache.readTrackedPullRequests(trimmedRepoId);
-      }),
-  };
-}
+  });
 
-export { TrackedPullRequestService };
+  return {
+    list,
+    track,
+    remove,
+    refresh,
+  } satisfies TrackedPullRequestServiceShape;
+});
+
+const TrackedPullRequestServiceLive = Layer.effect(
+  TrackedPullRequestService,
+  makeTrackedPullRequestService,
+);
+
+export { TrackedPullRequestService, TrackedPullRequestServiceLive };

@@ -20,6 +20,7 @@ import {
   createPullRequestReviewCommentInputSchema,
   providerAccountSchema,
   providerProfileSchema,
+  overviewPullRequestSummarySchema,
   providerHostSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
@@ -32,7 +33,7 @@ import {
 import { z } from "zod";
 import { app } from "electron";
 import { completeOAuth, startOAuth } from "../backend/auth/oauth";
-import { deleteStoredAuthToken } from "../backend/auth/token-store";
+import { AuthTokenStore } from "../backend/auth/token-store";
 import {
   subscribeToDeepLinks,
   subscribeToOAuthCallbacks,
@@ -99,7 +100,7 @@ const router = t.router({
     ),
     completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
       try {
-        const session = await completeOAuth(input.code, input.state);
+        const session = await runEffect(completeOAuth(input.code, input.state));
         const statuses = await runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
@@ -116,11 +117,12 @@ const router = t.router({
       }
     }),
     signOut: t.procedure.input(providerAccountSchema).mutation(async ({ input }) => {
-      try {
-        await deleteStoredAuthToken(input.accountId);
-      } catch (error) {
-        throw mapError(error);
-      }
+      return runEffect(
+        Effect.gen(function* () {
+          const tokenStore = yield* AuthTokenStore;
+          yield* tokenStore.delete(input.accountId);
+        }),
+      );
     }),
     oauthCallbacks: t.procedure.subscription(() =>
       observable<string>((emit) => {
@@ -219,6 +221,18 @@ const router = t.router({
   }),
 
   pullRequests: t.router({
+    listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
+      runEffect(
+        Effect.gen(function* () {
+          console.info(`[trpc] pullRequests.listOverview ${input.accountId}`);
+          const service = yield* PullRequestService;
+          const pullRequests = yield* service.listOverview(input.accountId);
+          return pullRequests.map((entry) =>
+            overviewPullRequestSummarySchema.parse(entry),
+          );
+        }),
+      ),
+    ),
     listCached: t.procedure.input(repoIdSchema).query(({ input }) =>
       runEffect(
         Effect.gen(function* () {
@@ -356,6 +370,31 @@ const router = t.router({
   }),
 
   window: t.router({
+    fullScreenStatus: t.procedure.subscription(({ ctx }) =>
+      observable<boolean>((emit) => {
+        const currentWindow = ctx.getWindow();
+        if (!currentWindow) {
+          emit.next(false);
+          return () => {};
+        }
+
+        const emitStatus = () => {
+          if (!currentWindow.isDestroyed()) {
+            emit.next(currentWindow.isFullScreen());
+          }
+        };
+
+        emitStatus();
+        currentWindow.on("enter-full-screen", emitStatus);
+        currentWindow.on("leave-full-screen", emitStatus);
+
+        return () => {
+          if (currentWindow.isDestroyed()) return;
+          currentWindow.off("enter-full-screen", emitStatus);
+          currentWindow.off("leave-full-screen", emitStatus);
+        };
+      }),
+    ),
     toggleMaximize: t.procedure.mutation(({ ctx }) => {
       const currentWindow = ctx.getWindow();
       if (!currentWindow) return;

@@ -5,7 +5,7 @@
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
     "build": "tsc --noEmit && electron-vite build",
     "dist": "electron-builder",
     "preview": "electron-vite preview"

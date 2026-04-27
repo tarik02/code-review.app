@@ -33,6 +33,11 @@ const pullRequestSummarySchema = z.object({
   baseSha: z.string().nullable(),
 });
 
+const overviewPullRequestSummarySchema = z.object({
+  repo: repoSummarySchema,
+  pullRequest: pullRequestSummarySchema,
+});
+
 const providerHostSchema = z.object({
   provider: forgeProviderKindSchema,
   host: z.string(),
@@ -96,6 +101,7 @@ export {
   completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
   forgeProviderKindSchema,
+  overviewPullRequestSummarySchema,
   providerAccountSchema,
   providerProfileSchema,
   providerHostSchema,

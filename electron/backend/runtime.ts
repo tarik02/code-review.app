@@ -1,20 +1,33 @@
+import { NodeHttpClient } from "@effect/platform-node";
 import { Layer, ManagedRuntime } from "effect";
-import { CacheService } from "./cache";
-import { DiffDataService } from "./services/diff-data";
-import { PullRequestService } from "./services/pull-requests";
-import { RepoService } from "./services/repos";
-import { ReviewCommentService } from "./services/review-comments";
-import { SettingsService } from "./services/settings";
-import { TrackedPullRequestService } from "./services/tracked-pull-requests";
+import { AuthTokenStoreLive } from "./auth/token-store";
+import { CacheServiceLive } from "./cache";
+import { DiffDataServiceLive } from "./services/diff-data";
+import { PullRequestServiceLive } from "./services/pull-requests";
+import { RepoServiceLive } from "./services/repos";
+import { ReviewCommentServiceLive } from "./services/review-comments";
+import { SettingsServiceLive } from "./services/settings";
+import { TrackedPullRequestServiceLive } from "./services/tracked-pull-requests";
 
-const AppLayer = Layer.mergeAll(
-  CacheService.Live,
-  DiffDataService.Live,
-  RepoService.Live,
-  PullRequestService.Live,
-  TrackedPullRequestService.Live,
-  ReviewCommentService.Live,
-  SettingsService.Live,
+const BaseLayer = Layer.mergeAll(
+  AuthTokenStoreLive,
+  CacheServiceLive,
+  NodeHttpClient.layerUndici,
+);
+
+const ServiceLayer = Layer.mergeAll(
+  DiffDataServiceLive,
+  RepoServiceLive,
+  TrackedPullRequestServiceLive,
+  ReviewCommentServiceLive,
+  SettingsServiceLive,
+);
+
+const BaseAndServiceLayer = Layer.provideMerge(ServiceLayer, BaseLayer);
+
+const AppLayer = Layer.provideMerge(
+  PullRequestServiceLive,
+  BaseAndServiceLayer,
 );
 
 const runtime = ManagedRuntime.make(AppLayer);

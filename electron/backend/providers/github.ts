@@ -1,9 +1,17 @@
-import { Effect } from "effect";
+import {
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "@effect/platform";
+import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors";
 import { parseOwnerRepo } from "../repo-id";
 import { createRepoId } from "../repo-id";
-import { providerJson, providerText } from "../auth/http";
-import { getStoredAuthToken, updateViewerLogin } from "../auth/provider-auth";
+import {
+  getValidAccessToken,
+  updateViewerLogin,
+} from "../auth/provider-auth";
 import type {
   ProviderAuthStatus,
   PullRequestSummary,
@@ -13,109 +21,17 @@ import type {
 } from "../../shared/types";
 import type { ForgeProvider, ReviewThreadInput } from "./types";
 import type { RepoId } from "../repo-id";
+import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store";
 
-type GhActor = {
-  login: string;
-  avatarUrl?: string | null;
-  avatar_url?: string | null;
-};
-
-type GhSearchRepo = {
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean | null;
-  owner?: GhActor | null;
-};
-
-type GhRestRepo = {
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean | null;
-  owner?: GhActor | null;
-};
-
-type GhRestUser = {
-  login: string;
-};
-
-type GhSearchResponse = {
-  items: GhSearchRepo[];
-};
-
-type GhChangedFile = {
-  filename: string;
-};
-
-type GhPullRequest = {
-  number: number;
-  title: string;
-  state: string;
-  isDraft: boolean;
-  mergeStateStatus?: string | null;
-  mergeable?: string | null;
-  additions?: number | null;
-  deletions?: number | null;
-  author?: GhActor | null;
-  updatedAt: string;
-  url: string;
-  headRefOid: string;
-  baseRefOid?: string | null;
-  mergedAt?: string | null;
+type GitHubRequestOptions = {
+  method?: "GET" | "POST";
+  accept?: string;
+  body?: unknown;
 };
 
 type GraphQlResponse<T> = {
   data?: T | null;
-  errors?: Array<{ message: string }> | null;
-};
-
-type PullRequestNodeIdQueryData = {
-  repository?: {
-    pullRequest?: {
-      id: string;
-    } | null;
-  } | null;
-};
-
-type ReviewThreadsQueryData = {
-  repository?: {
-    pullRequest?: {
-      reviewThreads: {
-        nodes: GraphQlReviewThread[];
-      };
-    } | null;
-  } | null;
-};
-
-type GraphQlReviewThread = {
-  id: string;
-  path: string;
-  isResolved: boolean;
-  isOutdated: boolean;
-  line: number | null;
-  originalLine: number | null;
-  startLine: number | null;
-  originalStartLine: number | null;
-  diffSide: string;
-  startDiffSide: string | null;
-  subjectType: string;
-  comments: {
-    nodes: GraphQlReviewComment[];
-  };
-};
-
-type GraphQlReviewComment = {
-  id: string;
-  databaseId: number | null;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-  url: string;
-  path: string;
-  authorAssociation: string | null;
-  author?: GhActor | null;
-  replyTo?: { id: string } | null;
+  errors?: ReadonlyArray<{ message: string }> | null;
 };
 
 type UserContext = {
@@ -125,16 +41,246 @@ type UserContext = {
   fetchedAt: number;
 };
 
+const API_REQUEST_TIMEOUT = "30 seconds";
 const USER_CONTEXT_TTL_MS = 60 * 60 * 1000;
+
+const NullableString = Schema.NullOr(Schema.String);
+const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String));
+const OptionalNullableNumber = Schema.optional(Schema.NullOr(Schema.Number));
+
+const GhActorSchema = Schema.Struct({
+  login: Schema.String,
+  avatarUrl: OptionalNullableString,
+  avatar_url: OptionalNullableString,
+});
+
+const GhSearchRepoSchema = Schema.Struct({
+  name: Schema.String,
+  full_name: Schema.String,
+  description: NullableString,
+  private: Schema.NullOr(Schema.Boolean),
+  owner: Schema.optional(Schema.NullOr(GhActorSchema)),
+});
+
+const GhRestRepoSchema = Schema.Struct({
+  name: Schema.String,
+  full_name: Schema.String,
+  description: NullableString,
+  private: Schema.NullOr(Schema.Boolean),
+  owner: Schema.optional(Schema.NullOr(GhActorSchema)),
+});
+
+const GhGraphqlRepoSchema = Schema.Struct({
+  name: Schema.String,
+  nameWithOwner: Schema.String,
+  description: NullableString,
+  isPrivate: Schema.NullOr(Schema.Boolean),
+  owner: Schema.optional(Schema.NullOr(GhActorSchema)),
+});
+
+const GhRestUserSchema = Schema.Struct({
+  login: Schema.String,
+});
+
+const GhSearchResponseSchema = Schema.Struct({
+  items: Schema.Array(GhSearchRepoSchema),
+});
+
+const GhChangedFileSchema = Schema.Struct({
+  filename: Schema.String,
+});
+
+const GhPullRequestFields = {
+  number: Schema.Number,
+  title: Schema.String,
+  state: Schema.String,
+  isDraft: Schema.Boolean,
+  mergeStateStatus: OptionalNullableString,
+  mergeable: OptionalNullableString,
+  additions: OptionalNullableNumber,
+  deletions: OptionalNullableNumber,
+  author: Schema.optional(Schema.NullOr(GhActorSchema)),
+  updatedAt: Schema.String,
+  url: Schema.String,
+  headRefOid: Schema.String,
+  baseRefOid: OptionalNullableString,
+  mergedAt: OptionalNullableString,
+};
+
+const GhPullRequestSchema = Schema.Struct(GhPullRequestFields);
+
+const GhOverviewPullRequestSchema = Schema.Struct({
+  ...GhPullRequestFields,
+  repository: Schema.optional(Schema.NullOr(GhGraphqlRepoSchema)),
+});
+
+const PullRequestNodeIdQueryDataSchema = Schema.Struct({
+  repository: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        pullRequest: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              id: Schema.String,
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+});
+
+const GraphQlReviewCommentSchema = Schema.Struct({
+  id: Schema.String,
+  databaseId: OptionalNullableNumber,
+  body: Schema.String,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+  url: Schema.String,
+  path: Schema.String,
+  authorAssociation: OptionalNullableString,
+  author: Schema.optional(Schema.NullOr(GhActorSchema)),
+  replyTo: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        id: Schema.String,
+      }),
+    ),
+  ),
+});
+
+const GraphQlReviewThreadSchema = Schema.Struct({
+  id: Schema.String,
+  path: Schema.String,
+  isResolved: Schema.Boolean,
+  isOutdated: Schema.Boolean,
+  line: OptionalNullableNumber,
+  originalLine: OptionalNullableNumber,
+  startLine: OptionalNullableNumber,
+  originalStartLine: OptionalNullableNumber,
+  diffSide: Schema.String,
+  startDiffSide: OptionalNullableString,
+  subjectType: Schema.String,
+  comments: Schema.Struct({
+    nodes: Schema.Array(GraphQlReviewCommentSchema),
+  }),
+});
+
+const ReviewThreadsQueryDataSchema = Schema.Struct({
+  repository: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        pullRequest: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              reviewThreads: Schema.Struct({
+                nodes: Schema.Array(GraphQlReviewThreadSchema),
+              }),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+});
+
+const SearchPullRequestsQueryDataSchema = Schema.Struct({
+  search: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        nodes: Schema.optional(
+          Schema.NullOr(Schema.Array(Schema.NullOr(GhOverviewPullRequestSchema))),
+        ),
+      }),
+    ),
+  ),
+});
+
+const ListPullRequestsQueryDataSchema = Schema.Struct({
+  repository: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        pullRequests: Schema.Struct({
+          nodes: Schema.Array(GhPullRequestSchema),
+        }),
+      }),
+    ),
+  ),
+});
+
+const GetPullRequestQueryDataSchema = Schema.Struct({
+  repository: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        pullRequest: Schema.optional(Schema.NullOr(GhPullRequestSchema)),
+      }),
+    ),
+  ),
+});
+
+const GitHubGraphQlErrorSchema = Schema.Struct({
+  message: Schema.String,
+});
+
+const GitHubErrorBodySchema = Schema.Struct({
+  message: Schema.optional(Schema.String),
+});
+
+type GhSearchRepo = typeof GhSearchRepoSchema.Type;
+type GhRestRepo = typeof GhRestRepoSchema.Type;
+type GhGraphqlRepo = typeof GhGraphqlRepoSchema.Type;
+type GhPullRequest = typeof GhPullRequestSchema.Type;
 let userContext: UserContext | null = null;
 
-function providerEffect<A>(operation: () => Promise<A>) {
-  return Effect.tryPromise({
-    try: operation,
-    catch: (error) =>
-      error instanceof ProviderError
-        ? error
-        : new ProviderError(error instanceof Error ? error.message : String(error)),
+function graphQlResponseSchema<A, I, R>(dataSchema: Schema.Schema<A, I, R>) {
+  return Schema.Struct({
+    data: Schema.optional(Schema.NullOr(dataSchema)),
+    errors: Schema.optional(Schema.NullOr(Schema.Array(GitHubGraphQlErrorSchema))),
+  });
+}
+
+function toProviderError(error: unknown) {
+  return error instanceof ProviderError
+    ? error
+    : new ProviderError(error instanceof Error ? error.message : String(error));
+}
+
+function storedToken(
+  accountId: string,
+): Effect.Effect<StoredAuthToken | null, ProviderError, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    return yield* tokenStore.get(accountId).pipe(Effect.mapError(toProviderError));
+  });
+}
+
+function requireStoredToken(
+  accountId: string,
+): Effect.Effect<StoredAuthToken, ProviderError, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const token = yield* storedToken(accountId);
+    if (!token) return yield* Effect.fail(new ProviderError("GitHub is not signed in."));
+    return token;
+  });
+}
+
+function validAccessToken(
+  accountId: string,
+): Effect.Effect<string, ProviderError, AuthTokenStore> {
+  return getValidAccessToken(accountId).pipe(Effect.mapError(toProviderError));
+}
+
+function saveViewerLogin(
+  accountId: string,
+  login: string,
+): Effect.Effect<void, ProviderError, AuthTokenStore> {
+  return updateViewerLogin(accountId, login).pipe(Effect.mapError(toProviderError));
+}
+
+function parseOwnerRepoEffect(value: string): Effect.Effect<[string, string], ProviderError> {
+  return Effect.try({
+    try: () => parseOwnerRepo(value),
+    catch: toProviderError,
   });
 }
 
@@ -150,10 +296,53 @@ function isNotAuthenticatedMessage(message: string) {
   );
 }
 
-function graphqlErrors<T>(response: GraphQlResponse<T>) {
-  if (!response.errors?.length) return;
+function parseGitHubErrorBody(text: string) {
+  if (!text) return "";
+  try {
+    const parsed = Schema.decodeUnknownSync(GitHubErrorBodySchema)(JSON.parse(text));
+    return parsed.message ?? text;
+  } catch {
+    return text;
+  }
+}
+
+function parseErrorMessage(error: ParseResult.ParseError) {
+  return Effect.map(
+    ParseResult.TreeFormatter.formatError(error),
+    (message) => new ProviderError(message),
+  );
+}
+
+function responseErrorMessage(error: HttpClientError.ResponseError) {
+  return Effect.gen(function* () {
+    const body = yield* error.response.text.pipe(
+      Effect.catchAll(() => Effect.succeed("")),
+    );
+    return (
+      parseGitHubErrorBody(body) ||
+      `Provider API returned HTTP ${error.response.status}`
+    );
+  });
+}
+
+function mapHttpError(error: unknown) {
+  if (error instanceof ProviderError) return Effect.succeed(error);
+  if (error instanceof ParseResult.ParseError) return parseErrorMessage(error);
+  if (error instanceof HttpClientError.ResponseError) {
+    return Effect.map(responseErrorMessage(error), (message) => new ProviderError(message));
+  }
+  if (HttpClientError.isHttpClientError(error)) {
+    return Effect.succeed(new ProviderError(error.message));
+  }
+  return Effect.succeed(toProviderError(error));
+}
+
+function graphqlErrors<T>(response: GraphQlResponse<T>): Effect.Effect<void, ProviderError> {
+  if (!response.errors?.length) return Effect.void;
   const message = response.errors.map((error) => error.message).join("\n");
-  throw new ProviderError(message || "GitHub returned an unknown GraphQL error");
+  return Effect.fail(
+    new ProviderError(message || "GitHub returned an unknown GraphQL error"),
+  );
 }
 
 function githubApiBase(host: string) {
@@ -164,75 +353,144 @@ function githubGraphqlUrl(host: string) {
   return host === "github.com" ? "https://api.github.com/graphql" : `https://${host}/api/graphql`;
 }
 
-async function githubJson<T>(
+function githubApiUrl(host: string, pathOrUrl: string) {
+  return pathOrUrl.startsWith("http") ? pathOrUrl : `${githubApiBase(host)}${pathOrUrl}`;
+}
+
+function requestFor(url: string, token: string, options: GitHubRequestOptions = {}) {
+  const request =
+    options.method === "POST"
+      ? HttpClientRequest.post(url)
+      : HttpClientRequest.get(url);
+
+  return request.pipe(
+    HttpClientRequest.accept(options.accept ?? "application/json"),
+    HttpClientRequest.bearerToken(token),
+    HttpClientRequest.setHeader("User-Agent", "rudu"),
+    HttpClientRequest.setHeader("X-GitHub-Api-Version", "2022-11-28"),
+  );
+}
+
+function githubResponse(
+  accountId: string,
+  host: string,
+  pathOrUrl: string,
+  options?: GitHubRequestOptions,
+) {
+  const url = githubApiUrl(host, pathOrUrl);
+  return Effect.gen(function* () {
+    const token = yield* validAccessToken(accountId);
+    const client = yield* HttpClient.HttpClient;
+    let request = requestFor(url, token, options);
+    if (options?.body !== undefined) {
+      request = yield* request.pipe(
+        HttpClientRequest.setHeader("Content-Type", "application/json"),
+        HttpClientRequest.bodyJson(options.body),
+        Effect.mapError(toProviderError),
+      );
+    }
+    return yield* client.execute(request).pipe(
+      Effect.timeoutFail({
+        duration: API_REQUEST_TIMEOUT,
+        onTimeout: () => new ProviderError(`Provider API request timed out after 30s: ${url}`),
+      }),
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+    );
+  }).pipe(
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
+}
+
+function githubJson<A, I, R>(
   accountId: string,
   host: string,
   path: string,
-  init?: RequestInit,
-) {
-  return providerJson<T>(accountId, `${githubApiBase(host)}${path}`, {
-    ...init,
-    headers: {
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
+  schema: Schema.Schema<A, I, R>,
+  options?: GitHubRequestOptions,
+): Effect.Effect<A, ProviderError, AuthTokenStore | HttpClient.HttpClient | R> {
+  return githubResponse(accountId, host, path, options).pipe(
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
 }
 
-async function githubText(accountId: string, host: string, path: string, accept: string) {
-  return providerText(accountId, `${githubApiBase(host)}${path}`, {
-    accept,
-    headers: {
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
+function githubText(
+  accountId: string,
+  host: string,
+  path: string,
+  accept: string,
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  return githubResponse(accountId, host, path, { accept }).pipe(
+    Effect.flatMap((response) => response.text),
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
 }
 
-async function githubGraphql<T>(
+function githubGraphql<A, I, R>(
   accountId: string,
   host: string,
   query: string,
   variables: Record<string, string | number | boolean | null>,
-) {
-  const response = await providerJson<GraphQlResponse<T>>(accountId, githubGraphqlUrl(host), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query, variables }),
+  schema: Schema.Schema<A, I, R>,
+): Effect.Effect<GraphQlResponse<A>, ProviderError, AuthTokenStore | HttpClient.HttpClient | R> {
+  return Effect.gen(function* () {
+    const response = yield* githubJson(
+      accountId,
+      host,
+      githubGraphqlUrl(host),
+      graphQlResponseSchema(schema),
+      {
+        method: "POST",
+        body: { query, variables },
+      },
+    );
+    yield* graphqlErrors(response);
+    return response;
   });
-  graphqlErrors(response);
-  return response;
 }
 
-async function ensureUserContext(accountId: string, host: string) {
-  if (
-    userContext &&
-    userContext.accountId === accountId &&
-    Date.now() - userContext.fetchedAt < USER_CONTEXT_TTL_MS
-  ) {
-    return userContext.owners;
-  }
+function ensureUserContext(
+  accountId: string,
+  host: string,
+): Effect.Effect<string[], ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    if (
+      userContext &&
+      userContext.accountId === accountId &&
+      Date.now() - userContext.fetchedAt < USER_CONTEXT_TTL_MS
+    ) {
+      return userContext.owners;
+    }
 
-  const user = await githubJson<GhRestUser>(accountId, host, "/user");
-  const owners = [user.login];
+    const user = yield* githubJson(accountId, host, "/user", GhRestUserSchema);
+    const owners = [user.login];
 
-  try {
-    const orgs = await githubJson<GhRestUser[]>(accountId, host, "/user/orgs?per_page=100");
+    const orgs = yield* githubJson(
+      accountId,
+      host,
+      "/user/orgs?per_page=100",
+      Schema.Array(GhRestUserSchema),
+    ).pipe(Effect.catchAll(() => Effect.succeed([])));
     for (const org of orgs) {
       if (org.login.trim().length > 0) owners.push(org.login);
     }
-  } catch {
-    // Organization lookup is best-effort.
-  }
 
-  await updateViewerLogin(accountId, user.login);
-  userContext = { accountId, login: user.login, owners, fetchedAt: Date.now() };
-  return owners;
+    yield* saveViewerLogin(accountId, user.login);
+    userContext = { accountId, login: user.login, owners, fetchedAt: Date.now() };
+    return owners;
+  });
 }
 
-async function getPullRequestNodeId(repo: RepoId, number: number) {
-  const [owner, name] = parseOwnerRepo(repo.path);
+function getPullRequestNodeId(
+  repo: RepoId,
+  number: number,
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   const query = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -243,17 +501,26 @@ query($owner: String!, $name: String!, $number: Int!) {
 }
 `;
 
-  const response = await githubGraphql<PullRequestNodeIdQueryData>(repo.accountId, repo.host, query, {
-    owner,
-    name,
-    number,
-  });
+  return Effect.gen(function* () {
+    const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+    const response = yield* githubGraphql(
+      repo.accountId,
+      repo.host,
+      query,
+      {
+        owner,
+        name,
+        number,
+      },
+      PullRequestNodeIdQueryDataSchema,
+    );
 
-  const id = response.data?.repository?.pullRequest?.id?.trim();
-  if (!id) {
-    throw new ProviderError("Pull request not found");
-  }
-  return id;
+    const id = response.data?.repository?.pullRequest?.id?.trim();
+    if (!id) {
+      return yield* Effect.fail(new ProviderError("Pull request not found"));
+    }
+    return id;
+  });
 }
 
 function repoSummaryFromSearch(accountId: string, host: string, label: string, repo: GhSearchRepo): RepoSummary {
@@ -286,6 +553,30 @@ function repoSummaryFromRest(accountId: string, host: string, label: string, rep
   };
 }
 
+function repoSummaryFromGraphql(
+  accountId: string,
+  host: string,
+  label: string,
+  repo: GhGraphqlRepo,
+): RepoSummary {
+  return {
+    id: createRepoId("github", host, accountId, repo.nameWithOwner).key,
+    provider: "github",
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
+    name: repo.name,
+    nameWithOwner: repo.nameWithOwner,
+    description: repo.description,
+    isPrivate: repo.isPrivate,
+    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+  };
+}
+
+function labelForToken(token: { viewerLogin: string | null; host: string }) {
+  return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+}
+
 function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
   const merged = pullRequest.mergedAt != null;
   return {
@@ -308,74 +599,79 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
 
 class GitHubProvider implements ForgeProvider {
   authStatus(accountId: string) {
-    return providerEffect<ProviderAuthStatus>(async () => {
-      try {
-        const token = await getStoredAuthToken(accountId);
-        if (!token) {
-          return {
-            status: "not_authenticated",
-            message: "Sign in with GitHub to load repositories.",
-          };
-        }
-        await Effect.runPromise(this.viewerLogin(accountId));
-        return { status: "ready", message: null };
-      } catch (error) {
-        if (isNotAuthenticatedMessage(error instanceof Error ? error.message : String(error))) {
-          return {
+    const provider = this;
+    return Effect.gen(function* () {
+      const token = yield* storedToken(accountId);
+      if (!token) {
+        return {
+          status: "not_authenticated",
+          message: "Sign in with GitHub to load repositories.",
+        } satisfies ProviderAuthStatus;
+      }
+      yield* provider.viewerLogin(accountId);
+      return { status: "ready", message: null } satisfies ProviderAuthStatus;
+    }).pipe(
+      Effect.catchAll((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isNotAuthenticatedMessage(message)) {
+          return Effect.succeed({
             status: "not_authenticated",
             message: "Sign in with GitHub again.",
-          };
+          } satisfies ProviderAuthStatus);
         }
-        return {
+        return Effect.succeed({
           status: "unknown_error",
-          message: error instanceof Error ? error.message : String(error),
-        };
-      }
-    });
+          message,
+        } satisfies ProviderAuthStatus);
+      }),
+    );
   }
 
   viewerLogin(accountId: string) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitHub is not signed in.");
-      await ensureUserContext(accountId, token.host);
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      yield* ensureUserContext(accountId, token.host);
       const login = userContext?.login;
-      if (!login) throw new ProviderError("Unable to determine GitHub viewer login");
+      if (!login) {
+        return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
+      }
       return login;
     });
   }
 
   listInitialRepos(accountId: string, limit: number) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitHub is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
-      const repos = await githubJson<GhRestRepo[]>(
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
+      const repos = yield* githubJson(
         accountId,
         token.host,
         `/user/repos?per_page=${limit}&sort=updated&affiliation=owner,collaborator,organization_member`,
+        Schema.Array(GhRestRepoSchema),
       );
       return repos.map((repo) => repoSummaryFromRest(accountId, token.host, label, repo));
     });
   }
 
   searchRepos(accountId: string, query: string, limit: number) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitHub is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
-      if (query.trim().length === 0) {
-        return await Effect.runPromise(this.listInitialRepos(accountId, limit));
+    const provider = this;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
+      const trimmedQuery = query.trim();
+      if (trimmedQuery.length === 0) {
+        return yield* provider.listInitialRepos(accountId, limit);
       }
 
-      const owners = await ensureUserContext(accountId, token.host);
+      const owners = yield* ensureUserContext(accountId, token.host);
       const repos: GhSearchRepo[] = [];
       for (const owner of owners) {
         const qualifier = owner === userContext?.login ? "user" : "org";
-        const response = await githubJson<GhSearchResponse>(
+        const response = yield* githubJson(
           accountId,
           token.host,
-          `/search/repositories?q=${encodeURIComponent(`${query.trim()} in:name ${qualifier}:${owner}`)}&per_page=${limit}`,
+          `/search/repositories?q=${encodeURIComponent(`${trimmedQuery} in:name ${qualifier}:${owner}`)}&per_page=${limit}`,
+          GhSearchResponseSchema,
         );
         repos.push(...response.items);
         if (repos.length >= limit) break;
@@ -390,23 +686,99 @@ class GitHubProvider implements ForgeProvider {
   }
 
   validateRepo(accountId: string, input: string) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitHub is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
       const repo = input.trim();
       if (repo.split("/").length !== 2 || repo.startsWith("/") || repo.endsWith("/")) {
-        throw new ProviderError("Enter a repo as owner/name");
+        return yield* Effect.fail(new ProviderError("Enter a repo as owner/name"));
       }
-      const [owner, name] = parseOwnerRepo(repo);
-      const details = await githubJson<GhRestRepo>(accountId, token.host, `/repos/${owner}/${name}`);
+      const [owner, name] = yield* parseOwnerRepoEffect(repo);
+      const details = yield* githubJson(
+        accountId,
+        token.host,
+        `/repos/${owner}/${name}`,
+        GhRestRepoSchema,
+      );
       return repoSummaryFromRest(accountId, token.host, label, details);
     });
   }
 
+  listOverviewPullRequests(accountId: string) {
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
+      yield* ensureUserContext(accountId, token.host);
+      const login = userContext?.login;
+      if (!login) {
+        return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
+      }
+
+      const query = `
+query($query: String!, $first: Int!) {
+  search(type: ISSUE, query: $query, first: $first) {
+    nodes {
+      ... on PullRequest {
+        number
+        title
+        state
+        isDraft
+        mergeStateStatus
+        mergeable
+        additions
+        deletions
+        author { login }
+        updatedAt
+        url
+        headRefOid
+        baseRefOid
+        repository {
+          name
+          nameWithOwner
+          description
+          isPrivate
+          owner {
+            login
+            avatarUrl
+          }
+        }
+      }
+    }
+  }
+}
+`;
+      const searchQuery = `is:pr is:open archived:false involves:${login} sort:updated-desc`;
+      console.info(
+        `[github] loading overview pull requests from ${token.host} for ${login}`,
+      );
+      const response = yield* githubGraphql(
+        accountId,
+        token.host,
+        query,
+        { query: searchQuery, first: 100 },
+        SearchPullRequestsQueryDataSchema,
+      );
+      const entries = (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
+        const repo = pullRequest?.repository;
+        if (!pullRequest || !repo) return [];
+        return [
+          {
+            repo: repoSummaryFromGraphql(accountId, token.host, label, repo),
+            pullRequest: toPullRequestSummary(pullRequest),
+          },
+        ];
+      });
+
+      console.info(
+        `[github] loaded ${entries.length} overview pull requests from ${token.host}`,
+      );
+      return entries;
+    });
+  }
+
   listPullRequests(repo: RepoId) {
-    return providerEffect(async () => {
-      const [owner, name] = parseOwnerRepo(repo.path);
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
 query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
@@ -430,9 +802,13 @@ query($owner: String!, $name: String!) {
   }
 }
 `;
-      const response = await githubGraphql<{
-        repository?: { pullRequests: { nodes: GhPullRequest[] } } | null;
-      }>(repo.accountId, repo.host, query, { owner, name });
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        { owner, name },
+        ListPullRequestsQueryDataSchema,
+      );
       return (response.data?.repository?.pullRequests.nodes ?? []).map(
         toPullRequestSummary,
       );
@@ -440,8 +816,8 @@ query($owner: String!, $name: String!) {
   }
 
   getPullRequest(repo: RepoId, number: number) {
-    return providerEffect(async () => {
-      const [owner, name] = parseOwnerRepo(repo.path);
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -464,19 +840,25 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 }
 `;
-      const response = await githubGraphql<{
-        repository?: { pullRequest?: GhPullRequest | null } | null;
-      }>(repo.accountId, repo.host, query, { owner, name, number });
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        { owner, name, number },
+        GetPullRequestQueryDataSchema,
+      );
       const pullRequest = response.data?.repository?.pullRequest;
-      if (!pullRequest) throw new ProviderError(`Pull request #${number} not found`);
+      if (!pullRequest) {
+        return yield* Effect.fail(new ProviderError(`Pull request #${number} not found`));
+      }
       return toPullRequestSummary(pullRequest);
     });
   }
 
   fetchPatch(repo: RepoId, number: number) {
-    return providerEffect(async () => {
-      const [owner, name] = parseOwnerRepo(repo.path);
-      return githubText(
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      return yield* githubText(
         repo.accountId,
         repo.host,
         `/repos/${owner}/${name}/pulls/${number}`,
@@ -486,33 +868,38 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 
   fetchChangedFiles(repo: RepoId, number: number) {
-    return providerEffect(async () => {
-      const [owner, name] = parseOwnerRepo(repo.path);
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const seen = new Set<string>();
       const files: string[] = [];
       let page = 1;
-      while (true) {
-        const items = await githubJson<GhChangedFile[]>(
+      let shouldContinue = true;
+      while (shouldContinue) {
+        const items = yield* githubJson(
           repo.accountId,
           repo.host,
           `/repos/${owner}/${name}/pulls/${number}/files?per_page=100&page=${page}`,
+          Schema.Array(GhChangedFileSchema),
         );
-        if (items.length === 0) break;
-        for (const item of items) {
-          if (!seen.has(item.filename)) {
-            seen.add(item.filename);
-            files.push(item.filename);
+        if (items.length === 0) {
+          shouldContinue = false;
+        } else {
+          for (const item of items) {
+            if (!seen.has(item.filename)) {
+              seen.add(item.filename);
+              files.push(item.filename);
+            }
           }
+          page += 1;
         }
-        page += 1;
       }
       return files;
     });
   }
 
   listReviewThreads(repo: RepoId, number: number) {
-    return providerEffect(async () => {
-      const [owner, name] = parseOwnerRepo(repo.path);
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -555,11 +942,17 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 }
 `;
-      const response = await githubGraphql<ReviewThreadsQueryData>(repo.accountId, repo.host, query, {
-        owner,
-        name,
-        number,
-      });
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          owner,
+          name,
+          number,
+        },
+        ReviewThreadsQueryDataSchema,
+      );
 
       return (
         response.data?.repository?.pullRequest?.reviewThreads.nodes ?? []
@@ -567,10 +960,10 @@ query($owner: String!, $name: String!, $number: Int!) {
         if (thread.comments.nodes.length === 0) return [];
         const comments: ReviewComment[] = thread.comments.nodes.map((comment) => ({
           id: comment.id,
-          databaseId: comment.databaseId,
+          databaseId: comment.databaseId ?? null,
           authorLogin: comment.author?.login ?? "unknown",
           authorAvatarUrl: comment.author?.avatarUrl ?? null,
-          authorAssociation: comment.authorAssociation,
+          authorAssociation: comment.authorAssociation ?? null,
           body: comment.body,
           createdAt: comment.createdAt,
           updatedAt: comment.updatedAt,
@@ -601,16 +994,16 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 
   createReviewThread(repo: RepoId, number: number, input: ReviewThreadInput) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const body = input.body.trim();
       const targetPath = input.path.trim();
-      if (!body) throw new ProviderError("Comment body is required");
-      if (!targetPath) throw new ProviderError("File path is required");
+      if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      if (!targetPath) return yield* Effect.fail(new ProviderError("File path is required"));
       if (input.subjectType === "line" && input.line == null) {
-        throw new ProviderError("Line comments require a target line");
+        return yield* Effect.fail(new ProviderError("Line comments require a target line"));
       }
 
-      const pullRequestId = await getPullRequestNodeId(repo, number);
+      const pullRequestId = yield* getPullRequestNodeId(repo, number);
       const query = `
 mutation(
   $pullRequestId: ID!,
@@ -639,24 +1032,30 @@ mutation(
 }
 `;
 
-      await githubGraphql(repo.accountId, repo.host, query, {
-        pullRequestId,
-        body,
-        path: targetPath,
-        line: input.line,
-        side: input.side,
-        startLine: input.startLine,
-        startSide: input.startSide,
-        subjectType: input.subjectType.toUpperCase(),
-      });
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestId,
+          body,
+          path: targetPath,
+          line: input.line,
+          side: input.side,
+          startLine: input.startLine,
+          startSide: input.startSide,
+          subjectType: input.subjectType.toUpperCase(),
+        },
+        Schema.Unknown,
+      );
     });
   }
 
   replyToReviewThread(repo: RepoId, number: number, threadId: string, body: string) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const trimmedBody = body.trim();
-      if (!threadId.trim()) throw new ProviderError("Thread id is required");
-      if (!trimmedBody) throw new ProviderError("Reply body is required");
+      if (!threadId.trim()) return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Reply body is required"));
       const query = `
 mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(
@@ -670,27 +1069,33 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
   }
 }
 `;
-      const pullRequestId = await getPullRequestNodeId(repo, number);
-      await githubGraphql(repo.accountId, repo.host, query, {
-        pullRequestId,
-        pullRequestReviewThreadId: threadId.trim(),
-        body: trimmedBody,
-      });
+      const pullRequestId = yield* getPullRequestNodeId(repo, number);
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestId,
+          pullRequestReviewThreadId: threadId.trim(),
+          body: trimmedBody,
+        },
+        Schema.Unknown,
+      );
     });
   }
 
   updateReviewComment(
-    _repo: RepoId,
+    repo: RepoId,
     _number: number,
     threadId: string,
     commentId: string,
     body: string,
   ) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const trimmedBody = body.trim();
-      if (!threadId.trim()) throw new ProviderError("Thread id is required");
-      if (!commentId.trim()) throw new ProviderError("Comment id is required");
-      if (!trimmedBody) throw new ProviderError("Comment body is required");
+      if (!threadId.trim()) return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!commentId.trim()) return yield* Effect.fail(new ProviderError("Comment id is required"));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
       const query = `
 mutation($id: ID!, $body: String!) {
   updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) {
@@ -698,10 +1103,16 @@ mutation($id: ID!, $body: String!) {
   }
 }
 `;
-      await githubGraphql(_repo.accountId, _repo.host, query, {
-        id: commentId.trim(),
-        body: trimmedBody,
-      });
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          id: commentId.trim(),
+          body: trimmedBody,
+        },
+        Schema.Unknown,
+      );
     });
   }
 }

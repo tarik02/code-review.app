@@ -79,7 +79,7 @@ function AuthGateScreen({
 
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
 
-      <TopBar className="relative z-10 app-region-drag" position="left" />
+      <TopBar className="relative z-10 cursor-grab app-region-drag" position="left" />
 
       <div className="relative z-10 flex h-full items-end justify-center">
         <div className="w-full px-6 pb-16 sm:px-10 sm:pb-24">

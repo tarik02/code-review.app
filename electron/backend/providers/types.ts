@@ -1,8 +1,11 @@
+import type { HttpClient } from "@effect/platform";
 import type { Effect } from "effect";
 import type { ProviderError } from "../errors";
 import type { RepoId } from "../repo-id";
+import type { AuthTokenStore } from "../auth/token-store";
 import type {
   PullRequestSummary,
+  OverviewPullRequestSummary,
   ProviderAuthStatus,
   RepoSummary,
   ReviewThread,
@@ -21,47 +24,61 @@ type ReviewThreadInput = {
 };
 
 type ForgeProvider = {
-  authStatus(accountId: string): Effect.Effect<ProviderAuthStatus, ProviderError>;
-  viewerLogin(accountId: string): Effect.Effect<string, ProviderError>;
+  authStatus(accountId: string): Effect.Effect<ProviderAuthStatus, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  viewerLogin(accountId: string): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listInitialRepos(
     accountId: string,
     limit: number,
-  ): Effect.Effect<RepoSummary[], ProviderError>;
+  ): Effect.Effect<RepoSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   searchRepos(
     accountId: string,
     query: string,
     limit: number,
-  ): Effect.Effect<RepoSummary[], ProviderError>;
-  validateRepo(accountId: string, input: string): Effect.Effect<RepoSummary, ProviderError>;
-  listPullRequests(repo: RepoId): Effect.Effect<PullRequestSummary[], ProviderError>;
+  ): Effect.Effect<RepoSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  validateRepo(
+    accountId: string,
+    input: string,
+  ): Effect.Effect<RepoSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  listOverviewPullRequests(
+    accountId: string,
+  ): Effect.Effect<OverviewPullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  listPullRequests(
+    repo: RepoId,
+  ): Effect.Effect<PullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   getPullRequest(
     repo: RepoId,
     number: number,
-  ): Effect.Effect<PullRequestSummary, ProviderError>;
-  fetchPatch(repo: RepoId, number: number): Effect.Effect<string, ProviderError>;
-  fetchChangedFiles(repo: RepoId, number: number): Effect.Effect<string[], ProviderError>;
+  ): Effect.Effect<PullRequestSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  fetchPatch(
+    repo: RepoId,
+    number: number,
+  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  fetchChangedFiles(
+    repo: RepoId,
+    number: number,
+  ): Effect.Effect<string[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listReviewThreads(
     repo: RepoId,
     number: number,
-  ): Effect.Effect<ReviewThread[], ProviderError>;
+  ): Effect.Effect<ReviewThread[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   createReviewThread(
     repo: RepoId,
     number: number,
     input: ReviewThreadInput,
-  ): Effect.Effect<void, ProviderError>;
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   replyToReviewThread(
     repo: RepoId,
     number: number,
     threadId: string,
     body: string,
-  ): Effect.Effect<void, ProviderError>;
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   updateReviewComment(
     repo: RepoId,
     number: number,
     threadId: string,
     commentId: string,
     body: string,
-  ): Effect.Effect<void, ProviderError>;
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };
 
 export type { ForgeProvider, ReviewThreadInput };

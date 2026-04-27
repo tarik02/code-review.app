@@ -1,5 +1,6 @@
 import { normalizeHost } from "../repo-id";
-import { deleteStoredAuthToken, getStoredAuthToken, saveStoredAuthToken } from "./token-store";
+import { Effect } from "effect";
+import { AuthTokenStore } from "./token-store";
 import type { ForgeProviderKind } from "../../shared/types";
 import type { StoredAuthToken } from "./token-store";
 
@@ -23,6 +24,10 @@ type OAuthTokenResponse = {
 
 const DEFAULT_REDIRECT_URI = "code-review.app://oauth/callback";
 const REFRESH_SKEW_MS = 60_000;
+
+function toError(error: unknown) {
+  return error instanceof Error ? error : new Error(String(error));
+}
 
 function redirectUri() {
   return process.env.RUDU_OAUTH_REDIRECT_URI?.trim() || DEFAULT_REDIRECT_URI;
@@ -109,112 +114,153 @@ function expiresAt(expiresIn: number | undefined) {
     : null;
 }
 
-async function exchangeOAuthCode(
+function exchangeOAuthCode(
   accountId: string,
   provider: ForgeProviderKind,
   host: string,
   clientId: string,
   code: string,
   codeVerifier: string,
-) {
-  const config = oauthConfig(provider, host, clientId);
-  const body = new URLSearchParams({
-    client_id: config.clientId,
-    code,
-    grant_type: "authorization_code",
-    redirect_uri: config.redirectUri,
-    code_verifier: codeVerifier,
-  });
+): Effect.Effect<StoredAuthToken, Error, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    const config = yield* Effect.try({
+      try: () => oauthConfig(provider, host, clientId),
+      catch: toError,
+    });
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: config.redirectUri,
+      code_verifier: codeVerifier,
+    });
 
-  const response = await fetch(config.tokenUrl, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "rudu",
-    },
-    body,
-  });
-  const payload = (await response.json()) as OAuthTokenResponse;
-  if (!response.ok || payload.error || !payload.access_token) {
-    throw new Error(payload.error_description ?? payload.error ?? "OAuth token exchange failed.");
-  }
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(config.tokenUrl, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "rudu",
+          },
+          body,
+        }),
+      catch: toError,
+    });
+    const payload = yield* Effect.tryPromise({
+      try: () => response.json() as Promise<OAuthTokenResponse>,
+      catch: toError,
+    });
+    if (!response.ok || payload.error || !payload.access_token) {
+      return yield* Effect.fail(
+        new Error(payload.error_description ?? payload.error ?? "OAuth token exchange failed."),
+      );
+    }
 
-  const token: StoredAuthToken = {
-    id: accountId,
-    provider,
-    host: normalizeHost(host),
-    clientId: config.clientId,
-    accessToken: payload.access_token,
-    refreshToken: payload.refresh_token ?? null,
-    expiresAt: expiresAt(payload.expires_in),
-    scopes: parseScopes(payload.scope, config.scopes),
-    viewerLogin: null,
-    createdAt: Date.now(),
-  };
-  await saveStoredAuthToken(token);
-  return token;
+    const token: StoredAuthToken = {
+      id: accountId,
+      provider,
+      host: normalizeHost(host),
+      clientId: config.clientId,
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token ?? null,
+      expiresAt: expiresAt(payload.expires_in),
+      scopes: parseScopes(payload.scope, config.scopes),
+      viewerLogin: null,
+      createdAt: Date.now(),
+    };
+    yield* tokenStore.save(token);
+    return token;
+  });
 }
 
-async function refreshStoredAuthToken(token: StoredAuthToken) {
-  if (!token.refreshToken) return token;
-  const config = oauthConfig(token.provider, token.host, token.clientId);
-  const body = new URLSearchParams({
-    client_id: config.clientId,
-    grant_type: "refresh_token",
-    redirect_uri: config.redirectUri,
-    refresh_token: token.refreshToken,
-  });
+function refreshStoredAuthToken(
+  token: StoredAuthToken,
+): Effect.Effect<StoredAuthToken, Error, AuthTokenStore> {
+  return Effect.gen(function* () {
+    if (!token.refreshToken) return token;
+    const tokenStore = yield* AuthTokenStore;
+    const config = yield* Effect.try({
+      try: () => oauthConfig(token.provider, token.host, token.clientId),
+      catch: toError,
+    });
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      grant_type: "refresh_token",
+      redirect_uri: config.redirectUri,
+      refresh_token: token.refreshToken,
+    });
 
-  const response = await fetch(config.tokenUrl, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "rudu",
-    },
-    body,
-  });
-  const payload = (await response.json()) as OAuthTokenResponse;
-  if (!response.ok || payload.error || !payload.access_token) {
-    await deleteStoredAuthToken(token.id);
-    throw new Error(payload.error_description ?? payload.error ?? "OAuth token refresh failed.");
-  }
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(config.tokenUrl, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": "rudu",
+          },
+          body,
+        }),
+      catch: toError,
+    });
+    const payload = yield* Effect.tryPromise({
+      try: () => response.json() as Promise<OAuthTokenResponse>,
+      catch: toError,
+    });
+    if (!response.ok || payload.error || !payload.access_token) {
+      yield* tokenStore.delete(token.id);
+      return yield* Effect.fail(
+        new Error(payload.error_description ?? payload.error ?? "OAuth token refresh failed."),
+      );
+    }
 
-  const refreshed: StoredAuthToken = {
-    ...token,
-    accessToken: payload.access_token,
-    refreshToken: payload.refresh_token ?? token.refreshToken,
-    expiresAt: expiresAt(payload.expires_in),
-    scopes: parseScopes(payload.scope, token.scopes),
-  };
-  await saveStoredAuthToken(refreshed);
-  return refreshed;
+    const refreshed: StoredAuthToken = {
+      ...token,
+      accessToken: payload.access_token,
+      refreshToken: payload.refresh_token ?? token.refreshToken,
+      expiresAt: expiresAt(payload.expires_in),
+      scopes: parseScopes(payload.scope, token.scopes),
+    };
+    yield* tokenStore.save(refreshed);
+    return refreshed;
+  });
 }
 
-async function getValidAccessToken(accountId: string) {
-  const token = await getStoredAuthToken(accountId);
-  if (!token) {
-    throw new Error("Provider account is not signed in.");
-  }
+function getValidAccessToken(
+  accountId: string,
+): Effect.Effect<string, Error, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    const token = yield* tokenStore.get(accountId);
+    if (!token) {
+      return yield* Effect.fail(new Error("Provider account is not signed in."));
+    }
 
-  if (token.expiresAt !== null && token.expiresAt <= Date.now() + REFRESH_SKEW_MS) {
-    return (await refreshStoredAuthToken(token)).accessToken;
-  }
+    if (token.expiresAt !== null && token.expiresAt <= Date.now() + REFRESH_SKEW_MS) {
+      return (yield* refreshStoredAuthToken(token)).accessToken;
+    }
 
-  return token.accessToken;
+    return token.accessToken;
+  });
 }
 
-async function updateViewerLogin(accountId: string, viewerLogin: string) {
-  const token = await getStoredAuthToken(accountId);
-  if (!token) return;
-  await saveStoredAuthToken({ ...token, viewerLogin });
+function updateViewerLogin(
+  accountId: string,
+  viewerLogin: string,
+): Effect.Effect<void, Error, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    const token = yield* tokenStore.get(accountId);
+    if (!token) return;
+    yield* tokenStore.save({ ...token, viewerLogin });
+  });
 }
 
 export {
-  deleteStoredAuthToken,
   exchangeOAuthCode,
-  getStoredAuthToken,
   getValidAccessToken,
   oauthConfig,
   updateViewerLogin,

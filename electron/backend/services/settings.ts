@@ -1,25 +1,19 @@
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
-import { listProviderAccounts } from "../auth/token-store";
+import { AuthTokenStore } from "../auth/token-store";
 import type { AccountVisibilitySettings } from "../../shared/types";
 
 type SettingsServiceShape = {
-  getAccountVisibility(): Effect.Effect<
-    AccountVisibilitySettings,
-    Error,
-    CacheService
-  >;
+  getAccountVisibility(): Effect.Effect<AccountVisibilitySettings, Error>;
   setAccountVisibility(
     enabledAccountIds: string[],
-  ): Effect.Effect<AccountVisibilitySettings, Error, CacheService>;
+  ): Effect.Effect<AccountVisibilitySettings, Error>;
 };
 
 class SettingsService extends Effect.Tag("SettingsService")<
   SettingsService,
   SettingsServiceShape
->() {
-  static Live = Layer.succeed(this, createSettingsService());
-}
+>() {}
 
 function toVisibilitySettings(
   accountIds: string[],
@@ -40,21 +34,23 @@ function toVisibilitySettings(
   return { enabledAccountIds, disabledAccountIds };
 }
 
-function createSettingsService(): SettingsServiceShape {
-  return {
-    getAccountVisibility: () =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        const accounts = yield* Effect.promise(() => listProviderAccounts());
+const makeSettingsService = Effect.gen(function* () {
+  const tokenStore = yield* AuthTokenStore;
+  const cache = yield* CacheService;
+
+  const getAccountVisibility: SettingsServiceShape["getAccountVisibility"] = Effect.fn(
+    "SettingsService.getAccountVisibility",
+  )(function* () {
+        const accounts = yield* tokenStore.listAccounts();
         const accountIds = accounts.map((account) => account.id);
         const visibility = yield* cache.readProviderAccountVisibility(accountIds);
         return toVisibilitySettings(accountIds, visibility);
-      }),
+  });
 
-    setAccountVisibility: (enabledAccountIds) =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        const accounts = yield* Effect.promise(() => listProviderAccounts());
+  const setAccountVisibility: SettingsServiceShape["setAccountVisibility"] = Effect.fn(
+    "SettingsService.setAccountVisibility",
+  )(function* (enabledAccountIds) {
+        const accounts = yield* tokenStore.listAccounts();
         const accountIds = accounts.map((account) => account.id);
         const knownAccountIds = new Set(accountIds);
         const unknownAccountId = enabledAccountIds.find(
@@ -74,8 +70,14 @@ function createSettingsService(): SettingsServiceShape {
 
         const visibility = yield* cache.readProviderAccountVisibility(accountIds);
         return toVisibilitySettings(accountIds, visibility);
-      }),
-  };
-}
+  });
 
-export { SettingsService };
+  return {
+    getAccountVisibility,
+    setAccountVisibility,
+  } satisfies SettingsServiceShape;
+});
+
+const SettingsServiceLive = Layer.effect(SettingsService, makeSettingsService);
+
+export { SettingsService, SettingsServiceLive };

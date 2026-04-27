@@ -5,6 +5,8 @@
 @custom-variant windows (&:is(.windows, .windows *));
 @custom-variant linux (&:is(.linux, .linux *));
 @custom-variant macos (&:is(.macos, .macos *));
+@custom-variant fullscreen (&:is(.window-fullscreen, .window-fullscreen *));
+@custom-variant not-fullscreen (&:is(:root:not(.window-fullscreen) *));
 
 @theme inline {
   --color-canvas: rgb(var(--rgb-canvas));

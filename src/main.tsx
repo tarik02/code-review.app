@@ -11,11 +11,13 @@ import "./index.css";
 import PierreDiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker";
 import { isElectron, syncDocumentPlatformClass } from "./lib/platform";
 import { syncDocumentWindowControlsOverlayClass } from "./lib/wco";
+import { syncDocumentWindowFullscreenClass } from "./lib/window-fullscreen";
 
 syncDocumentPlatformClass();
 
 if (isElectron) {
   syncDocumentWindowControlsOverlayClass();
+  syncDocumentWindowFullscreenClass();
 }
 
 const queryClient = new QueryClient({

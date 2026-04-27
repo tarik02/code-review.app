@@ -59,9 +59,7 @@ type CacheServiceShape = {
 class CacheService extends Effect.Tag("CacheService")<
   CacheService,
   CacheServiceShape
->() {
-  static Live = Layer.succeed(this, createCacheService());
-}
+>() {}
 
 let db: Database.Database | null = null;
 
@@ -241,9 +239,17 @@ function wrap<A>(operation: () => A): Effect.Effect<A, CacheError> {
   });
 }
 
-function createCacheService(): CacheServiceShape {
-  return {
-    listSavedRepos: () =>
+const makeCacheService = Effect.gen(function* () {
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      db?.close();
+      db = null;
+    }),
+  );
+
+  const listSavedRepos: CacheServiceShape["listSavedRepos"] = Effect.fn(
+    "CacheService.listSavedRepos",
+  )(() =>
       wrap(() => {
         const rows = getDatabase()
           .prepare(
@@ -269,8 +275,11 @@ function createCacheService(): CacheServiceShape {
           avatarUrl: row.avatar_url === null ? null : String(row.avatar_url),
         }));
       }),
+  );
 
-    saveRepo: (repo) =>
+  const saveRepo: CacheServiceShape["saveRepo"] = Effect.fn(
+    "CacheService.saveRepo",
+  )((repo) =>
       wrap(() => {
         const timestamp = nowUnixTimestamp();
         const repoKey =
@@ -322,8 +331,11 @@ function createCacheService(): CacheServiceShape {
             timestamp,
           });
       }),
+  );
 
-    readCachedPullRequests: (repoId) =>
+  const readCachedPullRequests: CacheServiceShape["readCachedPullRequests"] = Effect.fn(
+    "CacheService.readCachedPullRequests",
+  )((repoId) =>
       wrap(() => {
         const rows = getDatabase()
           .prepare(
@@ -339,8 +351,11 @@ function createCacheService(): CacheServiceShape {
           .all(repoId) as Record<string, unknown>[];
         return rows.map(rowToPullRequest);
       }),
+  );
 
-    writePullRequestsCache: (repoId, pullRequests) =>
+  const writePullRequestsCache: CacheServiceShape["writePullRequestsCache"] = Effect.fn(
+    "CacheService.writePullRequestsCache",
+  )((repoId, pullRequests) =>
       wrap(() => {
         const database = getDatabase();
         const timestamp = nowUnixTimestamp();
@@ -363,8 +378,11 @@ function createCacheService(): CacheServiceShape {
           }
         })();
       }),
+  );
 
-    readTrackedPullRequests: (repoId) =>
+  const readTrackedPullRequests: CacheServiceShape["readTrackedPullRequests"] = Effect.fn(
+    "CacheService.readTrackedPullRequests",
+  )((repoId) =>
       wrap(() => {
         const rows = getDatabase()
           .prepare(
@@ -380,8 +398,11 @@ function createCacheService(): CacheServiceShape {
           .all(repoId) as Record<string, unknown>[];
         return rows.map(rowToPullRequest);
       }),
+  );
 
-    trackPullRequest: (repoId, pullRequest) =>
+  const trackPullRequest: CacheServiceShape["trackPullRequest"] = Effect.fn(
+    "CacheService.trackPullRequest",
+  )((repoId, pullRequest) =>
       wrap(() => {
         const timestamp = nowUnixTimestamp();
         getDatabase()
@@ -417,8 +438,11 @@ function createCacheService(): CacheServiceShape {
           )
           .run(pullRequestParams(repoId, pullRequest, timestamp));
       }),
+  );
 
-    removeTrackedPullRequest: (repoId, number) =>
+  const removeTrackedPullRequest: CacheServiceShape["removeTrackedPullRequest"] = Effect.fn(
+    "CacheService.removeTrackedPullRequest",
+  )((repoId, number) =>
       wrap(() => {
         getDatabase()
           .prepare(
@@ -429,8 +453,11 @@ function createCacheService(): CacheServiceShape {
           )
           .run(repoId, number);
       }),
+  );
 
-    getCachedPatch: (repoId, number, headSha) =>
+  const getCachedPatch: CacheServiceShape["getCachedPatch"] = Effect.fn(
+    "CacheService.getCachedPatch",
+  )((repoId, number, headSha) =>
       wrap(() => {
         const row = getDatabase()
           .prepare(
@@ -453,8 +480,11 @@ function createCacheService(): CacheServiceShape {
           .run(nowUnixTimestamp(), repoId, number, headSha);
         return row.patch_text;
       }),
+  );
 
-    storePatch: (repoId, number, headSha, patch) =>
+  const storePatch: CacheServiceShape["storePatch"] = Effect.fn(
+    "CacheService.storePatch",
+  )((repoId, number, headSha, patch) =>
       wrap(() => {
         const timestamp = nowUnixTimestamp();
         getDatabase()
@@ -473,8 +503,11 @@ function createCacheService(): CacheServiceShape {
           )
           .run(repoId, number, headSha, patch, timestamp, timestamp);
       }),
+  );
 
-    getCachedChangedFiles: (repoId, number, headSha) =>
+  const getCachedChangedFiles: CacheServiceShape["getCachedChangedFiles"] = Effect.fn(
+    "CacheService.getCachedChangedFiles",
+  )((repoId, number, headSha) =>
       wrap(() => {
         const row = getDatabase()
           .prepare(
@@ -497,8 +530,11 @@ function createCacheService(): CacheServiceShape {
           .run(nowUnixTimestamp(), repoId, number, headSha);
         return JSON.parse(row.files_json) as string[];
       }),
+  );
 
-    storeChangedFiles: (repoId, number, headSha, files) =>
+  const storeChangedFiles: CacheServiceShape["storeChangedFiles"] = Effect.fn(
+    "CacheService.storeChangedFiles",
+  )((repoId, number, headSha, files) =>
       wrap(() => {
         const timestamp = nowUnixTimestamp();
         getDatabase()
@@ -517,15 +553,21 @@ function createCacheService(): CacheServiceShape {
           )
           .run(repoId, number, headSha, JSON.stringify(files), timestamp, timestamp);
       }),
+  );
 
-    updateRepoAccessTimestamp: (repoId) =>
+  const updateRepoAccessTimestamp: CacheServiceShape["updateRepoAccessTimestamp"] = Effect.fn(
+    "CacheService.updateRepoAccessTimestamp",
+  )((repoId) =>
       wrap(() => {
         getDatabase()
           .prepare("UPDATE repos SET last_opened_at = ? WHERE repo_key = ?")
           .run(nowUnixTimestamp(), repoId);
       }),
+  );
 
-    readProviderAccountVisibility: (accountIds) =>
+  const readProviderAccountVisibility: CacheServiceShape["readProviderAccountVisibility"] = Effect.fn(
+    "CacheService.readProviderAccountVisibility",
+  )((accountIds) =>
       wrap(() => {
         if (accountIds.length === 0) {
           return {};
@@ -548,8 +590,11 @@ function createCacheService(): CacheServiceShape {
           ]),
         );
       }),
+  );
 
-    setProviderAccountVisibility: (accountIds, enabledAccountIds) =>
+  const setProviderAccountVisibility: CacheServiceShape["setProviderAccountVisibility"] = Effect.fn(
+    "CacheService.setProviderAccountVisibility",
+  )((accountIds, enabledAccountIds) =>
       wrap(() => {
         const timestamp = nowUnixTimestamp();
         const enabled = new Set(enabledAccountIds);
@@ -570,7 +615,26 @@ function createCacheService(): CacheServiceShape {
           }
         })();
       }),
-  };
-}
+  );
 
-export { CacheService };
+  return {
+    listSavedRepos,
+    saveRepo,
+    readCachedPullRequests,
+    writePullRequestsCache,
+    readTrackedPullRequests,
+    trackPullRequest,
+    removeTrackedPullRequest,
+    getCachedPatch,
+    storePatch,
+    getCachedChangedFiles,
+    storeChangedFiles,
+    updateRepoAccessTimestamp,
+    readProviderAccountVisibility,
+    setProviderAccountVisibility,
+  } satisfies CacheServiceShape;
+});
+
+const CacheServiceLive = Layer.scoped(CacheService, makeCacheService);
+
+export { CacheService, CacheServiceLive };

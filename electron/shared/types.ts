@@ -30,6 +30,11 @@ type PullRequestSummary = {
   baseSha: string | null;
 };
 
+type OverviewPullRequestSummary = {
+  repo: RepoSummary;
+  pullRequest: PullRequestSummary;
+};
+
 enum PullRequestBadgeStatus {
   Merged = "merged",
   Closed = "closed",
@@ -167,6 +172,7 @@ export type {
   AvailableUpdate,
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
+  OverviewPullRequestSummary,
   PrPatch,
   ProviderAccount,
   ProviderAuthStatus,

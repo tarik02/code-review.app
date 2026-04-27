@@ -1,9 +1,18 @@
-import { Effect } from "effect";
+import {
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "@effect/platform";
+import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors";
 import { createRepoId, normalizeHost, normalizePath } from "../repo-id";
-import { providerJson, providerText } from "../auth/http";
-import { getStoredAuthToken, updateViewerLogin } from "../auth/provider-auth";
+import {
+  getValidAccessToken,
+  updateViewerLogin,
+} from "../auth/provider-auth";
 import type {
+  OverviewPullRequestSummary,
   ProviderAuthStatus,
   PullRequestSummary,
   RepoSummary,
@@ -12,98 +21,157 @@ import type {
 } from "../../shared/types";
 import type { ForgeProvider, ReviewThreadInput } from "./types";
 import type { RepoId } from "../repo-id";
+import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store";
 
-type GitLabProject = {
-  name: string;
-  path_with_namespace: string;
-  description: string | null;
-  visibility: string | null;
-  avatar_url: string | null;
+type GitLabRequestOptions = {
+  method?: "GET" | "POST" | "PUT";
+  accept?: string;
+  body?: FormData;
 };
 
-type GitLabUser = {
-  username: string;
-  avatar_url?: string | null;
-};
+const API_REQUEST_TIMEOUT = "30 seconds";
 
-type GitLabDiffRefs = {
-  base_sha?: string | null;
-  head_sha?: string | null;
-  start_sha?: string | null;
-};
+const NullableString = Schema.NullOr(Schema.String);
+const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String));
+const OptionalNullableNumber = Schema.optional(Schema.NullOr(Schema.Number));
+const OptionalNullableBoolean = Schema.optional(Schema.NullOr(Schema.Boolean));
 
-type GitLabMergeRequest = {
-  iid: number;
-  title: string;
-  state: string;
-  draft?: boolean | null;
-  work_in_progress?: boolean | null;
-  merge_status?: string | null;
-  detailed_merge_status?: string | null;
-  changes_count?: string | null;
-  author?: GitLabUser | null;
-  updated_at: string;
-  web_url: string;
-  sha?: string | null;
-  diff_refs?: GitLabDiffRefs | null;
-};
+const GitLabUserSchema = Schema.Struct({
+  username: Schema.String,
+  avatar_url: OptionalNullableString,
+});
 
-type GitLabDiff = {
-  new_path: string;
-};
+const GitLabProjectSchema = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  path_with_namespace: Schema.String,
+  description: NullableString,
+  visibility: NullableString,
+  avatar_url: NullableString,
+});
 
-type GitLabDiscussion = {
-  id: string;
-  individual_note?: boolean;
-  notes?: GitLabNote[];
-};
+const GitLabDiffRefsSchema = Schema.Struct({
+  base_sha: OptionalNullableString,
+  head_sha: OptionalNullableString,
+  start_sha: OptionalNullableString,
+});
 
-type GitLabNote = {
-  id: number;
-  type?: string | null;
-  body: string;
-  author?: GitLabUser | null;
-  created_at: string;
-  updated_at: string;
-  web_url?: string | null;
-  resolved?: boolean | null;
-  position?: GitLabPosition | null;
-};
+const GitLabMergeRequestSchema = Schema.Struct({
+  project_id: OptionalNullableNumber,
+  iid: Schema.Number,
+  title: Schema.String,
+  state: Schema.String,
+  draft: OptionalNullableBoolean,
+  work_in_progress: OptionalNullableBoolean,
+  merge_status: OptionalNullableString,
+  detailed_merge_status: OptionalNullableString,
+  changes_count: OptionalNullableString,
+  author: Schema.optional(Schema.NullOr(GitLabUserSchema)),
+  updated_at: Schema.String,
+  web_url: Schema.String,
+  sha: OptionalNullableString,
+  diff_refs: Schema.optional(Schema.NullOr(GitLabDiffRefsSchema)),
+});
 
-type GitLabPosition = {
-  old_path?: string | null;
-  new_path?: string | null;
-  old_line?: number | null;
-  new_line?: number | null;
-  position_type?: string | null;
-  line_range?: GitLabLineRange | null;
-};
+const GitLabDiffSchema = Schema.Struct({
+  new_path: Schema.String,
+});
 
-type GitLabLineRange = {
-  start?: GitLabLineRangePoint | null;
-  end?: GitLabLineRangePoint | null;
-};
+const GitLabLineRangePointSchema = Schema.Struct({
+  type: OptionalNullableString,
+  old_line: OptionalNullableNumber,
+  new_line: OptionalNullableNumber,
+});
 
-type GitLabLineRangePoint = {
-  type?: string | null;
-  old_line?: number | null;
-  new_line?: number | null;
-};
+const GitLabLineRangeSchema = Schema.Struct({
+  start: Schema.optional(Schema.NullOr(GitLabLineRangePointSchema)),
+  end: Schema.optional(Schema.NullOr(GitLabLineRangePointSchema)),
+});
 
-type GitLabMrVersion = {
-  base_commit_sha: string;
-  head_commit_sha: string;
-  start_commit_sha: string;
-};
+const GitLabPositionSchema = Schema.Struct({
+  old_path: OptionalNullableString,
+  new_path: OptionalNullableString,
+  old_line: OptionalNullableNumber,
+  new_line: OptionalNullableNumber,
+  position_type: OptionalNullableString,
+  line_range: Schema.optional(Schema.NullOr(GitLabLineRangeSchema)),
+});
 
-function providerEffect<A>(operation: () => Promise<A>) {
-  return Effect.tryPromise({
-    try: operation,
-    catch: (error) =>
-      error instanceof ProviderError
-        ? error
-        : new ProviderError(error instanceof Error ? error.message : String(error)),
+const GitLabNoteSchema = Schema.Struct({
+  id: Schema.Number,
+  type: OptionalNullableString,
+  body: Schema.String,
+  author: Schema.optional(Schema.NullOr(GitLabUserSchema)),
+  created_at: Schema.String,
+  updated_at: Schema.String,
+  web_url: OptionalNullableString,
+  resolved: OptionalNullableBoolean,
+  position: Schema.optional(Schema.NullOr(GitLabPositionSchema)),
+});
+
+const GitLabDiscussionSchema = Schema.Struct({
+  id: Schema.String,
+  individual_note: Schema.optional(Schema.Boolean),
+  notes: Schema.optional(Schema.Array(GitLabNoteSchema)),
+});
+
+const GitLabMrVersionSchema = Schema.Struct({
+  base_commit_sha: Schema.String,
+  head_commit_sha: Schema.String,
+  start_commit_sha: Schema.String,
+});
+
+const GitLabErrorBodySchema = Schema.Struct({
+  message: Schema.optional(Schema.String),
+});
+
+type GitLabProject = typeof GitLabProjectSchema.Type;
+type GitLabMergeRequest = typeof GitLabMergeRequestSchema.Type;
+type GitLabPosition = typeof GitLabPositionSchema.Type;
+type GitLabDiscussion = typeof GitLabDiscussionSchema.Type;
+
+const OVERVIEW_MERGE_REQUEST_SCOPES = [
+  "reviews_for_me",
+  "assigned_to_me",
+  "created_by_me",
+] as const;
+
+function toProviderError(error: unknown) {
+  return error instanceof ProviderError
+    ? error
+    : new ProviderError(error instanceof Error ? error.message : String(error));
+}
+
+function storedToken(
+  accountId: string,
+): Effect.Effect<StoredAuthToken | null, ProviderError, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    return yield* tokenStore.get(accountId).pipe(Effect.mapError(toProviderError));
   });
+}
+
+function requireStoredToken(
+  accountId: string,
+): Effect.Effect<StoredAuthToken, ProviderError, AuthTokenStore> {
+  return Effect.gen(function* () {
+    const token = yield* storedToken(accountId);
+    if (!token) return yield* Effect.fail(new ProviderError("GitLab is not signed in."));
+    return token;
+  });
+}
+
+function validAccessToken(
+  accountId: string,
+): Effect.Effect<string, ProviderError, AuthTokenStore> {
+  return getValidAccessToken(accountId).pipe(Effect.mapError(toProviderError));
+}
+
+function saveViewerLogin(
+  accountId: string,
+  login: string,
+): Effect.Effect<void, ProviderError, AuthTokenStore> {
+  return updateViewerLogin(accountId, login).pipe(Effect.mapError(toProviderError));
 }
 
 function isNotAuthenticatedMessage(message: string) {
@@ -129,37 +197,150 @@ function gitlabApiUrl(host: string, endpoint: string) {
   return `https://${normalizeHost(host)}/api/v4/${endpoint}`;
 }
 
-async function gitlabJson<T>(
-  accountId: string,
-  host: string,
-  endpoint: string,
-  init?: RequestInit,
+function overviewMergeRequestsEndpoint(
+  scope: (typeof OVERVIEW_MERGE_REQUEST_SCOPES)[number],
 ) {
-  return providerJson<T>(accountId, gitlabApiUrl(host, endpoint), {
-    ...init,
-    headers: init?.headers as Record<string, string> | undefined,
+  const params = new URLSearchParams({
+    scope,
+    state: "opened",
+    order_by: "updated_at",
+    sort: "desc",
+    non_archived: "true",
+    per_page: "100",
+  });
+  return `merge_requests?${params}`;
+}
+
+function parseGitLabErrorBody(text: string) {
+  if (!text) return "";
+  try {
+    const parsed = Schema.decodeUnknownSync(GitLabErrorBodySchema)(JSON.parse(text));
+    return parsed.message ?? text;
+  } catch {
+    return text;
+  }
+}
+
+function parseErrorMessage(error: ParseResult.ParseError) {
+  return Effect.map(
+    ParseResult.TreeFormatter.formatError(error),
+    (message) => new ProviderError(message),
+  );
+}
+
+function responseErrorMessage(error: HttpClientError.ResponseError) {
+  return Effect.gen(function* () {
+    const body = yield* error.response.text.pipe(
+      Effect.catchAll(() => Effect.succeed("")),
+    );
+    return (
+      parseGitLabErrorBody(body) ||
+      `Provider API returned HTTP ${error.response.status}`
+    );
   });
 }
 
-async function gitlabText(accountId: string, host: string, endpoint: string) {
-  return providerText(accountId, gitlabApiUrl(host, endpoint));
+function mapHttpError(error: unknown) {
+  if (error instanceof ProviderError) return Effect.succeed(error);
+  if (error instanceof ParseResult.ParseError) return parseErrorMessage(error);
+  if (error instanceof HttpClientError.ResponseError) {
+    return Effect.map(responseErrorMessage(error), (message) => new ProviderError(message));
+  }
+  if (HttpClientError.isHttpClientError(error)) {
+    return Effect.succeed(new ProviderError(error.message));
+  }
+  return Effect.succeed(toProviderError(error));
 }
 
-async function gitlabForm(
+function requestFor(url: string, token: string, options: GitLabRequestOptions = {}) {
+  const request =
+    options.method === "POST"
+      ? HttpClientRequest.post(url)
+      : options.method === "PUT"
+        ? HttpClientRequest.put(url)
+        : HttpClientRequest.get(url);
+
+  const authorizedRequest = request.pipe(
+    HttpClientRequest.accept(options.accept ?? "application/json"),
+    HttpClientRequest.bearerToken(token),
+    HttpClientRequest.setHeader("User-Agent", "rudu"),
+  );
+
+  return options.body
+    ? authorizedRequest.pipe(HttpClientRequest.bodyFormData(options.body))
+    : authorizedRequest;
+}
+
+function gitlabResponse(
+  accountId: string,
+  host: string,
+  endpoint: string,
+  options?: GitLabRequestOptions,
+) {
+  const url = gitlabApiUrl(host, endpoint);
+  return Effect.gen(function* () {
+    const token = yield* validAccessToken(accountId);
+    const client = yield* HttpClient.HttpClient;
+    return yield* client.execute(requestFor(url, token, options)).pipe(
+      Effect.timeoutFail({
+        duration: API_REQUEST_TIMEOUT,
+        onTimeout: () => new ProviderError(`Provider API request timed out after 30s: ${url}`),
+      }),
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+    );
+  }).pipe(
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
+}
+
+function gitlabJson<A, I, R>(
+  accountId: string,
+  host: string,
+  endpoint: string,
+  schema: Schema.Schema<A, I, R>,
+  options?: GitLabRequestOptions,
+): Effect.Effect<A, ProviderError, AuthTokenStore | HttpClient.HttpClient | R> {
+  return gitlabResponse(accountId, host, endpoint, options).pipe(
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
+}
+
+function gitlabText(
+  accountId: string,
+  host: string,
+  endpoint: string,
+  options?: GitLabRequestOptions,
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  return gitlabResponse(accountId, host, endpoint, {
+    ...options,
+    accept: options?.accept ?? "text/plain",
+  }).pipe(
+    Effect.flatMap((response) => response.text),
+    Effect.catchAll((error) =>
+      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+    ),
+  );
+}
+
+function gitlabForm(
   host: string,
   accountId: string,
-  method: string,
+  method: "POST" | "PUT",
   endpoint: string,
   forms: Array<[string, string]>,
-) {
+): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   const body = new FormData();
   for (const [key, value] of forms) {
     body.set(key, value);
   }
-  await gitlabJson<unknown>(accountId, host, endpoint, {
-    method,
-    body,
-  });
+  return gitlabResponse(accountId, host, endpoint, { method, body }).pipe(
+    Effect.asVoid,
+  );
 }
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
@@ -201,6 +382,10 @@ function repoSummaryFromProject(
       project.visibility == null ? null : project.visibility.toLowerCase() !== "public",
     avatarUrl: project.avatar_url,
   };
+}
+
+function labelForToken(token: { viewerLogin: string | null; host: string }) {
+  return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
 }
 
 function mapState(state: string) {
@@ -321,180 +506,340 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
 
 class GitLabProvider implements ForgeProvider {
   authStatus(accountId: string) {
-    return providerEffect<ProviderAuthStatus>(async () => {
-      try {
-        const token = await getStoredAuthToken(accountId);
-        if (!token) {
-          return {
-            status: "not_authenticated",
-            message: "Sign in with GitLab to load projects.",
-          };
-        }
-        await Effect.runPromise(this.viewerLogin(accountId));
-        return { status: "ready", message: null };
-      } catch (error) {
+    const provider = this;
+    return Effect.gen(function* () {
+      const token = yield* storedToken(accountId);
+      if (!token) {
+        return {
+          status: "not_authenticated",
+          message: "Sign in with GitLab to load projects.",
+        } satisfies ProviderAuthStatus;
+      }
+      yield* provider.viewerLogin(accountId);
+      return { status: "ready", message: null } satisfies ProviderAuthStatus;
+    }).pipe(
+      Effect.catchAll((error) => {
         const message = error instanceof Error ? error.message : String(error);
         if (isNotAuthenticatedMessage(message)) {
-          return {
+          return Effect.succeed({
             status: "not_authenticated",
             message: "Sign in with GitLab again.",
-          };
+          } satisfies ProviderAuthStatus);
         }
-        return { status: "unknown_error", message };
-      }
-    });
+        return Effect.succeed({ status: "unknown_error", message } satisfies ProviderAuthStatus);
+      }),
+    );
   }
 
   viewerLogin(accountId: string) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitLab is not signed in.");
-      const username = (await gitlabJson<GitLabUser>(accountId, token.host, "user")).username;
-      await updateViewerLogin(accountId, username);
-      return username;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const user = yield* gitlabJson(
+        accountId,
+        token.host,
+        "user",
+        GitLabUserSchema,
+      );
+      yield* saveViewerLogin(accountId, user.username);
+      return user.username;
     });
   }
 
   listInitialRepos(accountId: string, limit: number) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitLab is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
       const endpoint = `projects?membership=true&simple=true&per_page=${limit}`;
-      return (await gitlabJson<GitLabProject[]>(accountId, token.host, endpoint)).map((project) =>
+      const projects = yield* gitlabJson(
+        accountId,
+        token.host,
+        endpoint,
+        Schema.Array(GitLabProjectSchema),
+      );
+      return projects.map((project) =>
         repoSummaryFromProject(accountId, token.host, label, project),
       );
     });
   }
 
   searchRepos(accountId: string, query: string, limit: number) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitLab is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
-      if (query.trim().length === 0) {
-        return await Effect.runPromise(this.listInitialRepos(accountId, limit));
+    const provider = this;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
+      const trimmedQuery = query.trim();
+      if (trimmedQuery.length === 0) {
+        return yield* provider.listInitialRepos(accountId, limit);
       }
 
       const endpoint = `projects?membership=true&search=${encodeURIComponent(
-        query.trim(),
+        trimmedQuery,
       )}&simple=true&per_page=${limit}`;
-      return (await gitlabJson<GitLabProject[]>(accountId, token.host, endpoint)).map((project) =>
+      const projects = yield* gitlabJson(
+        accountId,
+        token.host,
+        endpoint,
+        Schema.Array(GitLabProjectSchema),
+      );
+      return projects.map((project) =>
         repoSummaryFromProject(accountId, token.host, label, project),
       );
     });
   }
 
   validateRepo(accountId: string, input: string) {
-    return providerEffect(async () => {
-      const token = await getStoredAuthToken(accountId);
-      if (!token) throw new ProviderError("GitLab is not signed in.");
-      const label = token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
       const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
       if (validatedHost !== normalizeHost(token.host)) {
-        throw new ProviderError("Project URL host must match the selected GitLab account.");
+        return yield* Effect.fail(
+          new ProviderError("Project URL host must match the selected GitLab account."),
+        );
       }
-      return repoSummaryFromProject(
+      const project = yield* gitlabJson(
         accountId,
         validatedHost,
-        label,
-        await gitlabJson<GitLabProject>(accountId, validatedHost, projectPathEndpoint(projectPath)),
+        projectPathEndpoint(projectPath),
+        GitLabProjectSchema,
       );
+      return repoSummaryFromProject(accountId, validatedHost, label, project);
+    });
+  }
+
+  listOverviewPullRequests(accountId: string) {
+    return Effect.gen(function* () {
+      const token = yield* requireStoredToken(accountId);
+      const label = labelForToken(token);
+      console.info(
+        `[gitlab] loading overview merge requests from ${token.host} (${OVERVIEW_MERGE_REQUEST_SCOPES.join(
+          ", ",
+        )})`,
+      );
+      const scopedResults = yield* Effect.forEach(
+        OVERVIEW_MERGE_REQUEST_SCOPES,
+        (scope) =>
+          gitlabJson(
+            accountId,
+            token.host,
+            overviewMergeRequestsEndpoint(scope),
+            Schema.Array(GitLabMergeRequestSchema),
+          ).pipe(
+            Effect.map((mergeRequests) => ({ scope, mergeRequests, error: null })),
+            Effect.catchAll((error) =>
+              Effect.succeed({ scope, mergeRequests: [], error }),
+            ),
+          ),
+        { concurrency: "unbounded" },
+      );
+      const mergeRequestsByKey = new Map<string, GitLabMergeRequest>();
+      const errors: ProviderError[] = [];
+
+      for (const result of scopedResults) {
+        if (result.error) {
+          errors.push(result.error);
+          console.warn(
+            `[gitlab] failed to load overview merge request scope ${result.scope} from ${token.host}`,
+            result.error,
+          );
+          continue;
+        }
+
+        console.info(
+          `[gitlab] loaded ${result.mergeRequests.length} overview merge requests for scope ${result.scope} from ${token.host}`,
+        );
+        for (const mergeRequest of result.mergeRequests) {
+          const key =
+            typeof mergeRequest.project_id === "number"
+              ? `${mergeRequest.project_id}:${mergeRequest.iid}`
+              : mergeRequest.web_url;
+          mergeRequestsByKey.set(key, mergeRequest);
+        }
+      }
+
+      if (
+        mergeRequestsByKey.size === 0 &&
+        errors.length === scopedResults.length
+      ) {
+        return yield* Effect.fail(
+          new ProviderError(
+            errors[0]?.message ?? "Failed to load GitLab overview merge requests.",
+          ),
+        );
+      }
+
+      const mergeRequests = [...mergeRequestsByKey.values()].sort(
+        (left, right) =>
+          Date.parse(right.updated_at) - Date.parse(left.updated_at),
+      );
+      console.info(
+        `[gitlab] collected ${mergeRequests.length} overview merge requests from ${token.host}`,
+      );
+      const projectIds = [
+        ...new Set(
+          mergeRequests
+            .map((mergeRequest) => mergeRequest.project_id)
+            .filter(
+              (projectId): projectId is number => typeof projectId === "number",
+            ),
+        ),
+      ];
+      const projectResults = yield* Effect.forEach(
+        projectIds,
+        (projectId) =>
+          gitlabJson(
+            accountId,
+            token.host,
+            `projects/${projectId}`,
+            GitLabProjectSchema,
+          ).pipe(
+            Effect.map((project) => ({ projectId, project })),
+            Effect.catchAll((error) => {
+              console.warn(
+                `[gitlab] failed to load project ${projectId} for overview`,
+                error,
+              );
+              return Effect.succeed({ projectId, project: null });
+            }),
+          ),
+        { concurrency: "unbounded" },
+      );
+      const projectsById = new Map<number, GitLabProject>();
+      for (const result of projectResults) {
+        if (result.project) {
+          projectsById.set(result.projectId, result.project);
+        }
+      }
+      const entries: OverviewPullRequestSummary[] = [];
+
+      for (const mergeRequest of mergeRequests) {
+        const projectId = mergeRequest.project_id;
+        if (typeof projectId !== "number") {
+          console.warn(
+            `[gitlab] skipping overview MR !${mergeRequest.iid}: missing project_id`,
+          );
+          continue;
+        }
+
+        const project = projectsById.get(projectId);
+        if (!project) continue;
+
+        entries.push({
+          repo: repoSummaryFromProject(accountId, token.host, label, project),
+          pullRequest: toPullRequestSummary(mergeRequest),
+        });
+      }
+
+      console.info(
+        `[gitlab] mapped ${entries.length} overview merge requests from ${token.host}`,
+      );
+      return entries;
     });
   }
 
   listPullRequests(repo: RepoId) {
-    return providerEffect(async () => {
-      return (
-        await gitlabJson<GitLabMergeRequest[]>(
-          repo.accountId,
-          repo.host,
-          projectEndpoint(repo, "merge_requests?state=opened&per_page=100"),
-        )
-      ).map(toPullRequestSummary);
-    });
+    return gitlabJson(
+      repo.accountId,
+      repo.host,
+      projectEndpoint(
+        repo,
+        "merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=100",
+      ),
+      Schema.Array(GitLabMergeRequestSchema),
+    ).pipe(Effect.map((mergeRequests) => mergeRequests.map(toPullRequestSummary)));
   }
 
   getPullRequest(repo: RepoId, number: number) {
-    return providerEffect(async () => {
-      return toPullRequestSummary(
-        await gitlabJson<GitLabMergeRequest>(
-          repo.accountId,
-          repo.host,
-          projectEndpoint(repo, `merge_requests/${number}`),
-        ),
-      );
-    });
+    return gitlabJson(
+      repo.accountId,
+      repo.host,
+      projectEndpoint(repo, `merge_requests/${number}`),
+      GitLabMergeRequestSchema,
+    ).pipe(Effect.map(toPullRequestSummary));
   }
 
   fetchPatch(repo: RepoId, number: number) {
-    return providerEffect(() =>
-      gitlabText(repo.accountId, repo.host, projectEndpoint(repo, `merge_requests/${number}/raw_diffs`)),
+    return gitlabText(
+      repo.accountId,
+      repo.host,
+      projectEndpoint(repo, `merge_requests/${number}/raw_diffs`),
     );
   }
 
   fetchChangedFiles(repo: RepoId, number: number) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const files: string[] = [];
       const seen = new Set<string>();
       let page = 1;
-      while (true) {
-        const diffs = await gitlabJson<GitLabDiff[]>(
+      let shouldContinue = true;
+      while (shouldContinue) {
+        const diffs = yield* gitlabJson(
           repo.accountId,
           repo.host,
           projectEndpoint(repo, `merge_requests/${number}/diffs?per_page=100&page=${page}`),
+          Schema.Array(GitLabDiffSchema),
         );
-        if (diffs.length === 0) break;
-        for (const diff of diffs) {
-          if (!seen.has(diff.new_path)) {
-            seen.add(diff.new_path);
-            files.push(diff.new_path);
+        if (diffs.length === 0) {
+          shouldContinue = false;
+        } else {
+          for (const diff of diffs) {
+            if (!seen.has(diff.new_path)) {
+              seen.add(diff.new_path);
+              files.push(diff.new_path);
+            }
           }
+          page += 1;
         }
-        page += 1;
       }
       return files;
     });
   }
 
   listReviewThreads(repo: RepoId, number: number) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const threads: ReviewThread[] = [];
       let page = 1;
-      while (true) {
-        const discussions = await gitlabJson<GitLabDiscussion[]>(
+      let shouldContinue = true;
+      while (shouldContinue) {
+        const discussions = yield* gitlabJson(
           repo.accountId,
           repo.host,
           projectEndpoint(
             repo,
             `merge_requests/${number}/discussions?per_page=100&page=${page}`,
           ),
+          Schema.Array(GitLabDiscussionSchema),
         );
-        if (discussions.length === 0) break;
-        for (const discussion of discussions) {
-          if (discussion.individual_note) continue;
-          const thread = discussionToReviewThread(discussion);
-          if (thread) threads.push(thread);
+        if (discussions.length === 0) {
+          shouldContinue = false;
+        } else {
+          for (const discussion of discussions) {
+            if (discussion.individual_note) continue;
+            const thread = discussionToReviewThread(discussion);
+            if (thread) threads.push(thread);
+          }
+          page += 1;
         }
-        page += 1;
       }
       return threads;
     });
   }
 
   createReviewThread(repo: RepoId, number: number, input: ReviewThreadInput) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const body = input.body.trim();
-      if (!body) throw new ProviderError("Comment body is required");
+      if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
 
-      const version = (
-        await gitlabJson<GitLabMrVersion[]>(
-          repo.accountId,
-          repo.host,
-          projectEndpoint(repo, `merge_requests/${number}/versions`),
-        )
-      )[0];
-      if (!version) throw new ProviderError("GitLab merge request has no diff versions");
+      const versions = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/versions`),
+        Schema.Array(GitLabMrVersionSchema),
+      );
+      const version = versions[0];
+      if (!version) {
+        return yield* Effect.fail(new ProviderError("GitLab merge request has no diff versions"));
+      }
 
       const oldPath = input.oldPath.trim() || input.path.trim();
       const newPath = input.newPath.trim() || input.path.trim();
@@ -511,7 +856,7 @@ class GitLabProvider implements ForgeProvider {
         forms.push(["position[position_type]", "file"]);
       } else {
         if (input.line == null) {
-          throw new ProviderError("Line comments require a target line");
+          return yield* Effect.fail(new ProviderError("Line comments require a target line"));
         }
         forms.push(["position[position_type]", "text"]);
         if (input.side === "LEFT") {
@@ -521,7 +866,7 @@ class GitLabProvider implements ForgeProvider {
         }
       }
 
-      await gitlabForm(
+      yield* gitlabForm(
         repo.host,
         repo.accountId,
         "POST",
@@ -532,12 +877,12 @@ class GitLabProvider implements ForgeProvider {
   }
 
   replyToReviewThread(repo: RepoId, number: number, threadId: string, body: string) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedBody = body.trim();
-      if (!trimmedThreadId) throw new ProviderError("Thread id is required");
-      if (!trimmedBody) throw new ProviderError("Reply body is required");
-      await gitlabForm(
+      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Reply body is required"));
+      yield* gitlabForm(
         repo.host,
         repo.accountId,
         "POST",
@@ -557,14 +902,14 @@ class GitLabProvider implements ForgeProvider {
     commentId: string,
     body: string,
   ) {
-    return providerEffect(async () => {
+    return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedCommentId = commentId.trim();
       const trimmedBody = body.trim();
-      if (!trimmedThreadId) throw new ProviderError("Thread id is required");
-      if (!trimmedCommentId) throw new ProviderError("Comment id is required");
-      if (!trimmedBody) throw new ProviderError("Comment body is required");
-      await gitlabForm(
+      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!trimmedCommentId) return yield* Effect.fail(new ProviderError("Comment id is required"));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      yield* gitlabForm(
         repo.host,
         repo.accountId,
         "PUT",

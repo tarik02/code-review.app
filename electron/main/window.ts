@@ -76,6 +76,15 @@ function syncAllWindowAppearance(): void {
 
 nativeTheme.on("updated", syncAllWindowAppearance);
 
+function forwardRendererConsole(window: BrowserWindow): void {
+  window.webContents.on("console-message", (details) => {
+    const source = details.sourceId
+      ? ` ${details.sourceId}:${details.lineNumber}`
+      : "";
+    console.log(`[renderer:${details.level}] ${details.message}${source}`);
+  });
+}
+
 async function createMainWindow() {
   const window = new BrowserWindow({
     width: 900,
@@ -94,6 +103,7 @@ async function createMainWindow() {
   });
 
   registerTrpc(window);
+  forwardRendererConsole(window);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) {

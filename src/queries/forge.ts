@@ -29,6 +29,8 @@ const forgeKeys = {
   viewerLogin: (accountId: string) =>
     [...forgeKeys.repos(), "viewer-login", accountId] as const,
   pullRequests: () => [...forgeKeys.all, "pull-requests"] as const,
+  pullRequestOverview: (accountId: string) =>
+    [...forgeKeys.pullRequests(), "overview", accountId] as const,
   pullRequestList: (repoId: string) => [...forgeKeys.pullRequests(), "list", repoId] as const,
   pullRequestCachedList: (repoId: string) =>
     [...forgeKeys.pullRequests(), "list", repoId, "cached"] as const,
@@ -152,6 +154,14 @@ function pullRequestCachedListQueryOptions(repoId: string) {
   });
 }
 
+function pullRequestOverviewQueryOptions(accountId: string) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestOverview(accountId),
+    queryFn: () => trpc.pullRequests.listOverview.query({ accountId }),
+    staleTime: 0,
+  });
+}
+
 function pullRequestListQueryOptions(repoId: string) {
   return queryOptions({
     queryKey: forgeKeys.pullRequestList(repoId),
@@ -255,6 +265,7 @@ export {
   pullRequestCachedListQueryOptions,
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,
+  pullRequestOverviewQueryOptions,
   pullRequestPatchQueryOptions,
   pullRequestReviewThreadsQueryOptions,
   trackedPullRequestListQueryOptions,

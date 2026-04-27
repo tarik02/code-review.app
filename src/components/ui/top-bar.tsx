@@ -1,5 +1,4 @@
 import { ReactNode } from "react";
-import {} from "tailwind-merge";
 import { cx } from "../../lib/cx";
 import { trpc } from "../../lib/trpc";
 
@@ -15,7 +14,7 @@ export function TopBar(props: Props) {
   return (
     <div
       className={cx(
-        "macos:h-[40px] macos:data-[position=left]:pl-[72px]",
+        "macos:h-[40px] macos:not-fullscreen:data-[position=left]:pl-[calc(72px+1em)]",
         "wco:h-[calc(env(titlebar-area-y)+env(titlebar-area-height))]",
         "wco:data-[position=left]-pl-[env(titlebar-area-x)]",
         "wco:data-[position=right]-pr-[calc(env(titlebar-area-width)-env(titlebar-area-x))]",

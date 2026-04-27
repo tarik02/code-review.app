@@ -24,11 +24,28 @@ type RepoSidebarItemProps = {
   nameWithOwner: string;
   pullRequests: PullRequestSummary[] | undefined;
   error: string | undefined;
+  view: SidebarPullRequestView;
   selectedPrKey: string | null;
+  trackedPullRequestNumbers?: Set<number>;
   onSelectPr: (repo: string, pr: PullRequestSummary) => void;
   onAddPr: (repo: string) => void;
+  onTrackPr?: (repo: string, pr: PullRequestSummary) => void;
   onRemovePr: (repo: string, pr: PullRequestSummary) => void;
   onOpenChange: (open: boolean) => void;
+};
+
+type SidebarPullRequestView = "overview" | "tracked";
+
+type PullRequestSidebarRowProps = {
+  repoId: string;
+  pullRequest: PullRequestSummary;
+  selectedPrKey: string | null;
+  isTrackedView: boolean;
+  isTracked: boolean;
+  repoLabel?: string;
+  onSelectPr: (repo: string, pr: PullRequestSummary) => void;
+  onTrackPr?: (repo: string, pr: PullRequestSummary) => void;
+  onRemovePr: (repo: string, pr: PullRequestSummary) => void;
 };
 
 type PullRequestStatusViewModel = {
@@ -148,6 +165,78 @@ function ChevronIcon(props: React.ComponentProps<"svg">) {
   );
 }
 
+function PullRequestSidebarRow({
+  repoId,
+  pullRequest,
+  selectedPrKey,
+  isTrackedView,
+  isTracked,
+  repoLabel,
+  onSelectPr,
+  onTrackPr,
+  onRemovePr,
+}: PullRequestSidebarRowProps) {
+  const status = getPullRequestStatus(pullRequest);
+  const isSelected =
+    selectedPrKey ===
+    `${repoId}#${pullRequest.number}@${pullRequest.headSha}`;
+
+  return (
+    <div className="group relative">
+      <button
+        className={[
+          "group relative flex w-full flex-col gap-1 bg-canvas px-3 pl-6 py-2.5 text-left transition hover:bg-canvasDark focus-visible:bg-surface",
+          isSelected ? "bg-canvasDark" : "",
+        ].join(" ")}
+        onClick={() => onSelectPr(repoId, pullRequest)}
+        type="button"
+      >
+        <p className="truncate text-xs text-ink-500">
+          {repoLabel ? `${repoLabel} · ` : ""}
+          {pullRequest.authorLogin}
+        </p>
+
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="shrink-0">
+              <PullRequestStatusIcon status={status.status} />
+            </div>
+            <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
+              {pullRequest.title}
+            </p>
+          </div>
+          <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+            {formatChangeSummary(pullRequest)}
+          </p>
+        </div>
+      </button>
+      {isTrackedView ? (
+        <button
+          aria-label={`Remove PR #${pullRequest.number}`}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100"
+          onClick={() => onRemovePr(repoId, pullRequest)}
+          type="button"
+        >
+          <ArchiveBoxXMarkIcon className="size-4 shrink-0" />
+        </button>
+      ) : !isTracked && onTrackPr ? (
+        <button
+          aria-label={`Track PR #${pullRequest.number}`}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onTrackPr(repoId, pullRequest);
+          }}
+          type="button"
+        >
+          <PlusIcon className="size-4 shrink-0" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function RepoSidebarItem({
   value,
   avatarUrl,
@@ -155,14 +244,18 @@ function RepoSidebarItem({
   nameWithOwner,
   pullRequests,
   error,
+  view,
   selectedPrKey,
+  trackedPullRequestNumbers,
   onSelectPr,
   onAddPr,
+  onTrackPr,
   onRemovePr,
   onOpenChange,
 }: RepoSidebarItemProps) {
   const ownerLogin = getOwnerLogin(nameWithOwner);
   const hasPullRequests = Boolean(pullRequests && pullRequests.length > 0);
+  const isTrackedView = view === "tracked";
 
   return (
     <AccordionItem value={value} onOpenChange={onOpenChange}>
@@ -203,7 +296,7 @@ function RepoSidebarItem({
             {error && !hasPullRequests ? (
               <div className="text-sm text-danger-600">{error}</div>
             ) : null}
-            {!error && pullRequests?.length === 0 ? (
+            {!error && pullRequests?.length === 0 && isTrackedView ? (
               <div className="px-3 py-2.5 text-sm text-ink-500">
                 No tracked PRs yet.{" "}
                 <button
@@ -215,49 +308,29 @@ function RepoSidebarItem({
                 </button>
               </div>
             ) : null}
+            {!error && pullRequests?.length === 0 && !isTrackedView ? (
+              <div className="px-3 py-2.5 text-sm text-ink-500">
+                No open PRs or MRs.
+              </div>
+            ) : null}
             {pullRequests
               ? pullRequests.map((pullRequest) => {
                   const prKey = `${value}#${pullRequest.number}`;
-                  const status = getPullRequestStatus(pullRequest);
-                  const isSelected =
-                    selectedPrKey ===
-                    `${value}#${pullRequest.number}@${pullRequest.headSha}`;
+                  const isTracked =
+                    trackedPullRequestNumbers?.has(pullRequest.number) ?? false;
 
                   return (
-                    <div className="group relative" key={prKey}>
-                      <button
-                        className={[
-                          "group relative flex w-full flex-col gap-1 bg-canvas px-3 pl-6 py-2.5 text-left transition hover:bg-canvasDark focus-visible:bg-surface",
-                          isSelected ? "bg-canvasDark" : "",
-                        ].join(" ")}
-                        onClick={() => onSelectPr(value, pullRequest)}
-                        type="button"
-                      >
-                        <p className="text-xs ">{pullRequest.authorLogin}</p>
-
-                        <div className="flex items-center gap-3">
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <div className="shrink-0">
-                              <PullRequestStatusIcon status={status.status} />
-                            </div>
-                            <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
-                              {pullRequest.title}
-                            </p>
-                          </div>
-                          <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
-                            {formatChangeSummary(pullRequest)}
-                          </p>
-                        </div>
-                      </button>
-                      <button
-                        aria-label={`Remove PR #${pullRequest.number}`}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100"
-                        onClick={() => onRemovePr(value, pullRequest)}
-                        type="button"
-                      >
-                        <ArchiveBoxXMarkIcon className="size-4 shrink-0" />
-                      </button>
-                    </div>
+                    <PullRequestSidebarRow
+                      key={prKey}
+                      repoId={value}
+                      pullRequest={pullRequest}
+                      selectedPrKey={selectedPrKey}
+                      isTrackedView={isTrackedView}
+                      isTracked={isTracked}
+                      onSelectPr={onSelectPr}
+                      onTrackPr={onTrackPr}
+                      onRemovePr={onRemovePr}
+                    />
                   );
                 })
               : null}
@@ -268,5 +341,10 @@ function RepoSidebarItem({
   );
 }
 
-export { RepoSidebarItem };
-export type { RepoSidebarItemProps, PullRequestSummary };
+export { PullRequestSidebarRow, RepoSidebarItem };
+export type {
+  PullRequestSidebarRowProps,
+  RepoSidebarItemProps,
+  PullRequestSummary,
+  SidebarPullRequestView,
+};

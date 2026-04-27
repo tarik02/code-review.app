@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { CSSProperties } from "react";
 import type {
   DiffLineAnnotation,
@@ -94,6 +94,7 @@ type PatchViewerMainProps = {
   fileStats: Map<string, FileStatsEntry> | null;
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
+  onExpandContext: (filePath: string, expandAll?: boolean) => void;
 };
 
 function toGithubSide(side: SelectedLineRange["side"]): ReviewCommentSide {
@@ -117,6 +118,28 @@ function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
   }
 
   return `Lines ${startLine}-${endLine}`;
+}
+
+function isHtmlElement(value: EventTarget): value is HTMLElement {
+  return value instanceof HTMLElement;
+}
+
+function didClickUnmodifiedLines(event: ReactMouseEvent<HTMLElement>) {
+  const path = event.nativeEvent.composedPath();
+  const clickedUnmodifiedLines = path.some(
+    (item) =>
+      isHtmlElement(item) &&
+      (item.hasAttribute("data-unmodified-lines") ||
+        item.hasAttribute("data-separator-content")),
+  );
+
+  if (!clickedUnmodifiedLines) {
+    return false;
+  }
+
+  return !path.some(
+    (item) => isHtmlElement(item) && item.hasAttribute("data-expand-index"),
+  );
 }
 
 type ReviewThreadsPanelProps = {
@@ -242,6 +265,7 @@ function PatchViewerMain({
   parsedPatch,
   fileStats,
   gitStatus,
+  onExpandContext,
 }: PatchViewerMainProps) {
   const [draftCommentTarget, setDraftCommentTarget] =
     useState<DraftReviewCommentTarget | null>(null);
@@ -303,6 +327,18 @@ function PatchViewerMain({
       startLine: startLine !== endLine ? startLine : null,
       startSide: startLine !== endLine ? startGithubSide : null,
     });
+  }
+
+  function handleUnmodifiedLinesClick(
+    event: ReactMouseEvent<HTMLDivElement>,
+    filePath: string,
+  ) {
+    if (!didClickUnmodifiedLines(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    onExpandContext(filePath, event.shiftKey);
   }
 
   async function handleSubmitDraftComment(body: string) {
@@ -582,6 +618,9 @@ function PatchViewerMain({
                           <div
                             data-file-path={fileDiff.name}
                             key={`${selectedPatch.repoId}-${selectedPatch.number}-${normalizePath(fileDiff.name)}`}
+                            onClick={(event) =>
+                              handleUnmodifiedLinesClick(event, fileDiff.name)
+                            }
                             ref={(node) =>
                               navigator.diff.registerDiffNode(
                                 fileDiff.name,
@@ -629,6 +668,16 @@ function PatchViewerMain({
                                   [data-column-number][data-selected-line]::before {
                                     background-color: #f59e0b;
                                     background-image: none;
+                                  }
+
+                                  [data-separator='line-info'] [data-separator-content],
+                                  [data-separator='line-info-basic'] [data-separator-content] {
+                                    cursor: pointer;
+                                  }
+
+                                  [data-separator='line-info'] [data-separator-content]:hover,
+                                  [data-separator='line-info-basic'] [data-separator-content]:hover {
+                                    text-decoration: underline;
                                   }
                                 `,
                                 enableGutterUtility:

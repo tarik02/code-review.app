@@ -18,6 +18,9 @@ import {
   createPullRequestReviewComment,
   forgeKeys,
   initialReposQueryOptions,
+  pullRequestCachedListQueryOptions,
+  pullRequestListQueryOptions,
+  pullRequestOverviewQueryOptions,
   replyToPullRequestReviewComment,
   savedReposQueryOptions,
   searchReposQueryOptions,
@@ -29,6 +32,8 @@ import type {
   CreatePullRequestReviewCommentInput,
   PrPatch,
   ForgeProviderKind,
+  OverviewPullRequestSummary,
+  ProviderAccount,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,
@@ -179,10 +184,181 @@ function useRepoPickerRepos(
   };
 }
 
+function useInitialReposForAccounts(
+  accounts: ProviderAccount[],
+  enabledAccountIds: string[],
+  enabled: boolean,
+) {
+  const accountIds = useMemo(
+    () =>
+      accounts
+        .map((account) => account.id)
+        .filter((accountId) => enabledAccountIds.includes(accountId)),
+    [accounts, enabledAccountIds],
+  );
+
+  const initialRepoQueries = useQueries({
+    queries: accountIds.map((accountId) => ({
+      ...initialReposQueryOptions(accountId),
+      enabled,
+    })),
+  });
+
+  const repos = useMemo(() => {
+    const byId = new Map<string, RepoSummary>();
+    for (const query of initialRepoQueries) {
+      for (const repo of query.data ?? []) {
+        byId.set(repo.id, repo);
+      }
+    }
+    return [...byId.values()];
+  }, [initialRepoQueries]);
+
+  return { repos };
+}
+
+function useAccountOverviewPullRequests(
+  accounts: ProviderAccount[],
+  enabledAccountIds: string[],
+  enabled: boolean,
+) {
+  const accountIds = useMemo(
+    () =>
+      accounts
+        .map((account) => account.id)
+        .filter((accountId) => enabledAccountIds.includes(accountId)),
+    [accounts, enabledAccountIds],
+  );
+
+  const overviewQueries = useQueries({
+    queries: accountIds.map((accountId) => ({
+      ...pullRequestOverviewQueryOptions(accountId),
+      enabled,
+    })),
+  });
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    console.info(
+      `[overview] configured for ${accountIds.length} enabled provider account(s)`,
+      accountIds,
+    );
+
+    if (accountIds.length === 0) {
+      return;
+    }
+
+    for (let i = 0; i < accountIds.length; i += 1) {
+      const query = overviewQueries[i];
+      if (!query) continue;
+      if (query.error) {
+        console.error(
+          `[overview] failed for account ${accountIds[i]}`,
+          query.error,
+        );
+        continue;
+      }
+      if (query.data) {
+        console.info(
+          `[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`,
+        );
+      }
+    }
+  }, [accountIds, enabled, overviewQueries]);
+
+  const pullRequests = useMemo(() => {
+    const entries: OverviewPullRequestSummary[] = [];
+    for (const query of overviewQueries) {
+      entries.push(...(query.data ?? []));
+    }
+    return entries;
+  }, [overviewQueries]);
+
+  const errors = useMemo(() => {
+    const entries: string[] = [];
+    for (let i = 0; i < accountIds.length; i += 1) {
+      const error = overviewQueries[i]?.error;
+      if (!error) continue;
+      entries.push(getErrorMessage(error));
+    }
+    return entries;
+  }, [accountIds, overviewQueries]);
+
+  return {
+    accountIds,
+    errors,
+    isLoading: enabled && overviewQueries.some((query) => query.isPending),
+    pullRequests,
+  };
+}
+
 type UseRepoPullRequestsArgs = {
   repos: RepoSummary[];
   setSelectedPr: Dispatch<SetStateAction<SelectedPullRequest | null>>;
 };
+
+type UseOverviewPullRequestsArgs = {
+  repos: RepoSummary[];
+  enabled: boolean;
+};
+
+function useOverviewPullRequests({
+  repos,
+  enabled,
+}: UseOverviewPullRequestsArgs) {
+  const repoNames = useMemo(
+    () => repos.map((repo) => repo.id),
+    [repos],
+  );
+
+  const cachedPullRequestQueries = useQueries({
+    queries: repoNames.map((repo) => ({
+      ...pullRequestCachedListQueryOptions(repo),
+      enabled,
+    })),
+  });
+  const livePullRequestQueries = useQueries({
+    queries: repoNames.map((repo) => ({
+      ...pullRequestListQueryOptions(repo),
+      enabled,
+    })),
+  });
+
+  const prsByRepo = useMemo(() => {
+    const entries: Array<[string, PullRequestSummary[]]> = [];
+    for (let i = 0; i < repoNames.length; i += 1) {
+      const repo = repoNames[i];
+      const livePullRequests = livePullRequestQueries[i]?.data;
+      const cachedPullRequests = cachedPullRequestQueries[i]?.data;
+      const pullRequests = livePullRequests ?? cachedPullRequests;
+      if (!pullRequests) continue;
+      entries.push([repo, pullRequests]);
+    }
+    return Object.fromEntries(entries);
+  }, [cachedPullRequestQueries, livePullRequestQueries, repoNames]);
+
+  const repoErrors = useMemo(() => {
+    const entries: Array<[string, string]> = [];
+    for (let i = 0; i < repoNames.length; i += 1) {
+      const repo = repoNames[i];
+      const hasDisplayData = Boolean(
+        livePullRequestQueries[i]?.data ?? cachedPullRequestQueries[i]?.data,
+      );
+      const error = livePullRequestQueries[i]?.error;
+      if (!error || hasDisplayData) continue;
+      entries.push([repo, getErrorMessage(error)]);
+    }
+    return Object.fromEntries(entries);
+  }, [cachedPullRequestQueries, livePullRequestQueries, repoNames]);
+
+  return {
+    prsByRepo,
+    repoErrors,
+  };
+}
 
 function useTrackedPullRequests({
   repos,
@@ -520,6 +696,9 @@ function usePullRequestReviewCommentMutations(
 
 export {
   getErrorMessage,
+  useAccountOverviewPullRequests,
+  useInitialReposForAccounts,
+  useOverviewPullRequests,
   usePullRequestReviewCommentMutations,
   useRepoPickerRepos,
   useSavedRepos,

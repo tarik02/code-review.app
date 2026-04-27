@@ -1,7 +1,8 @@
+import { HttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
 import { providerFor } from "../providers/registry";
-import { getStoredAuthToken, listProviderAccounts } from "../auth/token-store";
+import { AuthTokenStore } from "../auth/token-store";
 import type {
   ProviderProfile,
   ProviderAccount,
@@ -22,74 +23,111 @@ type RepoServiceShape = {
     query: string,
     limit?: number,
   ): Effect.Effect<RepoSummary[], Error>;
-  validateRepo(
-    accountId: string,
-    repo: string,
-  ): Effect.Effect<RepoSummary, Error>;
-  listSavedRepos(): Effect.Effect<RepoSummary[], Error, CacheService>;
-  saveRepo(repo: RepoSummary): Effect.Effect<RepoSummary, Error, CacheService>;
+  validateRepo(accountId: string, repo: string): Effect.Effect<RepoSummary, Error>;
+  listSavedRepos(): Effect.Effect<RepoSummary[], Error>;
+  saveRepo(repo: RepoSummary): Effect.Effect<RepoSummary, Error>;
 };
 
-class RepoService extends Effect.Tag("RepoService")<RepoService, RepoServiceShape>() {
-  static Live = Layer.succeed(this, createRepoService());
-}
+class RepoService extends Effect.Tag("RepoService")<RepoService, RepoServiceShape>() {}
 
-function createRepoService(): RepoServiceShape {
-  return {
-    listProviderAccounts: () => Effect.promise(() => listProviderAccounts()),
+const makeRepoService = Effect.gen(function* () {
+  const tokenStore = yield* AuthTokenStore;
+  const cache = yield* CacheService;
+  const httpClient = yield* HttpClient.HttpClient;
 
-    getProviderStatuses: () =>
-      Effect.gen(function* () {
-        const accounts = yield* Effect.promise(() => listProviderAccounts());
+  const provideProviderDeps = <A, E>(
+    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
+  ) =>
+    effect.pipe(
+      Effect.provideService(AuthTokenStore, tokenStore),
+      Effect.provideService(HttpClient.HttpClient, httpClient),
+    );
+
+  const listProviderAccounts: RepoServiceShape["listProviderAccounts"] = Effect.fn(
+    "RepoService.listProviderAccounts",
+  )(function* () {
+    return yield* tokenStore.listAccounts();
+  });
+
+  const getProviderStatuses: RepoServiceShape["getProviderStatuses"] = Effect.fn(
+    "RepoService.getProviderStatuses",
+  )(function* () {
+        const accounts = yield* tokenStore.listAccounts();
         const statuses: Record<string, ProviderAuthStatus> = {};
         for (const account of accounts) {
-          statuses[account.id] = yield* providerFor(account.provider).authStatus(account.id);
+          statuses[account.id] = yield* provideProviderDeps(
+            providerFor(account.provider).authStatus(account.id),
+          );
         }
         return statuses;
-      }),
+  });
 
-    getProviderProfile: (accountId) =>
-      Effect.gen(function* () {
-        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+  const getProviderProfile: RepoServiceShape["getProviderProfile"] = Effect.fn(
+    "RepoService.getProviderProfile",
+  )(function* (accountId) {
+        const account = yield* tokenStore.get(accountId);
         if (!account) throw new Error("Provider account is not signed in.");
-        const login = yield* providerFor(account.provider).viewerLogin(accountId);
+        const login = yield* provideProviderDeps(
+          providerFor(account.provider).viewerLogin(accountId),
+        );
         return { accountId, login };
-      }),
+  });
 
-    listInitialRepos: (accountId, limit = 5) =>
-      Effect.gen(function* () {
-        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+  const listInitialRepos: RepoServiceShape["listInitialRepos"] = Effect.fn(
+    "RepoService.listInitialRepos",
+  )(function* (accountId, limit = 5) {
+        const account = yield* tokenStore.get(accountId);
         if (!account) return [];
-        return yield* providerFor(account.provider).listInitialRepos(accountId, limit);
-      }),
+        return yield* provideProviderDeps(
+          providerFor(account.provider).listInitialRepos(accountId, limit),
+        );
+  });
 
-    searchRepos: (accountId, query, limit = 20) =>
-      Effect.gen(function* () {
-        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+  const searchRepos: RepoServiceShape["searchRepos"] = Effect.fn(
+    "RepoService.searchRepos",
+  )(function* (accountId, query, limit = 20) {
+        const account = yield* tokenStore.get(accountId);
         if (!account) return [];
-        return yield* providerFor(account.provider).searchRepos(accountId, query, limit);
-      }),
+        return yield* provideProviderDeps(
+          providerFor(account.provider).searchRepos(accountId, query, limit),
+        );
+  });
 
-    validateRepo: (accountId, repo) =>
-      Effect.gen(function* () {
-        const account = yield* Effect.promise(() => getStoredAuthToken(accountId));
+  const validateRepo: RepoServiceShape["validateRepo"] = Effect.fn(
+    "RepoService.validateRepo",
+  )(function* (accountId, repo) {
+        const account = yield* tokenStore.get(accountId);
         if (!account) throw new Error("Provider account is not signed in.");
-        return yield* providerFor(account.provider).validateRepo(accountId, repo);
-      }),
+        return yield* provideProviderDeps(
+          providerFor(account.provider).validateRepo(accountId, repo),
+        );
+  });
 
-    listSavedRepos: () =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        return yield* cache.listSavedRepos();
-      }),
+  const listSavedRepos: RepoServiceShape["listSavedRepos"] = Effect.fn(
+    "RepoService.listSavedRepos",
+  )(function* () {
+    return yield* cache.listSavedRepos();
+  });
 
-    saveRepo: (repo) =>
-      Effect.gen(function* () {
-        const cache = yield* CacheService;
-        yield* cache.saveRepo(repo);
-        return repo;
-      }),
-  };
-}
+  const saveRepo: RepoServiceShape["saveRepo"] = Effect.fn(
+    "RepoService.saveRepo",
+  )(function* (repo) {
+    yield* cache.saveRepo(repo);
+    return repo;
+  });
 
-export { RepoService };
+  return {
+    listProviderAccounts,
+    getProviderStatuses,
+    getProviderProfile,
+    listInitialRepos,
+    searchRepos,
+    validateRepo,
+    listSavedRepos,
+    saveRepo,
+  } satisfies RepoServiceShape;
+});
+
+const RepoServiceLive = Layer.effect(RepoService, makeRepoService);
+
+export { RepoService, RepoServiceLive };
