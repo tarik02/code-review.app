@@ -3,6 +3,8 @@ import type { BrowserWindow } from "electron";
 
 const oauthCallbacks = new EventEmitter();
 const pendingOAuthCallbacks: string[] = [];
+const OAUTH_CALLBACK_TTL_MS = 10 * 60 * 1000;
+let latestOAuthCallback: { url: string; emittedAt: number } | null = null;
 const deepLinkCallbacks = new EventEmitter();
 const pendingDeepLinks: string[] = [];
 
@@ -17,6 +19,7 @@ function isOAuthCallbackUrl(url: string) {
 
 function emitOAuthCallback(url: string, window: BrowserWindow | null) {
   if (!isOAuthCallbackUrl(url)) return false;
+  latestOAuthCallback = { url, emittedAt: Date.now() };
   if (oauthCallbacks.listenerCount("callback") === 0) {
     pendingOAuthCallbacks.push(url);
   }
@@ -26,6 +29,15 @@ function emitOAuthCallback(url: string, window: BrowserWindow | null) {
     window.focus();
   }
   return true;
+}
+
+function getLatestOAuthCallback() {
+  if (!latestOAuthCallback) return null;
+  if (Date.now() - latestOAuthCallback.emittedAt > OAUTH_CALLBACK_TTL_MS) {
+    latestOAuthCallback = null;
+    return null;
+  }
+  return latestOAuthCallback;
 }
 
 function subscribeToOAuthCallbacks(listener: (url: string) => void) {
@@ -75,6 +87,7 @@ function subscribeToDeepLinks(listener: (url: string) => void) {
 export {
   emitDeepLink,
   emitOAuthCallback,
+  getLatestOAuthCallback,
   isDeepLinkUrl,
   isOAuthCallbackUrl,
   subscribeToDeepLinks,

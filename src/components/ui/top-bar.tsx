@@ -2,6 +2,10 @@ import { ReactNode } from "react";
 import { cx } from "../../lib/cx";
 import { trpc } from "../../lib/trpc";
 
+const TOP_BAR_MACOS_HEIGHT = "40px";
+const TOP_BAR_WCO_HEIGHT =
+  "calc(env(titlebar-area-y) + env(titlebar-area-height))";
+
 interface Props {
   position: "left" | "middle" | "right";
   children?: ReactNode;
@@ -32,3 +36,5 @@ export function TopBar(props: Props) {
     </div>
   );
 }
+
+export { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT };

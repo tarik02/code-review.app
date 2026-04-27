@@ -102,6 +102,46 @@
       color 180ms ease;
   }
 
+  html.theme-view-transition-active body {
+    transition: none;
+  }
+
+  html.theme-reveal-transition::view-transition-old(root),
+  html.theme-reveal-transition::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-fade-transition::view-transition-old(root) {
+    animation: theme-fade-out 180ms ease both;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-fade-transition::view-transition-new(root) {
+    animation: theme-fade-in 180ms ease both;
+    mix-blend-mode: normal;
+  }
+
+  @keyframes theme-fade-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes theme-fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
   button,
   input {
     font: inherit;

@@ -48,6 +48,7 @@ type SelectedPullRequest = {
   repoId: string;
   number: number;
   headSha: string;
+  baseSha?: string | null;
 };
 
 type PrPatch = {
@@ -55,6 +56,23 @@ type PrPatch = {
   number: number;
   headSha: string;
   patch: string;
+};
+
+type PrFileChangeType =
+  | "change"
+  | "rename-pure"
+  | "rename-changed"
+  | "new"
+  | "deleted";
+
+type PrFileContents = {
+  repoId: string;
+  oldPath: string;
+  newPath: string;
+  baseSha: string | null;
+  headSha: string;
+  oldContent: string;
+  newContent: string;
 };
 
 type ViewerLogin = {
@@ -173,6 +191,8 @@ export type {
   CreatePullRequestReviewCommentInput,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PrFileChangeType,
+  PrFileContents,
   PrPatch,
   ProviderAccount,
   ProviderAuthStatus,

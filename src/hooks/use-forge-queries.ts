@@ -2,8 +2,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 import {
   type QueryKey,
@@ -184,6 +182,87 @@ function useRepoPickerRepos(
   };
 }
 
+function useRepoPickerReposForAccounts(
+  accounts: ProviderAccount[],
+  enabledAccountIds: string[],
+  debouncedQuery: string,
+  enabled = true,
+) {
+  const queryClient = useQueryClient();
+  const trimmedQuery = debouncedQuery.trim();
+  const enabledAccountIdSet = useMemo(
+    () => new Set(enabledAccountIds),
+    [enabledAccountIds],
+  );
+  const activeAccounts = useMemo(
+    () => accounts.filter((account) => enabledAccountIdSet.has(account.id)),
+    [accounts, enabledAccountIdSet],
+  );
+  const shouldQuery = enabled && activeAccounts.length > 0;
+  const isSearching = trimmedQuery.length > 0;
+
+  const initialRepoQueries = useQueries({
+    queries: activeAccounts.map((account) => ({
+      ...initialReposQueryOptions(account.id),
+      enabled: shouldQuery && !isSearching,
+    })),
+  });
+  const searchRepoQueries = useQueries({
+    queries: activeAccounts.map((account) => ({
+      ...searchReposQueryOptions(debouncedQuery, account.id, account.provider),
+      enabled: shouldQuery && isSearching,
+    })),
+  });
+
+  useEffect(() => {
+    if (!shouldQuery) {
+      return;
+    }
+
+    for (const account of activeAccounts) {
+      void queryClient.prefetchQuery(initialReposQueryOptions(account.id));
+    }
+  }, [activeAccounts, queryClient, shouldQuery]);
+
+  const activeQueries = isSearching ? searchRepoQueries : initialRepoQueries;
+  const availableRepos = useMemo(() => {
+    const byId = new Map<string, RepoSummary>();
+    for (const query of activeQueries) {
+      for (const repo of query.data ?? []) {
+        byId.set(repo.id, repo);
+      }
+    }
+    return [...byId.values()];
+  }, [activeQueries]);
+  const isLoadingRepos =
+    shouldQuery &&
+    activeQueries.some((query) => query.isPending || query.isFetching);
+  const availableReposError = useMemo(() => {
+    if (!shouldQuery || isLoadingRepos) {
+      return null;
+    }
+
+    const errors = activeQueries
+      .map((query) => query.error)
+      .filter((error): error is Error => error instanceof Error);
+    if (errors.length === 0) {
+      return null;
+    }
+
+    if (errors.length === activeQueries.length || availableRepos.length === 0) {
+      return errors.map(getErrorMessage).join("; ");
+    }
+
+    return null;
+  }, [activeQueries, availableRepos.length, isLoadingRepos, shouldQuery]);
+
+  return {
+    availableRepos,
+    availableReposError,
+    isLoadingRepos,
+  };
+}
+
 function useInitialReposForAccounts(
   accounts: ProviderAccount[],
   enabledAccountIds: string[],
@@ -297,7 +376,6 @@ function useAccountOverviewPullRequests(
 
 type UseRepoPullRequestsArgs = {
   repos: RepoSummary[];
-  setSelectedPr: Dispatch<SetStateAction<SelectedPullRequest | null>>;
 };
 
 type UseOverviewPullRequestsArgs = {
@@ -362,7 +440,6 @@ function useOverviewPullRequests({
 
 function useTrackedPullRequests({
   repos,
-  setSelectedPr,
 }: UseRepoPullRequestsArgs) {
   const queryClient = useQueryClient();
   const repoNames = useMemo(
@@ -409,25 +486,6 @@ function useTrackedPullRequests({
           pullRequests,
         );
 
-        setSelectedPr((current) => {
-          if (!current || current.repoId !== repoId) return current;
-          const refreshedSelection = pullRequests.find(
-            (pullRequest) => pullRequest.number === current.number,
-          );
-
-          if (
-            !refreshedSelection ||
-            refreshedSelection.headSha === current.headSha
-          ) {
-            return current;
-          }
-
-          return {
-            ...current,
-            headSha: refreshedSelection.headSha,
-          };
-        });
-
         return pullRequests;
       } catch {
         return queryClient.getQueryData<PullRequestSummary[]>(
@@ -435,7 +493,7 @@ function useTrackedPullRequests({
         ) ?? [];
       }
     },
-    [queryClient, setSelectedPr],
+    [queryClient],
   );
 
   return {
@@ -700,6 +758,7 @@ export {
   useInitialReposForAccounts,
   useOverviewPullRequests,
   usePullRequestReviewCommentMutations,
+  useRepoPickerReposForAccounts,
   useRepoPickerRepos,
   useSavedRepos,
   useSelectedPullRequestData,

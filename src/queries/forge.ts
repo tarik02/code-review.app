@@ -3,6 +3,7 @@ import { trpc } from "../lib/trpc";
 import type {
   AccountVisibilitySettings,
   CreatePullRequestReviewCommentInput,
+  PrFileChangeType,
   ProviderProfile,
   ReplyToPullRequestReviewCommentInput,
   SelectedPullRequest,
@@ -41,6 +42,26 @@ const forgeKeys = {
     [...forgeKeys.pullRequests(), "patch", pr.repoId, pr.number, pr.headSha] as const,
   pullRequestFiles: (pr: SelectedPullRequest) =>
     [...forgeKeys.pullRequests(), "files", pr.repoId, pr.number, pr.headSha] as const,
+  pullRequestFileContents: (input: {
+    repoId: string;
+    number: number;
+    oldPath: string;
+    newPath: string;
+    baseSha: string | null;
+    headSha: string;
+    changeType: PrFileChangeType;
+  }) =>
+    [
+      ...forgeKeys.pullRequests(),
+      "file-contents",
+      input.repoId,
+      input.number,
+      input.oldPath,
+      input.newPath,
+      input.baseSha,
+      input.headSha,
+      input.changeType,
+    ] as const,
   pullRequestReviewThreads: (pr: SelectedPullRequest) =>
     [...forgeKeys.pullRequests(), "review-threads", pr.repoId, pr.number, pr.headSha] as const,
   pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), "patch", "idle"] as const,

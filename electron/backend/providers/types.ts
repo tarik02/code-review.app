@@ -23,6 +23,11 @@ type ReviewThreadInput = {
   subjectType: "file" | "line";
 };
 
+type PullRequestRefs = {
+  baseSha: string | null;
+  headSha: string | null;
+};
+
 type ForgeProvider = {
   authStatus(accountId: string): Effect.Effect<ProviderAuthStatus, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   viewerLogin(accountId: string): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
@@ -57,6 +62,15 @@ type ForgeProvider = {
     repo: RepoId,
     number: number,
   ): Effect.Effect<string[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  fetchPullRequestRefs(
+    repo: RepoId,
+    number: number,
+  ): Effect.Effect<PullRequestRefs, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  fetchFileContent(
+    repo: RepoId,
+    path: string,
+    ref: string,
+  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listReviewThreads(
     repo: RepoId,
     number: number,
@@ -81,4 +95,4 @@ type ForgeProvider = {
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };
 
-export type { ForgeProvider, ReviewThreadInput };
+export type { ForgeProvider, PullRequestRefs, ReviewThreadInput };

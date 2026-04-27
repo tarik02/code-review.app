@@ -284,6 +284,13 @@ function parseOwnerRepoEffect(value: string): Effect.Effect<[string, string], Pr
   });
 }
 
+function encodePath(path: string) {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -894,6 +901,51 @@ query($owner: String!, $name: String!, $number: Int!) {
         }
       }
       return files;
+    });
+  }
+
+  fetchPullRequestRefs(repo: RepoId, number: number) {
+    console.info("[github] fetching pull request refs", {
+      repo: repo.path,
+      number,
+    });
+    return this.getPullRequest(repo, number).pipe(
+      Effect.map((pullRequest) => {
+        console.info("[github] fetched pull request refs", {
+          repo: repo.path,
+          number,
+          baseSha: pullRequest.baseSha,
+          headSha: pullRequest.headSha,
+        });
+        return {
+          baseSha: pullRequest.baseSha,
+          headSha: pullRequest.headSha,
+        };
+      }),
+    );
+  }
+
+  fetchFileContent(repo: RepoId, path: string, ref: string) {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      console.info("[github] fetching file content", {
+        repo: repo.path,
+        path,
+        ref,
+      });
+      const content = yield* githubText(
+        repo.accountId,
+        repo.host,
+        `/repos/${owner}/${name}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`,
+        "application/vnd.github.raw",
+      );
+      console.info("[github] fetched file content", {
+        repo: repo.path,
+        path,
+        ref,
+        length: content.length,
+      });
+      return content;
     });
   }
 

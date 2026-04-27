@@ -15,7 +15,12 @@ type AuthGateScreenProps = {
   isSigningIn: boolean;
   accounts: ProviderAccount[];
   statuses: Record<string, ProviderAuthStatus>;
-  onSignIn: (provider: ForgeProviderKind, host: string, clientId: string) => void;
+  onSignIn: (
+    provider: ForgeProviderKind,
+    host: string,
+    clientId: string,
+    clientSecret?: string,
+  ) => void;
   onCheckAgain: () => void;
 };
 
@@ -47,6 +52,7 @@ function AuthGateScreen({
   const [provider, setProvider] = useState<ForgeProviderKind>("github");
   const [host, setHost] = useState("github.com");
   const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
 
   useEffect(() => {
     setHost(provider === "github" ? "github.com" : "gitlab.com");
@@ -119,10 +125,20 @@ function AuthGateScreen({
                 }
                 value={clientId}
               />
+              <input
+                className="mt-2 w-full rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden placeholder:text-white/45"
+                disabled={isChecking || isSigningIn}
+                onChange={(event) => setClientSecret(event.currentTarget.value)}
+                placeholder="OAuth client secret (optional)"
+                type="password"
+                value={clientSecret}
+              />
               <button
                 className="mt-2 w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!canStartSignIn}
-                onClick={() => onSignIn(provider, normalizedHost, clientId)}
+                onClick={() =>
+                  onSignIn(provider, normalizedHost, clientId, clientSecret)
+                }
                 type="button"
               >
                 {isSigningIn

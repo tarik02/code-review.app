@@ -33,6 +33,7 @@ function handlePotentialRuduUrl(url: string) {
 }
 
 app.on("open-url", (event, url) => {
+  console.log(url);
   if (isOAuthCallbackUrl(url) || isDeepLinkUrl(url)) {
     event.preventDefault();
     handlePotentialRuduUrl(url);
@@ -58,8 +59,6 @@ function handleStartupProtocolUrls() {
     handlePotentialRuduUrl(item);
   }
 }
-
-console.log(1);
 
 app.whenReady().then(async () => {
   configureUpdater();

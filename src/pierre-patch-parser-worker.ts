@@ -1,8 +1,8 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
 import {
-  parsePatchWithContextOverrides,
-  type PatchContextOverrides,
-} from "./lib/patch-context";
+  parsePatchFiles,
+  trimPatchContext,
+  type FileDiffMetadata,
+} from "@pierre/diffs";
 
 type ParsePatchRequest = {
   type: "parse-patch";
@@ -10,7 +10,6 @@ type ParsePatchRequest = {
   patch: string;
   cacheKeyPrefix: string;
   contextSize: number;
-  contextOverrides?: PatchContextOverrides;
 };
 
 type ParsePatchSuccess = {
@@ -39,11 +38,9 @@ self.onmessage = (event: MessageEvent<ParsePatchRequest>) => {
   }
 
   try {
-    const fileDiffs = parsePatchWithContextOverrides(
-      message.patch,
-      message.cacheKeyPrefix,
-      message.contextSize,
-      message.contextOverrides,
+    const trimmedPatch = trimPatchContext(message.patch, message.contextSize);
+    const fileDiffs = parsePatchFiles(trimmedPatch, message.cacheKeyPrefix).flatMap(
+      (parsedPatch) => parsedPatch.files,
     );
 
     postResponse({

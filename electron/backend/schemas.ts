@@ -42,6 +42,7 @@ const providerHostSchema = z.object({
   provider: forgeProviderKindSchema,
   host: z.string(),
   clientId: z.string().optional().default(""),
+  clientSecret: z.string().optional().default(""),
 });
 
 const completeOAuthSchema = z.object({
@@ -72,6 +73,23 @@ const pullRequestInputSchema = repoIdSchema.extend({
 
 const pullRequestVersionedInputSchema = pullRequestInputSchema.extend({
   headSha: z.string().min(1),
+});
+
+const prFileChangeTypeSchema = z.enum([
+  "change",
+  "rename-pure",
+  "rename-changed",
+  "new",
+  "deleted",
+]);
+
+const pullRequestFileContentsInputSchema = repoIdSchema.extend({
+  number: z.number().int().nonnegative(),
+  oldPath: z.string(),
+  newPath: z.string(),
+  baseSha: z.string().nullable(),
+  headSha: z.string().min(1),
+  changeType: prFileChangeTypeSchema,
 });
 
 const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
@@ -106,6 +124,7 @@ export {
   providerProfileSchema,
   providerHostSchema,
   pullRequestInputSchema,
+  pullRequestFileContentsInputSchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
   replyToPullRequestReviewCommentInputSchema,

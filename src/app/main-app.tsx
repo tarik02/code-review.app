@@ -6,9 +6,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useWorkerPool } from "@pierre/diffs/react";
-import type { FileDiffMetadata } from "@pierre/diffs";
+import {
+  parsePatchFiles,
+  trimPatchContext,
+  type FileDiffMetadata,
+} from "@pierre/diffs";
 import type { GitStatusEntry } from "@pierre/trees";
 import {
   RepoSidebar,
@@ -20,17 +25,13 @@ import PatchParserWorker from "../pierre-patch-parser-worker.ts?worker";
 import {
   getErrorMessage,
   useAccountOverviewPullRequests,
-  useRepoPickerRepos,
+  useRepoPickerReposForAccounts,
   useSavedRepos,
   useSelectedPullRequestData,
   useTrackedPullRequests,
 } from "../hooks/use-forge-queries";
 import { useTheme } from "../hooks/use-theme";
 import { useAuthSession } from "./auth-session";
-import {
-  parsePatchWithContextOverrides,
-  type PatchContextOverrides,
-} from "../lib/patch-context";
 import { buildReviewThreadsByFile } from "../lib/review-threads";
 import { trpc } from "../lib/trpc";
 import {
@@ -38,7 +39,6 @@ import {
   forgeKeys,
   pullRequestListQueryOptions,
   savedReposQueryOptions,
-  setAccountVisibility,
 } from "../queries/forge";
 import type {
   FileStatsEntry,
@@ -60,7 +60,6 @@ type ParsePatchWorkerRequest = {
   patch: string;
   cacheKeyPrefix: string;
   contextSize: number;
-  contextOverrides?: PatchContextOverrides;
 };
 
 type ParsePatchWorkerResponse =
@@ -79,20 +78,14 @@ function parsePatchLocally(
   patch: string,
   cacheKeyPrefix: string,
   contextSize: number,
-  contextOverrides?: PatchContextOverrides,
 ): FileDiffMetadata[] {
-  return parsePatchWithContextOverrides(
-    patch,
-    cacheKeyPrefix,
-    contextSize,
-    contextOverrides,
+  const trimmedPatch = trimPatchContext(patch, contextSize);
+  return parsePatchFiles(trimmedPatch, cacheKeyPrefix).flatMap(
+    (parsedPatch) => parsedPatch.files,
   );
 }
 
 const AGGRESSIVE_PATCH_CONTEXT_SIZE = 3;
-const PATCH_CONTEXT_EXPANSION_SIZE = 20;
-const FULL_PATCH_CONTEXT_SIZE = Number.MAX_SAFE_INTEGER;
-const EMPTY_PATCH_CONTEXT_OVERRIDES: PatchContextOverrides = {};
 type PullRequestPickerMode = "repo-then-pr" | "pr-only";
 type PullRequestPickerStep = "repo" | "pull-request";
 
@@ -171,18 +164,14 @@ function parseRuduOpenUrl(value: string) {
 }
 
 function MainApp() {
-  const {
-    providerAccounts,
-    providerStatuses,
-    isSigningIn,
-    signIn,
-  } = useAuthSession();
+  const { providerAccounts, providerStatuses } = useAuthSession();
+  const activeRouteSearch = useSearch({ from: "/" });
+  const navigate = useNavigate({ from: "/" });
   const queryClient = useQueryClient();
   const { isDark, toggleTheme } = useTheme();
   const workerPool = useWorkerPool();
-  const [selectedPr, setSelectedPr] = useState<SelectedPullRequest | null>(
-    null,
-  );
+  const activeRepoId = activeRouteSearch.repo ?? null;
+  const activePullRequestNumber = activeRouteSearch.pr ?? null;
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<PullRequestPickerMode>(
@@ -190,7 +179,6 @@ function MainApp() {
   );
   const [pickerStep, setPickerStep] = useState<PullRequestPickerStep>("repo");
   const [pickerRepo, setPickerRepo] = useState<RepoSummary | null>(null);
-  const [selectedProviderAccountId, setSelectedProviderAccountId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSavingRepo, setIsSavingRepo] = useState(false);
@@ -203,13 +191,6 @@ function MainApp() {
     fileDiffs: [],
     parseError: "",
     isParsing: false,
-  });
-  const [patchContextOverrideState, setPatchContextOverrideState] = useState<{
-    prKey: string | null;
-    contextOverrides: PatchContextOverrides;
-  }>({
-    prKey: null,
-    contextOverrides: EMPTY_PATCH_CONTEXT_OVERRIDES,
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -231,15 +212,6 @@ function MainApp() {
 
   const { repos = [] } = useSavedRepos();
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
-  const updateAccountVisibilityMutation = useMutation({
-    mutationFn: setAccountVisibility,
-    onSuccess: (visibility) => {
-      queryClient.setQueryData(
-        accountVisibilityQueryOptions().queryKey,
-        visibility,
-      );
-    },
-  });
   const readyProviderAccounts = useMemo(
     () =>
       providerAccounts.filter(
@@ -275,21 +247,19 @@ function MainApp() {
     () => new Set(enabledAccountIds),
     [enabledAccountIds],
   );
-  const selectedProviderAccount =
-    providerAccounts.find((account) => account.id === selectedProviderAccountId) ??
-    readyProviderAccounts[0] ??
-    providerAccounts[0] ??
-    null;
-  const pickerProviderStatus = selectedProviderAccount
-    ? providerStatuses[selectedProviderAccount.id] ?? null
-    : null;
-  const canLoadPickerRepos =
-    isPickerOpen && Boolean(selectedProviderAccount) && pickerProviderStatus?.status === "ready";
+  const pickerAccounts = useMemo(
+    () =>
+      readyProviderAccounts.filter((account) =>
+        enabledAccountIdSet.has(account.id),
+      ),
+    [enabledAccountIdSet, readyProviderAccounts],
+  );
+  const canLoadPickerRepos = isPickerOpen && pickerStep === "repo";
   const { availableRepos, availableReposError, isLoadingRepos } =
-    useRepoPickerRepos(
+    useRepoPickerReposForAccounts(
+      pickerAccounts,
+      enabledAccountIds,
       debouncedQuery,
-      selectedProviderAccount?.id ?? "",
-      selectedProviderAccount?.provider ?? "github",
       canLoadPickerRepos,
     );
   const {
@@ -307,7 +277,7 @@ function MainApp() {
     if (sidebarView !== "overview") return null;
     if (readyOverviewAccountCount === 0) return "No ready provider accounts.";
     if (overviewAccountIds.length === 0) {
-      return "Provider accounts are hidden by the account filter.";
+      return "Provider accounts are hidden in settings.";
     }
     return null;
   }, [overviewAccountIds.length, readyOverviewAccountCount, sidebarView]);
@@ -315,12 +285,58 @@ function MainApp() {
     prsByRepo: trackedPrsByRepo,
     repoErrors: trackedRepoErrors,
     refreshTrackedPullRequests,
-  } = useTrackedPullRequests({
-    repos,
-    setSelectedPr,
-  });
-  const selectedRepo = selectedPr
-    ? repos.find((repo) => repo.id === selectedPr.repoId) ?? null
+  } = useTrackedPullRequests({ repos });
+  const activeOverviewEntry = useMemo(() => {
+    if (!activeRepoId || activePullRequestNumber === null) {
+      return null;
+    }
+
+    return (
+      overviewPullRequests.find(
+        (entry) =>
+          entry.repo.id === activeRepoId &&
+          entry.pullRequest.number === activePullRequestNumber,
+      ) ?? null
+    );
+  }, [activePullRequestNumber, activeRepoId, overviewPullRequests]);
+  const activeTrackedPullRequest = useMemo(() => {
+    if (!activeRepoId || activePullRequestNumber === null) {
+      return null;
+    }
+
+    return (
+      (trackedPrsByRepo[activeRepoId] ?? []).find(
+        (pullRequest) => pullRequest.number === activePullRequestNumber,
+      ) ?? null
+    );
+  }, [activePullRequestNumber, activeRepoId, trackedPrsByRepo]);
+  const selectedPr = useMemo<SelectedPullRequest | null>(() => {
+    if (!activeRepoId || activePullRequestNumber === null) {
+      return null;
+    }
+
+    const overviewPullRequest = activeOverviewEntry?.pullRequest ?? null;
+    const pullRequest = activeTrackedPullRequest ?? overviewPullRequest;
+    if (!pullRequest) {
+      return null;
+    }
+
+    return {
+      repoId: activeRepoId,
+      number: activePullRequestNumber,
+      headSha: pullRequest.headSha,
+      baseSha: pullRequest.baseSha ?? overviewPullRequest?.baseSha ?? null,
+    };
+  }, [
+    activeOverviewEntry,
+    activePullRequestNumber,
+    activeRepoId,
+    activeTrackedPullRequest,
+  ]);
+  const selectedRepo = activeRepoId
+    ? repos.find((repo) => repo.id === activeRepoId) ??
+      activeOverviewEntry?.repo ??
+      null
     : null;
   const isSelectedRepoHidden =
     Boolean(selectedPr && selectedRepo) &&
@@ -426,7 +442,6 @@ function MainApp() {
           pendingRequest.patch,
           pendingRequest.cacheKeyPrefix,
           pendingRequest.contextSize,
-          pendingRequest.contextOverrides,
         );
 
         startTransition(() => {
@@ -464,10 +479,6 @@ function MainApp() {
   const selectedPrKey = selectedPr
     ? `${selectedPr.repoId}#${selectedPr.number}@${selectedPr.headSha}`
     : null;
-  const activePatchContextOverrides =
-    patchContextOverrideState.prKey === selectedPrKey
-      ? patchContextOverrideState.contextOverrides
-      : EMPTY_PATCH_CONTEXT_OVERRIDES;
   const {
     changedFiles,
     changedFilesError,
@@ -520,42 +531,6 @@ function MainApp() {
   );
   const pickerPullRequestsError = getErrorMessage(pickerOpenPullRequestsQuery.error);
 
-  const expandPatchContext = useCallback(
-    (filePath: string, expandAll = false) => {
-      if (!selectedPrKey) {
-        return;
-      }
-
-      setPatchContextOverrideState((current) => {
-        const contextOverrides =
-          current.prKey === selectedPrKey
-            ? current.contextOverrides
-            : EMPTY_PATCH_CONTEXT_OVERRIDES;
-        const currentContextSize =
-          contextOverrides[filePath] ?? AGGRESSIVE_PATCH_CONTEXT_SIZE;
-        const nextContextSize = expandAll
-          ? FULL_PATCH_CONTEXT_SIZE
-          : Math.min(
-              currentContextSize + PATCH_CONTEXT_EXPANSION_SIZE,
-              FULL_PATCH_CONTEXT_SIZE,
-            );
-
-        if (nextContextSize <= currentContextSize) {
-          return current;
-        }
-
-        return {
-          prKey: selectedPrKey,
-          contextOverrides: {
-            ...contextOverrides,
-            [filePath]: nextContextSize,
-          },
-        };
-      });
-    },
-    [selectedPrKey],
-  );
-
   useEffect(() => {
     if (!workerPool) return;
 
@@ -563,19 +538,6 @@ function MainApp() {
       theme: isDark ? "pierre-dark" : "pierre-light",
     });
   }, [isDark, workerPool]);
-
-  useEffect(() => {
-    if (
-      selectedProviderAccountId &&
-      providerAccounts.some((account) => account.id === selectedProviderAccountId)
-    ) {
-      return;
-    }
-
-    setSelectedProviderAccountId(
-      readyProviderAccounts[0]?.id ?? providerAccounts[0]?.id ?? "",
-    );
-  }, [providerAccounts, readyProviderAccounts, selectedProviderAccountId]);
 
   useEffect(() => {
     const previousRepoNames = previousRepoNamesRef.current;
@@ -635,7 +597,6 @@ function MainApp() {
       // Be aggressive here: the review UI only needs enough surrounding lines
       // to orient the reader before Pierre's expand/collapse affordances take over.
       contextSize: AGGRESSIVE_PATCH_CONTEXT_SIZE,
-      contextOverrides: activePatchContextOverrides,
     } satisfies ParsePatchWorkerRequest;
 
     pendingParseRequestRef.current = request;
@@ -646,7 +607,6 @@ function MainApp() {
           request.patch,
           request.cacheKeyPrefix,
           request.contextSize,
-          request.contextOverrides,
         );
         setParsedPatch({ fileDiffs, parseError: "", isParsing: false });
       } catch (error) {
@@ -663,7 +623,7 @@ function MainApp() {
     }
 
     patchParserWorkerRef.current.postMessage(request);
-  }, [activePatchContextOverrides, selectedPatch]);
+  }, [selectedPatch]);
 
   useEffect(() => {
     for (const repo of repos) {
@@ -709,6 +669,23 @@ function MainApp() {
     return entries;
   }, [fileStats]);
 
+  const setActivePullRequest = useCallback(
+    (repoId: string, pullRequest: PullRequestSummary) => {
+      void navigate({
+        to: "/",
+        search: { repo: repoId, pr: pullRequest.number },
+      });
+    },
+    [navigate],
+  );
+
+  const clearActivePullRequest = useCallback(() => {
+    void navigate({
+      to: "/",
+      search: {},
+    });
+  }, [navigate]);
+
   async function handleRepoOpenChange(repo: string, open: boolean) {
     setOpenRepoValues((current) => {
       if (open) {
@@ -720,11 +697,7 @@ function MainApp() {
   }
 
   function handleSelectPr(repoId: string, pullRequest: PullRequestSummary) {
-    setSelectedPr({
-      repoId,
-      number: pullRequest.number,
-      headSha: pullRequest.headSha,
-    });
+    setActivePullRequest(repoId, pullRequest);
 
     if (sidebarView !== "tracked") {
       return;
@@ -760,7 +733,6 @@ function MainApp() {
       : await trpc.repos.save.mutate({ repo });
 
     cacheSavedRepo(savedRepo);
-    setSelectedProviderAccountId(repo.providerAccountId);
     setPickerMode("pr-only");
     setPickerStep("pull-request");
     setPickerRepo(savedRepo);
@@ -825,11 +797,7 @@ function MainApp() {
       });
       cacheTrackedPullRequest(pickerRepoId, trackedPullRequest);
 
-      setSelectedPr({
-        repoId: pickerRepoId,
-        number: trackedPullRequest.number,
-        headSha: trackedPullRequest.headSha,
-      });
+      setActivePullRequest(pickerRepoId, trackedPullRequest);
       setIsPickerOpen(false);
       resetPickerState();
     } finally {
@@ -854,12 +822,9 @@ function MainApp() {
           account.provider === parsed.provider && account.host === parsed.host,
       );
       const account =
-        selectedProviderAccount &&
-        selectedProviderAccount.provider === parsed.provider &&
-        selectedProviderAccount.host === parsed.host &&
-        providerStatuses[selectedProviderAccount.id]?.status === "ready"
-          ? selectedProviderAccount
-          : matchingAccounts[0];
+        matchingAccounts.find((candidate) =>
+          enabledAccountIdSet.has(candidate.id),
+        ) ?? matchingAccounts[0];
 
       if (!account) {
         throw new Error(
@@ -885,12 +850,7 @@ function MainApp() {
       });
       cacheTrackedPullRequest(savedRepo.id, trackedPullRequest);
 
-      setSelectedProviderAccountId(account.id);
-      setSelectedPr({
-        repoId: savedRepo.id,
-        number: trackedPullRequest.number,
-        headSha: trackedPullRequest.headSha,
-      });
+      setActivePullRequest(savedRepo.id, trackedPullRequest);
       setOpenRepoValues((current) =>
         current.includes(savedRepo.id) ? current : [...current, savedRepo.id],
       );
@@ -912,7 +872,7 @@ function MainApp() {
     });
 
     return () => subscription.unsubscribe();
-  }, [providerStatuses, readyProviderAccounts, selectedProviderAccount]);
+  }, [enabledAccountIdSet, readyProviderAccounts, setActivePullRequest]);
 
   async function handleRemoveTrackedPullRequest(
     repoId: string,
@@ -928,13 +888,12 @@ function MainApp() {
         (current ?? []).filter((item) => item.number !== pullRequest.number),
     );
 
-    setSelectedPr((current) => {
-      if (!current) return current;
-      if (current.repoId !== repoId || current.number !== pullRequest.number) {
-        return current;
-      }
-      return null;
-    });
+    if (
+      activeRepoId === repoId &&
+      activePullRequestNumber === pullRequest.number
+    ) {
+      clearActivePullRequest();
+    }
   }
 
   async function handleTrackFromOverview(
@@ -973,15 +932,6 @@ function MainApp() {
             selectedPrKey={selectedPrKey}
             trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
             isDark={isDark}
-            accountFilter={{
-              accounts: providerAccounts,
-              statuses: providerStatuses,
-              enabledAccountIds: persistedEnabledAccountIds,
-              isUpdating: updateAccountVisibilityMutation.isPending,
-              onChange: (nextEnabledAccountIds) => {
-                updateAccountVisibilityMutation.mutate(nextEnabledAccountIds);
-              },
-            }}
             emptyState={
               <div className="px-3 py-8 text-center text-sm text-ink-500">
                 No repos visible for the selected accounts.
@@ -990,7 +940,9 @@ function MainApp() {
             onAddRepo={openRepoPicker}
             onAddPr={(repo) => void openRepoPullRequestPicker(repo)}
             onViewChange={setSidebarView}
-            onToggleTheme={toggleTheme}
+            onToggleTheme={(trigger) =>
+              toggleTheme({ kind: "reveal", trigger })
+            }
             onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
             onTrackPr={(repo, pullRequest) =>
               void handleTrackFromOverview(repo, pullRequest)
@@ -1007,6 +959,7 @@ function MainApp() {
           <PatchViewerMain
             selectedPrKey={selectedPrKey}
             selectedPatch={selectedPatch}
+            selectedBaseSha={selectedPr?.baseSha ?? null}
             isPatchLoading={isPatchPreparing}
             isDark={isDark}
             patchError={patchError}
@@ -1020,7 +973,6 @@ function MainApp() {
             parsedPatch={parsedPatch}
             fileStats={fileStats}
             gitStatus={gitStatus}
-            onExpandContext={expandPatchContext}
           />
         </div>
       </div>
@@ -1042,20 +994,11 @@ function MainApp() {
         mode={pickerMode}
         step={pickerStep}
         selectedRepo={pickerRepo}
-        providerAccounts={providerAccounts}
-        selectedProviderAccountId={selectedProviderAccount?.id ?? ""}
-        providerStatus={pickerProviderStatus}
-        isSigningIn={isSigningIn}
-        onProviderAccountChange={(accountId) => {
-          setSelectedProviderAccountId(accountId);
-          setSearchQuery("");
-          setDebouncedQuery("");
-        }}
-        onSignIn={signIn}
         searchQuery={searchQuery}
         onSearchChange={updateSearch}
         isLoadingRepos={isLoadingRepos}
         availableReposError={availableReposError}
+        hasRepoSources={pickerAccounts.length > 0}
         filteredRepos={filteredRepos}
         isSavingRepo={isSavingRepo}
         onPickRepo={(repo) => void handlePickRepo(repo)}

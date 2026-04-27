@@ -1,18 +1,12 @@
-import { AuthGateScreen } from "../components/ui/auth-gate-screen";
+import { Navigate } from "@tanstack/react-router";
 import { useAuthSession } from "../app/auth-session";
 import { MainApp } from "../app/main-app";
 
 function HomeRoute() {
   const {
-    providerAccounts,
     providerStatuses,
     isCheckingAuth,
     hasReadyProvider,
-    gateStatus,
-    providerStatusMessage,
-    isSigningIn,
-    signIn,
-    checkAgain,
   } = useAuthSession();
 
   if (isCheckingAuth && Object.keys(providerStatuses).length === 0) {
@@ -24,18 +18,7 @@ function HomeRoute() {
   }
 
   if (!hasReadyProvider) {
-    return (
-      <AuthGateScreen
-        status={gateStatus.status}
-        message={providerStatusMessage}
-        isChecking={isCheckingAuth}
-        isSigningIn={isSigningIn}
-        accounts={providerAccounts}
-        statuses={providerStatuses}
-        onSignIn={signIn}
-        onCheckAgain={checkAgain}
-      />
-    );
+    return <Navigate to="/auth" replace />;
   }
 
   return <MainApp />;

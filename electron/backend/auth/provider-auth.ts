@@ -1,3 +1,7 @@
+import {
+  HttpClient,
+  HttpClientRequest,
+} from "@effect/platform";
 import { normalizeHost } from "../repo-id";
 import { Effect } from "effect";
 import { AuthTokenStore } from "./token-store";
@@ -6,10 +10,12 @@ import type { StoredAuthToken } from "./token-store";
 
 type OAuthProviderConfig = {
   clientId: string;
+  clientSecret: string | null;
   redirectUri: string;
   scopes: string[];
   authorizeUrl: string;
   tokenUrl: string;
+  deviceCodeUrl: string | null;
 };
 
 type OAuthTokenResponse = {
@@ -20,7 +26,23 @@ type OAuthTokenResponse = {
   token_type?: string;
   error?: string;
   error_description?: string;
+  interval?: number;
 };
+
+type OAuthDeviceCodeResponse = {
+  device_code?: string;
+  user_code?: string;
+  verification_uri?: string;
+  verification_uri_complete?: string;
+  expires_in?: number;
+  interval?: number;
+  error?: string;
+  error_description?: string;
+};
+
+type DeviceOAuthPollResult =
+  | { status: "pending"; intervalMs: number }
+  | { status: "complete"; token: StoredAuthToken };
 
 const DEFAULT_REDIRECT_URI = "code-review.app://oauth/callback";
 const REFRESH_SKEW_MS = 60_000;
@@ -29,17 +51,33 @@ function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+function envValue(key: string) {
+  return process.env[key]?.trim() ?? "";
+}
+
 function redirectUri() {
-  return process.env.RUDU_OAUTH_REDIRECT_URI?.trim() || DEFAULT_REDIRECT_URI;
+  return envValue("RUDU_OAUTH_REDIRECT_URI") || DEFAULT_REDIRECT_URI;
 }
 
 function defaultClientId(provider: ForgeProviderKind, host: string) {
   if (provider === "github" && host === "github.com") {
-    return process.env.GITHUB_CLIENT_ID?.trim() ?? "";
+    return envValue("GITHUB_CLIENT_ID");
   }
 
   if (provider === "gitlab" && host === "gitlab.com") {
-    return process.env.GITLAB_CLIENT_ID?.trim() ?? "";
+    return envValue("GITLAB_CLIENT_ID");
+  }
+
+  return "";
+}
+
+function defaultClientSecret(provider: ForgeProviderKind, host: string) {
+  if (provider === "github" && host === "github.com") {
+    return envValue("GITHUB_CLIENT_SECRET");
+  }
+
+  if (provider === "gitlab" && host === "gitlab.com") {
+    return envValue("GITLAB_CLIENT_SECRET");
   }
 
   return "";
@@ -72,12 +110,16 @@ function oauthConfig(
   provider: ForgeProviderKind,
   host: string,
   clientId: string,
+  clientSecret = "",
 ): OAuthProviderConfig {
   const normalizedHost = normalizeHost(host);
   const resolvedClientId = resolveClientId(provider, normalizedHost, clientId);
+  const resolvedClientSecret =
+    clientSecret.trim() || defaultClientSecret(provider, normalizedHost);
   if (provider === "github") {
     return {
       clientId: resolvedClientId,
+      clientSecret: resolvedClientSecret || null,
       redirectUri: redirectUri(),
       scopes: ["repo", "read:org"],
       authorizeUrl:
@@ -88,15 +130,21 @@ function oauthConfig(
         normalizedHost === "github.com"
           ? "https://github.com/login/oauth/access_token"
           : `https://${normalizedHost}/login/oauth/access_token`,
+      deviceCodeUrl:
+        normalizedHost === "github.com"
+          ? "https://github.com/login/device/code"
+          : `https://${normalizedHost}/login/device/code`,
     };
   }
 
   return {
     clientId: resolvedClientId,
+    clientSecret: resolvedClientSecret || null,
     redirectUri: redirectUri(),
     scopes: ["api"],
     authorizeUrl: `https://${normalizedHost}/oauth/authorize`,
     tokenUrl: `https://${normalizedHost}/oauth/token`,
+    deviceCodeUrl: null,
   };
 }
 
@@ -114,18 +162,122 @@ function expiresAt(expiresIn: number | undefined) {
     : null;
 }
 
+function tokenFromPayload(
+  accountId: string,
+  provider: ForgeProviderKind,
+  host: string,
+  clientId: string,
+  scopes: string[],
+  payload: OAuthTokenResponse,
+): StoredAuthToken {
+  return {
+    id: accountId,
+    provider,
+    host: normalizeHost(host),
+    clientId,
+    accessToken: payload.access_token ?? "",
+    refreshToken: payload.refresh_token ?? null,
+    expiresAt: expiresAt(payload.expires_in),
+    scopes: parseScopes(payload.scope, scopes),
+    viewerLogin: null,
+    createdAt: Date.now(),
+  };
+}
+
+function oauthFormJson<A>(
+  url: string,
+  body: URLSearchParams,
+): Effect.Effect<A, Error, HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    const request = HttpClientRequest.post(url).pipe(
+      HttpClientRequest.accept("application/json"),
+      HttpClientRequest.setHeader("User-Agent", "rudu"),
+      HttpClientRequest.bodyText(
+        body.toString(),
+        "application/x-www-form-urlencoded",
+      ),
+    );
+    const client = yield* HttpClient.HttpClient;
+    const response = yield* client.execute(request).pipe(
+      Effect.mapError(toError),
+    );
+    return yield* response.json.pipe(
+      Effect.map((payload) => payload as A),
+      Effect.mapError(toError),
+    );
+  });
+}
+
+function requestDeviceOAuthCode(
+  provider: ForgeProviderKind,
+  host: string,
+  clientId: string,
+): Effect.Effect<{
+  clientId: string;
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  intervalMs: number;
+}, Error, HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    const config = yield* Effect.try({
+      try: () => oauthConfig(provider, host, clientId),
+      catch: toError,
+    });
+    if (!config.deviceCodeUrl) {
+      return yield* Effect.fail(
+        new Error("Device authorization is only supported for GitHub."),
+      );
+    }
+
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      scope: config.scopes.join(" "),
+    });
+    const payload = yield* oauthFormJson<OAuthDeviceCodeResponse>(
+      config.deviceCodeUrl,
+      body,
+    );
+    if (
+      payload.error ||
+      !payload.device_code ||
+      !payload.user_code ||
+      !payload.verification_uri
+    ) {
+      return yield* Effect.fail(
+        new Error(
+          payload.error_description ??
+            payload.error ??
+            "OAuth device authorization failed.",
+        ),
+      );
+    }
+
+    return {
+      clientId: config.clientId,
+      deviceCode: payload.device_code,
+      userCode: payload.user_code,
+      verificationUri: payload.verification_uri_complete ?? payload.verification_uri,
+      expiresIn: payload.expires_in ?? 900,
+      intervalMs: Math.max(1, payload.interval ?? 5) * 1000,
+    };
+  });
+}
+
 function exchangeOAuthCode(
   accountId: string,
   provider: ForgeProviderKind,
   host: string,
   clientId: string,
+  clientSecret: string,
   code: string,
   codeVerifier: string,
-): Effect.Effect<StoredAuthToken, Error, AuthTokenStore> {
+): Effect.Effect<StoredAuthToken, Error, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
-      try: () => oauthConfig(provider, host, clientId),
+      try: () => oauthConfig(provider, host, clientId, clientSecret),
       catch: toError,
     });
     const body = new URLSearchParams({
@@ -135,50 +287,92 @@ function exchangeOAuthCode(
       redirect_uri: config.redirectUri,
       code_verifier: codeVerifier,
     });
+    if (config.clientSecret) {
+      body.set("client_secret", config.clientSecret);
+    }
 
-    const response = yield* Effect.tryPromise({
-      try: () =>
-        fetch(config.tokenUrl, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "rudu",
-          },
-          body,
-        }),
-      catch: toError,
-    });
-    const payload = yield* Effect.tryPromise({
-      try: () => response.json() as Promise<OAuthTokenResponse>,
-      catch: toError,
-    });
-    if (!response.ok || payload.error || !payload.access_token) {
+    const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
+    if (payload.error || !payload.access_token) {
       return yield* Effect.fail(
         new Error(payload.error_description ?? payload.error ?? "OAuth token exchange failed."),
       );
     }
 
-    const token: StoredAuthToken = {
-      id: accountId,
+    const token = tokenFromPayload(
+      accountId,
       provider,
-      host: normalizeHost(host),
-      clientId: config.clientId,
-      accessToken: payload.access_token,
-      refreshToken: payload.refresh_token ?? null,
-      expiresAt: expiresAt(payload.expires_in),
-      scopes: parseScopes(payload.scope, config.scopes),
-      viewerLogin: null,
-      createdAt: Date.now(),
-    };
+      host,
+      config.clientId,
+      config.scopes,
+      payload,
+    );
     yield* tokenStore.save(token);
     return token;
   });
 }
 
+function exchangeDeviceOAuthCode(
+  accountId: string,
+  provider: ForgeProviderKind,
+  host: string,
+  clientId: string,
+  deviceCode: string,
+): Effect.Effect<
+  DeviceOAuthPollResult,
+  Error,
+  AuthTokenStore | HttpClient.HttpClient
+> {
+  return Effect.gen(function* () {
+    const tokenStore = yield* AuthTokenStore;
+    const config = yield* Effect.try({
+      try: () => oauthConfig(provider, host, clientId),
+      catch: toError,
+    });
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      device_code: deviceCode,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    });
+    const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
+
+    if (payload.error === "authorization_pending") {
+      return {
+        status: "pending",
+        intervalMs: Math.max(1, payload.interval ?? 5) * 1000,
+      } satisfies DeviceOAuthPollResult;
+    }
+    if (payload.error === "slow_down") {
+      return {
+        status: "pending",
+        intervalMs: Math.max(1, payload.interval ?? 10) * 1000,
+      } satisfies DeviceOAuthPollResult;
+    }
+    if (payload.error || !payload.access_token) {
+      return yield* Effect.fail(
+        new Error(
+          payload.error_description ??
+            payload.error ??
+            "OAuth device token exchange failed.",
+        ),
+      );
+    }
+
+    const token = tokenFromPayload(
+      accountId,
+      provider,
+      host,
+      config.clientId,
+      config.scopes,
+      payload,
+    );
+    yield* tokenStore.save(token);
+    return { status: "complete", token } satisfies DeviceOAuthPollResult;
+  });
+}
+
 function refreshStoredAuthToken(
   token: StoredAuthToken,
-): Effect.Effect<StoredAuthToken, Error, AuthTokenStore> {
+): Effect.Effect<StoredAuthToken, Error, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     if (!token.refreshToken) return token;
     const tokenStore = yield* AuthTokenStore;
@@ -193,24 +387,8 @@ function refreshStoredAuthToken(
       refresh_token: token.refreshToken,
     });
 
-    const response = yield* Effect.tryPromise({
-      try: () =>
-        fetch(config.tokenUrl, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "rudu",
-          },
-          body,
-        }),
-      catch: toError,
-    });
-    const payload = yield* Effect.tryPromise({
-      try: () => response.json() as Promise<OAuthTokenResponse>,
-      catch: toError,
-    });
-    if (!response.ok || payload.error || !payload.access_token) {
+    const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
+    if (payload.error || !payload.access_token) {
       yield* tokenStore.delete(token.id);
       return yield* Effect.fail(
         new Error(payload.error_description ?? payload.error ?? "OAuth token refresh failed."),
@@ -231,7 +409,7 @@ function refreshStoredAuthToken(
 
 function getValidAccessToken(
   accountId: string,
-): Effect.Effect<string, Error, AuthTokenStore> {
+): Effect.Effect<string, Error, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const tokenStore = yield* AuthTokenStore;
     const token = yield* tokenStore.get(accountId);
@@ -260,8 +438,10 @@ function updateViewerLogin(
 }
 
 export {
+  exchangeDeviceOAuthCode,
   exchangeOAuthCode,
   getValidAccessToken,
   oauthConfig,
+  requestDeviceOAuthCode,
   updateViewerLogin,
 };

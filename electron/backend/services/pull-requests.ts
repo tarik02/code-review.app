@@ -8,6 +8,8 @@ import { DiffDataService } from "./diff-data";
 import { AuthTokenStore } from "../auth/token-store";
 import type {
   OverviewPullRequestSummary,
+  PrFileChangeType,
+  PrFileContents,
   PrPatch,
   PullRequestSummary,
 } from "../../shared/types";
@@ -34,6 +36,15 @@ type PullRequestServiceShape = {
     number: number,
     headSha: string,
   ): Effect.Effect<string[], Error>;
+  getFileContents(input: {
+    repoId: string;
+    number: number;
+    oldPath: string;
+    newPath: string;
+    baseSha: string | null;
+    headSha: string;
+    changeType: PrFileChangeType;
+  }): Effect.Effect<PrFileContents, Error>;
 };
 
 class PullRequestService extends Effect.Tag("PullRequestService")<
@@ -116,6 +127,12 @@ const makePullRequestService = Effect.gen(function* () {
     return yield* diffData.getChangedFiles(repoId, number, headSha);
   });
 
+  const getFileContents: PullRequestServiceShape["getFileContents"] = Effect.fn(
+    "PullRequestService.getFileContents",
+  )(function* (input) {
+    return yield* diffData.getFileContents(input);
+  });
+
   return {
     listCached,
     listOverview,
@@ -123,6 +140,7 @@ const makePullRequestService = Effect.gen(function* () {
     get,
     getPatch,
     listChangedFiles,
+    getFileContents,
   } satisfies PullRequestServiceShape;
 });
 

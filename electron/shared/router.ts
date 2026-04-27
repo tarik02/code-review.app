@@ -22,6 +22,7 @@ import {
   providerProfileSchema,
   overviewPullRequestSummarySchema,
   providerHostSchema,
+  pullRequestFileContentsInputSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
@@ -32,9 +33,10 @@ import {
 } from "../backend/schemas";
 import { z } from "zod";
 import { app } from "electron";
-import { completeOAuth, startOAuth } from "../backend/auth/oauth";
+import { completeOAuth, pollDeviceOAuth, startOAuth } from "../backend/auth/oauth";
 import { AuthTokenStore } from "../backend/auth/token-store";
 import {
+  getLatestOAuthCallback,
   subscribeToDeepLinks,
   subscribeToOAuthCallbacks,
 } from "../main/oauth-callback";
@@ -96,7 +98,17 @@ const router = t.router({
         ),
       ),
     startOAuth: t.procedure.input(providerHostSchema).mutation(({ input }) =>
-      startOAuth(input.provider, input.host, input.clientId),
+      runEffect(
+        startOAuth(
+          input.provider,
+          input.host,
+          input.clientId,
+          input.clientSecret,
+        ),
+      ),
+    ),
+    pollDeviceOAuth: t.procedure.input(providerAccountSchema).mutation(({ input }) =>
+      runEffect(pollDeviceOAuth(input.accountId)),
     ),
     completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
       try {
@@ -130,6 +142,7 @@ const router = t.router({
         return unsubscribe;
       }),
     ),
+    latestOAuthCallback: t.procedure.query(() => getLatestOAuthCallback()),
   }),
 
   settings: t.router({
@@ -276,6 +289,16 @@ const router = t.router({
               input.number,
               input.headSha,
             );
+          }),
+        ),
+      ),
+    getFileContents: t.procedure
+      .input(pullRequestFileContentsInputSchema)
+      .query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.getFileContents(input);
           }),
         ),
       ),

@@ -6,9 +6,38 @@ import {
   createRouter,
   redirect,
 } from "@tanstack/react-router";
+import { AuthRoute } from "./routes/auth-route";
 import { HomeRoute } from "./routes/home-route";
 import { ProfilesRoute } from "./routes/profiles-route";
 import { SettingsLayout } from "./routes/settings-layout";
+
+type HomeRouteSearch = {
+  repo?: string;
+  pr?: number;
+};
+
+function parsePositiveInteger(value: unknown) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function validateHomeRouteSearch(
+  search: Record<string, unknown>,
+): HomeRouteSearch {
+  const repo =
+    typeof search.repo === "string" && search.repo.trim().length > 0
+      ? search.repo
+      : undefined;
+  const pr = parsePositiveInteger(search.pr);
+
+  return { repo, pr };
+}
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
@@ -17,7 +46,14 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
+  validateSearch: validateHomeRouteSearch,
   component: HomeRoute,
+});
+
+const authRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "auth",
+  component: AuthRoute,
 });
 
 const settingsRoute = createRoute({
@@ -39,6 +75,7 @@ const profilesRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  authRoute,
   settingsRoute.addChildren([profilesRoute]),
 ]);
 
@@ -54,3 +91,4 @@ declare module "@tanstack/react-router" {
 }
 
 export { router };
+export type { HomeRouteSearch };

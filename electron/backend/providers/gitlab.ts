@@ -19,7 +19,7 @@ import type {
   ReviewComment,
   ReviewThread,
 } from "../../shared/types";
-import type { ForgeProvider, ReviewThreadInput } from "./types";
+import type { ForgeProvider, PullRequestRefs, ReviewThreadInput } from "./types";
 import type { RepoId } from "../repo-id";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store";
 
@@ -127,6 +127,7 @@ const GitLabErrorBodySchema = Schema.Struct({
 
 type GitLabProject = typeof GitLabProjectSchema.Type;
 type GitLabMergeRequest = typeof GitLabMergeRequestSchema.Type;
+type GitLabMrVersion = typeof GitLabMrVersionSchema.Type;
 type GitLabPosition = typeof GitLabPositionSchema.Type;
 type GitLabDiscussion = typeof GitLabDiscussionSchema.Type;
 
@@ -187,6 +188,10 @@ function isNotAuthenticatedMessage(message: string) {
 
 function projectEndpoint(repo: RepoId, suffix: string) {
   return `projects/${encodeURIComponent(repo.path)}/${suffix}`;
+}
+
+function projectIdEndpoint(project: string | number, suffix: string) {
+  return `projects/${encodeURIComponent(String(project))}/${suffix}`;
 }
 
 function projectPathEndpoint(path: string) {
@@ -401,7 +406,23 @@ function parseChangeCount(value?: string | null) {
   return Number.isFinite(count) ? count : null;
 }
 
-function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
+function refsFromVersion(version: GitLabMrVersion): PullRequestRefs {
+  return {
+    baseSha: version.base_commit_sha,
+    headSha: version.head_commit_sha,
+  };
+}
+
+function mergeRequestKey(mergeRequest: GitLabMergeRequest) {
+  return typeof mergeRequest.project_id === "number"
+    ? `${mergeRequest.project_id}:${mergeRequest.iid}`
+    : mergeRequest.web_url;
+}
+
+function toPullRequestSummary(
+  mr: GitLabMergeRequest,
+  refs?: PullRequestRefs | null,
+): PullRequestSummary {
   const diffRefs = mr.diff_refs;
   return {
     number: mr.iid,
@@ -416,9 +437,52 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     authorLogin: mr.author?.username ?? "unknown",
     updatedAt: mr.updated_at,
     url: mr.web_url,
-    headSha: mr.sha ?? diffRefs?.head_sha ?? "",
-    baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
+    headSha: mr.sha ?? refs?.headSha ?? diffRefs?.head_sha ?? "",
+    baseSha: refs?.baseSha ?? diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
   };
+}
+
+function fetchGitLabPullRequestRefsByProject(
+  accountId: string,
+  host: string,
+  project: string | number,
+  number: number,
+) {
+  return Effect.gen(function* () {
+    console.info("[gitlab] fetching merge request diff refs", {
+      host,
+      project,
+      number,
+    });
+    const versions = yield* gitlabJson(
+      accountId,
+      host,
+      projectIdEndpoint(project, `merge_requests/${number}/versions`),
+      Schema.Array(GitLabMrVersionSchema),
+    );
+    const version = versions[0];
+    if (!version) {
+      return yield* Effect.fail(new ProviderError("GitLab merge request has no diff versions"));
+    }
+    const refs = refsFromVersion(version);
+    console.info("[gitlab] fetched merge request diff refs", {
+      host,
+      project,
+      number,
+      baseSha: refs.baseSha,
+      headSha: refs.headSha,
+    });
+    return refs;
+  });
+}
+
+function fetchGitLabPullRequestRefs(repo: RepoId, number: number) {
+  return fetchGitLabPullRequestRefsByProject(
+    repo.accountId,
+    repo.host,
+    repo.path,
+    number,
+  );
 }
 
 function lineSide(position: GitLabPosition): "LEFT" | "RIGHT" | null {
@@ -649,11 +713,7 @@ class GitLabProvider implements ForgeProvider {
           `[gitlab] loaded ${result.mergeRequests.length} overview merge requests for scope ${result.scope} from ${token.host}`,
         );
         for (const mergeRequest of result.mergeRequests) {
-          const key =
-            typeof mergeRequest.project_id === "number"
-              ? `${mergeRequest.project_id}:${mergeRequest.iid}`
-              : mergeRequest.web_url;
-          mergeRequestsByKey.set(key, mergeRequest);
+          mergeRequestsByKey.set(mergeRequestKey(mergeRequest), mergeRequest);
         }
       }
 
@@ -710,6 +770,46 @@ class GitLabProvider implements ForgeProvider {
           projectsById.set(result.projectId, result.project);
         }
       }
+      const refsResults = yield* Effect.forEach(
+        mergeRequests,
+        (mergeRequest) => {
+          const projectId = mergeRequest.project_id;
+          if (typeof projectId !== "number") {
+            return Effect.succeed({
+              key: mergeRequestKey(mergeRequest),
+              refs: null,
+            });
+          }
+
+          return fetchGitLabPullRequestRefsByProject(
+            accountId,
+            token.host,
+            projectId,
+            mergeRequest.iid,
+          ).pipe(
+            Effect.map((refs) => ({ key: mergeRequestKey(mergeRequest), refs })),
+            Effect.catchAll((error) =>
+              Effect.sync(() => {
+                console.warn("[gitlab] failed to hydrate overview MR refs", {
+                  host: token.host,
+                  projectId,
+                  number: mergeRequest.iid,
+                  error,
+                });
+                return {
+                  key: mergeRequestKey(mergeRequest),
+                  refs: null,
+                };
+              }),
+            ),
+          );
+        },
+        { concurrency: 8 },
+      );
+      const refsByKey = new Map<string, PullRequestRefs | null>();
+      for (const result of refsResults) {
+        refsByKey.set(result.key, result.refs);
+      }
       const entries: OverviewPullRequestSummary[] = [];
 
       for (const mergeRequest of mergeRequests) {
@@ -726,7 +826,10 @@ class GitLabProvider implements ForgeProvider {
 
         entries.push({
           repo: repoSummaryFromProject(accountId, token.host, label, project),
-          pullRequest: toPullRequestSummary(mergeRequest),
+          pullRequest: toPullRequestSummary(
+            mergeRequest,
+            refsByKey.get(mergeRequestKey(mergeRequest)),
+          ),
         });
       }
 
@@ -738,24 +841,60 @@ class GitLabProvider implements ForgeProvider {
   }
 
   listPullRequests(repo: RepoId) {
-    return gitlabJson(
-      repo.accountId,
-      repo.host,
-      projectEndpoint(
-        repo,
-        "merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=100",
-      ),
-      Schema.Array(GitLabMergeRequestSchema),
-    ).pipe(Effect.map((mergeRequests) => mergeRequests.map(toPullRequestSummary)));
+    return Effect.gen(function* () {
+      const mergeRequests = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(
+          repo,
+          "merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=100",
+        ),
+        Schema.Array(GitLabMergeRequestSchema),
+      );
+
+      return yield* Effect.forEach(
+        mergeRequests,
+        (mergeRequest) =>
+          fetchGitLabPullRequestRefs(repo, mergeRequest.iid).pipe(
+            Effect.map((refs) => toPullRequestSummary(mergeRequest, refs)),
+            Effect.catchAll((error) =>
+              Effect.sync(() => {
+                console.warn("[gitlab] failed to hydrate repo MR refs", {
+                  repo: repo.path,
+                  number: mergeRequest.iid,
+                  error,
+                });
+                return toPullRequestSummary(mergeRequest);
+              }),
+            ),
+          ),
+        { concurrency: 8 },
+      );
+    });
   }
 
   getPullRequest(repo: RepoId, number: number) {
-    return gitlabJson(
-      repo.accountId,
-      repo.host,
-      projectEndpoint(repo, `merge_requests/${number}`),
-      GitLabMergeRequestSchema,
-    ).pipe(Effect.map(toPullRequestSummary));
+    return Effect.gen(function* () {
+      const mergeRequest = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}`),
+        GitLabMergeRequestSchema,
+      );
+      const refs = yield* fetchGitLabPullRequestRefs(repo, number).pipe(
+        Effect.catchAll((error) =>
+          Effect.sync(() => {
+            console.warn("[gitlab] failed to hydrate single MR refs", {
+              repo: repo.path,
+              number,
+              error,
+            });
+            return null;
+          }),
+        ),
+      );
+      return toPullRequestSummary(mergeRequest, refs);
+    });
   }
 
   fetchPatch(repo: RepoId, number: number) {
@@ -793,6 +932,37 @@ class GitLabProvider implements ForgeProvider {
       }
       return files;
     });
+  }
+
+  fetchPullRequestRefs(repo: RepoId, number: number) {
+    return fetchGitLabPullRequestRefs(repo, number);
+  }
+
+  fetchFileContent(repo: RepoId, path: string, ref: string) {
+    console.info("[gitlab] fetching file content", {
+      repo: repo.path,
+      path,
+      ref,
+    });
+    return gitlabText(
+      repo.accountId,
+      repo.host,
+      projectEndpoint(
+        repo,
+        `repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`,
+      ),
+    ).pipe(
+      Effect.tap((content) =>
+        Effect.sync(() => {
+          console.info("[gitlab] fetched file content", {
+            repo: repo.path,
+            path,
+            ref,
+            length: content.length,
+          });
+        }),
+      ),
+    );
   }
 
   listReviewThreads(repo: RepoId, number: number) {

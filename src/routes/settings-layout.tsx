@@ -1,9 +1,27 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useCanGoBack,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
-import { trpc } from "../lib/trpc";
 import { TopBar } from "../components/ui/top-bar";
 
 function SettingsLayout() {
+  const router = useRouter();
+  const navigate = useNavigate();
+  const canGoBack = useCanGoBack();
+
+  function handleBackToPrs() {
+    if (canGoBack) {
+      router.history.back();
+      return;
+    }
+
+    void navigate({ to: "/" });
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-canvas text-ink-900">
       <aside className="flex flex-col w-64 shrink-0 border-r border-neutral-300 bg-canvas dark:border-neutral-700">
@@ -29,13 +47,14 @@ function SettingsLayout() {
             </Link>
           </nav>
 
-        <Link
+          <button
             className="inline-flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
-            to="/"
+            onClick={handleBackToPrs}
+            type="button"
           >
             <ArrowLeftIcon className="size-4" />
             Back to PRs
-          </Link>
+          </button>
         </div>
       </aside>
 

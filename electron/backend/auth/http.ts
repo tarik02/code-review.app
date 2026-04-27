@@ -1,3 +1,8 @@
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "@effect/platform";
 import { Effect } from "effect";
 import { ProviderError } from "../errors";
 import { getValidAccessToken } from "./provider-auth";
@@ -8,7 +13,7 @@ type ApiRequestOptions = Omit<RequestInit, "headers"> & {
   accept?: string;
 };
 
-const API_REQUEST_TIMEOUT_MS = 30_000;
+const API_REQUEST_TIMEOUT = "30 seconds";
 
 function toProviderError(error: unknown) {
   return error instanceof ProviderError
@@ -16,12 +21,11 @@ function toProviderError(error: unknown) {
     : new ProviderError(error instanceof Error ? error.message : String(error));
 }
 
-function readResponseBody(response: Response): Effect.Effect<string, ProviderError> {
+function readResponseBody(
+  response: HttpClientResponse.HttpClientResponse,
+): Effect.Effect<string, ProviderError> {
   return Effect.gen(function* () {
-    const text = yield* Effect.tryPromise({
-      try: () => response.text(),
-      catch: toProviderError,
-    });
+    const text = yield* response.text.pipe(Effect.mapError(toProviderError));
     if (!text) return "";
     try {
       const parsed = JSON.parse(text) as unknown;
@@ -44,48 +48,61 @@ function providerFetch(
   accountId: string,
   url: string,
   options: ApiRequestOptions = {},
-): Effect.Effect<Response, ProviderError, AuthTokenStore> {
+): Effect.Effect<
+  HttpClientResponse.HttpClientResponse,
+  ProviderError,
+  AuthTokenStore | HttpClient.HttpClient
+> {
   return Effect.gen(function* () {
     const token = yield* getValidAccessToken(accountId).pipe(
       Effect.mapError(toProviderError),
     );
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
-
-    const response = yield* Effect.tryPromise({
-      try: async () => {
-        try {
-          return await fetch(url, {
-            ...options,
-            signal: controller.signal,
-            headers: {
-              Accept: options.accept ?? "application/json",
-              Authorization: `Bearer ${token}`,
-              "User-Agent": "rudu",
-              ...options.headers,
-            },
-          });
-        } finally {
-          clearTimeout(timeout);
-        }
-      },
-      catch: (error) => {
-        if (controller.signal.aborted) {
-          return new ProviderError(
-            `Provider API request timed out after ${API_REQUEST_TIMEOUT_MS / 1000}s: ${url}`,
-          );
-        }
-        return toProviderError(error);
-      },
-    });
-
-    if (!response.ok) {
-      const message = yield* readResponseBody(response);
-      return yield* Effect.fail(
-        new ProviderError(message || `Provider API returned HTTP ${response.status}`),
-      );
+    const method = options.method?.toUpperCase() ?? "GET";
+    const baseRequest =
+      method === "POST"
+        ? HttpClientRequest.post(url)
+        : method === "PUT"
+          ? HttpClientRequest.put(url)
+          : method === "DELETE"
+            ? HttpClientRequest.del(url)
+            : HttpClientRequest.get(url);
+    let request = baseRequest.pipe(
+      HttpClientRequest.accept(options.accept ?? "application/json"),
+      HttpClientRequest.bearerToken(token),
+      HttpClientRequest.setHeader("User-Agent", "rudu"),
+    );
+    for (const [key, value] of Object.entries(options.headers ?? {})) {
+      request = request.pipe(HttpClientRequest.setHeader(key, value));
     }
-    return response;
+    if (typeof options.body === "string") {
+      const contentType =
+        options.headers?.["Content-Type"] ??
+        options.headers?.["content-type"] ??
+        "text/plain";
+      request = request.pipe(HttpClientRequest.bodyText(options.body, contentType));
+    }
+
+    const client = yield* HttpClient.HttpClient;
+    return yield* client.execute(request).pipe(
+      Effect.timeoutFail({
+        duration: API_REQUEST_TIMEOUT,
+        onTimeout: () =>
+          new ProviderError(`Provider API request timed out after 30s: ${url}`),
+      }),
+      Effect.flatMap((response) =>
+        HttpClientResponse.filterStatusOk(response).pipe(
+          Effect.catchAll(function* () {
+            const message = yield* readResponseBody(response);
+            return yield* Effect.fail(
+              new ProviderError(
+                message || `Provider API returned HTTP ${response.status}`,
+              ),
+            );
+          }),
+        ),
+      ),
+      Effect.mapError(toProviderError),
+    );
   });
 }
 
@@ -93,13 +110,13 @@ function providerJson<T>(
   accountId: string,
   url: string,
   options: ApiRequestOptions = {},
-): Effect.Effect<T, ProviderError, AuthTokenStore> {
+): Effect.Effect<T, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const response = yield* providerFetch(accountId, url, options);
-    return yield* Effect.tryPromise({
-      try: () => response.json() as Promise<T>,
-      catch: toProviderError,
-    });
+    return yield* response.json.pipe(
+      Effect.map((payload) => payload as T),
+      Effect.mapError(toProviderError),
+    );
   });
 }
 
@@ -107,13 +124,10 @@ function providerText(
   accountId: string,
   url: string,
   options: ApiRequestOptions = {},
-): Effect.Effect<string, ProviderError, AuthTokenStore> {
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const response = yield* providerFetch(accountId, url, options);
-    return yield* Effect.tryPromise({
-      try: () => response.text(),
-      catch: toProviderError,
-    });
+    return yield* response.text.pipe(Effect.mapError(toProviderError));
   });
 }
 

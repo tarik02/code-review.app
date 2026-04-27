@@ -30,7 +30,12 @@ type AuthSessionValue = {
   gateStatus: ProviderAuthStatus;
   providerStatusMessage: string | null;
   isSigningIn: boolean;
-  signIn(provider: ForgeProviderKind, host: string, clientId: string): void;
+  signIn(
+    provider: ForgeProviderKind,
+    host: string,
+    clientId: string,
+    clientSecret?: string,
+  ): void;
   checkAgain(): void;
 };
 
@@ -52,6 +57,18 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     provider: ForgeProviderKind;
     host: string;
     accountId: string;
+    startedAt: number;
+  } | null>(null);
+  const handledOAuthCallbackUrlsRef = useRef<Set<string>>(new Set());
+  const [pendingOAuthStartedAt, setPendingOAuthStartedAt] = useState<number | null>(
+    null,
+  );
+  const [pendingDeviceOAuth, setPendingDeviceOAuth] = useState<{
+    accountId: string;
+    userCode: string;
+    verificationUri: string;
+    expiresAt: number;
+    intervalMs: number;
   } | null>(null);
   const providerAccountsQuery = useQuery(providerAccountsQueryOptions());
   const providerStatusesQuery = useQuery(providerStatusesQueryOptions());
@@ -98,8 +115,25 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     });
   }, [providerStatusesQuery.data, queryClient]);
 
+  const refreshAuthQueries = useCallback(async () => {
+    const [accounts, statuses] = await Promise.all([
+      trpc.auth.listProviderAccounts.query(),
+      trpc.auth.getProviderStatuses.query(),
+    ]);
+    queryClient.setQueryData(forgeKeys.providerAccounts(), accounts);
+    queryClient.setQueryData(forgeKeys.providerStatuses(), statuses);
+    await queryClient.invalidateQueries({
+      queryKey: forgeKeys.accountVisibility(),
+    });
+  }, [queryClient]);
+
   const signIn = useCallback(
-    async (provider: ForgeProviderKind, host: string, clientId: string) => {
+    async (
+      provider: ForgeProviderKind,
+      host: string,
+      clientId: string,
+      clientSecret = "",
+    ) => {
       const normalizedHost =
         normalizeHostInput(host) ||
         (provider === "github" ? "github.com" : "gitlab.com");
@@ -110,15 +144,36 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
           provider,
           host: normalizedHost,
           clientId,
+          clientSecret,
         });
+        if (result.type === "device") {
+          pendingOAuthRef.current = null;
+          setPendingOAuthStartedAt(null);
+          setPendingDeviceOAuth({
+            accountId: result.accountId,
+            userCode: result.userCode,
+            verificationUri: result.verificationUri,
+            expiresAt: result.expiresAt,
+            intervalMs: result.intervalMs,
+          });
+          setAuthMessage(
+            `Enter code ${result.userCode} in GitHub to finish signing in.`,
+          );
+          window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+          return;
+        }
+
         pendingOAuthRef.current = {
           provider,
           host: normalizedHost,
           accountId: result.accountId,
+          startedAt: Date.now(),
         };
+        setPendingOAuthStartedAt(pendingOAuthRef.current.startedAt);
         window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
       } catch (error) {
         pendingOAuthRef.current = null;
+        setPendingOAuthStartedAt(null);
         setAuthMessage(getErrorMessage(error));
       } finally {
         setIsSigningIn(false);
@@ -127,41 +182,49 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const handleOAuthCallback = useCallback(
+    async (url: string) => {
+      if (handledOAuthCallbackUrlsRef.current.has(url)) {
+        return;
+      }
+
+      const pending = pendingOAuthRef.current;
+      if (!pending) {
+        setAuthMessage("OAuth callback received, but no sign in request is active.");
+        return;
+      }
+
+      handledOAuthCallbackUrlsRef.current.add(url);
+
+      try {
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get("code");
+        const state = parsed.searchParams.get("state");
+        const error = parsed.searchParams.get("error");
+        if (error) {
+          throw new Error(parsed.searchParams.get("error_description") ?? error);
+        }
+        if (!code || !state) {
+          throw new Error("OAuth callback is missing a code or state.");
+        }
+        await trpc.auth.completeOAuth.mutate({ code, state });
+        await refreshAuthQueries();
+        setAuthMessage(null);
+        pendingOAuthRef.current = null;
+        setPendingOAuthStartedAt(null);
+      } catch (error) {
+        pendingOAuthRef.current = null;
+        setPendingOAuthStartedAt(null);
+        setAuthMessage(getErrorMessage(error));
+      }
+    },
+    [refreshAuthQueries],
+  );
+
   useEffect(() => {
     const subscription = trpc.auth.oauthCallbacks.subscribe(undefined, {
-      async onData(url) {
-        const pending = pendingOAuthRef.current;
-        if (!pending) {
-          setAuthMessage("OAuth callback received, but no sign in request is active.");
-          return;
-        }
-
-        try {
-          const parsed = new URL(url);
-          const code = parsed.searchParams.get("code");
-          const state = parsed.searchParams.get("state");
-          const error = parsed.searchParams.get("error");
-          if (error) {
-            throw new Error(parsed.searchParams.get("error_description") ?? error);
-          }
-          if (!code || !state) {
-            throw new Error("OAuth callback is missing a code or state.");
-          }
-          await trpc.auth.completeOAuth.mutate({ code, state });
-          setAuthMessage(null);
-          pendingOAuthRef.current = null;
-          await queryClient.invalidateQueries({
-            queryKey: forgeKeys.providerAccounts(),
-          });
-          await queryClient.invalidateQueries({
-            queryKey: forgeKeys.providerStatuses(),
-          });
-          await queryClient.invalidateQueries({
-            queryKey: forgeKeys.accountVisibility(),
-          });
-        } catch (error) {
-          setAuthMessage(getErrorMessage(error));
-        }
+      onData(url) {
+        void handleOAuthCallback(url);
       },
       onError(error) {
         setAuthMessage(getErrorMessage(error));
@@ -169,7 +232,96 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [queryClient]);
+  }, [handleOAuthCallback]);
+
+  useEffect(() => {
+    if (pendingOAuthStartedAt === null) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+
+    async function checkLatestOAuthCallback() {
+      try {
+        const callback = await trpc.auth.latestOAuthCallback.query();
+        if (
+          isDisposed ||
+          !callback ||
+          callback.emittedAt < pendingOAuthStartedAt
+        ) {
+          return;
+        }
+        await handleOAuthCallback(callback.url);
+      } catch (error) {
+        if (!isDisposed) {
+          setAuthMessage(getErrorMessage(error));
+        }
+      }
+    }
+
+    void checkLatestOAuthCallback();
+    const interval = window.setInterval(() => {
+      void checkLatestOAuthCallback();
+    }, 1000);
+
+    return () => {
+      isDisposed = true;
+      window.clearInterval(interval);
+    };
+  }, [handleOAuthCallback, pendingOAuthStartedAt]);
+
+  useEffect(() => {
+    if (!pendingDeviceOAuth) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+
+    async function pollDeviceOAuth() {
+      if (Date.now() > pendingDeviceOAuth.expiresAt) {
+        setPendingDeviceOAuth(null);
+        setAuthMessage("OAuth device sign in expired. Start sign in again.");
+        return;
+      }
+
+      try {
+        const result = await trpc.auth.pollDeviceOAuth.mutate({
+          accountId: pendingDeviceOAuth.accountId,
+        });
+        if (isDisposed) return;
+        if (result.status === "pending") {
+          setPendingDeviceOAuth((current) =>
+            current
+              ? {
+                  ...current,
+                  intervalMs: result.intervalMs,
+                }
+              : current,
+          );
+          return;
+        }
+
+        await refreshAuthQueries();
+        if (isDisposed) return;
+        setPendingDeviceOAuth(null);
+        setAuthMessage(null);
+      } catch (error) {
+        if (!isDisposed) {
+          setPendingDeviceOAuth(null);
+          setAuthMessage(getErrorMessage(error));
+        }
+      }
+    }
+
+    const timeout = window.setTimeout(() => {
+      void pollDeviceOAuth();
+    }, pendingDeviceOAuth.intervalMs);
+
+    return () => {
+      isDisposed = true;
+      window.clearTimeout(timeout);
+    };
+  }, [pendingDeviceOAuth, refreshAuthQueries]);
 
   const value = useMemo<AuthSessionValue>(
     () => ({

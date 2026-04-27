@@ -1,12 +1,9 @@
+import { Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
-import { useEffect, useState } from "react";
 import { AlertDialog, AlertDialogContent } from "./alert-dialog";
 import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
 import {
   PullRequestBadgeStatus,
-  type ForgeProviderKind,
-  type ProviderAccount,
-  type ProviderAuthStatus,
   type PullRequestSummary,
   type RepoSummary,
 } from "../../types/forge";
@@ -24,16 +21,11 @@ type TrackPullRequestModalProps = {
   mode: TrackPullRequestModalMode;
   step: TrackPullRequestModalStep;
   selectedRepo: RepoSummary | null;
-  providerAccounts: ProviderAccount[];
-  selectedProviderAccountId: string;
-  providerStatus: ProviderAuthStatus | null;
-  isSigningIn: boolean;
-  onProviderAccountChange: (accountId: string) => void;
-  onSignIn: (provider: ForgeProviderKind, host: string, clientId: string) => void;
   searchQuery: string;
   onSearchChange: (value: string) => void;
   isLoadingRepos: boolean;
   availableReposError: unknown;
+  hasRepoSources: boolean;
   filteredRepos: RepoSummary[];
   isSavingRepo: boolean;
   onPickRepo: (repo: RepoSummary) => void;
@@ -47,67 +39,29 @@ type TrackPullRequestModalProps = {
 
 type RepoSelectionStepProps = {
   searchQuery: string;
-  providerAccounts: ProviderAccount[];
-  selectedProviderAccountId: string;
-  providerStatus: ProviderAuthStatus | null;
-  isSigningIn: boolean;
-  onProviderAccountChange: (accountId: string) => void;
-  onSignIn: (provider: ForgeProviderKind, host: string, clientId: string) => void;
   onSearchChange: (value: string) => void;
   isLoadingRepos: boolean;
   availableReposError: unknown;
+  hasRepoSources: boolean;
   filteredRepos: RepoSummary[];
   isSavingRepo: boolean;
   onPickRepo: (repo: RepoSummary) => void;
 };
 
-function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
-
-function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
-  return (
-    (provider === "github" && host === "github.com") ||
-    (provider === "gitlab" && host === "gitlab.com")
-  );
+function getRepoProviderLabel(repo: RepoSummary) {
+  return `${repo.provider === "github" ? "GitHub" : "GitLab"} · ${repo.providerAccountLabel}`;
 }
 
 function RepoSelectionStep({
   searchQuery,
-  providerAccounts,
-  selectedProviderAccountId,
-  providerStatus,
-  isSigningIn,
-  onProviderAccountChange,
-  onSignIn,
   onSearchChange,
   isLoadingRepos,
   availableReposError,
+  hasRepoSources,
   filteredRepos,
   isSavingRepo,
   onPickRepo,
 }: RepoSelectionStepProps) {
-  const [newProvider, setNewProvider] = useState<ForgeProviderKind>("github");
-  const [newHost, setNewHost] = useState("github.com");
-  const [newClientId, setNewClientId] = useState("");
-  const selectedAccount =
-    providerAccounts.find((account) => account.id === selectedProviderAccountId) ??
-    providerAccounts[0] ??
-    null;
-  const normalizedNewHost =
-    normalizeHostInput(newHost) || (newProvider === "github" ? "github.com" : "gitlab.com");
-  const canStartSignIn =
-    (newClientId.trim().length > 0 || hasDefaultClientId(newProvider, normalizedNewHost)) &&
-    !isSigningIn;
-
-  useEffect(() => {
-    setNewHost(newProvider === "github" ? "github.com" : "gitlab.com");
-  }, [newProvider]);
-
   return (
     <>
       {/*<AlertDialogHeader>
@@ -118,87 +72,12 @@ function RepoSelectionStep({
       </AlertDialogHeader>*/}
 
       <div className="mb-4 flex min-h-0 flex-col gap-2.5">
-        <div className="px-4 pt-3">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <select
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition dark:border-neutral-700"
-              disabled={providerAccounts.length === 0}
-              onChange={(event) => onProviderAccountChange(event.currentTarget.value)}
-              value={selectedAccount?.id ?? ""}
-            >
-              {providerAccounts.length === 0 ? (
-                <option value="">No provider accounts</option>
-              ) : null}
-              {providerAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.provider === "github" ? "GitHub" : "GitLab"} · {account.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mx-4 rounded-md border border-neutral-200 bg-canvas/60 p-2 dark:border-neutral-700">
-          <div className="grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]">
-            <select
-              className="rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition dark:border-neutral-700"
-              disabled={isSigningIn}
-              onChange={(event) =>
-                setNewProvider(event.currentTarget.value as ForgeProviderKind)
-              }
-              value={newProvider}
-            >
-              <option value="github">GitHub</option>
-              <option value="gitlab">GitLab</option>
-            </select>
-            <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
-              disabled={isSigningIn}
-              onChange={(event) => setNewHost(event.currentTarget.value)}
-              placeholder={newProvider === "github" ? "github.com" : "gitlab.com"}
-              value={newHost}
-            />
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-2 py-1.5 text-xs outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
-              disabled={isSigningIn}
-              onChange={(event) => setNewClientId(event.currentTarget.value)}
-              placeholder={
-                hasDefaultClientId(newProvider, normalizedNewHost)
-                  ? "OAuth client ID (optional)"
-                  : "OAuth client ID"
-              }
-              value={newClientId}
-            />
-            <button
-              className="rounded-md bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ink-200 dark:text-ink-900"
-              disabled={!canStartSignIn}
-              onClick={() => onSignIn(newProvider, normalizedNewHost, newClientId)}
-              type="button"
-            >
-              {isSigningIn ? "Opening..." : "Add account"}
-            </button>
-          </div>
-        </div>
-        {selectedAccount && providerStatus && providerStatus.status !== "ready" ? (
-          <div className="mx-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-            <span>
-              {providerStatus.message ??
-                `${selectedAccount.provider === "github" ? "GitHub" : "GitLab"} is not signed in.`}
-            </span>
-          </div>
-        ) : null}
         <input
           autoFocus
           className="w-full border-b border-neutral-200 dark:border-neutral-700 bg-surface px-4 py-3 outline-hidden transition placeholder:text-neutral-400"
-          disabled={!selectedAccount || isLoadingRepos || isSavingRepo}
+          disabled={isLoadingRepos || isSavingRepo}
           onChange={(event) => onSearchChange(event.currentTarget.value)}
-          placeholder={
-            selectedAccount?.provider === "gitlab"
-              ? "Search projects or paste a GitLab project URL"
-              : "Search repositories by title"
-          }
+          placeholder="Search repositories or paste a GitLab project path"
           value={searchQuery}
         />
 
@@ -222,7 +101,20 @@ function RepoSelectionStep({
           <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
             {filteredRepos.length === 0 ? (
               <div className="px-0 py-2 text-sm text-ink-500">
-                No repos to add.
+                {hasRepoSources ? (
+                  "No repos to add."
+                ) : (
+                  <>
+                    No enabled accounts.{" "}
+                    <Link
+                      className="font-medium text-ink-700 underline-offset-2 hover:underline"
+                      to="/settings/profiles"
+                    >
+                      Open settings
+                    </Link>
+                    .
+                  </>
+                )}
               </div>
             ) : (
               filteredRepos.map((repo) => (
@@ -249,6 +141,12 @@ function RepoSelectionStep({
                           {repo.description}
                         </div>
                       ) : null}
+                      <div className="mt-1 truncate text-[11px] text-neutral-500">
+                        {getRepoProviderLabel(repo)}
+                        {repo.host === "github.com" || repo.host === "gitlab.com"
+                          ? ""
+                          : ` · ${repo.host}`}
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -473,16 +371,11 @@ function TrackPullRequestModal({
   mode,
   step,
   selectedRepo,
-  providerAccounts,
-  selectedProviderAccountId,
-  providerStatus,
-  isSigningIn,
-  onProviderAccountChange,
-  onSignIn,
   searchQuery,
   onSearchChange,
   isLoadingRepos,
   availableReposError,
+  hasRepoSources,
   filteredRepos,
   isSavingRepo,
   onPickRepo,
@@ -503,15 +396,10 @@ function TrackPullRequestModal({
           <RepoSelectionStep
             availableReposError={availableReposError}
             filteredRepos={filteredRepos}
-            providerAccounts={providerAccounts}
-            providerStatus={providerStatus}
-            selectedProviderAccountId={selectedProviderAccountId}
-            isSigningIn={isSigningIn}
+            hasRepoSources={hasRepoSources}
             isLoadingRepos={isLoadingRepos}
             isSavingRepo={isSavingRepo}
             onPickRepo={onPickRepo}
-            onProviderAccountChange={onProviderAccountChange}
-            onSignIn={onSignIn}
             onSearchChange={onSearchChange}
             searchQuery={searchQuery}
           />

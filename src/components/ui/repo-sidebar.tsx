@@ -5,10 +5,6 @@ import {
   PlusIcon,
   SunIcon,
 } from "@heroicons/react/20/solid";
-import {
-  AccountFilterMenu,
-  type AccountFilterMenuProps,
-} from "./account-filter-menu";
 import { Accordion } from "./accordion";
 import { AppUpdater } from "./app-updater";
 import {
@@ -37,12 +33,11 @@ type RepoSidebarProps = {
   selectedPrKey: string | null;
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   isDark: boolean;
-  accountFilter: AccountFilterMenuProps;
   emptyState?: ReactNode;
   onAddRepo: () => void;
   onAddPr: (repo: string) => void;
   onViewChange: (view: SidebarPullRequestView) => void;
-  onToggleTheme: () => void;
+  onToggleTheme: (trigger?: HTMLElement | null) => void;
   onSelectPr: (repo: string, pullRequest: PullRequestSummary) => void;
   onTrackPr: (repo: string, pullRequest: PullRequestSummary) => void;
   onRemovePr: (repo: string, pullRequest: PullRequestSummary) => void;
@@ -74,7 +69,6 @@ function RepoSidebar({
   selectedPrKey,
   trackedPullRequestNumbersByRepo,
   isDark,
-  accountFilter,
   emptyState,
   onAddRepo,
   onAddPr,
@@ -119,7 +113,7 @@ function RepoSidebar({
                   isDark ? "Switch to light mode" : "Switch to dark mode"
                 }
                 className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-                onClick={onToggleTheme}
+                onClick={(event) => onToggleTheme(event.currentTarget)}
                 style={noDragRegionStyle}
                 type="button"
               >
@@ -149,7 +143,6 @@ function RepoSidebar({
               containerClassName="flex-row items-center gap-0"
               showFeedback={false}
             />
-            <AccountFilterMenu {...accountFilter} />
           </div>
           <button
             aria-label="Add repo"
