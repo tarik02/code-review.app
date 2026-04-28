@@ -19,6 +19,7 @@ import {
 } from "../hooks/use-forge-queries";
 import { useTheme } from "../hooks/use-theme";
 import { useAuthSession } from "./auth-session";
+import { sortByFileTreePathOrder } from "../lib/file-tree-order";
 import { buildReviewThreadsByFile } from "../lib/review-threads";
 import { trpc } from "../lib/trpc";
 import {
@@ -355,7 +356,9 @@ function MainApp() {
   );
   const parsedPatch = useMemo(
     () => ({
-      fileDiffs: selectedPatch?.fileDiffs ?? [],
+      fileDiffs: selectedPatch
+        ? sortByFileTreePathOrder(selectedPatch.fileDiffs, (fd) => fd.name)
+        : [],
       parseError: "",
     }),
     [selectedPatch],
