@@ -8,7 +8,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - Desktop shell: Electron
 - Backend: TypeScript in Electron main process, Effect services, tRPC over Electron IPC
 - Data source: GitHub CLI (`gh`) and GitLab CLI (`glab`) invoked from the Electron backend
-- JavaScript package manager/runtime: Bun
+- JavaScript runtime/package manager: Node.js + pnpm
 
 ## Important Structure
 - `src/App.tsx`: top-level state and orchestration for repo/PR selection.
@@ -37,14 +37,14 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - `preflight.getCliStatuses(gitlabHost)` reports provider CLI readiness.
 
 ## Dependency Notes
-- Use `@pierre/trees@0.0.1-beta.4`.
+- Use the pinned `@pierre/trees` version from `package.json`.
 - Do not switch to a floating/latest tag without checking installability; newer metadata can fail in this repo setup.
 
 ## Working Rules For Agents
 - Keep UI changes aligned with existing Tailwind design tokens (`bg-canvas`, `bg-surface`, etc.).
 - Prefer small focused components over growing `App.tsx`.
 - Keep tree and diff states decoupled: one may fail while the other still renders.
-- Use Bun everywhere for JS tasks (`bun install`, `bun add`, `bun run ...`); do not use npm.
+- Use pnpm everywhere for JS tasks (`pnpm install`, `pnpm add`, `pnpm run ...`); do not use npm.
 
 ## Electron Backend Architecture
 - `electron/main/index.ts`: app lifecycle only.
@@ -69,7 +69,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 ## Build/Run Policy
 - NEVER build the app yourself.
 - Do not run build commands like:
-  - `bun run build`
+  - `pnpm run build`
   - `electron-vite build`
   - `electron-builder`
 - Never start the dev server.

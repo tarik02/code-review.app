@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { GitStatusEntry } from "@pierre/trees";
-import { FileTree } from "@pierre/trees/react";
+import { FileTree, useFileTree } from "@pierre/trees/react";
 import type { FileStatsEntry } from "../../types/forge";
 import { TopBar } from "./top-bar";
 
@@ -34,7 +34,7 @@ function ChangedFilesTree({
   gitStatus,
   isDark,
 }: ChangedFilesTreeProps) {
-  const initialExpandedItems = useMemo(() => {
+  const initialExpandedPaths = useMemo(() => {
     const expandedDirs = new Set<string>();
 
     for (const file of files) {
@@ -90,14 +90,50 @@ function ChangedFilesTree({
     [],
   );
 
-  const treeOptions = useMemo(
-    () => ({
-      id: "icon-set-tree",
-      flattenEmptyDirectories: true,
-      gitStatus,
-    }),
-    [gitStatus],
+  const selectedTreePaths = useMemo(
+    () =>
+      selectedFilePath && fileSet.has(selectedFilePath) ? [selectedFilePath] : [],
+    [fileSet, selectedFilePath],
   );
+
+  const { model } = useFileTree({
+    id: "icon-set-tree",
+    flattenEmptyDirectories: true,
+    initialExpandedPaths,
+    initialSelectedPaths: selectedTreePaths,
+    gitStatus,
+    onSelectionChange: handleSelectionChange,
+    paths: files,
+  });
+
+  useEffect(() => {
+    model.resetPaths(files, { initialExpandedPaths });
+  }, [files, initialExpandedPaths, model]);
+
+  useEffect(() => {
+    model.setGitStatus(gitStatus);
+  }, [gitStatus, model]);
+
+  useEffect(() => {
+    const selectedPaths = model.getSelectedPaths();
+    const nextSelectedPath = selectedTreePaths[0] ?? null;
+
+    if (
+      selectedPaths.length === (nextSelectedPath ? 1 : 0) &&
+      selectedPaths[0] === nextSelectedPath
+    ) {
+      return;
+    }
+
+    for (const path of selectedPaths) {
+      model.getItem(path)?.deselect();
+    }
+
+    if (nextSelectedPath) {
+      model.getItem(nextSelectedPath)?.select();
+      model.focusPath(nextSelectedPath);
+    }
+  }, [model, selectedTreePaths]);
 
   const fileTreeStyle = useMemo(
     () => ({
@@ -165,16 +201,8 @@ function ChangedFilesTree({
         {hasSelection && !isLoading && !error && files.length > 0 ? (
           <FileTree
             className="h-full min-h-[220px]"
-            files={files}
-            initialExpandedItems={initialExpandedItems}
-            selectedItems={
-              selectedFilePath && fileSet.has(selectedFilePath)
-                ? [selectedFilePath]
-                : []
-            }
-            onSelectedItemsChange={handleSelectionChange}
+            model={model}
             style={fileTreeStyle}
-            options={treeOptions}
           />
         ) : null}
       </div>

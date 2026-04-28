@@ -465,10 +465,7 @@ function mergeRequestKey(mergeRequest: GitLabMergeRequest) {
     : mergeRequest.web_url;
 }
 
-function toPullRequestSummary(
-  mr: GitLabMergeRequest,
-  refs?: PullRequestRefs | null,
-): PullRequestSummary {
+function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
   const diffRefs = mr.diff_refs;
   return {
     number: mr.iid,
@@ -483,8 +480,8 @@ function toPullRequestSummary(
     authorLogin: mr.author?.username ?? "unknown",
     updatedAt: mr.updated_at,
     url: mr.web_url,
-    headSha: mr.sha ?? refs?.headSha ?? diffRefs?.head_sha ?? "",
-    baseSha: refs?.baseSha ?? diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
+    headSha: mr.sha ?? diffRefs?.head_sha ?? "",
+    baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
   };
 }
 
@@ -816,46 +813,6 @@ class GitLabProvider implements ForgeProvider {
           projectsById.set(result.projectId, result.project);
         }
       }
-      const refsResults = yield* Effect.forEach(
-        mergeRequests,
-        (mergeRequest) => {
-          const projectId = mergeRequest.project_id;
-          if (typeof projectId !== "number") {
-            return Effect.succeed({
-              key: mergeRequestKey(mergeRequest),
-              refs: null,
-            });
-          }
-
-          return fetchGitLabPullRequestRefsByProject(
-            accountId,
-            token.host,
-            projectId,
-            mergeRequest.iid,
-          ).pipe(
-            Effect.map((refs) => ({ key: mergeRequestKey(mergeRequest), refs })),
-            Effect.catchAll((error) =>
-              Effect.sync(() => {
-                console.warn("[gitlab] failed to hydrate overview MR refs", {
-                  host: token.host,
-                  projectId,
-                  number: mergeRequest.iid,
-                  error,
-                });
-                return {
-                  key: mergeRequestKey(mergeRequest),
-                  refs: null,
-                };
-              }),
-            ),
-          );
-        },
-        { concurrency: 8 },
-      );
-      const refsByKey = new Map<string, PullRequestRefs | null>();
-      for (const result of refsResults) {
-        refsByKey.set(result.key, result.refs);
-      }
       const entries: OverviewPullRequestSummary[] = [];
 
       for (const mergeRequest of mergeRequests) {
@@ -872,10 +829,7 @@ class GitLabProvider implements ForgeProvider {
 
         entries.push({
           repo: repoSummaryFromProject(accountId, token.host, label, project),
-          pullRequest: toPullRequestSummary(
-            mergeRequest,
-            refsByKey.get(mergeRequestKey(mergeRequest)),
-          ),
+          pullRequest: toPullRequestSummary(mergeRequest),
         });
       }
 
@@ -898,23 +852,8 @@ class GitLabProvider implements ForgeProvider {
         Schema.Array(GitLabMergeRequestSchema),
       );
 
-      return yield* Effect.forEach(
-        mergeRequests,
-        (mergeRequest) =>
-          fetchGitLabPullRequestRefs(repo, mergeRequest.iid).pipe(
-            Effect.map((refs) => toPullRequestSummary(mergeRequest, refs)),
-            Effect.catchAll((error) =>
-              Effect.sync(() => {
-                console.warn("[gitlab] failed to hydrate repo MR refs", {
-                  repo: repo.path,
-                  number: mergeRequest.iid,
-                  error,
-                });
-                return toPullRequestSummary(mergeRequest);
-              }),
-            ),
-          ),
-        { concurrency: 8 },
+      return mergeRequests.map((mergeRequest) =>
+        toPullRequestSummary(mergeRequest),
       );
     });
   }
@@ -927,19 +866,7 @@ class GitLabProvider implements ForgeProvider {
         projectEndpoint(repo, `merge_requests/${number}`),
         GitLabMergeRequestSchema,
       );
-      const refs = yield* fetchGitLabPullRequestRefs(repo, number).pipe(
-        Effect.catchAll((error) =>
-          Effect.sync(() => {
-            console.warn("[gitlab] failed to hydrate single MR refs", {
-              repo: repo.path,
-              number,
-              error,
-            });
-            return null;
-          }),
-        ),
-      );
-      return toPullRequestSummary(mergeRequest, refs);
+      return toPullRequestSummary(mergeRequest);
     });
   }
 

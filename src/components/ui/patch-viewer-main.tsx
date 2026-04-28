@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useEffect } from "react";
+import type { CSSProperties } from "react";
 import type {
   DiffLineAnnotation,
-  ExpansionDirections,
   FileDiffMetadata,
-  HunkExpansionRegion,
   SelectedLineRange,
   VirtualFileMetrics,
   VirtualizerConfig,
 } from "@pierre/diffs";
-import { parseDiffFromFile } from "@pierre/diffs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { GitStatusEntry } from "@pierre/trees";
 import { FileDiff, Virtualizer } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
@@ -21,11 +18,7 @@ import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
 import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
 import { cx } from "../../lib/cx";
-import { trpc } from "../../lib/trpc";
-import {
-  appearanceBackgroundQueryOptions,
-  forgeKeys,
-} from "../../queries/forge";
+import { appearanceBackgroundQueryOptions } from "../../queries/forge";
 import {
   getFileReviewThreadsForPath,
   isActiveReviewThread,
@@ -37,10 +30,13 @@ import {
 } from "../../lib/review-threads";
 import type {
   FileStatsEntry,
-  PrFileChangeType,
-  PrFileContents,
   ReviewCommentSide,
 } from "../../types/forge";
+import {
+  getPatchViewerSessionState,
+  usePatchViewerStore,
+  type DraftReviewCommentTarget,
+} from "../../stores/patch-viewer-store";
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
@@ -62,12 +58,8 @@ const DIFF_FONT_STYLE = {
     '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 } as CSSProperties;
 
-const DIFF_EXPAND_LOG_PREFIX = "[diff-expand]";
-const DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX = ":fake-expandable";
 const DIFF_EXPANSION_LINE_COUNT = 20;
-const DIFF_CONTEXT_LINE_COUNT = 3;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
-const DIFF_FAKE_BLANK_LINE = "\n";
 
 type SelectedPatch = {
   repoId: string;
@@ -76,20 +68,6 @@ type SelectedPatch = {
   fileDiffs: FileDiffMetadata[];
 };
 
-type DraftReviewCommentTarget =
-  | {
-      type: "file";
-      path: string;
-    }
-  | {
-      type: "line";
-      path: string;
-      line: number;
-      side: ReviewCommentSide;
-      startLine: number | null;
-      startSide: ReviewCommentSide | null;
-    };
-
 type DraftReviewCommentAnnotation = {
   kind: "draft";
 };
@@ -97,42 +75,6 @@ type DraftReviewCommentAnnotation = {
 type PatchLineAnnotation =
   | ReviewThreadAnnotation
   | DraftReviewCommentAnnotation;
-
-type PierreDiffInstance = {
-  fileDiff?: FileDiffMetadata;
-  hunksRenderer?: {
-    getExpandedHunksMap?: () => Map<number, HunkExpansionRegion>;
-  };
-  heightCache?: {
-    clear?: () => void;
-  };
-  renderRange?: unknown;
-  computeApproximateSize?: () => void;
-  render: (props?: {
-    fileDiff?: FileDiffMetadata;
-    forceRender?: boolean;
-    preventEmit?: boolean;
-  }) => boolean;
-  virtualizer?: {
-    instanceChanged?: (instance: PierreDiffInstance) => void;
-  };
-};
-
-type ExpandClickTarget = {
-  hunkIndex: number;
-  direction: ExpansionDirections;
-  expansionLineCountOverride?: number;
-};
-
-type ControlledExpandedHunks = Record<
-  number,
-  HunkExpansionRegion | undefined
->;
-
-type ControlledExpandedHunksByPath = Record<
-  string,
-  ControlledExpandedHunks | undefined
->;
 
 type PatchViewerMainProps = {
   selectedPrKey: string | null;
@@ -178,358 +120,6 @@ function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
   }
 
   return `Lines ${startLine}-${endLine}`;
-}
-
-function fileContentsQueryInput(
-  selectedPatch: SelectedPatch,
-  selectedBaseSha: string | null,
-  fileDiff: FileDiffMetadata,
-) {
-  const oldPath = fileDiff.prevName ?? fileDiff.name;
-  return {
-    repoId: selectedPatch.repoId,
-    number: selectedPatch.number,
-    oldPath,
-    newPath: fileDiff.name,
-    baseSha: selectedBaseSha,
-    headSha: selectedPatch.headSha,
-    changeType: fileDiff.type as PrFileChangeType,
-  };
-}
-
-function createFullFileDiff(
-  contents: PrFileContents,
-  fileDiff: FileDiffMetadata,
-) {
-  console.info(DIFF_EXPAND_LOG_PREFIX, "parse full file diff", {
-    path: fileDiff.name,
-    oldPath: contents.oldPath,
-    newPath: contents.newPath,
-    baseSha: contents.baseSha,
-    headSha: contents.headSha,
-    oldLength: contents.oldContent.length,
-    newLength: contents.newContent.length,
-  });
-  try {
-    const fullFileDiff = parseDiffFromFile(
-      {
-        name: contents.oldPath,
-        contents: contents.oldContent,
-        cacheKey: `${contents.repoId}:${contents.baseSha ?? "empty"}:${contents.oldPath}`,
-      },
-      {
-        name: contents.newPath,
-        contents: contents.newContent,
-        cacheKey: `${contents.repoId}:${contents.headSha}:${contents.newPath}`,
-      },
-      { context: DIFF_CONTEXT_LINE_COUNT },
-    );
-    console.info(DIFF_EXPAND_LOG_PREFIX, "full diff expansion stats", {
-      path: fileDiff.name,
-      isPartial: fullFileDiff.isPartial,
-      hunkCount: fullFileDiff.hunks.length,
-      leadingCollapsedLines: fullFileDiff.hunks.reduce(
-        (count, hunk) => count + hunk.collapsedBefore,
-        0,
-      ),
-      trailingCollapsedLines: getTrailingCollapsedLineCount(fullFileDiff),
-    });
-    return fullFileDiff;
-  } catch (error) {
-    console.warn(
-      DIFF_EXPAND_LOG_PREFIX,
-      "failed to parse full file diff",
-      fileDiff.name,
-      error,
-    );
-    return null;
-  }
-}
-
-function getTrailingCollapsedLineCount(fileDiff: FileDiffMetadata) {
-  const lastHunk = fileDiff.hunks.at(-1);
-  if (
-    lastHunk === undefined ||
-    fileDiff.isPartial ||
-    fileDiff.additionLines.length === 0 ||
-    fileDiff.deletionLines.length === 0
-  ) {
-    return 0;
-  }
-
-  const additionRemaining =
-    fileDiff.additionLines.length -
-    (lastHunk.additionLineIndex + lastHunk.additionCount);
-  const deletionRemaining =
-    fileDiff.deletionLines.length -
-    (lastHunk.deletionLineIndex + lastHunk.deletionCount);
-
-  if (additionRemaining !== deletionRemaining) {
-    console.warn(DIFF_EXPAND_LOG_PREFIX, "trailing context mismatch", {
-      path: fileDiff.name,
-      additionRemaining,
-      deletionRemaining,
-    });
-  }
-
-  return Math.max(Math.min(additionRemaining, deletionRemaining), 0);
-}
-
-function setArrayLine(lines: string[], index: number, value: string) {
-  while (lines.length < index) {
-    lines.push(DIFF_FAKE_BLANK_LINE);
-  }
-  lines[index] = value;
-}
-
-function padArrayLines(lines: string[], length: number) {
-  while (lines.length < length) {
-    lines.push(DIFF_FAKE_BLANK_LINE);
-  }
-}
-
-function shouldCreateExpandableFakeDiff(fileDiff: FileDiffMetadata) {
-  return (
-    fileDiff.isPartial &&
-    fileDiff.hunks.length > 0 &&
-    fileDiff.type !== "new" &&
-    fileDiff.type !== "deleted"
-  );
-}
-
-function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
-  if (!shouldCreateExpandableFakeDiff(fileDiff)) {
-    return fileDiff;
-  }
-
-  const deletionLines: string[] = [];
-  const additionLines: string[] = [];
-  let splitLineCount = 0;
-  let unifiedLineCount = 0;
-  let lastAdditionHunkEnd = 0;
-
-  const hunks: FileDiffMetadata["hunks"] = fileDiff.hunks.map((hunk) => {
-    let deletionLineIndex = hunk.deletionStart - 1;
-    let additionLineIndex = hunk.additionStart - 1;
-    const collapsedBefore = Math.max(
-      hunk.additionStart - 1 - lastAdditionHunkEnd,
-      0,
-    );
-
-    const hunkContent: typeof hunk.hunkContent = hunk.hunkContent.map(
-      (content) => {
-        if (content.type === "context") {
-          const nextContent = {
-            ...content,
-            deletionLineIndex,
-            additionLineIndex,
-          };
-
-          for (let index = 0; index < content.lines; index += 1) {
-            setArrayLine(
-              deletionLines,
-              deletionLineIndex + index,
-              fileDiff.deletionLines[content.deletionLineIndex + index] ?? "",
-            );
-            setArrayLine(
-              additionLines,
-              additionLineIndex + index,
-              fileDiff.additionLines[content.additionLineIndex + index] ?? "",
-            );
-          }
-
-          deletionLineIndex += content.lines;
-          additionLineIndex += content.lines;
-
-          return nextContent;
-        }
-
-        const nextContent = {
-          ...content,
-          deletionLineIndex,
-          additionLineIndex,
-        };
-
-        for (let index = 0; index < content.deletions; index += 1) {
-          setArrayLine(
-            deletionLines,
-            deletionLineIndex + index,
-            fileDiff.deletionLines[content.deletionLineIndex + index] ?? "",
-          );
-        }
-
-        for (let index = 0; index < content.additions; index += 1) {
-          setArrayLine(
-            additionLines,
-            additionLineIndex + index,
-            fileDiff.additionLines[content.additionLineIndex + index] ?? "",
-          );
-        }
-
-        deletionLineIndex += content.deletions;
-        additionLineIndex += content.additions;
-
-        return nextContent;
-      },
-    );
-
-    const nextHunk: typeof hunk = {
-      ...hunk,
-      collapsedBefore,
-      deletionLineIndex: hunk.deletionStart - 1,
-      additionLineIndex: hunk.additionStart - 1,
-      splitLineStart: splitLineCount + collapsedBefore,
-      unifiedLineStart: unifiedLineCount + collapsedBefore,
-      hunkContent,
-    };
-
-    splitLineCount += collapsedBefore + hunk.splitLineCount;
-    unifiedLineCount += collapsedBefore + hunk.unifiedLineCount;
-    lastAdditionHunkEnd = hunk.additionStart + hunk.additionCount - 1;
-
-    return nextHunk;
-  });
-
-  const lastHunk = hunks.at(-1);
-  if (lastHunk) {
-    padArrayLines(
-      deletionLines,
-      lastHunk.deletionLineIndex + lastHunk.deletionCount,
-    );
-    padArrayLines(
-      additionLines,
-      lastHunk.additionLineIndex + lastHunk.additionCount,
-    );
-  }
-
-  const fakeFileDiff: FileDiffMetadata = {
-    ...fileDiff,
-    hunks,
-    isPartial: false,
-    deletionLines,
-    additionLines,
-    splitLineCount,
-    unifiedLineCount,
-    cacheKey: `${fileDiff.cacheKey ?? fileDiff.name}${DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX}`,
-  };
-
-  console.info(DIFF_EXPAND_LOG_PREFIX, "create fake expandable diff", {
-    path: fileDiff.name,
-    leadingCollapsedLines: hunks.reduce(
-      (count, hunk) => count + hunk.collapsedBefore,
-      0,
-    ),
-    trailingPlaceholderLines: getTrailingCollapsedLineCount(fakeFileDiff),
-  });
-
-  return fakeFileDiff;
-}
-
-function getExpandClickTarget(
-  event: ReactMouseEvent<HTMLElement>,
-): ExpandClickTarget | null {
-  let expandButton: HTMLElement | null = null;
-  let expandIndex: number | null = null;
-
-  for (const item of event.nativeEvent.composedPath()) {
-    if (!(item instanceof HTMLElement)) {
-      continue;
-    }
-
-    if (!expandButton && item.hasAttribute("data-expand-button")) {
-      expandButton = item;
-    }
-
-    if (expandIndex === null && item.hasAttribute("data-expand-index")) {
-      const parsedIndex = Number(item.getAttribute("data-expand-index"));
-      expandIndex = Number.isFinite(parsedIndex) ? parsedIndex : null;
-    }
-  }
-
-  if (!expandButton || expandIndex === null) {
-    return null;
-  }
-
-  const isExpandAll =
-    event.shiftKey || expandButton.hasAttribute("data-expand-all-button");
-  const direction: ExpansionDirections =
-    isExpandAll || expandButton.hasAttribute("data-expand-both")
-      ? "both"
-      : expandButton.hasAttribute("data-expand-up")
-        ? "up"
-        : "down";
-
-  return {
-    hunkIndex: expandIndex,
-    direction,
-    expansionLineCountOverride: isExpandAll
-      ? Number.POSITIVE_INFINITY
-      : undefined,
-  };
-}
-
-function serializeExpansionValue(value: number) {
-  return Number.isFinite(value) ? `${value}` : "inf";
-}
-
-function serializeExpandedHunks(expandedHunks?: ControlledExpandedHunks) {
-  if (!expandedHunks) {
-    return "";
-  }
-
-  return Object.entries(expandedHunks)
-    .filter(
-      ([, region]) => region && (region.fromStart > 0 || region.fromEnd > 0),
-    )
-    .sort(([left], [right]) => Number(left) - Number(right))
-    .map(([hunkIndex, region]) => {
-      if (!region) {
-        return "";
-      }
-
-      return `${hunkIndex}:${serializeExpansionValue(region.fromStart)}:${serializeExpansionValue(region.fromEnd)}`;
-    })
-    .join("|");
-}
-
-function addExpansionLineCount(current: number, increment: number) {
-  if (!Number.isFinite(current) || !Number.isFinite(increment)) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  return current + increment;
-}
-
-function updateExpandedHunks(
-  current: ControlledExpandedHunks | undefined,
-  target: ExpandClickTarget,
-) {
-  const expansionLineCount =
-    target.expansionLineCountOverride ?? DIFF_EXPANSION_LINE_COUNT;
-  const currentRegion = current?.[target.hunkIndex] ?? {
-    fromStart: 0,
-    fromEnd: 0,
-  };
-  const nextRegion = { ...currentRegion };
-
-  if (target.direction === "up" || target.direction === "both") {
-    nextRegion.fromStart = addExpansionLineCount(
-      nextRegion.fromStart,
-      expansionLineCount,
-    );
-  }
-
-  if (target.direction === "down" || target.direction === "both") {
-    nextRegion.fromEnd = addExpansionLineCount(
-      nextRegion.fromEnd,
-      expansionLineCount,
-    );
-  }
-
-  return {
-    ...current,
-    [target.hunkIndex]: nextRegion,
-  };
 }
 
 type ReviewThreadsPanelProps = {
@@ -642,7 +232,6 @@ function ReviewThreadsPanel({
 function PatchViewerMain({
   selectedPrKey,
   selectedPatch,
-  selectedBaseSha,
   isGitDiffMode,
   isPatchLoading,
   isDark,
@@ -658,32 +247,33 @@ function PatchViewerMain({
   fileStats,
   gitStatus,
 }: PatchViewerMainProps) {
-  const queryClient = useQueryClient();
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
-  const [draftCommentTarget, setDraftCommentTarget] =
-    useState<DraftReviewCommentTarget | null>(null);
-  const [draftCommentError, setDraftCommentError] = useState("");
-  const [fullFileDiffsByPath, setFullFileDiffsByPath] = useState<
-    Record<string, FileDiffMetadata | undefined>
-  >({});
-  const [expandedHunksByPath, setExpandedHunksByPath] =
-    useState<ControlledExpandedHunksByPath>({});
-  const prefetchedFullFileDiffsByPath = useRef<
-    Record<string, FileDiffMetadata | undefined>
-  >({});
-  const pendingFullFileDiffsByPath = useRef<
-    Record<string, Promise<FileDiffMetadata | null> | undefined>
-  >({});
-  const diffInstancesByPath = useRef<
-    Record<string, PierreDiffInstance | undefined>
-  >({});
-  const expandedHunksByPathRef = useRef<ControlledExpandedHunksByPath>({});
-  const appliedExpandedHunksSignatureByPath = useRef<
-    Record<string, string | undefined>
-  >({});
-  const selectedPrKeyRef = useRef(selectedPrKey);
-  selectedPrKeyRef.current = selectedPrKey;
-  expandedHunksByPathRef.current = expandedHunksByPath;
+  const patchViewerSessionKey = selectedPrKey
+    ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
+    : null;
+  const draftCommentTarget = usePatchViewerStore(
+    (state) =>
+      getPatchViewerSessionState(state, patchViewerSessionKey)
+        .draftCommentTarget,
+  );
+  const draftCommentError = usePatchViewerStore(
+    (state) =>
+      getPatchViewerSessionState(state, patchViewerSessionKey)
+        .draftCommentError,
+  );
+  const ensureSession = usePatchViewerStore((state) => state.ensureSession);
+  const setDraftCommentTarget = usePatchViewerStore(
+    (state) => state.setDraftCommentTarget,
+  );
+  const setDraftCommentError = usePatchViewerStore(
+    (state) => state.setDraftCommentError,
+  );
+  const clearDraftComment = usePatchViewerStore(
+    (state) => state.clearDraftComment,
+  );
+  const setPendingScrollPath = usePatchViewerStore(
+    (state) => state.setPendingScrollPath,
+  );
   const hasSelection = selectedPrKey !== null;
   const shouldShowCommentsPanel =
     hasSelection &&
@@ -691,6 +281,7 @@ function PatchViewerMain({
       Boolean(reviewThreadsError) ||
       reviewThreads.length > 0);
   const navigator = useDiffNavigator({
+    sessionKey: patchViewerSessionKey,
     prKey: selectedPrKey,
     isDiffReady: !isPatchLoading && !patchError && !parsedPatch.parseError,
     hasDiffError: Boolean(patchError || parsedPatch.parseError),
@@ -709,129 +300,15 @@ function PatchViewerMain({
         }
       : null,
   );
-  const expandableFileDiffsByPath = useMemo(() => {
-    const fileDiffsByPath: Record<string, FileDiffMetadata | undefined> = {};
-
-    if (isGitDiffMode) {
-      return fileDiffsByPath;
-    }
-
-    for (const fileDiff of parsedPatch.fileDiffs) {
-      fileDiffsByPath[normalizePath(fileDiff.name)] =
-        createExpandableFakeFileDiff(fileDiff);
-    }
-
-    return fileDiffsByPath;
-  }, [isGitDiffMode, parsedPatch.fileDiffs]);
-
-  const recordControlledHunkExpansion = useCallback(
-    (path: string, expandTarget: ExpandClickTarget) => {
-      const nextExpandedHunks = updateExpandedHunks(
-        expandedHunksByPathRef.current[path],
-        expandTarget,
-      );
-      const nextExpandedHunksByPath = {
-        ...expandedHunksByPathRef.current,
-        [path]: nextExpandedHunks,
-      };
-
-      expandedHunksByPathRef.current = nextExpandedHunksByPath;
-      appliedExpandedHunksSignatureByPath.current[path] = undefined;
-      setExpandedHunksByPath(nextExpandedHunksByPath);
-      console.info(DIFF_EXPAND_LOG_PREFIX, "record controlled expansion", {
-        path,
-        expandTarget,
-        expandedHunks: nextExpandedHunks,
-      });
-    },
-    [],
-  );
-
-  const applyControlledExpandedHunks = useCallback(
-    (path: string, source: string) => {
-      if (isGitDiffMode) {
-        return;
-      }
-
-      const instance = diffInstancesByPath.current[path];
-      const expandedHunks = expandedHunksByPathRef.current[path];
-      const signature = serializeExpandedHunks(expandedHunks);
-      const pierreExpandedHunks =
-        instance?.hunksRenderer?.getExpandedHunksMap?.();
-
-      if (
-        appliedExpandedHunksSignatureByPath.current[path] === signature ||
-        (!signature && pierreExpandedHunks?.size === 0)
-      ) {
-        appliedExpandedHunksSignatureByPath.current[path] = signature;
-        return;
-      }
-
-      if (!instance || !pierreExpandedHunks) {
-        if (signature) {
-          console.info(DIFF_EXPAND_LOG_PREFIX, "skip controlled expansion", {
-            path,
-            source,
-            reason: "missing pierre expansion map",
-          });
-        }
-        return;
-      }
-
-      if (
-        instance.fileDiff?.cacheKey?.endsWith(
-          DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX,
-        )
-      ) {
-        console.info(DIFF_EXPAND_LOG_PREFIX, "skip controlled expansion", {
-          path,
-          source,
-          reason: "waiting for hydrated full diff",
-        });
-        return;
-      }
-
-      pierreExpandedHunks.clear();
-      if (expandedHunks) {
-        for (const [hunkIndex, region] of Object.entries(expandedHunks)) {
-          if (!region || (region.fromStart <= 0 && region.fromEnd <= 0)) {
-            continue;
-          }
-          pierreExpandedHunks.set(Number(hunkIndex), { ...region });
-        }
-      }
-
-      appliedExpandedHunksSignatureByPath.current[path] = signature;
-      instance.renderRange = undefined;
-      instance.heightCache?.clear?.();
-      instance.computeApproximateSize?.();
-      instance.virtualizer?.instanceChanged?.(instance);
-      const didRender = instance.render({
-        fileDiff: instance.fileDiff,
-        forceRender: true,
-        preventEmit: true,
-      });
-      console.info(DIFF_EXPAND_LOG_PREFIX, "apply controlled expansion", {
-        path,
-        source,
-        didRender,
-        expandedHunks,
-      });
-    },
-    [isGitDiffMode],
-  );
 
   useEffect(() => {
-    setDraftCommentTarget(null);
-    setDraftCommentError("");
-    setFullFileDiffsByPath({});
-    setExpandedHunksByPath({});
-    prefetchedFullFileDiffsByPath.current = {};
-    pendingFullFileDiffsByPath.current = {};
-    diffInstancesByPath.current = {};
-    expandedHunksByPathRef.current = {};
-    appliedExpandedHunksSignatureByPath.current = {};
-  }, [isGitDiffMode, selectedPrKey]);
+    ensureSession(patchViewerSessionKey);
+    const selectedFilePath = getPatchViewerSessionState(
+      usePatchViewerStore.getState(),
+      patchViewerSessionKey,
+    ).selectedFilePath;
+    setPendingScrollPath(patchViewerSessionKey, selectedFilePath);
+  }, [ensureSession, patchViewerSessionKey, setPendingScrollPath]);
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();
@@ -839,14 +316,7 @@ function PatchViewerMain({
     navigator.actions,
     parsedPatch.fileDiffs,
     reviewThreadsByFile,
-    fullFileDiffsByPath,
   ]);
-
-  useEffect(() => {
-    for (const path of Object.keys(expandedHunksByPath)) {
-      applyControlledExpandedHunks(path, "state");
-    }
-  }, [applyControlledExpandedHunks, expandedHunksByPath]);
 
   function openLineCommentDraft(path: string, range: SelectedLineRange) {
     const startSide = range.side ?? range.endSide;
@@ -861,8 +331,8 @@ function PatchViewerMain({
     const endLine = startsFirst ? range.end : range.start;
     const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
 
-    setDraftCommentError("");
-    setDraftCommentTarget({
+    setDraftCommentError(patchViewerSessionKey, "");
+    setDraftCommentTarget(patchViewerSessionKey, {
       type: "line",
       path,
       line: endLine,
@@ -872,227 +342,12 @@ function PatchViewerMain({
     });
   }
 
-  async function loadFullFileDiff(
-    fileDiff: FileDiffMetadata,
-    activate: boolean,
-  ) {
-    if (!selectedPatch) {
-      console.info(DIFF_EXPAND_LOG_PREFIX, "skip load: no selected patch", {
-        path: fileDiff.name,
-        activate,
-      });
-      return null;
-    }
-
-    const normalizedFilePath = normalizePath(fileDiff.name);
-    const requestPrKey = selectedPrKey;
-    const cached = fullFileDiffsByPath[normalizedFilePath];
-    if (cached) {
-      console.info(DIFF_EXPAND_LOG_PREFIX, "use rendered full diff cache", {
-        path: fileDiff.name,
-        activate,
-      });
-      return cached;
-    }
-    const prefetched = prefetchedFullFileDiffsByPath.current[normalizedFilePath];
-    if (prefetched) {
-      console.info(DIFF_EXPAND_LOG_PREFIX, "use prefetched full diff", {
-        path: fileDiff.name,
-        activate,
-      });
-      if (activate) {
-        setFullFileDiffsByPath((current) => ({
-          ...current,
-          [normalizedFilePath]: prefetched,
-        }));
-      }
-      return prefetched;
-    }
-
-    const input = fileContentsQueryInput(
-      selectedPatch,
-      selectedBaseSha,
-      fileDiff,
-    );
-    console.info(DIFF_EXPAND_LOG_PREFIX, "load full file diff", {
-      path: fileDiff.name,
-      activate,
-      input,
-    });
-
-    const pending = pendingFullFileDiffsByPath.current[normalizedFilePath];
-    if (pending) {
-      console.info(DIFF_EXPAND_LOG_PREFIX, "join pending full diff load", {
-        path: fileDiff.name,
-        activate,
-      });
-      const fullFileDiff = await pending;
-      if (
-        fullFileDiff &&
-        activate &&
-        selectedPrKeyRef.current === requestPrKey
-      ) {
-        setFullFileDiffsByPath((current) => ({
-          ...current,
-          [normalizedFilePath]: fullFileDiff,
-        }));
-      }
-      return fullFileDiff;
-    }
-
-    const pendingFullFileDiff = queryClient
-      .fetchQuery({
-        queryKey: forgeKeys.pullRequestFileContents(input),
-        queryFn: () => trpc.pullRequests.getFileContents.query(input),
-        staleTime: Infinity,
-      })
-      .then((contents) => createFullFileDiff(contents, fileDiff))
-      .then((fullFileDiff) => {
-        if (selectedPrKeyRef.current !== requestPrKey) {
-          console.info(DIFF_EXPAND_LOG_PREFIX, "discard stale full diff", {
-            path: fileDiff.name,
-            requestPrKey,
-            currentPrKey: selectedPrKeyRef.current,
-          });
-          return null;
-        }
-        if (fullFileDiff) {
-          prefetchedFullFileDiffsByPath.current[normalizedFilePath] =
-            fullFileDiff;
-        }
-        return fullFileDiff;
-      })
-      .catch((error) => {
-        console.warn(
-          DIFF_EXPAND_LOG_PREFIX,
-          "failed to load full file contents",
-          fileDiff.name,
-          error,
-        );
-        return null;
-      })
-      .finally(() => {
-        delete pendingFullFileDiffsByPath.current[normalizedFilePath];
-      });
-    pendingFullFileDiffsByPath.current[normalizedFilePath] =
-      pendingFullFileDiff;
-
-    try {
-      const fullFileDiff = await pendingFullFileDiff;
-      if (!fullFileDiff) {
-        console.info(DIFF_EXPAND_LOG_PREFIX, "full diff unavailable", {
-          path: fileDiff.name,
-          activate,
-        });
-        return null;
-      }
-      if (activate && selectedPrKeyRef.current === requestPrKey) {
-        console.info(DIFF_EXPAND_LOG_PREFIX, "activate full diff", {
-          path: fileDiff.name,
-        });
-        setFullFileDiffsByPath((current) => ({
-          ...current,
-          [normalizedFilePath]: fullFileDiff,
-        }));
-      }
-      return fullFileDiff;
-    } catch (error) {
-      console.warn(
-        DIFF_EXPAND_LOG_PREFIX,
-        "failed to await full file contents",
-        fileDiff.name,
-        error,
-      );
-      return null;
-    }
-  }
-
-  async function loadAndRenderFullFileDiff(fileDiff: FileDiffMetadata) {
-    return loadFullFileDiff(fileDiff, true);
-  }
-
-  function prefetchFullFileDiff(fileDiff: FileDiffMetadata) {
-    void loadFullFileDiff(fileDiff, false);
-  }
-
-  function hydrateAndExpandFullFileDiff(
-    fileDiff: FileDiffMetadata,
-    expandTarget: ExpandClickTarget,
-  ) {
-    const normalizedFilePath = normalizePath(fileDiff.name);
-    console.info(DIFF_EXPAND_LOG_PREFIX, "hydrate from expand click", {
-      path: fileDiff.name,
-      type: fileDiff.type,
-      isPartial: fileDiff.isPartial,
-      expandTarget,
-    });
-
-    void loadAndRenderFullFileDiff(fileDiff).then((fullFileDiff) => {
-      if (!fullFileDiff) {
-        console.info(DIFF_EXPAND_LOG_PREFIX, "expand skipped: no full diff", {
-          path: fileDiff.name,
-          expandTarget,
-        });
-        return;
-      }
-
-      recordControlledHunkExpansion(normalizedFilePath, expandTarget);
-      applyControlledExpandedHunks(normalizedFilePath, "expand-click");
-      console.info(DIFF_EXPAND_LOG_PREFIX, "hydrated controlled expansion", {
-        path: fileDiff.name,
-        expandTarget,
-      });
-    });
-  }
-
-  function handleExpandControlClick(
-    event: ReactMouseEvent<HTMLDivElement>,
-    fileDiff: FileDiffMetadata,
-    isHydrated: boolean,
-  ) {
-    if (isGitDiffMode) {
-      return;
-    }
-
-    const expandTarget = getExpandClickTarget(event);
-    if (!expandTarget) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    const normalizedFilePath = normalizePath(fileDiff.name);
-    if (!isHydrated && fileDiff.isPartial) {
-      hydrateAndExpandFullFileDiff(fileDiff, expandTarget);
-      return;
-    }
-
-    recordControlledHunkExpansion(normalizedFilePath, expandTarget);
-    applyControlledExpandedHunks(normalizedFilePath, "expand-click");
-  }
-
-  function handleExpandControlHover(
-    event: ReactMouseEvent<HTMLDivElement>,
-    fileDiff: FileDiffMetadata,
-    isHydrated: boolean,
-  ) {
-    if (isGitDiffMode) {
-      return;
-    }
-
-    if (isHydrated || !fileDiff.isPartial || !getExpandClickTarget(event)) {
-      return;
-    }
-
-    prefetchFullFileDiff(fileDiff);
-  }
-
   async function handleSubmitDraftComment(body: string) {
     if (!selectedPatch || !draftCommentTarget) {
       return;
     }
 
-    setDraftCommentError("");
+    setDraftCommentError(patchViewerSessionKey, "");
 
     try {
       await createCommentMutation.mutateAsync({
@@ -1116,9 +371,10 @@ function PatchViewerMain({
             : null,
         subjectType: draftCommentTarget.type === "file" ? "file" : "line",
       });
-      setDraftCommentTarget(null);
+      setDraftCommentTarget(patchViewerSessionKey, null);
     } catch (error) {
       setDraftCommentError(
+        patchViewerSessionKey,
         error instanceof Error ? error.message : String(error),
       );
     }
@@ -1214,10 +470,7 @@ function PatchViewerMain({
           isPending={createCommentMutation.isPending}
           selectedLineLabel={getSelectedLineLabel(draftCommentTarget)}
           submitLabel="Comment"
-          onCancel={() => {
-            setDraftCommentError("");
-            setDraftCommentTarget(null);
-          }}
+          onCancel={() => clearDraftComment(patchViewerSessionKey)}
           onSubmit={handleSubmitDraftComment}
         />
       );
@@ -1310,16 +563,6 @@ function PatchViewerMain({
                           fileDiff.name,
                         );
                         const normalizedFilePath = normalizePath(fileDiff.name);
-                        const fullFileDiff =
-                          isGitDiffMode
-                            ? null
-                            : fullFileDiffsByPath[normalizedFilePath] ?? null;
-                        const renderedFileDiff =
-                          isGitDiffMode
-                            ? fileDiff
-                            : fullFileDiff ??
-                              expandableFileDiffsByPath[normalizedFilePath] ??
-                              fileDiff;
                         let lineDraft: Extract<
                           DraftReviewCommentTarget,
                           { type: "line" }
@@ -1372,35 +615,15 @@ function PatchViewerMain({
                           <div
                             data-file-path={fileDiff.name}
                             key={`${selectedPatch.repoId}-${selectedPatch.number}-${normalizePath(fileDiff.name)}`}
-                            onClickCapture={(event) =>
-                              handleExpandControlClick(
-                                event,
-                                fileDiff,
-                                Boolean(fullFileDiff),
-                              )
-                            }
-                            onMouseOverCapture={(event) =>
-                              handleExpandControlHover(
-                                event,
-                                fileDiff,
-                                Boolean(fullFileDiff),
-                              )
-                            }
-                            ref={(node) => {
+                            ref={(node) =>
                               navigator.diff.registerDiffNode(
                                 fileDiff.name,
                                 node,
-                              );
-                              if (node === null) {
-                                delete diffInstancesByPath.current[
-                                  normalizedFilePath
-                                ];
-                              }
-                            }}
+                              )
+                            }
                           >
                             <FileDiff
-                              key={renderedFileDiff.cacheKey ?? renderedFileDiff.name}
-                              fileDiff={renderedFileDiff}
+                              fileDiff={fileDiff}
                               metrics={VIRTUAL_FILE_METRICS}
                               lineAnnotations={lineAnnotations}
                               selectedLines={selectedLines}
@@ -1417,20 +640,6 @@ function PatchViewerMain({
                                 expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
                                 collapsedContextThreshold:
                                   DIFF_COLLAPSED_CONTEXT_THRESHOLD,
-                                onPostRender: (_node, instance) => {
-                                  diffInstancesByPath.current[
-                                    normalizedFilePath
-                                  ] = instance as unknown as PierreDiffInstance;
-                                  appliedExpandedHunksSignatureByPath.current[
-                                    normalizedFilePath
-                                  ] = undefined;
-                                  if (!isGitDiffMode) {
-                                    applyControlledExpandedHunks(
-                                      normalizedFilePath,
-                                      "post-render",
-                                    );
-                                  }
-                                },
                                 unsafeCSS: `
                                   [data-overflow='scroll'],
                                   [data-code] {
@@ -1498,10 +707,9 @@ function PatchViewerMain({
                                     error={draftCommentError}
                                     isPending={createCommentMutation.isPending}
                                     submitLabel="Comment"
-                                    onCancel={() => {
-                                      setDraftCommentError("");
-                                      setDraftCommentTarget(null);
-                                    }}
+                                    onCancel={() =>
+                                      clearDraftComment(patchViewerSessionKey)
+                                    }
                                     onSubmit={handleSubmitDraftComment}
                                   />
                                 ) : null}

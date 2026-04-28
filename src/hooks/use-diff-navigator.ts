@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { normalizePath } from "../lib/review-threads";
+import {
+  getPatchViewerSessionState,
+  usePatchViewerStore,
+} from "../stores/patch-viewer-store";
 
 type UseDiffNavigatorArgs = {
+  sessionKey: string | null;
   prKey: string | null;
   isDiffReady: boolean;
   hasDiffError: boolean;
@@ -37,30 +42,36 @@ type DiffNavigatorController = {
   getState(): DiffNavigatorControllerState;
 };
 
+type DiffNavigatorStateAdapter = {
+  getSelectedFilePath(): string | null;
+  setSelectedFilePath(path: string | null): void;
+  getPendingScrollPath(): string | null;
+  setPendingScrollPath(path: string | null): void;
+};
+
 type CreateDiffNavigatorControllerArgs = {
   prKey: string | null;
   isDiffReady: boolean;
   hasDiffError: boolean;
-  onSelectedFilePathChange(path: string | null): void;
-};
+} & DiffNavigatorStateAdapter;
 
 function createDiffNavigatorController({
   prKey: initialPrKey,
   isDiffReady: initialIsDiffReady,
   hasDiffError: initialHasDiffError,
-  onSelectedFilePathChange,
+  getSelectedFilePath,
+  setSelectedFilePath,
+  getPendingScrollPath,
+  setPendingScrollPath,
 }: CreateDiffNavigatorControllerArgs): DiffNavigatorController {
   const diffNodeMap = new Map<string, ScrollableDiffNode>();
   let prKey = initialPrKey;
   let isDiffReady = initialIsDiffReady;
   let hasDiffError = initialHasDiffError;
-  let selectedFilePath: string | null = null;
-  let pendingScrollPath: string | null = null;
 
-  function setSelectedFilePath(next: string | null) {
-    if (selectedFilePath === next) return;
-    selectedFilePath = next;
-    onSelectedFilePathChange(next);
+  function updateSelectedFilePath(next: string | null) {
+    if (getSelectedFilePath() === next) return;
+    setSelectedFilePath(next);
   }
 
   function canScroll() {
@@ -104,10 +115,11 @@ function createDiffNavigatorController({
   }
 
   function flushPendingScroll() {
+    const pendingScrollPath = getPendingScrollPath();
     if (!pendingScrollPath) return false;
 
     if (tryScroll(pendingScrollPath)) {
-      pendingScrollPath = null;
+      setPendingScrollPath(null);
       return true;
     }
 
@@ -119,9 +131,8 @@ function createDiffNavigatorController({
       if (nextPrKey === prKey) return;
 
       prKey = nextPrKey;
-      setSelectedFilePath(null);
-      pendingScrollPath = null;
       diffNodeMap.clear();
+      setPendingScrollPath(getSelectedFilePath());
     },
 
     setReadiness(nextIsDiffReady, nextHasDiffError) {
@@ -131,8 +142,8 @@ function createDiffNavigatorController({
     },
 
     onSelectFile(path) {
-      setSelectedFilePath(path);
-      pendingScrollPath = path;
+      updateSelectedFilePath(path);
+      setPendingScrollPath(path);
       flushPendingScroll();
     },
 
@@ -147,22 +158,23 @@ function createDiffNavigatorController({
     },
 
     notifyDiffContentChanged() {
+      const selectedFilePath = getSelectedFilePath();
       if (!selectedFilePath) return;
 
       if (diffNodeMap.size > 0 && !hasMatchingNode(selectedFilePath)) {
-        pendingScrollPath = null;
-        setSelectedFilePath(null);
+        setPendingScrollPath(null);
+        updateSelectedFilePath(null);
         return;
       }
 
-      pendingScrollPath = selectedFilePath;
+      setPendingScrollPath(selectedFilePath);
       flushPendingScroll();
     },
 
     getState() {
       return {
-        selectedFilePath,
-        pendingScrollPath,
+        selectedFilePath: getSelectedFilePath(),
+        pendingScrollPath: getPendingScrollPath(),
       };
     },
   };
@@ -182,20 +194,45 @@ function scheduleNextFrame(callback: () => void) {
 }
 
 function useDiffNavigator({
+  sessionKey,
   prKey,
   isDiffReady,
   hasDiffError,
 }: UseDiffNavigatorArgs): UseDiffNavigatorResult {
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+  const navigatorKey = sessionKey ?? prKey;
+  const selectedFilePath = usePatchViewerStore((state) =>
+    getPatchViewerSessionState(state, sessionKey).selectedFilePath,
+  );
+  const setSelectedFilePath = usePatchViewerStore(
+    (state) => state.setSelectedFilePath,
+  );
+  const setPendingScrollPath = usePatchViewerStore(
+    (state) => state.setPendingScrollPath,
+  );
+  const sessionKeyRef = useRef(sessionKey);
+  sessionKeyRef.current = sessionKey;
   const cancelNotifyRef = useRef<(() => void) | null>(null);
 
   const controllerRef = useRef<DiffNavigatorController | null>(null);
   if (!controllerRef.current) {
     controllerRef.current = createDiffNavigatorController({
-      prKey,
+      prKey: navigatorKey,
       isDiffReady,
       hasDiffError,
-      onSelectedFilePathChange: setSelectedFilePath,
+      getSelectedFilePath: () =>
+        getPatchViewerSessionState(
+          usePatchViewerStore.getState(),
+          sessionKeyRef.current,
+        ).selectedFilePath,
+      setSelectedFilePath: (path) =>
+        setSelectedFilePath(sessionKeyRef.current, path),
+      getPendingScrollPath: () =>
+        getPatchViewerSessionState(
+          usePatchViewerStore.getState(),
+          sessionKeyRef.current,
+        ).pendingScrollPath,
+      setPendingScrollPath: (path) =>
+        setPendingScrollPath(sessionKeyRef.current, path),
     });
   }
 
@@ -210,9 +247,9 @@ function useDiffNavigator({
   useEffect(() => {
     const controller = controllerRef.current;
     if (!controller) return;
-    controller.setPrKey(prKey);
+    controller.setPrKey(navigatorKey);
     controller.setReadiness(isDiffReady, hasDiffError);
-  }, [prKey, isDiffReady, hasDiffError]);
+  }, [navigatorKey, isDiffReady, hasDiffError]);
 
   const onSelectFile = useCallback((path: string) => {
     controllerRef.current?.onSelectFile(path);
