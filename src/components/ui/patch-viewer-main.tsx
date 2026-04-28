@@ -59,8 +59,13 @@ import type {
 import {
   getPatchViewerSessionState,
   usePatchViewerStore,
-  type DraftReviewCommentTarget,
 } from "../../stores/patch-viewer-store";
+import {
+  getReviewCommentEditorSessionState,
+  useReviewCommentEditorStore,
+  type DraftReviewCommentTarget,
+  type ReviewCommentEditorState,
+} from "../../stores/review-comment-editor-store";
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
@@ -107,6 +112,7 @@ type SelectedPatch = {
 
 type DraftReviewCommentAnnotation = {
   kind: "draft";
+  editorId: string;
   portalRootId: string;
 };
 
@@ -390,6 +396,7 @@ function getFileContentsInput(
 }
 
 type FloatingLineDraftEditorProps = {
+  cursorPosition: ReviewCommentEditorState["cursorPosition"];
   error: string;
   isPending: boolean;
   provider: ForgeProviderKind;
@@ -397,11 +404,17 @@ type FloatingLineDraftEditorProps = {
   selectedText: string;
   suggestionContext: ReturnType<typeof getDraftSuggestionContext>;
   target: DraftReviewCommentTarget | null;
+  value: string;
   onCancel: () => void;
+  onChange: (body: string) => void;
+  onCursorPositionChange: (
+    cursorPosition: ReviewCommentEditorState["cursorPosition"],
+  ) => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
 function FloatingLineDraftEditor({
+  cursorPosition,
   error,
   isPending,
   provider,
@@ -409,7 +422,10 @@ function FloatingLineDraftEditor({
   selectedText,
   suggestionContext,
   target,
+  value,
   onCancel,
+  onChange,
+  onCursorPositionChange,
   onSubmit,
 }: FloatingLineDraftEditorProps) {
   const spacerRef = useRef<HTMLDivElement | null>(null);
@@ -473,6 +489,7 @@ function FloatingLineDraftEditor({
             style={floatingStyles}
           >
             <ReviewCommentEditor
+              cursorPosition={cursorPosition}
               error={error}
               isPending={isPending}
               provider={provider}
@@ -480,13 +497,91 @@ function FloatingLineDraftEditor({
               suggestionContext={suggestionContext}
               submitLabel="Comment"
               target={target}
+              value={value}
               onCancel={onCancel}
+              onChange={onChange}
+              onCursorPositionChange={onCursorPositionChange}
               onSubmit={onSubmit}
             />
           </div>
         ) : null}
       </FloatingPortal>
     </>
+  );
+}
+
+type FloatingLineDraftEditorForTargetProps = {
+  editor: ReviewCommentEditorState;
+  fileDiffs: FileDiffMetadata[];
+  portalRootId: string;
+  provider: ForgeProviderKind;
+  selectedBaseSha: string | null;
+  selectedPatch: SelectedPatch | null;
+  onCancel: () => void;
+  onChange: (body: string) => void;
+  onCursorPositionChange: (
+    cursorPosition: ReviewCommentEditorState["cursorPosition"],
+  ) => void;
+  onSubmit: (body: string) => Promise<void>;
+};
+
+function FloatingLineDraftEditorForTarget({
+  editor,
+  fileDiffs,
+  portalRootId,
+  provider,
+  selectedBaseSha,
+  selectedPatch,
+  onCancel,
+  onChange,
+  onCursorPositionChange,
+  onSubmit,
+}: FloatingLineDraftEditorForTargetProps) {
+  const target = editor.target ?? null;
+  const fileContentsInput = useMemo(
+    () =>
+      getFileContentsInput(selectedPatch, selectedBaseSha, fileDiffs, target),
+    [fileDiffs, selectedBaseSha, selectedPatch, target],
+  );
+  const fileContentsQuery = useQuery({
+    ...pullRequestFileContentsQueryOptions(
+      fileContentsInput ?? {
+        repoId: "__idle__",
+        number: 0,
+        oldPath: "",
+        newPath: "",
+        baseSha: null,
+        headSha: "__idle__",
+        changeType: "change",
+      },
+    ),
+    enabled: fileContentsInput !== null,
+  });
+  const selectedText = useMemo(
+    () => getDraftSelectedText(fileDiffs, target, fileContentsQuery.data),
+    [fileContentsQuery.data, fileDiffs, target],
+  );
+  const suggestionContext = useMemo(
+    () => getDraftSuggestionContext(fileDiffs, target, fileContentsQuery.data),
+    [fileContentsQuery.data, fileDiffs, target],
+  );
+
+  return (
+    <FloatingLineDraftEditor
+      cursorPosition={editor.cursorPosition}
+      error={editor.error}
+      isPending={editor.isSubmitting}
+      portalRootId={portalRootId}
+      provider={provider}
+      selectedText={selectedText}
+      suggestionContext={suggestionContext}
+      target={target}
+      value={editor.body}
+      onCancel={onCancel}
+      onChange={onChange}
+      onCursorPositionChange={onCursorPositionChange}
+      onSubmit={onSubmit}
+    />
   );
 }
 
@@ -749,32 +844,51 @@ function PatchViewerMain({
   const patchViewerSessionKey = selectedPrKey
     ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
     : null;
-  const draftCommentTarget = usePatchViewerStore(
-    (state) =>
-      getPatchViewerSessionState(state, patchViewerSessionKey)
-        .draftCommentTarget,
+  const reviewEditorSessionKey = selectedPrKey;
+  const reviewEditorSession = useReviewCommentEditorStore((state) =>
+    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
   );
-  const draftCommentError = usePatchViewerStore(
-    (state) =>
-      getPatchViewerSessionState(state, patchViewerSessionKey)
-        .draftCommentError,
+  const reviewCommentEditors = useMemo(
+    () =>
+      reviewEditorSession.editorOrder
+        .map((editorId) => reviewEditorSession.editorsById[editorId])
+        .filter(
+          (editor): editor is ReviewCommentEditorState => editor != null,
+        ),
+    [reviewEditorSession],
+  );
+  const newCommentEditors = useMemo(
+    () =>
+      reviewCommentEditors.filter(
+        (editor) => editor.kind === "new" && editor.target != null,
+      ),
+    [reviewCommentEditors],
   );
   const ensureSession = usePatchViewerStore((state) => state.ensureSession);
-  const setDraftCommentTarget = usePatchViewerStore(
-    (state) => state.setDraftCommentTarget,
-  );
-  const setDraftCommentError = usePatchViewerStore(
-    (state) => state.setDraftCommentError,
-  );
-  const clearDraftComment = usePatchViewerStore(
-    (state) => state.clearDraftComment,
-  );
   const setPendingScrollPath = usePatchViewerStore(
     (state) => state.setPendingScrollPath,
   );
   const setScrollTop = usePatchViewerStore((state) => state.setScrollTop);
   const recordHunkExpansion = usePatchViewerStore(
     (state) => state.recordHunkExpansion,
+  );
+  const openNewEditor = useReviewCommentEditorStore(
+    (state) => state.openNewEditor,
+  );
+  const setEditorBody = useReviewCommentEditorStore(
+    (state) => state.setEditorBody,
+  );
+  const setEditorError = useReviewCommentEditorStore(
+    (state) => state.setEditorError,
+  );
+  const setEditorCursorPosition = useReviewCommentEditorStore(
+    (state) => state.setEditorCursorPosition,
+  );
+  const setEditorSubmitting = useReviewCommentEditorStore(
+    (state) => state.setEditorSubmitting,
+  );
+  const closeEditor = useReviewCommentEditorStore(
+    (state) => state.closeEditor,
   );
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
@@ -812,49 +926,6 @@ function PatchViewerMain({
   const selectedProvider = selectedPatch
     ? getProviderFromRepoId(selectedPatch.repoId)
     : "github";
-  const draftFileContentsInput = useMemo(
-    () =>
-      getFileContentsInput(
-        selectedPatch,
-        selectedBaseSha,
-        parsedPatch.fileDiffs,
-        draftCommentTarget,
-      ),
-    [draftCommentTarget, parsedPatch.fileDiffs, selectedBaseSha, selectedPatch],
-  );
-  const draftFileContentsQuery = useQuery({
-    ...pullRequestFileContentsQueryOptions(
-      draftFileContentsInput ?? {
-        repoId: "__idle__",
-        number: 0,
-        oldPath: "",
-        newPath: "",
-        baseSha: null,
-        headSha: "__idle__",
-        changeType: "change",
-      },
-    ),
-    enabled: draftFileContentsInput !== null,
-  });
-  const draftSelectedText = useMemo(
-    () =>
-      getDraftSelectedText(
-        parsedPatch.fileDiffs,
-        draftCommentTarget,
-        draftFileContentsQuery.data,
-      ),
-    [draftCommentTarget, draftFileContentsQuery.data, parsedPatch.fileDiffs],
-  );
-  const draftSuggestionContext = useMemo(
-    () =>
-      getDraftSuggestionContext(
-        parsedPatch.fileDiffs,
-        draftCommentTarget,
-        draftFileContentsQuery.data,
-      ),
-    [draftCommentTarget, draftFileContentsQuery.data, parsedPatch.fileDiffs],
-  );
-
   const handleVirtualizerRootChange = useCallback(
     (node: HTMLDivElement | null) => {
       scrollRootRef.current = node;
@@ -1046,8 +1117,7 @@ function PatchViewerMain({
     const endLine = startsFirst ? range.end : range.start;
     const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
 
-    setDraftCommentError(patchViewerSessionKey, "");
-    setDraftCommentTarget(patchViewerSessionKey, {
+    openNewEditor(reviewEditorSessionKey, {
       type: "line",
       path,
       line: endLine,
@@ -1057,41 +1127,49 @@ function PatchViewerMain({
     });
   }
 
-  async function handleSubmitDraftComment(body: string) {
-    if (!selectedPatch || !draftCommentTarget) {
+  async function handleSubmitDraftComment(editorId: string, body: string) {
+    const editor = getReviewCommentEditorSessionState(
+      useReviewCommentEditorStore.getState(),
+      reviewEditorSessionKey,
+    ).editorsById[editorId];
+    const target = editor?.target;
+    if (!selectedPatch || !target) {
       return;
     }
 
-    setDraftCommentError(patchViewerSessionKey, "");
+    setEditorSubmitting(reviewEditorSessionKey, editorId, true);
+    setEditorError(reviewEditorSessionKey, editorId, "");
 
     try {
       await createCommentMutation.mutateAsync({
         repoId: selectedPatch.repoId,
         number: selectedPatch.number,
         body,
-        path: draftCommentTarget.path,
-        oldPath: draftCommentTarget.path,
-        newPath: draftCommentTarget.path,
-        line:
-          draftCommentTarget.type === "line" ? draftCommentTarget.line : null,
-        side:
-          draftCommentTarget.type === "line" ? draftCommentTarget.side : null,
-        startLine:
-          draftCommentTarget.type === "line"
-            ? draftCommentTarget.startLine
-            : null,
-        startSide:
-          draftCommentTarget.type === "line"
-            ? draftCommentTarget.startSide
-            : null,
-        subjectType: draftCommentTarget.type === "file" ? "file" : "line",
+        path: target.path,
+        oldPath: target.path,
+        newPath: target.path,
+        line: target.type === "line" ? target.line : null,
+        side: target.type === "line" ? target.side : null,
+        startLine: target.type === "line" ? target.startLine : null,
+        startSide: target.type === "line" ? target.startSide : null,
+        subjectType: target.type === "file" ? "file" : "line",
       });
-      setDraftCommentTarget(patchViewerSessionKey, null);
+      closeEditor(reviewEditorSessionKey, editorId);
     } catch (error) {
-      setDraftCommentError(
-        patchViewerSessionKey,
+      setEditorError(
+        reviewEditorSessionKey,
+        editorId,
         error instanceof Error ? error.message : String(error),
       );
+    } finally {
+      if (
+        getReviewCommentEditorSessionState(
+          useReviewCommentEditorStore.getState(),
+          reviewEditorSessionKey,
+        ).editorsById[editorId]
+      ) {
+        setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+      }
     }
   }
 
@@ -1136,9 +1214,11 @@ function PatchViewerMain({
     fileReviewThreads: FileReviewThreads,
     path: string,
   ) {
-    const hasDraft =
-      draftCommentTarget?.type === "file" &&
-      normalizePath(draftCommentTarget.path) === normalizePath(path);
+    const hasDraft = newCommentEditors.some(
+      (editor) =>
+        editor.target?.type === "file" &&
+        normalizePath(editor.target.path) === normalizePath(path),
+    );
 
     return (
       <div className="flex items-center gap-2 text-xs text-ink-500">
@@ -1179,17 +1259,42 @@ function PatchViewerMain({
     annotation: DiffLineAnnotation<PatchLineAnnotation>,
   ) {
     if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
+      const editor = getReviewCommentEditorSessionState(
+        useReviewCommentEditorStore.getState(),
+        reviewEditorSessionKey,
+      ).editorsById[annotation.metadata.editorId];
+      if (!editor) {
+        return null;
+      }
+
       return (
-        <FloatingLineDraftEditor
-          error={draftCommentError}
-          isPending={createCommentMutation.isPending}
+        <FloatingLineDraftEditorForTarget
+          editor={editor}
+          fileDiffs={parsedPatch.fileDiffs}
           portalRootId={annotation.metadata.portalRootId}
           provider={selectedProvider}
-          selectedText={draftSelectedText}
-          suggestionContext={draftSuggestionContext}
-          target={draftCommentTarget}
-          onCancel={() => clearDraftComment(patchViewerSessionKey)}
-          onSubmit={handleSubmitDraftComment}
+          selectedBaseSha={selectedBaseSha}
+          selectedPatch={selectedPatch}
+          onCancel={() =>
+            closeEditor(reviewEditorSessionKey, annotation.metadata.editorId)
+          }
+          onChange={(body) =>
+            setEditorBody(
+              reviewEditorSessionKey,
+              annotation.metadata.editorId,
+              body,
+            )
+          }
+          onCursorPositionChange={(cursorPosition) =>
+            setEditorCursorPosition(
+              reviewEditorSessionKey,
+              annotation.metadata.editorId,
+              cursorPosition ?? null,
+            )
+          }
+          onSubmit={(body) =>
+            handleSubmitDraftComment(annotation.metadata.editorId, body)
+          }
         />
       );
     }
@@ -1202,6 +1307,7 @@ function PatchViewerMain({
         editorPortalRootId={threadAnnotation.portalRootId}
         onEditComment={handleEditComment}
         onReplyToThread={handleReplyToThread}
+        reviewEditorSessionKey={reviewEditorSessionKey}
         thread={threadAnnotation.thread}
         viewerLogin={viewerLogin}
       />
@@ -1295,43 +1401,51 @@ function PatchViewerMain({
                               },
                             }),
                           );
-                        let lineDraft: Extract<
+                        const lineDraftEditors = newCommentEditors.filter(
+                          (
+                            editor,
+                          ): editor is ReviewCommentEditorState & {
+                            target: Extract<
+                              DraftReviewCommentTarget,
+                              { type: "line" }
+                            >;
+                          } =>
+                            editor.target?.type === "line" &&
+                            normalizePath(editor.target.path) ===
+                              normalizedFilePath,
+                        );
+                        const fileDraftEditors = newCommentEditors.filter(
+                          (
+                            editor,
+                          ): editor is ReviewCommentEditorState & {
+                            target: Extract<
+                              DraftReviewCommentTarget,
+                              { type: "file" }
+                            >;
+                          } =>
+                            editor.target?.type === "file" &&
+                            normalizePath(editor.target.path) ===
+                              normalizedFilePath,
+                        );
+                        const latestLineDraft = lineDraftEditors.at(-1);
+                        const lineDraft: Extract<
                           DraftReviewCommentTarget,
                           { type: "line" }
-                        > | null = null;
-                        let fileDraft: Extract<
-                          DraftReviewCommentTarget,
-                          { type: "file" }
-                        > | null = null;
-
-                        if (
-                          draftCommentTarget?.type === "line" &&
-                          normalizePath(draftCommentTarget.path) ===
-                            normalizedFilePath
-                        ) {
-                          lineDraft = draftCommentTarget;
-                        }
-
-                        if (
-                          draftCommentTarget?.type === "file" &&
-                          normalizePath(draftCommentTarget.path) ===
-                            normalizedFilePath
-                        ) {
-                          fileDraft = draftCommentTarget;
-                        }
+                        > | null = latestLineDraft?.target ?? null;
 
                         const lineAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
-                          lineDraft
+                          lineDraftEditors.length > 0
                             ? [
                                 ...lineThreadAnnotations,
-                                {
-                                  side: toSelectionSide(lineDraft.side),
-                                  lineNumber: lineDraft.line,
+                                ...lineDraftEditors.map((editor) => ({
+                                  side: toSelectionSide(editor.target.side),
+                                  lineNumber: editor.target.line,
                                   metadata: {
-                                    kind: "draft",
+                                    kind: "draft" as const,
+                                    editorId: editor.id,
                                     portalRootId: lineDraftPortalRootId,
                                   },
-                                },
+                                })),
                               ]
                             : lineThreadAnnotations;
                         const selectedLines: SelectedLineRange | null =
@@ -1419,8 +1533,7 @@ function PatchViewerMain({
                                   }
 
                                 `,
-                                enableGutterUtility:
-                                  draftCommentTarget === null,
+                                enableGutterUtility: true,
                                 onGutterUtilityClick: (range) =>
                                   openLineCommentDraft(fileDiff.name, range),
                                 onPostRender: (node, instance) =>
@@ -1444,29 +1557,54 @@ function PatchViewerMain({
                               className="pointer-events-none absolute inset-0 z-[4]"
                             />
                             {fileReviewThreads.fileThreads.length > 0 ||
-                            fileDraft ? (
+                            fileDraftEditors.length > 0 ? (
                               <div className="mt-3 flex flex-col gap-3 rounded-xl border border-ink-200 bg-surface p-3">
                                 <div className="text-xs font-medium uppercase tracking-wide text-ink-500">
                                   File threads
                                 </div>
-                                {fileDraft ? (
+                                {fileDraftEditors.map((editor) => (
                                   <ReviewCommentEditor
-                                    error={draftCommentError}
-                                    isPending={createCommentMutation.isPending}
+                                    key={editor.id}
+                                    cursorPosition={editor.cursorPosition}
+                                    error={editor.error}
+                                    isPending={editor.isSubmitting}
                                     provider={selectedProvider}
                                     submitLabel="Comment"
-                                    target={fileDraft}
+                                    target={editor.target}
+                                    value={editor.body}
                                     onCancel={() =>
-                                      clearDraftComment(patchViewerSessionKey)
+                                      closeEditor(
+                                        reviewEditorSessionKey,
+                                        editor.id,
+                                      )
                                     }
-                                    onSubmit={handleSubmitDraftComment}
+                                    onChange={(body) =>
+                                      setEditorBody(
+                                        reviewEditorSessionKey,
+                                        editor.id,
+                                        body,
+                                      )
+                                    }
+                                    onCursorPositionChange={(cursorPosition) =>
+                                      setEditorCursorPosition(
+                                        reviewEditorSessionKey,
+                                        editor.id,
+                                        cursorPosition ?? null,
+                                      )
+                                    }
+                                    onSubmit={(body) =>
+                                      handleSubmitDraftComment(editor.id, body)
+                                    }
                                   />
-                                ) : null}
+                                ))}
                                 {fileReviewThreads.fileThreads.map((thread) => (
                                   <ReviewThreadCard
                                     key={getThreadRefKey(thread)}
                                     onEditComment={handleEditComment}
                                     onReplyToThread={handleReplyToThread}
+                                    reviewEditorSessionKey={
+                                      reviewEditorSessionKey
+                                    }
                                     thread={thread}
                                     viewerLogin={viewerLogin}
                                   />

@@ -46,8 +46,113 @@ import "./styles.css";
 
 const DEFAULT_EDITOR_MODE: CommentEditorMode = "rich-text";
 
+type SerializedCursorPosition = NonNullable<
+  ReviewCommentEditorProps["cursorPosition"]
+>;
+
+function getEditorContentElement(host: HTMLDivElement | null) {
+  return (
+    host?.querySelector<HTMLElement>(".rudu-comment-editor-content") ?? null
+  );
+}
+
+function getNodePath(root: Node, node: Node) {
+  const path: number[] = [];
+  let currentNode: Node | null = node;
+
+  while (currentNode && currentNode !== root) {
+    const parentNode = currentNode.parentNode;
+    if (!parentNode) {
+      return null;
+    }
+
+    path.unshift(
+      Array.prototype.indexOf.call(parentNode.childNodes, currentNode),
+    );
+    currentNode = parentNode;
+  }
+
+  return currentNode === root ? path : null;
+}
+
+function getNodeFromPath(root: Node, path: number[]) {
+  let node: Node | null = root;
+
+  for (const index of path) {
+    node = node?.childNodes[index] ?? null;
+    if (!node) {
+      return null;
+    }
+  }
+
+  return node;
+}
+
+function clampNodeOffset(node: Node, offset: number) {
+  const maxOffset =
+    node.nodeType === Node.TEXT_NODE
+      ? (node.textContent ?? "").length
+      : node.childNodes.length;
+
+  return Math.min(Math.max(offset, 0), maxOffset);
+}
+
+function serializeCursorPosition(
+  root: HTMLElement,
+): SerializedCursorPosition | null {
+  const selection = window.getSelection();
+  if (
+    !selection ||
+    !selection.anchorNode ||
+    !selection.focusNode ||
+    !root.contains(selection.anchorNode) ||
+    !root.contains(selection.focusNode)
+  ) {
+    return null;
+  }
+
+  const anchorPath = getNodePath(root, selection.anchorNode);
+  const focusPath = getNodePath(root, selection.focusNode);
+  if (!anchorPath || !focusPath) {
+    return null;
+  }
+
+  return {
+    anchorOffset: selection.anchorOffset,
+    anchorPath,
+    focusOffset: selection.focusOffset,
+    focusPath,
+  };
+}
+
+function restoreCursorPosition(
+  root: HTMLElement,
+  cursorPosition: SerializedCursorPosition,
+) {
+  const anchorNode = getNodeFromPath(root, cursorPosition.anchorPath);
+  const focusNode = getNodeFromPath(root, cursorPosition.focusPath);
+  if (!anchorNode || !focusNode) {
+    return false;
+  }
+
+  const selection = window.getSelection();
+  if (!selection) {
+    return false;
+  }
+
+  selection.setBaseAndExtent(
+    anchorNode,
+    clampNodeOffset(anchorNode, cursorPosition.anchorOffset),
+    focusNode,
+    clampNodeOffset(focusNode, cursorPosition.focusOffset),
+  );
+  return true;
+}
+
 function ReviewCommentEditor({
   initialValue = "",
+  value,
+  cursorPosition = null,
   placeholder = "Leave a comment",
   provider,
   suggestionContext = null,
@@ -58,6 +163,8 @@ function ReviewCommentEditor({
   isPending = false,
   error = "",
   autoFocus = true,
+  onChange,
+  onCursorPositionChange,
   onCancel,
   onSubmit,
 }: ReviewCommentEditorProps) {
@@ -68,6 +175,11 @@ function ReviewCommentEditor({
     null,
   );
   const [body, setBody] = useState(initialValue);
+  const isControlled = value !== undefined;
+  const currentBody = value ?? body;
+  const lastMarkdownRef = useRef(value ?? initialValue);
+  const cursorCaptureFrameRef = useRef<number | null>(null);
+  const hasRestoredCursorPositionRef = useRef(false);
   const suggestion = useMemo(
     () => buildSuggestionBlock(provider, target, selectedText),
     [provider, selectedText, target],
@@ -99,10 +211,123 @@ function ReviewCommentEditor({
     ensureCodeMirrorStyles(editorHostRef.current?.getRootNode() ?? null);
   }, []);
 
+  const captureCursorPosition = useCallback(() => {
+    if (!onCursorPositionChange) {
+      return;
+    }
+
+    const contentElement = getEditorContentElement(editorHostRef.current);
+    if (!contentElement) {
+      return;
+    }
+
+    const nextCursorPosition = serializeCursorPosition(contentElement);
+    if (nextCursorPosition) {
+      onCursorPositionChange(nextCursorPosition);
+    }
+  }, [onCursorPositionChange]);
+
+  const scheduleCursorPositionCapture = useCallback(() => {
+    if (!onCursorPositionChange || typeof window === "undefined") {
+      return;
+    }
+
+    if (cursorCaptureFrameRef.current !== null) {
+      window.cancelAnimationFrame(cursorCaptureFrameRef.current);
+    }
+
+    cursorCaptureFrameRef.current = window.requestAnimationFrame(() => {
+      cursorCaptureFrameRef.current = null;
+      captureCursorPosition();
+    });
+  }, [captureCursorPosition, onCursorPositionChange]);
+
   useEffect(() => {
+    return () => {
+      if (cursorCaptureFrameRef.current !== null) {
+        window.cancelAnimationFrame(cursorCaptureFrameRef.current);
+        cursorCaptureFrameRef.current = null;
+      }
+      captureCursorPosition();
+    };
+  }, [captureCursorPosition]);
+
+  useEffect(() => {
+    if (!onCursorPositionChange) {
+      return;
+    }
+
+    document.addEventListener("selectionchange", scheduleCursorPositionCapture);
+    return () => {
+      document.removeEventListener(
+        "selectionchange",
+        scheduleCursorPositionCapture,
+      );
+    };
+  }, [onCursorPositionChange, scheduleCursorPositionCapture]);
+
+  useEffect(() => {
+    if (isControlled) {
+      return;
+    }
+
+    lastMarkdownRef.current = initialValue;
     setBody(initialValue);
     editorRef.current?.setMarkdown(initialValue);
-  }, [initialValue]);
+  }, [initialValue, isControlled]);
+
+  useEffect(() => {
+    if (!isControlled || value === lastMarkdownRef.current) {
+      return;
+    }
+
+    const nextValue = value ?? "";
+    lastMarkdownRef.current = nextValue;
+    editorRef.current?.setMarkdown(nextValue);
+  }, [isControlled, value]);
+
+  useEffect(() => {
+    if (
+      !cursorPosition ||
+      hasRestoredCursorPositionRef.current ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    let frameId: number | null = null;
+    let attempts = 0;
+    let cancelled = false;
+
+    const tryRestore = () => {
+      if (cancelled) {
+        return;
+      }
+
+      attempts += 1;
+      const contentElement = getEditorContentElement(editorHostRef.current);
+      if (
+        contentElement &&
+        restoreCursorPosition(contentElement, cursorPosition)
+      ) {
+        hasRestoredCursorPositionRef.current = true;
+        return;
+      }
+
+      if (attempts < 5) {
+        frameId = window.requestAnimationFrame(tryRestore);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tryRestore);
+
+    return () => {
+      cancelled = true;
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [cursorPosition]);
 
   const insertSuggestion = useCallback(() => {
     if (!suggestion.block || isPending) {
@@ -190,8 +415,8 @@ function ReviewCommentEditor({
   );
 
   async function handleSubmit() {
-    const currentBody = editorRef.current?.getMarkdown() ?? body;
-    const trimmedBody = currentBody.trim();
+    const latestBody = editorRef.current?.getMarkdown() ?? currentBody;
+    const trimmedBody = latestBody.trim();
     if (!trimmedBody) {
       return;
     }
@@ -199,9 +424,25 @@ function ReviewCommentEditor({
     await onSubmit(trimmedBody);
   }
 
+  function handleChange(markdown: string) {
+    lastMarkdownRef.current = markdown;
+    if (!isControlled) {
+      setBody(markdown);
+    }
+    onChange?.(markdown);
+    scheduleCursorPositionCapture();
+  }
+
   return (
     <div className="font-sans">
-      <div ref={editorHostRef} className="rudu-comment-editor-shell">
+      <div
+        ref={editorHostRef}
+        className="rudu-comment-editor-shell"
+        onBlurCapture={captureCursorPosition}
+        onKeyUpCapture={scheduleCursorPositionCapture}
+        onMouseUpCapture={scheduleCursorPositionCapture}
+        onPointerUpCapture={scheduleCursorPositionCapture}
+      >
         <SuggestionEditorContext.Provider value={suggestionEditorContext}>
           <MDXEditor
             ref={editorRef}
@@ -212,8 +453,8 @@ function ReviewCommentEditor({
             }
             className="rudu-comment-editor"
             contentEditableClassName="rudu-comment-editor-content rudu-comment-markdown"
-            markdown={initialValue}
-            onChange={(markdown) => setBody(markdown)}
+            markdown={value ?? initialValue}
+            onChange={handleChange}
             placeholder={placeholder}
             plugins={plugins}
             readOnly={isPending}
@@ -222,7 +463,7 @@ function ReviewCommentEditor({
           />
         </SuggestionEditorContext.Provider>
         <ReviewCommentEditorFooter
-          canSubmit={!isPending && body.trim().length > 0}
+          canSubmit={!isPending && currentBody.trim().length > 0}
           cancelLabel={cancelLabel}
           isPending={isPending}
           submitLabel={submitLabel}

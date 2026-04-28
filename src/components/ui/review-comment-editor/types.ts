@@ -1,4 +1,5 @@
 import type { CommentEditorTarget } from "../review-comment-editor-actions";
+import type { ReviewCommentEditorCursorPosition } from "../../../stores/review-comment-editor-store";
 import type { ForgeProviderKind } from "../../../types/forge";
 
 type CommentEditorMode = "rich-text" | "source";
@@ -37,6 +38,8 @@ type SuggestionRange = {
 
 type ReviewCommentEditorProps = {
   initialValue?: string;
+  value?: string;
+  cursorPosition?: ReviewCommentEditorCursorPosition | null;
   placeholder?: string;
   provider: ForgeProviderKind;
   suggestionContext?: SuggestionEditorSourceContext | null;
@@ -47,6 +50,10 @@ type ReviewCommentEditorProps = {
   isPending?: boolean;
   error?: string;
   autoFocus?: boolean;
+  onChange?: (body: string) => void;
+  onCursorPositionChange?: (
+    cursorPosition: ReviewCommentEditorCursorPosition | null,
+  ) => void;
   onCancel?: () => void;
   onSubmit: (body: string) => Promise<void> | void;
 };

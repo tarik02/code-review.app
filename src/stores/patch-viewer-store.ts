@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { ReviewCommentSide } from "../types/forge";
 
 const MAX_PATCH_VIEWER_SESSIONS = 20;
 
@@ -10,23 +9,7 @@ type HunkExpansionRegion = {
   fromEnd: number;
 };
 
-type DraftReviewCommentTarget =
-  | {
-      type: "file";
-      path: string;
-    }
-  | {
-      type: "line";
-      path: string;
-      line: number;
-      side: ReviewCommentSide;
-      startLine: number | null;
-      startSide: ReviewCommentSide | null;
-    };
-
 type PatchViewerSessionState = {
-  draftCommentTarget: DraftReviewCommentTarget | null;
-  draftCommentError: string;
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
   scrollTop: number | null;
@@ -42,12 +25,6 @@ type PatchViewerStore = {
   ensureSession: (sessionKey: string | null) => void;
   resetSession: (sessionKey: string | null) => void;
   removeSession: (sessionKey: string | null) => void;
-  setDraftCommentTarget: (
-    sessionKey: string | null,
-    target: DraftReviewCommentTarget | null,
-  ) => void;
-  setDraftCommentError: (sessionKey: string | null, error: string) => void;
-  clearDraftComment: (sessionKey: string | null) => void;
   setSelectedFilePath: (sessionKey: string | null, path: string | null) => void;
   setPendingScrollPath: (
     sessionKey: string | null,
@@ -67,8 +44,6 @@ type PatchViewerStore = {
 
 function createPatchViewerSessionState(): PatchViewerSessionState {
   return {
-    draftCommentTarget: null,
-    draftCommentError: "",
     selectedFilePath: null,
     pendingScrollPath: null,
     scrollTop: null,
@@ -186,24 +161,6 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       };
     });
   },
-  setDraftCommentTarget(sessionKey, target) {
-    set((state) =>
-      updateSession(state, sessionKey, () => ({ draftCommentTarget: target })),
-    );
-  },
-  setDraftCommentError(sessionKey, error) {
-    set((state) =>
-      updateSession(state, sessionKey, () => ({ draftCommentError: error })),
-    );
-  },
-  clearDraftComment(sessionKey) {
-    set((state) =>
-      updateSession(state, sessionKey, () => ({
-        draftCommentTarget: null,
-        draftCommentError: "",
-      })),
-    );
-  },
   setSelectedFilePath(sessionKey, path) {
     set((state) =>
       updateSession(state, sessionKey, () => ({ selectedFilePath: path })),
@@ -268,7 +225,6 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
 
 export { getPatchViewerSessionState, usePatchViewerStore };
 export type {
-  DraftReviewCommentTarget,
   HunkExpansionDirection,
   HunkExpansionRegion,
   PatchViewerSessionState,

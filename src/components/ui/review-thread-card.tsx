@@ -5,8 +5,13 @@ import {
   size,
   useFloating,
 } from "@floating-ui/react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReviewComment, ReviewThread } from "../../lib/review-threads";
+import {
+  getReviewCommentEditorSessionState,
+  type ReviewCommentEditorState,
+  useReviewCommentEditorStore,
+} from "../../stores/review-comment-editor-store";
 import { CommentMarkdown } from "./comment-markdown";
 import {
   ReviewCommentEditor,
@@ -22,6 +27,7 @@ type ReviewThreadCardProps = {
   slim?: boolean;
   viewerLogin?: string | null;
   editorPortalRootId?: string;
+  reviewEditorSessionKey?: string | null;
   onReplyToThread?: (thread: ReviewThread, body: string) => Promise<void>;
   onEditComment?: (comment: ReviewComment, body: string) => Promise<void>;
   onClick?: () => void;
@@ -184,23 +190,55 @@ function ReviewThreadCard({
   slim = false,
   viewerLogin = null,
   editorPortalRootId,
+  reviewEditorSessionKey = null,
   onReplyToThread,
   onEditComment,
   onClick,
   containerRef,
 }: ReviewThreadCardProps) {
-  const [activeAction, setActiveAction] = useState<
-    | { type: "reply" }
-    | { type: "edit"; commentId: string }
-    | null
-  >(null);
-  const [actionError, setActionError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const rootComment =
     thread.comments.find((comment) => comment.replyToId === null) ??
     thread.comments[0] ??
     null;
   const editorTarget = getThreadEditorTarget(thread);
+  const reviewEditorSession = useReviewCommentEditorStore((state) =>
+    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
+  );
+  const threadEditors = useMemo(
+    () =>
+      reviewEditorSession.editorOrder
+        .map((editorId) => reviewEditorSession.editorsById[editorId])
+        .filter(
+          (editor): editor is ReviewCommentEditorState =>
+            editor != null && editor.threadId === thread.id,
+        ),
+    [reviewEditorSession, thread.id],
+  );
+  const openReplyEditor = useReviewCommentEditorStore(
+    (state) => state.openReplyEditor,
+  );
+  const openEditEditor = useReviewCommentEditorStore(
+    (state) => state.openEditEditor,
+  );
+  const setEditorBody = useReviewCommentEditorStore(
+    (state) => state.setEditorBody,
+  );
+  const setEditorError = useReviewCommentEditorStore(
+    (state) => state.setEditorError,
+  );
+  const setEditorCursorPosition = useReviewCommentEditorStore(
+    (state) => state.setEditorCursorPosition,
+  );
+  const setEditorSubmitting = useReviewCommentEditorStore(
+    (state) => state.setEditorSubmitting,
+  );
+  const closeEditor = useReviewCommentEditorStore(
+    (state) => state.closeEditor,
+  );
+  const replyEditor =
+    thread.id.length > 0
+      ? threadEditors.find((editor) => editor.kind === "reply")
+      : undefined;
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
@@ -246,39 +284,65 @@ function ReviewThreadCard({
     );
   }
 
-  async function handleReplySubmit(body: string) {
+  async function handleReplySubmit(editorId: string, body: string) {
     if (!rootComment || !onReplyToThread) {
       return;
     }
 
-    setIsSubmitting(true);
-    setActionError("");
+    setEditorSubmitting(reviewEditorSessionKey, editorId, true);
+    setEditorError(reviewEditorSessionKey, editorId, "");
 
     try {
       await onReplyToThread(thread, body);
-      setActiveAction(null);
+      closeEditor(reviewEditorSessionKey, editorId);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setEditorError(
+        reviewEditorSessionKey,
+        editorId,
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
-      setIsSubmitting(false);
+      if (
+        getReviewCommentEditorSessionState(
+          useReviewCommentEditorStore.getState(),
+          reviewEditorSessionKey,
+        ).editorsById[editorId]
+      ) {
+        setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+      }
     }
   }
 
-  async function handleEditSubmit(comment: ReviewComment, body: string) {
+  async function handleEditSubmit(
+    editorId: string,
+    comment: ReviewComment,
+    body: string,
+  ) {
     if (!onEditComment) {
       return;
     }
 
-    setIsSubmitting(true);
-    setActionError("");
+    setEditorSubmitting(reviewEditorSessionKey, editorId, true);
+    setEditorError(reviewEditorSessionKey, editorId, "");
 
     try {
       await onEditComment(comment, body);
-      setActiveAction(null);
+      closeEditor(reviewEditorSessionKey, editorId);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setEditorError(
+        reviewEditorSessionKey,
+        editorId,
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
-      setIsSubmitting(false);
+      if (
+        getReviewCommentEditorSessionState(
+          useReviewCommentEditorStore.getState(),
+          reviewEditorSessionKey,
+        ).editorsById[editorId]
+      ) {
+        setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+      }
     }
   }
 
@@ -306,16 +370,23 @@ function ReviewThreadCard({
 
       <div className="flex flex-col gap-3">
         {thread.comments.map((comment) => {
-          const isEditing =
-            activeAction?.type === "edit" && activeAction.commentId === comment.id;
+          const editEditor = threadEditors.find(
+            (editor) =>
+              editor.kind === "edit" && editor.commentId === comment.id,
+          );
           const canEdit =
             viewerLogin != null &&
             viewerLogin === comment.authorLogin &&
             comment.id.length > 0 &&
+            thread.id.length > 0 &&
+            reviewEditorSessionKey != null &&
             onEditComment != null;
 
           return (
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3" key={comment.id}>
+            <div
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-3"
+              key={comment.id}
+            >
               <CommentAvatar comment={comment} />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
@@ -337,8 +408,12 @@ function ReviewThreadCard({
                     <button
                       className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
                       onClick={() => {
-                        setActionError("");
-                        setActiveAction({ type: "edit", commentId: comment.id });
+                        openEditEditor(
+                          reviewEditorSessionKey,
+                          thread.id,
+                          comment.id,
+                          comment.body,
+                        );
                       }}
                       type="button"
                     >
@@ -347,20 +422,37 @@ function ReviewThreadCard({
                   ) : null}
                 </div>
                 <div className="mt-1 min-w-0">
-                  {isEditing ? (
+                  {editEditor ? (
                     <FloatingReviewCommentEditor
                       portalRootId={editorPortalRootId}
-                      error={actionError}
+                      cursorPosition={editEditor.cursorPosition}
+                      error={editEditor.error}
                       initialValue={comment.body}
-                      isPending={isSubmitting}
+                      isPending={editEditor.isSubmitting}
                       provider={thread.provider}
                       submitLabel="Save"
                       target={editorTarget}
-                      onCancel={() => {
-                        setActionError("");
-                        setActiveAction(null);
-                      }}
-                      onSubmit={(body) => handleEditSubmit(comment, body)}
+                      value={editEditor.body}
+                      onCancel={() =>
+                        closeEditor(reviewEditorSessionKey, editEditor.id)
+                      }
+                      onChange={(body) =>
+                        setEditorBody(
+                          reviewEditorSessionKey,
+                          editEditor.id,
+                          body,
+                        )
+                      }
+                      onCursorPositionChange={(cursorPosition) =>
+                        setEditorCursorPosition(
+                          reviewEditorSessionKey,
+                          editEditor.id,
+                          cursorPosition ?? null,
+                        )
+                      }
+                      onSubmit={(body) =>
+                        handleEditSubmit(editEditor.id, comment, body)
+                      }
                     />
                   ) : (
                     <CommentMarkdown body={comment.body} />
@@ -372,29 +464,42 @@ function ReviewThreadCard({
         })}
       </div>
 
-      {rootComment && onReplyToThread ? (
+      {rootComment &&
+      onReplyToThread &&
+      thread.id.length > 0 &&
+      reviewEditorSessionKey != null ? (
         <div className="mt-3 border-t border-ink-200 pt-3">
-          {activeAction?.type === "reply" ? (
+          {replyEditor ? (
             <FloatingReviewCommentEditor
               portalRootId={editorPortalRootId}
-              error={actionError}
-              isPending={isSubmitting}
+              cursorPosition={replyEditor.cursorPosition}
+              error={replyEditor.error}
+              isPending={replyEditor.isSubmitting}
               provider={thread.provider}
               submitLabel="Reply"
               target={editorTarget}
-              onCancel={() => {
-                setActionError("");
-                setActiveAction(null);
-              }}
-              onSubmit={handleReplySubmit}
+              value={replyEditor.body}
+              onCancel={() =>
+                closeEditor(reviewEditorSessionKey, replyEditor.id)
+              }
+              onChange={(body) =>
+                setEditorBody(reviewEditorSessionKey, replyEditor.id, body)
+              }
+              onCursorPositionChange={(cursorPosition) =>
+                setEditorCursorPosition(
+                  reviewEditorSessionKey,
+                  replyEditor.id,
+                  cursorPosition ?? null,
+                )
+              }
+              onSubmit={(body) => handleReplySubmit(replyEditor.id, body)}
               placeholder="Reply to this thread"
             />
           ) : (
             <button
               className="font-sans text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
               onClick={() => {
-                setActionError("");
-                setActiveAction({ type: "reply" });
+                openReplyEditor(reviewEditorSessionKey, thread.id);
               }}
               type="button"
             >
