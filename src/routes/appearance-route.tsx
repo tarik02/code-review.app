@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppearanceBackground } from "../components/ui/appearance-background";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { useTheme } from "../hooks/use-theme";
 import type { ThemePreference } from "../hooks/use-theme";
 import {
@@ -76,32 +79,24 @@ function AppearanceRoute() {
 
       <section className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
         <h3 className="text-sm font-semibold text-ink-900">Color theme</h3>
-        <div className="mt-3 grid max-w-md grid-cols-3 rounded-md bg-canvasDark p-0.5 text-sm font-medium text-ink-600">
+        <ToggleGroup<ThemePreference>
+          className="mt-3 grid max-w-md grid-cols-3 bg-canvasDark"
+          value={[preference]}
+          onValueChange={(nextPreference) => {
+            const selectedPreference = nextPreference[0];
+            if (selectedPreference) {
+              setPreference(selectedPreference);
+            }
+          }}
+        >
           {themeOptions.map((option) => {
-            const isSelected = preference === option.value;
             return (
-              <button
-                aria-pressed={isSelected}
-                className={[
-                  "rounded px-3 py-2 transition",
-                  isSelected
-                    ? "bg-surface text-ink-900 shadow-sm"
-                    : "text-ink-500 hover:text-ink-900",
-                ].join(" ")}
-                key={option.value}
-                onClick={(event) =>
-                  setPreference(option.value, {
-                    kind: "reveal",
-                    trigger: event.currentTarget,
-                  })
-                }
-                type="button"
-              >
+              <ToggleGroupItem key={option.value} value={option.value}>
                 {option.label}
-              </button>
+              </ToggleGroupItem>
             );
           })}
-        </div>
+        </ToggleGroup>
         <p className="mt-3 text-sm text-ink-500">
           {preference === "auto"
             ? `Auto uses your system appearance. Current theme: ${theme}.`
@@ -113,41 +108,34 @@ function AppearanceRoute() {
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
           <div>
             <h3 className="text-sm font-semibold text-ink-900">Background</h3>
-            <div className="mt-3 grid max-w-xl grid-cols-3 rounded-md bg-canvasDark p-0.5 text-sm font-medium text-ink-600">
+            <ToggleGroup<AppearanceBackgroundSettings["kind"]>
+              className="mt-3 grid max-w-xl grid-cols-3 bg-canvasDark"
+              disabled={isSavingBackground}
+              value={[activeBackgroundKind]}
+              onValueChange={(nextBackgroundKind) => {
+                const selectedBackgroundKind = nextBackgroundKind[0];
+                if (selectedBackgroundKind === "default") {
+                  updateBackground({ kind: "default" });
+                } else if (selectedBackgroundKind === "solid") {
+                  updateBackground({ kind: "solid", color: solidColor });
+                } else if (selectedBackgroundKind === "customFile") {
+                  customFileMutation.mutate();
+                }
+              }}
+            >
               {backgroundOptions.map((option) => {
-                const isSelected = activeBackgroundKind === option.value;
                 return (
-                  <button
-                    aria-pressed={isSelected}
-                    className={[
-                      "rounded px-3 py-2 transition",
-                      isSelected
-                        ? "bg-surface text-ink-900 shadow-sm"
-                        : "text-ink-500 hover:text-ink-900",
-                    ].join(" ")}
-                    disabled={isSavingBackground}
-                    key={option.value}
-                    onClick={() => {
-                      if (option.value === "default") {
-                        updateBackground({ kind: "default" });
-                      } else if (option.value === "solid") {
-                        updateBackground({ kind: "solid", color: solidColor });
-                      } else {
-                        customFileMutation.mutate();
-                      }
-                    }}
-                    type="button"
-                  >
+                  <ToggleGroupItem key={option.value} value={option.value}>
                     {option.label}
-                  </button>
+                  </ToggleGroupItem>
                 );
               })}
-            </div>
+            </ToggleGroup>
 
             {activeBackgroundKind === "solid" ? (
               <label className="mt-4 flex max-w-sm items-center gap-3 text-sm text-ink-700">
                 <span className="shrink-0 font-medium text-ink-600">Color</span>
-                <input
+                <Input
                   className="h-9 w-14 rounded-md border border-neutral-200 bg-surface p-1 dark:border-neutral-700"
                   disabled={isSavingBackground}
                   onChange={(event) => {
@@ -180,8 +168,7 @@ function AppearanceRoute() {
                     or switch backgrounds.
                   </p>
                 ) : null}
-                <button
-                  className="rounded-md bg-ink-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ink-200 dark:text-ink-900"
+                <Button
                   disabled={isSavingBackground}
                   onClick={() => customFileMutation.mutate()}
                   type="button"
@@ -189,7 +176,7 @@ function AppearanceRoute() {
                   {customFileMutation.isPending
                     ? "Choosing..."
                     : "Choose image..."}
-                </button>
+                </Button>
               </div>
             ) : null}
 

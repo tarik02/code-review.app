@@ -7,6 +7,16 @@ import {
 } from "@tanstack/react-query";
 import { getErrorMessage } from "../hooks/use-forge-queries";
 import { useAuthSession } from "../app/auth-session";
+import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
+import { Input } from "../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { trpc } from "../lib/trpc";
 import {
   accountVisibilityQueryOptions,
@@ -40,6 +50,16 @@ function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
     (provider === "gitlab" && host === "gitlab.com")
   );
 }
+
+const diffDataModeOptions: { value: DiffDataMode; label: string }[] = [
+  { value: "provider-api", label: "Provider API" },
+  { value: "git", label: "Git partial clone" },
+];
+
+const providerOptions: { value: ForgeProviderKind; label: string }[] = [
+  { value: "github", label: "GitHub" },
+  { value: "gitlab", label: "GitLab" },
+];
 
 function ProfilesRoute() {
   const queryClient = useQueryClient();
@@ -176,38 +196,51 @@ function ProfilesRoute() {
               </p>
             ) : null}
           </div>
-          <select
-            className="h-10 rounded-md border border-neutral-200 bg-surface px-3 text-sm outline-hidden transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700"
+          <Select
             disabled={diffDataModeMutation.isPending}
-            onChange={(event) =>
-              diffDataModeMutation.mutate(
-                event.currentTarget.value as DiffDataMode,
-              )
-            }
+            items={diffDataModeOptions}
             value={diffDataSettingsQuery.data?.mode ?? "provider-api"}
+            onValueChange={(mode) =>
+              diffDataModeMutation.mutate(mode as DiffDataMode)
+            }
           >
-            <option value="provider-api">Provider API</option>
-            <option value="git">Git partial clone</option>
-          </select>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {diffDataModeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <div className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
         <h3 className="text-sm font-semibold text-ink-900">Add account</h3>
         <div className="mt-3 grid gap-2 md:grid-cols-[140px_minmax(0,1fr)]">
-          <select
-            className="rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition dark:border-neutral-700"
+          <Select
             disabled={isSigningIn}
-            onChange={(event) =>
-              setProvider(event.currentTarget.value as ForgeProviderKind)
-            }
+            items={providerOptions}
             value={provider}
+            onValueChange={(nextProvider) =>
+              setProvider(nextProvider as ForgeProviderKind)
+            }
           >
-            <option value="github">GitHub</option>
-            <option value="gitlab">GitLab</option>
-          </select>
-          <input
-            className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="start">
+              {providerOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
             disabled={isSigningIn}
             onChange={(event) => setHost(event.currentTarget.value)}
             placeholder={provider === "github" ? "github.com" : "gitlab.com"}
@@ -216,8 +249,7 @@ function ProfilesRoute() {
         </div>
         <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
           <div className="grid min-w-0 gap-2 md:grid-cols-2">
-            <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
+            <Input
               disabled={isSigningIn}
               onChange={(event) => setClientId(event.currentTarget.value)}
               placeholder={
@@ -227,8 +259,7 @@ function ProfilesRoute() {
               }
               value={clientId}
             />
-            <input
-              className="min-w-0 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm outline-hidden transition placeholder:text-neutral-400 dark:border-neutral-700"
+            <Input
               disabled={isSigningIn}
               onChange={(event) => setClientSecret(event.currentTarget.value)}
               placeholder="OAuth client secret (optional)"
@@ -236,8 +267,7 @@ function ProfilesRoute() {
               value={clientSecret}
             />
           </div>
-          <button
-            className="rounded-md bg-ink-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-ink-200 dark:text-ink-900"
+          <Button
             disabled={!canStartSignIn}
             onClick={() =>
               signIn(provider, normalizedHost, clientId, clientSecret)
@@ -245,7 +275,7 @@ function ProfilesRoute() {
             type="button"
           >
             {isSigningIn ? "Opening..." : "Add account"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -304,23 +334,23 @@ function ProfilesRoute() {
 
                 <div className="flex flex-col items-start gap-2 md:items-end">
                   <label className="inline-flex items-center gap-2 text-sm text-ink-700">
-                    <input
+                    <Checkbox
                       checked={isVisible}
-                      className="size-4 rounded border-neutral-300 text-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={!isReady || visibilityMutation.isPending}
-                      onChange={() => toggleAccountVisibility(account.id)}
-                      type="checkbox"
+                      onCheckedChange={() =>
+                        toggleAccountVisibility(account.id)
+                      }
                     />
                     Visible in main app
                   </label>
-                  <button
-                    className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-ink-700 transition hover:bg-canvasDark disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700"
+                  <Button
                     disabled={isSigningOut}
                     onClick={() => signOutMutation.mutate(account.id)}
+                    variant="outline"
                     type="button"
                   >
                     {isSigningOut ? "Signing out..." : "Sign out"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

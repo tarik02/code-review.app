@@ -1,5 +1,7 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon } from "@heroicons/react/20/solid";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { ArrowLeftIcon } from "lucide-react";
+import { Button } from "../components/ui/button";
 import { TopBar } from "../components/ui/top-bar";
 import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "../lib/settings-return-location";
 
@@ -18,6 +20,10 @@ function SettingsLayout() {
 
     void navigate({ to: "/" });
   }
+
+  useHotkey("Escape", () => {
+    handleBackToPrs();
+  });
 
   return (
     <div className="flex h-screen overflow-hidden bg-canvas text-ink-900">
@@ -62,14 +68,16 @@ function SettingsLayout() {
             </Link>
           </nav>
 
-          <button
-            className="inline-flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
+          <Button
+            className="justify-start px-2 text-ink-600 hover:bg-canvasDark hover:text-ink-900"
+            size="default"
+            variant="ghost"
             onClick={handleBackToPrs}
             type="button"
           >
             <ArrowLeftIcon className="size-4" />
             Back to PRs
-          </button>
+          </Button>
         </div>
       </aside>
 
