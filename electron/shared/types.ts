@@ -8,6 +8,12 @@ type DiffDataSettings = {
   mode: DiffDataMode;
 };
 
+type ReviewEditorMode = "rich-text" | "source";
+
+type ReviewEditorSettings = {
+  defaultMode: ReviewEditorMode;
+};
+
 type RepoSummary = {
   id: string;
   provider: ForgeProviderKind;
@@ -236,6 +242,8 @@ export type {
   ReplyToPullRequestReviewCommentInput,
   RepoSummary,
   ReviewComment,
+  ReviewEditorMode,
+  ReviewEditorSettings,
   ReviewCommentSide,
   ReviewThread,
   SelectedPullRequest,

@@ -37,14 +37,11 @@ import { suggestionCodeBlockDescriptor } from "./suggestion-code-block-editor";
 import { SuggestionEditorContext } from "./suggestion-context";
 import { ReviewCommentToolbar } from "./toolbar";
 import type {
-  CommentEditorMode,
   ReviewCommentEditorProps,
   SuggestionEditorContextValue,
 } from "./types";
 import "../comment-markdown.css";
 import "./styles.css";
-
-const DEFAULT_EDITOR_MODE: CommentEditorMode = "rich-text";
 
 type SerializedCursorPosition = NonNullable<
   ReviewCommentEditorProps["cursorPosition"]
@@ -150,6 +147,7 @@ function restoreCursorPosition(
 }
 
 function ReviewCommentEditor({
+  defaultMode = "rich-text",
   initialValue = "",
   value,
   cursorPosition = null,
@@ -171,6 +169,7 @@ function ReviewCommentEditor({
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<MDXEditorMethods | null>(null);
   const sourceEditorViewRef = useRef<EditorView | null>(null);
+  const [initialViewMode] = useState(defaultMode);
   const [sourceEditorView, setSourceEditorView] = useState<EditorView | null>(
     null,
   );
@@ -383,7 +382,7 @@ function ReviewCommentEditor({
       }),
       markdownShortcutPlugin(),
       diffSourcePlugin({
-        viewMode: DEFAULT_EDITOR_MODE,
+        viewMode: initialViewMode,
         codeMirrorExtensions: [
           sourceEditorBridgeExtension,
           commentCodeMirrorTheme,
@@ -406,6 +405,7 @@ function ReviewCommentEditor({
     ],
     [
       canInsertSuggestion,
+      initialViewMode,
       insertSuggestion,
       provider,
       sourceEditorBridgeExtension,

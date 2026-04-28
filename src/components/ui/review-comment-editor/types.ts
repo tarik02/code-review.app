@@ -37,6 +37,7 @@ type SuggestionRange = {
 };
 
 type ReviewCommentEditorProps = {
+  defaultMode?: CommentEditorMode;
   initialValue?: string;
   value?: string;
   cursorPosition?: ReviewCommentEditorCursorPosition | null;

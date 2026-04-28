@@ -10,6 +10,8 @@ import type {
   PrFileChangeType,
   ProviderProfile,
   ReplyToPullRequestReviewCommentInput,
+  ReviewEditorMode,
+  ReviewEditorSettings,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
 } from "../types/forge";
@@ -30,6 +32,8 @@ const forgeKeys = {
   appearanceBackground: () =>
     [...forgeKeys.settings(), "appearance-background"] as const,
   diffDataSettings: () => [...forgeKeys.settings(), "diff-data"] as const,
+  reviewEditorSettings: () =>
+    [...forgeKeys.settings(), "review-editor"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
   initialRepos: (accountId: string) =>
     [...forgeKeys.repos(), "initial", accountId] as const,
@@ -142,6 +146,16 @@ function diffDataSettingsQueryOptions() {
   });
 }
 
+function reviewEditorSettingsQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.reviewEditorSettings(),
+    queryFn: async (): Promise<ReviewEditorSettings> => {
+      return trpc.settings.getReviewEditorSettings.query();
+    },
+    staleTime: 0,
+  });
+}
+
 async function setAccountVisibility(enabledAccountIds: string[]) {
   return trpc.settings.setAccountVisibility.mutate({ enabledAccountIds });
 }
@@ -152,6 +166,10 @@ async function setAppearanceBackground(input: AppearanceBackgroundInput) {
 
 async function setDiffDataMode(mode: DiffDataMode) {
   return trpc.settings.setDiffDataSettings.mutate({ mode });
+}
+
+async function setReviewEditorDefaultMode(mode: ReviewEditorMode) {
+  return trpc.settings.setReviewEditorSettings.mutate({ defaultMode: mode });
 }
 
 async function selectCustomBackgroundFile() {
@@ -350,11 +368,13 @@ export {
   pullRequestReviewThreadsQueryOptions,
   trackedPullRequestListQueryOptions,
   replyToPullRequestReviewComment,
+  reviewEditorSettingsQueryOptions,
   savedReposQueryOptions,
   searchReposQueryOptions,
   setAccountVisibility,
   setAppearanceBackground,
   setDiffDataMode,
+  setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,

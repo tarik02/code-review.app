@@ -31,6 +31,7 @@ import {
   replyToPullRequestReviewCommentInputSchema,
   repoIdSchema,
   repoSummarySchema,
+  reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
 } from "../backend/schemas";
 import { z } from "zod";
@@ -181,6 +182,24 @@ const router = t.router({
           Effect.gen(function* () {
             const service = yield* SettingsService;
             return yield* service.setDiffDataSettings(input);
+          }),
+        ),
+      ),
+    getReviewEditorSettings: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          return yield* service.getReviewEditorSettings();
+        }),
+      ),
+    ),
+    setReviewEditorSettings: t.procedure
+      .input(reviewEditorSettingsSchema)
+      .mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setReviewEditorSettings(input);
           }),
         ),
       ),

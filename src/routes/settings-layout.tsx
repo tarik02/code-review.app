@@ -1,21 +1,18 @@
-import {
-  Link,
-  Outlet,
-  useCanGoBack,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
+import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
 import { TopBar } from "../components/ui/top-bar";
+import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "../lib/settings-return-location";
 
 function SettingsLayout() {
-  const router = useRouter();
   const navigate = useNavigate();
-  const canGoBack = useCanGoBack();
 
   function handleBackToPrs() {
-    if (canGoBack) {
-      router.history.back();
+    const returnHref = window.sessionStorage.getItem(
+      SETTINGS_RETURN_HREF_STORAGE_KEY,
+    );
+
+    if (returnHref) {
+      void navigate({ href: returnHref });
       return;
     }
 
@@ -53,6 +50,15 @@ function SettingsLayout() {
               to="/settings/profiles"
             >
               Profiles
+            </Link>
+            <Link
+              activeProps={{
+                className: "bg-canvasDark text-ink-900",
+              }}
+              className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
+              to="/settings/review"
+            >
+              Review
             </Link>
           </nav>
 

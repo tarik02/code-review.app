@@ -5,8 +5,10 @@ import {
   size,
   useFloating,
 } from "@floating-ui/react";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReviewComment, ReviewThread } from "../../lib/review-threads";
+import { reviewEditorSettingsQueryOptions } from "../../queries/forge";
 import {
   getReviewCommentEditorSessionState,
   type ReviewCommentEditorState,
@@ -235,6 +237,15 @@ function ReviewThreadCard({
   const closeEditor = useReviewCommentEditorStore(
     (state) => state.closeEditor,
   );
+  const canCreateEditor =
+    reviewEditorSessionKey != null &&
+    (onReplyToThread != null || onEditComment != null);
+  const reviewEditorSettingsQuery = useQuery({
+    ...reviewEditorSettingsQueryOptions(),
+    enabled: canCreateEditor,
+  });
+  const defaultReviewEditorMode =
+    reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
   const replyEditor =
     thread.id.length > 0
       ? threadEditors.find((editor) => editor.kind === "reply")
@@ -426,6 +437,7 @@ function ReviewThreadCard({
                     <FloatingReviewCommentEditor
                       portalRootId={editorPortalRootId}
                       cursorPosition={editEditor.cursorPosition}
+                      defaultMode={defaultReviewEditorMode}
                       error={editEditor.error}
                       initialValue={comment.body}
                       isPending={editEditor.isSubmitting}
@@ -473,6 +485,7 @@ function ReviewThreadCard({
             <FloatingReviewCommentEditor
               portalRootId={editorPortalRootId}
               cursorPosition={replyEditor.cursorPosition}
+              defaultMode={defaultReviewEditorMode}
               error={replyEditor.error}
               isPending={replyEditor.isSubmitting}
               provider={thread.provider}

@@ -9,6 +9,7 @@ import type {
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
   DiffDataSettings,
+  ReviewEditorSettings,
 } from "../../shared/types";
 
 type SettingsServiceShape = {
@@ -20,6 +21,10 @@ type SettingsServiceShape = {
   setDiffDataSettings(
     settings: DiffDataSettings,
   ): Effect.Effect<DiffDataSettings, Error>;
+  getReviewEditorSettings(): Effect.Effect<ReviewEditorSettings, Error>;
+  setReviewEditorSettings(
+    settings: ReviewEditorSettings,
+  ): Effect.Effect<ReviewEditorSettings, Error>;
   getAppearanceBackground(): Effect.Effect<AppearanceBackgroundSettings, Error>;
   setAppearanceBackground(
     input: AppearanceBackgroundInput,
@@ -55,6 +60,7 @@ function toVisibilitySettings(
 
 const APPEARANCE_BACKGROUND_KEY = "appearance.background";
 const DIFF_DATA_SETTINGS_KEY = "diff_data_settings";
+const REVIEW_EDITOR_SETTINGS_KEY = "review_editor_settings";
 const MAX_BACKGROUND_FILE_SIZE = 15 * 1024 * 1024;
 
 type PersistedAppearanceBackgroundSettings =
@@ -155,6 +161,32 @@ function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings 
   return { mode: settings.mode };
 }
 
+function parseReviewEditorSettings(value: unknown): ReviewEditorSettings {
+  if (
+    value &&
+    typeof value === "object" &&
+    "defaultMode" in value &&
+    (value.defaultMode === "rich-text" || value.defaultMode === "source")
+  ) {
+    return { defaultMode: value.defaultMode };
+  }
+
+  return { defaultMode: "rich-text" };
+}
+
+function validateReviewEditorSettings(
+  settings: ReviewEditorSettings,
+): ReviewEditorSettings {
+  if (
+    settings.defaultMode !== "rich-text" &&
+    settings.defaultMode !== "source"
+  ) {
+    throw new Error("Unsupported review editor mode.");
+  }
+
+  return { defaultMode: settings.defaultMode };
+}
+
 function readBackgroundDataUrl(
   fileSystem: FileSystem.FileSystem,
   background: PersistedAppearanceBackgroundSettings,
@@ -237,6 +269,23 @@ const makeSettingsService = Effect.gen(function* () {
         return validated;
   });
 
+  const getReviewEditorSettings: SettingsServiceShape["getReviewEditorSettings"] = Effect.fn(
+    "SettingsService.getReviewEditorSettings",
+  )(function* () {
+        const persisted = yield* cache
+          .readAppSetting<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+        return parseReviewEditorSettings(persisted);
+  });
+
+  const setReviewEditorSettings: SettingsServiceShape["setReviewEditorSettings"] = Effect.fn(
+    "SettingsService.setReviewEditorSettings",
+  )(function* (settings) {
+        const validated = validateReviewEditorSettings(settings);
+        yield* cache.writeAppSetting(REVIEW_EDITOR_SETTINGS_KEY, validated);
+        return validated;
+  });
+
   const getAppearanceBackground: SettingsServiceShape["getAppearanceBackground"] = Effect.fn(
     "SettingsService.getAppearanceBackground",
   )(function* () {
@@ -310,6 +359,8 @@ const makeSettingsService = Effect.gen(function* () {
     setAccountVisibility,
     getDiffDataSettings,
     setDiffDataSettings,
+    getReviewEditorSettings,
+    setReviewEditorSettings,
     getAppearanceBackground,
     setAppearanceBackground,
     setCustomBackgroundFromPath,

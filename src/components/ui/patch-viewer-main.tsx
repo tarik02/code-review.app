@@ -30,7 +30,10 @@ import { FileDiff } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
 import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
-import { ReviewCommentEditor } from "./review-comment-editor";
+import {
+  ReviewCommentEditor,
+  type CommentEditorMode,
+} from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
 import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
@@ -39,6 +42,7 @@ import { cx } from "../../lib/cx";
 import {
   appearanceBackgroundQueryOptions,
   pullRequestFileContentsQueryOptions,
+  reviewEditorSettingsQueryOptions,
 } from "../../queries/forge";
 import {
   getFileReviewThreadsForPath,
@@ -397,6 +401,7 @@ function getFileContentsInput(
 
 type FloatingLineDraftEditorProps = {
   cursorPosition: ReviewCommentEditorState["cursorPosition"];
+  defaultMode: CommentEditorMode;
   error: string;
   isPending: boolean;
   provider: ForgeProviderKind;
@@ -415,6 +420,7 @@ type FloatingLineDraftEditorProps = {
 
 function FloatingLineDraftEditor({
   cursorPosition,
+  defaultMode,
   error,
   isPending,
   provider,
@@ -490,6 +496,7 @@ function FloatingLineDraftEditor({
           >
             <ReviewCommentEditor
               cursorPosition={cursorPosition}
+              defaultMode={defaultMode}
               error={error}
               isPending={isPending}
               provider={provider}
@@ -511,6 +518,7 @@ function FloatingLineDraftEditor({
 }
 
 type FloatingLineDraftEditorForTargetProps = {
+  defaultMode: CommentEditorMode;
   editor: ReviewCommentEditorState;
   fileDiffs: FileDiffMetadata[];
   portalRootId: string;
@@ -526,6 +534,7 @@ type FloatingLineDraftEditorForTargetProps = {
 };
 
 function FloatingLineDraftEditorForTarget({
+  defaultMode,
   editor,
   fileDiffs,
   portalRootId,
@@ -569,6 +578,7 @@ function FloatingLineDraftEditorForTarget({
   return (
     <FloatingLineDraftEditor
       cursorPosition={editor.cursorPosition}
+      defaultMode={defaultMode}
       error={editor.error}
       isPending={editor.isSubmitting}
       portalRootId={portalRootId}
@@ -841,6 +851,9 @@ function PatchViewerMain({
   gitStatus,
 }: PatchViewerMainProps) {
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
+  const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
+  const defaultReviewEditorMode =
+    reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
   const patchViewerSessionKey = selectedPrKey
     ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
     : null;
@@ -1269,6 +1282,7 @@ function PatchViewerMain({
 
       return (
         <FloatingLineDraftEditorForTarget
+          defaultMode={defaultReviewEditorMode}
           editor={editor}
           fileDiffs={parsedPatch.fileDiffs}
           portalRootId={annotation.metadata.portalRootId}
@@ -1566,6 +1580,7 @@ function PatchViewerMain({
                                   <ReviewCommentEditor
                                     key={editor.id}
                                     cursorPosition={editor.cursorPosition}
+                                    defaultMode={defaultReviewEditorMode}
                                     error={editor.error}
                                     isPending={editor.isSubmitting}
                                     provider={selectedProvider}

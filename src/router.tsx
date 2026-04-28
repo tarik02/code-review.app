@@ -5,12 +5,16 @@ import {
   createRoute,
   createRouter,
   redirect,
+  useLocation,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { AuthRoute } from "./routes/auth-route";
 import { AppearanceRoute } from "./routes/appearance-route";
 import { HomeRoute } from "./routes/home-route";
 import { ProfilesRoute } from "./routes/profiles-route";
+import { ReviewRoute } from "./routes/review-route";
 import { SettingsLayout } from "./routes/settings-layout";
+import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "./lib/settings-return-location";
 
 type HomeRouteSearch = {
   repo?: string;
@@ -41,8 +45,29 @@ function validateHomeRouteSearch(
 }
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: RootRoute,
 });
+
+function isSettingsPath(pathname: string) {
+  return pathname === "/settings" || pathname.startsWith("/settings/");
+}
+
+function RootRoute() {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (isSettingsPath(location.pathname)) {
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      SETTINGS_RETURN_HREF_STORAGE_KEY,
+      location.href,
+    );
+  }, [location.href, location.pathname]);
+
+  return <Outlet />;
+}
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -80,10 +105,16 @@ const profilesRoute = createRoute({
   component: ProfilesRoute,
 });
 
+const reviewRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "review",
+  component: ReviewRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   authRoute,
-  settingsRoute.addChildren([appearanceRoute, profilesRoute]),
+  settingsRoute.addChildren([appearanceRoute, profilesRoute, reviewRoute]),
 ]);
 
 const router = createRouter({

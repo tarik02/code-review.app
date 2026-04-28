@@ -202,7 +202,7 @@ function PullRequestSidebarRow({
     <div className="group relative">
       <button
         className={[
-          "group relative flex w-full flex-col gap-1 bg-canvas px-3 pl-6 py-2.5 text-left transition hover:bg-canvasDark focus-visible:bg-surface",
+          "group relative flex w-full flex-col gap-1 bg-canvas px-3 py-2.5 text-left transition hover:bg-canvasDark focus-visible:bg-surface",
           isSelected ? "bg-canvasDark" : "",
         ].join(" ")}
         onClick={() => onSelectPr(repoId, pullRequest)}
