@@ -110,8 +110,12 @@ type DraftReviewCommentAnnotation = {
   portalRootId: string;
 };
 
+type ReviewThreadLineAnnotation = ReviewThreadAnnotation & {
+  portalRootId?: string;
+};
+
 type PatchLineAnnotation =
-  | ReviewThreadAnnotation
+  | ReviewThreadLineAnnotation
   | DraftReviewCommentAnnotation;
 
 type PatchViewerMainProps = {
@@ -1190,11 +1194,12 @@ function PatchViewerMain({
       );
     }
 
-    const threadAnnotation = annotation.metadata as ReviewThreadAnnotation;
+    const threadAnnotation = annotation.metadata as ReviewThreadLineAnnotation;
 
     return (
       <ReviewThreadCard
         compact
+        editorPortalRootId={threadAnnotation.portalRootId}
         onEditComment={handleEditComment}
         onReplyToThread={handleReplyToThread}
         thread={threadAnnotation.thread}
@@ -1280,6 +1285,16 @@ function PatchViewerMain({
                         );
                         const normalizedFilePath = normalizePath(fileDiff.name);
                         const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
+                        const lineThreadAnnotations =
+                          fileReviewThreads.lineAnnotations.map(
+                            (annotation) => ({
+                              ...annotation,
+                              metadata: {
+                                ...annotation.metadata,
+                                portalRootId: lineDraftPortalRootId,
+                              },
+                            }),
+                          );
                         let lineDraft: Extract<
                           DraftReviewCommentTarget,
                           { type: "line" }
@@ -1308,7 +1323,7 @@ function PatchViewerMain({
                         const lineAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
                           lineDraft
                             ? [
-                                ...fileReviewThreads.lineAnnotations,
+                                ...lineThreadAnnotations,
                                 {
                                   side: toSelectionSide(lineDraft.side),
                                   lineNumber: lineDraft.line,
@@ -1318,7 +1333,7 @@ function PatchViewerMain({
                                   },
                                 },
                               ]
-                            : fileReviewThreads.lineAnnotations;
+                            : lineThreadAnnotations;
                         const selectedLines: SelectedLineRange | null =
                           lineDraft
                             ? {

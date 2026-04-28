@@ -1,16 +1,27 @@
-import { useState } from "react";
+import {
+  FloatingPortal,
+  autoUpdate,
+  offset,
+  size,
+  useFloating,
+} from "@floating-ui/react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { ReviewComment, ReviewThread } from "../../lib/review-threads";
 import { CommentMarkdown } from "./comment-markdown";
 import {
   ReviewCommentEditor,
   type CommentEditorTarget,
+  type ReviewCommentEditorProps,
 } from "./review-comment-editor";
+
+const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
 
 type ReviewThreadCardProps = {
   thread: ReviewThread;
   compact?: boolean;
   slim?: boolean;
   viewerLogin?: string | null;
+  editorPortalRootId?: string;
   onReplyToThread?: (thread: ReviewThread, body: string) => Promise<void>;
   onEditComment?: (comment: ReviewComment, body: string) => Promise<void>;
   onClick?: () => void;
@@ -89,11 +100,90 @@ function CommentAvatar({ comment }: { comment: ReviewComment }) {
   );
 }
 
+function FloatingReviewCommentEditor({
+  portalRootId,
+  ...editorProps
+}: ReviewCommentEditorProps & { portalRootId?: string }) {
+  const spacerRef = useRef<HTMLDivElement | null>(null);
+  const [hasReference, setHasReference] = useState(false);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const { floatingStyles, refs } = useFloating({
+    placement: "bottom-start",
+    strategy: "absolute",
+    transform: false,
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(({ rects }) => ({
+        mainAxis: -rects.reference.height,
+      })),
+      size({
+        apply({ elements, rects }) {
+          Object.assign(elements.floating.style, {
+            width: `${rects.reference.width}px`,
+          });
+
+          const nextHeight = Math.ceil(
+            elements.floating.getBoundingClientRect().height,
+          );
+          if (spacerRef.current && nextHeight > 0) {
+            spacerRef.current.style.height = `${nextHeight}px`;
+          }
+        },
+      }),
+    ],
+  });
+  const setReference = useCallback(
+    (node: HTMLDivElement | null) => {
+      spacerRef.current = node;
+      refs.setReference(node);
+      setHasReference(node !== null);
+    },
+    [refs],
+  );
+  const setFloating = useCallback(
+    (node: HTMLDivElement | null) => {
+      refs.setFloating(node);
+    },
+    [refs],
+  );
+
+  useLayoutEffect(() => {
+    setPortalRoot(portalRootId ? document.getElementById(portalRootId) : null);
+  }, [portalRootId]);
+
+  const shouldRenderFloating =
+    hasReference && (!portalRootId || portalRoot !== null);
+  const floatingEditor = shouldRenderFloating ? (
+    <div
+      ref={setFloating}
+      className="pointer-events-auto z-50 font-sans"
+      style={floatingStyles}
+    >
+      <ReviewCommentEditor {...editorProps} />
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={setReference}
+        style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }}
+      />
+      {portalRootId ? (
+        <FloatingPortal root={portalRoot}>{floatingEditor}</FloatingPortal>
+      ) : (
+        <FloatingPortal>{floatingEditor}</FloatingPortal>
+      )}
+    </>
+  );
+}
+
 function ReviewThreadCard({
   thread,
   compact = false,
   slim = false,
   viewerLogin = null,
+  editorPortalRootId,
   onReplyToThread,
   onEditComment,
   onClick,
@@ -258,7 +348,8 @@ function ReviewThreadCard({
                 </div>
                 <div className="mt-1 min-w-0">
                   {isEditing ? (
-                    <ReviewCommentEditor
+                    <FloatingReviewCommentEditor
+                      portalRootId={editorPortalRootId}
                       error={actionError}
                       initialValue={comment.body}
                       isPending={isSubmitting}
@@ -284,7 +375,8 @@ function ReviewThreadCard({
       {rootComment && onReplyToThread ? (
         <div className="mt-3 border-t border-ink-200 pt-3">
           {activeAction?.type === "reply" ? (
-            <ReviewCommentEditor
+            <FloatingReviewCommentEditor
+              portalRootId={editorPortalRootId}
               error={actionError}
               isPending={isSubmitting}
               provider={thread.provider}

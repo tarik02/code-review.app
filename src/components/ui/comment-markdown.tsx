@@ -5,6 +5,7 @@ import type { ThemeRegistrationResolved } from "@shikijs/types";
 import pierreDarkTheme from "@pierre/theme/pierre-dark";
 import pierreLightTheme from "@pierre/theme/pierre-light";
 import { useDocumentDarkMode } from "../../hooks/use-document-dark-mode";
+import "./comment-markdown.css";
 
 const CODE_THEME = {
   dark: { id: "pierre-dark", theme: toShikiTheme(pierreDarkTheme) },
@@ -129,7 +130,7 @@ function MarkdownCodeBlock({
 
 function CommentMarkdown({ body }: { body: string }) {
   return (
-    <div className="font-sans whitespace-normal break-words">
+    <div className="rudu-comment-markdown font-sans whitespace-normal break-words">
       <Markdown
         options={{
           disableParsingRawHTML: true,
@@ -148,63 +149,17 @@ function CommentMarkdown({ body }: { body: string }) {
           overrides: {
             a: {
               component: ({ children, ...props }) => (
-                <a
-                  {...props}
-                  className="text-ink-700 underline-offset-2 hover:text-ink-900 hover:underline"
-                  rel="noreferrer"
-                  target="_blank"
-                >
+                <a {...props} rel="noreferrer" target="_blank">
                   {children}
                 </a>
               ),
             },
-            blockquote: {
-              component: ({ children, ...props }) => (
-                <blockquote
-                  {...props}
-                  className="m-0 border-l-2 border-ink-200 pl-3 text-ink-600"
-                >
-                  {children}
-                </blockquote>
-              ),
-            },
             code: { component: InlineCode },
-            li: {
-              component: ({ children, ...props }) => (
-                <li {...props} className="my-1 leading-6 text-ink-800">
-                  {children}
-                </li>
-              ),
-            },
-            ol: {
-              component: ({ children, ...props }) => (
-                <ol {...props} className="my-2 list-decimal pl-5">
-                  {children}
-                </ol>
-              ),
-            },
-            p: {
-              component: ({ children, ...props }) => (
-                <p
-                  {...props}
-                  className="my-2 leading-6 text-ink-800 first:mt-0 last:mb-0"
-                >
-                  {children}
-                </p>
-              ),
-            },
             pre: {
               component: ({ children, ...props }) => (
                 <div {...props} className="my-3">
                   {children}
                 </div>
-              ),
-            },
-            ul: {
-              component: ({ children, ...props }) => (
-                <ul {...props} className="my-2 list-disc pl-5">
-                  {children}
-                </ul>
               ),
             },
           },

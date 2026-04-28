@@ -95,6 +95,21 @@
   background: rgb(var(--rgb-ink-200));
 }
 
+.rudu-comment-editor-link-popover {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  width: min(22rem, calc(100vw - 1.5rem));
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+  pointer-events: auto;
+  padding: 0.25rem;
+  box-shadow: 0 8px 20px rgb(var(--rgb-ink-900) / 0.12);
+}
+
 .rudu-comment-editor-block-select {
   min-width: 7rem;
   border-color: transparent;
@@ -151,18 +166,6 @@
 .rudu-comment-editor [class*="_placeholder_"] {
   padding: 0.5rem 0.75rem;
   color: rgb(var(--rgb-ink-500));
-}
-
-.rudu-comment-editor-content p {
-  margin: 0.35rem 0;
-}
-
-.rudu-comment-editor-content p:first-child {
-  margin-top: 0;
-}
-
-.rudu-comment-editor-content p:last-child {
-  margin-bottom: 0;
 }
 
 .rudu-comment-editor-content code {

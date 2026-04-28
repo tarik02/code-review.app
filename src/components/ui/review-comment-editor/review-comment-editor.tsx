@@ -31,6 +31,7 @@ import {
 } from "./code-block-editor";
 import { ReviewCommentEditorFooter } from "./footer";
 import { getLanguageFromPath } from "./language";
+import { ReviewCommentLinkDialog } from "./link-dialog";
 import { createSourceEditorViewBridge } from "./source-editor-bridge";
 import { suggestionCodeBlockDescriptor } from "./suggestion-code-block-editor";
 import { SuggestionEditorContext } from "./suggestion-context";
@@ -40,6 +41,7 @@ import type {
   ReviewCommentEditorProps,
   SuggestionEditorContextValue,
 } from "./types";
+import "../comment-markdown.css";
 import "./styles.css";
 
 const DEFAULT_EDITOR_MODE: CommentEditorMode = "rich-text";
@@ -127,7 +129,10 @@ function ReviewCommentEditor({
       quotePlugin(),
       listsPlugin(),
       linkPlugin(),
-      linkDialogPlugin(),
+      linkDialogPlugin({
+        LinkDialog: ReviewCommentLinkDialog,
+        showLinkTitleField: false,
+      }),
       codeBlockPlugin({
         codeBlockEditorDescriptors: [
           suggestionCodeBlockDescriptor,
@@ -206,7 +211,7 @@ function ReviewCommentEditor({
                 : false
             }
             className="rudu-comment-editor"
-            contentEditableClassName="rudu-comment-editor-content"
+            contentEditableClassName="rudu-comment-editor-content rudu-comment-markdown"
             markdown={initialValue}
             onChange={(markdown) => setBody(markdown)}
             placeholder={placeholder}
