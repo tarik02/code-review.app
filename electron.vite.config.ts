@@ -25,6 +25,11 @@ export default defineConfig({
   renderer: {
     root: ".",
     plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        "@": resolve("src"),
+      },
+    },
     build: {
       target: "chrome120",
       rolldownOptions: {

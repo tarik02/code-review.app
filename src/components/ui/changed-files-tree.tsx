@@ -104,6 +104,7 @@ function ChangedFilesTree({
     gitStatus,
     onSelectionChange: handleSelectionChange,
     paths: files,
+    density: 'compact',
   });
 
   useEffect(() => {

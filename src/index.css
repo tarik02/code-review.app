@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant wco (&:is(.wco, .wco *));
@@ -9,6 +10,30 @@
 @custom-variant not-fullscreen (&:is(:root:not(.window-fullscreen) *));
 
 @theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --color-canvas: rgb(var(--rgb-canvas));
   --color-surface: rgb(var(--rgb-surface));
   --color-canvasDark: rgb(var(--rgb-canvas-hover));
@@ -50,6 +75,25 @@
     --rgb-ink-700: 63 63 70;
     --rgb-ink-800: 39 39 42;
     --rgb-ink-900: 24 24 27;
+    --radius: 0.5rem;
+    --background: rgb(var(--rgb-canvas));
+    --foreground: rgb(var(--rgb-ink-900));
+    --card: rgb(var(--rgb-surface));
+    --card-foreground: rgb(var(--rgb-ink-900));
+    --popover: rgb(var(--rgb-surface));
+    --popover-foreground: rgb(var(--rgb-ink-900));
+    --primary: #18181b;
+    --primary-foreground: white;
+    --secondary: rgb(var(--rgb-canvas-hover));
+    --secondary-foreground: rgb(var(--rgb-ink-900));
+    --muted: rgb(var(--rgb-canvas-hover));
+    --muted-foreground: rgb(var(--rgb-ink-500));
+    --accent: rgb(var(--rgb-canvas-hover));
+    --accent-foreground: rgb(var(--rgb-ink-900));
+    --destructive: #b91c1c;
+    --border: rgb(var(--rgb-ink-200));
+    --input: rgb(var(--rgb-ink-300));
+    --ring: rgb(var(--rgb-ink-400));
   }
 
   html.dark {
@@ -66,6 +110,24 @@
     --rgb-ink-700: 228 228 231;
     --rgb-ink-800: 244 244 245;
     --rgb-ink-900: 250 250 251;
+    --background: rgb(var(--rgb-canvas));
+    --foreground: rgb(var(--rgb-ink-900));
+    --card: rgb(var(--rgb-surface));
+    --card-foreground: rgb(var(--rgb-ink-900));
+    --popover: rgb(var(--rgb-surface));
+    --popover-foreground: rgb(var(--rgb-ink-900));
+    --primary: rgb(var(--rgb-ink-800));
+    --primary-foreground: rgb(var(--rgb-ink-50));
+    --secondary: rgb(var(--rgb-canvas-hover));
+    --secondary-foreground: rgb(var(--rgb-ink-900));
+    --muted: rgb(var(--rgb-canvas-hover));
+    --muted-foreground: rgb(var(--rgb-ink-500));
+    --accent: rgb(var(--rgb-canvas-hover));
+    --accent-foreground: rgb(var(--rgb-ink-900));
+    --destructive: #ef4444;
+    --border: rgb(var(--rgb-ink-200));
+    --input: rgb(var(--rgb-ink-300));
+    --ring: rgb(var(--rgb-ink-400));
   }
 
   * {
@@ -145,10 +207,6 @@
   button,
   input {
     font: inherit;
-  }
-
-  button {
-    cursor: pointer;
   }
 }
 

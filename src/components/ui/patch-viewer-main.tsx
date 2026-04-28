@@ -9,6 +9,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -35,7 +36,10 @@ import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
 import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
 import { cx } from "../../lib/cx";
-import { appearanceBackgroundQueryOptions } from "../../queries/forge";
+import {
+  appearanceBackgroundQueryOptions,
+  pullRequestFileContentsQueryOptions,
+} from "../../queries/forge";
 import {
   getFileReviewThreadsForPath,
   isActiveReviewThread,
@@ -48,6 +52,8 @@ import {
 import type {
   FileStatsEntry,
   ForgeProviderKind,
+  PrFileChangeType,
+  PrFileContents,
   ReviewCommentSide,
 } from "../../types/forge";
 import {
@@ -152,23 +158,24 @@ function scheduleNextFrame(callback: () => void) {
   return () => clearTimeout(timeoutId);
 }
 
-function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
-  if (!target || target.type !== "line") {
-    return undefined;
-  }
-
-  const startLine = target.startLine ?? target.line;
-  const endLine = target.line;
-
-  if (startLine === endLine) {
-    return `Line ${endLine}`;
-  }
-
-  return `Lines ${startLine}-${endLine}`;
-}
-
 function getProviderFromRepoId(repoId: string): ForgeProviderKind {
   return repoId.startsWith("gitlab:") ? "gitlab" : "github";
+}
+
+function normalizeDiffLineText(content: string) {
+  return content.replace(/[\r\n]+$/g, "");
+}
+
+function splitFileContentLines(content: string) {
+  if (content.length === 0) {
+    return [];
+  }
+
+  const lines = content.split(/\r\n|\n|\r/);
+  if (lines.at(-1) === "") {
+    lines.pop();
+  }
+  return lines;
 }
 
 function getDiffLineContent(
@@ -187,16 +194,26 @@ function getDiffLineContent(
       : hunk.deletionLineIndex;
 
     if (line >= startLine && line < startLine + lineCount) {
-      return lines[lineIndex + line - startLine] ?? null;
+      return normalizeDiffLineText(lines[lineIndex + line - startLine] ?? "");
     }
   }
 
   return null;
 }
 
+function getFullFileLineContent(
+  fileContents: PrFileContents | null | undefined,
+  side: ReviewCommentSide,
+  line: number,
+) {
+  const fullFileLines = getFullFileSuggestionLines(fileContents, side);
+  return fullFileLines?.[line - 1]?.content ?? null;
+}
+
 function getDraftSelectedText(
   fileDiffs: FileDiffMetadata[],
   target: DraftReviewCommentTarget | null,
+  fileContents?: PrFileContents | null,
 ) {
   if (!target || target.type !== "line") {
     return "";
@@ -218,7 +235,9 @@ function getDraftSelectedText(
   const selectedLines: string[] = [];
 
   for (let line = startLine; line <= endLine; line += 1) {
-    const lineContent = getDiffLineContent(fileDiff, target.side, line);
+    const lineContent =
+      getFullFileLineContent(fileContents, target.side, line) ??
+      getDiffLineContent(fileDiff, target.side, line);
     if (lineContent === null) {
       return "";
     }
@@ -229,13 +248,150 @@ function getDraftSelectedText(
   return selectedLines.join("\n");
 }
 
+function createSuggestionSourceLine(
+  content: string,
+  line: number,
+  side: ReviewCommentSide,
+) {
+  return {
+    content: normalizeDiffLineText(content),
+    line,
+    newLine: side === "RIGHT" ? line : null,
+    oldLine: side === "LEFT" ? line : null,
+  };
+}
+
+function getFullFileSuggestionLines(
+  fileContents: PrFileContents | null | undefined,
+  side: ReviewCommentSide,
+) {
+  if (!fileContents) {
+    return null;
+  }
+
+  const sourceContent =
+    side === "RIGHT" ? fileContents.newContent : fileContents.oldContent;
+  const lines = splitFileContentLines(sourceContent);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return lines.map((content, index) =>
+    createSuggestionSourceLine(content, index + 1, side),
+  );
+}
+
+function getPatchSuggestionLines(
+  fileDiff: FileDiffMetadata,
+  side: ReviewCommentSide,
+) {
+  const isAdditionSide = side === "RIGHT";
+  const sourceLines = isAdditionSide
+    ? fileDiff.additionLines
+    : fileDiff.deletionLines;
+
+  if (!fileDiff.isPartial) {
+    return sourceLines.map((content, index) =>
+      createSuggestionSourceLine(content, index + 1, side),
+    );
+  }
+
+  const linesByNumber = new Map<
+    number,
+    ReturnType<typeof createSuggestionSourceLine>
+  >();
+
+  for (const hunk of fileDiff.hunks) {
+    const startLine = isAdditionSide ? hunk.additionStart : hunk.deletionStart;
+    const lineCount = isAdditionSide ? hunk.additionCount : hunk.deletionCount;
+    const lineIndex = isAdditionSide
+      ? hunk.additionLineIndex
+      : hunk.deletionLineIndex;
+
+    for (let index = 0; index < lineCount; index += 1) {
+      const line = startLine + index;
+      linesByNumber.set(
+        line,
+        createSuggestionSourceLine(
+          sourceLines[lineIndex + index] ?? "",
+          line,
+          side,
+        ),
+      );
+    }
+  }
+
+  return Array.from(linesByNumber.values()).sort((a, b) => a.line - b.line);
+}
+
+function getDraftSuggestionContext(
+  fileDiffs: FileDiffMetadata[],
+  target: DraftReviewCommentTarget | null,
+  fileContents?: PrFileContents | null,
+) {
+  if (!target || target.type !== "line") {
+    return null;
+  }
+
+  if (target.startSide && target.startSide !== target.side) {
+    return null;
+  }
+
+  const fileDiff = fileDiffs.find(
+    (candidate) => normalizePath(candidate.name) === normalizePath(target.path),
+  );
+  if (!fileDiff) {
+    return null;
+  }
+
+  const fullFileLines = getFullFileSuggestionLines(fileContents, target.side);
+  const patchLines = getPatchSuggestionLines(fileDiff, target.side);
+  const lines = fullFileLines?.some((line) => line.line === target.line)
+    ? fullFileLines
+    : patchLines;
+
+  if (!lines.some((line) => line.line === target.line)) {
+    return null;
+  }
+
+  return { lines };
+}
+
+function getFileContentsInput(
+  selectedPatch: SelectedPatch | null,
+  selectedBaseSha: string | null,
+  fileDiffs: FileDiffMetadata[],
+  target: DraftReviewCommentTarget | null,
+) {
+  if (!selectedPatch || !target || target.type !== "line") {
+    return null;
+  }
+
+  const fileDiff = fileDiffs.find(
+    (candidate) => normalizePath(candidate.name) === normalizePath(target.path),
+  );
+  if (!fileDiff) {
+    return null;
+  }
+
+  return {
+    repoId: selectedPatch.repoId,
+    number: selectedPatch.number,
+    oldPath: fileDiff.prevName ?? fileDiff.name,
+    newPath: fileDiff.name,
+    baseSha: selectedBaseSha,
+    headSha: selectedPatch.headSha,
+    changeType: fileDiff.type as PrFileChangeType,
+  };
+}
+
 type FloatingLineDraftEditorProps = {
   error: string;
   isPending: boolean;
   provider: ForgeProviderKind;
   portalRootId: string;
-  selectedLineLabel?: string;
   selectedText: string;
+  suggestionContext: ReturnType<typeof getDraftSuggestionContext>;
   target: DraftReviewCommentTarget | null;
   onCancel: () => void;
   onSubmit: (body: string) => Promise<void>;
@@ -246,8 +402,8 @@ function FloatingLineDraftEditor({
   isPending,
   provider,
   portalRootId,
-  selectedLineLabel,
   selectedText,
+  suggestionContext,
   target,
   onCancel,
   onSubmit,
@@ -316,8 +472,8 @@ function FloatingLineDraftEditor({
               error={error}
               isPending={isPending}
               provider={provider}
-              selectedLineLabel={selectedLineLabel}
               selectedText={selectedText}
+              suggestionContext={suggestionContext}
               submitLabel="Comment"
               target={target}
               onCancel={onCancel}
@@ -569,6 +725,7 @@ function ReviewThreadsPanel({
 function PatchViewerMain({
   selectedPrKey,
   selectedPatch,
+  selectedBaseSha,
   isGitDiffMode,
   isPatchLoading,
   isDark,
@@ -651,9 +808,47 @@ function PatchViewerMain({
   const selectedProvider = selectedPatch
     ? getProviderFromRepoId(selectedPatch.repoId)
     : "github";
-  const draftSelectedText = getDraftSelectedText(
-    parsedPatch.fileDiffs,
-    draftCommentTarget,
+  const draftFileContentsInput = useMemo(
+    () =>
+      getFileContentsInput(
+        selectedPatch,
+        selectedBaseSha,
+        parsedPatch.fileDiffs,
+        draftCommentTarget,
+      ),
+    [draftCommentTarget, parsedPatch.fileDiffs, selectedBaseSha, selectedPatch],
+  );
+  const draftFileContentsQuery = useQuery({
+    ...pullRequestFileContentsQueryOptions(
+      draftFileContentsInput ?? {
+        repoId: "__idle__",
+        number: 0,
+        oldPath: "",
+        newPath: "",
+        baseSha: null,
+        headSha: "__idle__",
+        changeType: "change",
+      },
+    ),
+    enabled: draftFileContentsInput !== null,
+  });
+  const draftSelectedText = useMemo(
+    () =>
+      getDraftSelectedText(
+        parsedPatch.fileDiffs,
+        draftCommentTarget,
+        draftFileContentsQuery.data,
+      ),
+    [draftCommentTarget, draftFileContentsQuery.data, parsedPatch.fileDiffs],
+  );
+  const draftSuggestionContext = useMemo(
+    () =>
+      getDraftSuggestionContext(
+        parsedPatch.fileDiffs,
+        draftCommentTarget,
+        draftFileContentsQuery.data,
+      ),
+    [draftCommentTarget, draftFileContentsQuery.data, parsedPatch.fileDiffs],
   );
 
   const handleVirtualizerRootChange = useCallback(
@@ -986,8 +1181,8 @@ function PatchViewerMain({
           isPending={createCommentMutation.isPending}
           portalRootId={annotation.metadata.portalRootId}
           provider={selectedProvider}
-          selectedLineLabel={getSelectedLineLabel(draftCommentTarget)}
           selectedText={draftSelectedText}
+          suggestionContext={draftSuggestionContext}
           target={draftCommentTarget}
           onCancel={() => clearDraftComment(patchViewerSessionKey)}
           onSubmit={handleSubmitDraftComment}

@@ -286,7 +286,6 @@ function ReviewThreadCard({
           {activeAction?.type === "reply" ? (
             <ReviewCommentEditor
               error={actionError}
-              framed={false}
               isPending={isSubmitting}
               provider={thread.provider}
               submitLabel="Reply"

@@ -263,6 +263,22 @@ function pullRequestFilesQueryOptions(pr: SelectedPullRequest) {
   });
 }
 
+function pullRequestFileContentsQueryOptions(input: {
+  repoId: string;
+  number: number;
+  oldPath: string;
+  newPath: string;
+  baseSha: string | null;
+  headSha: string;
+  changeType: PrFileChangeType;
+}) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestFileContents(input),
+    queryFn: () => trpc.pullRequests.getFileContents.query(input),
+    staleTime: Infinity,
+  });
+}
+
 function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
   return queryOptions({
     queryKey: forgeKeys.pullRequestReviewThreads(pr),
@@ -325,6 +341,7 @@ export {
   providerProfileQueryOptions,
   providerAccountsQueryOptions,
   providerStatusesQueryOptions,
+  pullRequestFileContentsQueryOptions,
   pullRequestCachedListQueryOptions,
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,
