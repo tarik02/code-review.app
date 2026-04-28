@@ -1,11 +1,16 @@
 import { HttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
-import { ProviderError, ValidationError } from "../errors";
+import { ValidationError } from "../errors";
+import { GitService } from "../git/service";
 import { parseRepoId } from "../repo-id";
-import { providerFor } from "../providers/registry";
 import { AuthTokenStore } from "../auth/token-store";
+import { SettingsService } from "./settings";
+import { makeGitDiffBackend } from "../diff-data/backends/git";
+import { makeProviderApiDiffBackend } from "../diff-data/backends/provider-api";
+import { parsePullRequestPatch } from "../diff-data/parse-patch";
 import type {
+  DiffDataMode,
   PrFileChangeType,
   PrFileContents,
   PrPatch,
@@ -52,6 +57,8 @@ const makeDiffDataService = Effect.gen(function* () {
   const cache = yield* CacheService;
   const tokenStore = yield* AuthTokenStore;
   const httpClient = yield* HttpClient.HttpClient;
+  const settings = yield* SettingsService;
+  const git = yield* GitService;
 
   const provideProviderDeps = <A, E>(
     effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
@@ -59,23 +66,81 @@ const makeDiffDataService = Effect.gen(function* () {
     effect.pipe(
       Effect.provideService(AuthTokenStore, tokenStore),
       Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
+  );
+  const providerApiBackend = makeProviderApiDiffBackend(provideProviderDeps);
+  const gitBackend = makeGitDiffBackend(git, provideProviderDeps);
+  const parsePatchResult = (input: {
+    patch: string;
+    repoId: string;
+    number: number;
+    headSha: string;
+    mode: DiffDataMode;
+  }) =>
+    Effect.try({
+      try: () => parsePullRequestPatch(input),
+      catch: (error) =>
+        error instanceof Error ? error : new Error("Failed to parse the PR patch."),
+    });
 
   const getPatch: DiffDataServiceShape["getPatch"] = Effect.fn(
     "DiffDataService.getPatch",
   )(function* (repoId, number, headSha) {
     const req = createRequest(repoId, headSha);
-    const cached = yield* cache.getCachedPatch(req.repoId, number, req.headSha);
-    if (cached !== null) {
-      return { repoId: req.repoId, number, headSha: req.headSha, patch: cached };
+    const mode = (yield* settings.getDiffDataSettings()).mode;
+    const repo = parseRepoId(req.repoId);
+    console.info(DIFF_DATA_LOG_PREFIX, "get patch", {
+      mode,
+      repoId: req.repoId,
+      number,
+      headSha: req.headSha,
+    });
+
+    if (mode === "provider-api") {
+      const cached = yield* cache.getCachedPatch(req.repoId, number, req.headSha);
+      if (cached !== null) {
+        const fileDiffs = yield* parsePatchResult({
+          patch: cached,
+          repoId: req.repoId,
+          number,
+          headSha: req.headSha,
+          mode,
+        });
+        return { repoId: req.repoId, number, headSha: req.headSha, fileDiffs };
+      }
+
+      const patch = yield* providerApiBackend.getPatch({
+        repo,
+        number,
+        headSha: req.headSha,
+        baseSha: null,
+      });
+      yield* cache.storePatch(req.repoId, number, req.headSha, patch);
+      const fileDiffs = yield* parsePatchResult({
+        patch,
+        repoId: req.repoId,
+        number,
+        headSha: req.headSha,
+        mode,
+      });
+      return { repoId: req.repoId, number, headSha: req.headSha, fileDiffs };
     }
 
-    const repo = parseRepoId(req.repoId);
-    const patch = yield* provideProviderDeps(
-      providerFor(repo.provider).fetchPatch(repo, number),
+    const patch = yield* gitBackend.getPatch(
+      {
+        repo,
+        number,
+        headSha: req.headSha,
+        baseSha: null,
+      },
     );
-    yield* cache.storePatch(req.repoId, number, req.headSha, patch);
-    return { repoId: req.repoId, number, headSha: req.headSha, patch };
+    const fileDiffs = yield* parsePatchResult({
+      patch,
+      repoId: req.repoId,
+      number,
+      headSha: req.headSha,
+      mode,
+    });
+    return { repoId: req.repoId, number, headSha: req.headSha, fileDiffs };
   });
 
   const getChangedFiles: DiffDataServiceShape["getChangedFiles"] = Effect.fn(
@@ -83,24 +148,42 @@ const makeDiffDataService = Effect.gen(function* () {
   )(
     function* (repoId, number, headSha) {
       const req = createRequest(repoId, headSha);
-      const cached = yield* cache.getCachedChangedFiles(
-        req.repoId,
-        number,
-        req.headSha,
-      );
-      if (cached !== null) return cached;
-
+      const mode = (yield* settings.getDiffDataSettings()).mode;
       const repo = parseRepoId(req.repoId);
-      const files = yield* provideProviderDeps(
-        providerFor(repo.provider).fetchChangedFiles(repo, number),
-      );
-      const unique = [...new Set(files.map((file) => file.trim()).filter(Boolean))];
-      yield* cache.storeChangedFiles(req.repoId, number, req.headSha, unique);
-      return unique;
+      console.info(DIFF_DATA_LOG_PREFIX, "get changed files", {
+        mode,
+        repoId: req.repoId,
+        number,
+        headSha: req.headSha,
+      });
+
+      if (mode === "provider-api") {
+        const cached = yield* cache.getCachedChangedFiles(
+          req.repoId,
+          number,
+          req.headSha,
+        );
+        if (cached !== null) return cached;
+
+        const files = yield* providerApiBackend.getChangedFiles({
+          repo,
+          number,
+          headSha: req.headSha,
+          baseSha: null,
+        });
+        const paths = files.map((file) => file.path);
+        yield* cache.storeChangedFiles(req.repoId, number, req.headSha, paths);
+        return paths;
+      }
+
+      const files = yield* gitBackend.getChangedFiles({
+        repo,
+        number,
+        headSha: req.headSha,
+        baseSha: null,
+      });
+      return files.map((file) => file.path);
     },
-    Effect.mapError((error) =>
-      error instanceof Error ? error : new ProviderError(String(error)),
-    ),
   );
 
   const getFileContents: DiffDataServiceShape["getFileContents"] = Effect.fn(
@@ -110,8 +193,10 @@ const makeDiffDataService = Effect.gen(function* () {
       const req = createRequest(input.repoId, input.headSha);
       const oldPath = input.oldPath.trim();
       const newPath = input.newPath.trim();
-      let baseSha = input.baseSha?.trim() || null;
+      const baseSha = input.baseSha?.trim() || null;
+      const mode = (yield* settings.getDiffDataSettings()).mode;
       console.info(DIFF_DATA_LOG_PREFIX, "get file contents", {
+        mode,
         repoId: req.repoId,
         number: input.number,
         oldPath,
@@ -128,79 +213,20 @@ const makeDiffDataService = Effect.gen(function* () {
         throw new ValidationError("New file path is required");
       }
       const repo = parseRepoId(req.repoId);
-      const provider = providerFor(repo.provider);
-      if (!baseSha && input.changeType !== "new") {
-        console.info(DIFF_DATA_LOG_PREFIX, "base sha missing; fetching refs", {
-          repoId: req.repoId,
-          number: input.number,
-          provider: repo.provider,
-        });
-        const refs = yield* provideProviderDeps(
-          provider.fetchPullRequestRefs(repo, input.number),
-        );
-        baseSha = refs.baseSha;
-        console.info(DIFF_DATA_LOG_PREFIX, "resolved refs", {
-          repoId: req.repoId,
-          number: input.number,
-          baseSha,
-          headSha: refs.headSha,
-        });
-      }
-      if (!baseSha && input.changeType !== "new") {
-        throw new ValidationError("Base SHA is required");
-      }
-      let oldContent = "";
-      let newContent = "";
-
-      if (input.changeType !== "new") {
-        console.info(DIFF_DATA_LOG_PREFIX, "fetch old file content", {
-          repoId: req.repoId,
-          number: input.number,
-          path: oldPath,
-          ref: baseSha,
-        });
-        oldContent = yield* provideProviderDeps(
-          provider.fetchFileContent(repo, oldPath, baseSha ?? ""),
-        );
-        console.info(DIFF_DATA_LOG_PREFIX, "fetched old file content", {
-          repoId: req.repoId,
-          number: input.number,
-          path: oldPath,
-          length: oldContent.length,
-        });
-      }
-
-      if (input.changeType !== "deleted") {
-        console.info(DIFF_DATA_LOG_PREFIX, "fetch new file content", {
-          repoId: req.repoId,
-          number: input.number,
-          path: newPath,
-          ref: req.headSha,
-        });
-        newContent = yield* provideProviderDeps(
-          provider.fetchFileContent(repo, newPath, req.headSha),
-        );
-        console.info(DIFF_DATA_LOG_PREFIX, "fetched new file content", {
-          repoId: req.repoId,
-          number: input.number,
-          path: newPath,
-          length: newContent.length,
-        });
-      }
-
-      return {
-        repoId: req.repoId,
+      const backendInput = {
+        repo,
+        number: input.number,
         oldPath,
         newPath,
         baseSha,
         headSha: req.headSha,
-        oldContent,
-        newContent,
+        changeType: input.changeType,
       };
+      if (mode === "provider-api") {
+        return yield* providerApiBackend.getFileContents(backendInput);
+      }
+      return yield* gitBackend.getFileContents(backendInput);
     },
-    Effect.mapError((error) =>
-      error instanceof Error ? error : new ProviderError(String(error)),
-    ),
   );
 
   return {

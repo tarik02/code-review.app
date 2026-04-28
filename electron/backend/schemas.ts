@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const forgeProviderKindSchema = z.enum(["github", "gitlab"]);
+const diffDataModeSchema = z.enum(["provider-api", "git"]);
 const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
 
 const repoSummarySchema = z.object({
@@ -56,6 +57,10 @@ const providerAccountSchema = z.object({
 
 const accountVisibilitySettingsSchema = z.object({
   enabledAccountIds: z.array(z.string()),
+});
+
+const diffDataSettingsSchema = z.object({
+  mode: diffDataModeSchema,
 });
 
 const appearanceBackgroundInputSchema = z.discriminatedUnion("kind", [
@@ -127,6 +132,8 @@ export {
   appearanceBackgroundInputSchema,
   completeOAuthSchema,
   createPullRequestReviewCommentInputSchema,
+  diffDataModeSchema,
+  diffDataSettingsSchema,
   forgeProviderKindSchema,
   overviewPullRequestSummarySchema,
   providerAccountSchema,

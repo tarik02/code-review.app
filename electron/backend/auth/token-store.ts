@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { FileSystem } from "@effect/platform";
 import path from "node:path";
 import { app, safeStorage } from "electron";
 import { Effect, Layer } from "effect";
@@ -78,46 +78,45 @@ function decryptValue(value: string): Effect.Effect<string, Error> {
   });
 }
 
-function readTokenRecords(): Effect.Effect<StoredAuthTokenRecord[], Error> {
-  return Effect.tryPromise({
-    try: async () => {
+function readTokenRecords(
+  fileSystem: FileSystem.FileSystem,
+): Effect.Effect<StoredAuthTokenRecord[], Error> {
+  return fileSystem.readFileString(tokenFilePath(), "utf8").pipe(
+    Effect.map((raw) => {
       try {
-        const raw = await readFile(tokenFilePath(), "utf8");
-        try {
-          const parsed = JSON.parse(raw) as unknown;
-          return Array.isArray(parsed) ? (parsed as StoredAuthTokenRecord[]) : [];
-        } catch {
-          return [];
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          return [];
-        }
-        throw error;
+        const parsed = JSON.parse(raw) as unknown;
+        return Array.isArray(parsed) ? (parsed as StoredAuthTokenRecord[]) : [];
+      } catch {
+        return [];
       }
-    },
-    catch: toError,
-  });
+    }),
+    Effect.catchAll(() => Effect.succeed([])),
+  );
 }
 
 function writeTokenRecords(
+  fileSystem: FileSystem.FileSystem,
   records: StoredAuthTokenRecord[],
 ): Effect.Effect<void, Error> {
-  return Effect.tryPromise({
-    try: async () => {
-      const filePath = tokenFilePath();
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
-    },
-    catch: toError,
-  });
+  const filePath = tokenFilePath();
+  return fileSystem.makeDirectory(path.dirname(filePath), { recursive: true }).pipe(
+    Effect.flatMap(() =>
+      fileSystem.writeFileString(
+        filePath,
+        `${JSON.stringify(records, null, 2)}\n`,
+      ),
+    ),
+    Effect.mapError(toError),
+  );
 }
 
 const makeAuthTokenStore = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+
   const get: AuthTokenStoreShape["get"] = Effect.fn(
     "AuthTokenStore.get",
   )(function* (accountId) {
-        const records = yield* readTokenRecords();
+        const records = yield* readTokenRecords(fileSystem);
         const record = records.find((item) => item.id === accountId);
         if (!record) return null;
 
@@ -137,7 +136,7 @@ const makeAuthTokenStore = Effect.gen(function* () {
   const listAccounts: AuthTokenStoreShape["listAccounts"] = Effect.fn(
     "AuthTokenStore.listAccounts",
   )(() =>
-    Effect.map(readTokenRecords(), (records) =>
+    Effect.map(readTokenRecords(fileSystem), (records) =>
       records.map((record) => {
         const host = normalizeHost(record.host);
         return {
@@ -173,17 +172,20 @@ const makeAuthTokenStore = Effect.gen(function* () {
           viewerLogin: token.viewerLogin,
           createdAt: token.createdAt,
         };
-        const records = yield* readTokenRecords();
+        const records = yield* readTokenRecords(fileSystem);
         const nextRecords = records.filter((item) => item.id !== token.id);
         nextRecords.push(nextRecord);
-        yield* writeTokenRecords(nextRecords);
+        yield* writeTokenRecords(fileSystem, nextRecords);
   });
 
   const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn(
     "AuthTokenStore.delete",
   )(function* (accountId) {
-        const records = yield* readTokenRecords();
-        yield* writeTokenRecords(records.filter((item) => item.id !== accountId));
+        const records = yield* readTokenRecords(fileSystem);
+        yield* writeTokenRecords(
+          fileSystem,
+          records.filter((item) => item.id !== accountId),
+        );
   });
 
   return {

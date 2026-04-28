@@ -14,6 +14,7 @@ import {
 } from "../auth/provider-auth";
 import type {
   ProviderAuthStatus,
+  PrChangedFile,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -88,7 +89,51 @@ const GhSearchResponseSchema = Schema.Struct({
 
 const GhChangedFileSchema = Schema.Struct({
   filename: Schema.String,
+  previous_filename: OptionalNullableString,
+  status: Schema.String,
+  changes: OptionalNullableNumber,
 });
+
+type GhChangedFile = typeof GhChangedFileSchema.Type;
+
+function toChangedFile(item: GhChangedFile): PrChangedFile {
+  const filename = item.filename.trim();
+  const previousFilename = item.previous_filename?.trim() || filename;
+
+  if (item.status === "added") {
+    return {
+      path: filename,
+      oldPath: "",
+      newPath: filename,
+      changeType: "new",
+    };
+  }
+
+  if (item.status === "removed") {
+    return {
+      path: filename,
+      oldPath: filename,
+      newPath: "",
+      changeType: "deleted",
+    };
+  }
+
+  if (item.status === "renamed") {
+    return {
+      path: filename,
+      oldPath: previousFilename,
+      newPath: filename,
+      changeType: item.changes === 0 ? "rename-pure" : "rename-changed",
+    };
+  }
+
+  return {
+    path: filename,
+    oldPath: filename,
+    newPath: filename,
+    changeType: "change",
+  };
+}
 
 const GhPullRequestFields = {
   number: Schema.Number,
@@ -862,23 +907,11 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  fetchPatch(repo: RepoId, number: number) {
-    return Effect.gen(function* () {
-      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
-      return yield* githubText(
-        repo.accountId,
-        repo.host,
-        `/repos/${owner}/${name}/pulls/${number}`,
-        "application/vnd.github.diff",
-      );
-    });
-  }
-
   fetchChangedFiles(repo: RepoId, number: number) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const seen = new Set<string>();
-      const files: string[] = [];
+      const files: PrChangedFile[] = [];
       let page = 1;
       let shouldContinue = true;
       while (shouldContinue) {
@@ -892,15 +925,28 @@ query($owner: String!, $name: String!, $number: Int!) {
           shouldContinue = false;
         } else {
           for (const item of items) {
-            if (!seen.has(item.filename)) {
-              seen.add(item.filename);
-              files.push(item.filename);
+            const file = toChangedFile(item);
+            if (!seen.has(file.path)) {
+              seen.add(file.path);
+              files.push(file);
             }
           }
           page += 1;
         }
       }
       return files;
+    });
+  }
+
+  fetchPatch(repo: RepoId, number: number) {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      return yield* githubText(
+        repo.accountId,
+        repo.host,
+        `/repos/${owner}/${name}/pulls/${number}`,
+        "application/vnd.github.diff",
+      );
     });
   }
 
@@ -946,6 +992,24 @@ query($owner: String!, $name: String!, $number: Int!) {
         length: content.length,
       });
       return content;
+    });
+  }
+
+  gitRemote(repo: RepoId) {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      const token = yield* validAccessToken(repo.accountId);
+      return {
+        url: `https://${repo.host}/${owner}/${name}.git`,
+        auth: {
+          envConfig: [
+            {
+              key: `http.https://${repo.host}/.extraHeader`,
+              value: `Authorization: Bearer ${token}`,
+            },
+          ],
+        },
+      };
     });
   }
 

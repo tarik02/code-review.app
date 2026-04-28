@@ -5,6 +5,8 @@ import type {
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
   CreatePullRequestReviewCommentInput,
+  DiffDataMode,
+  DiffDataSettings,
   PrFileChangeType,
   ProviderProfile,
   ReplyToPullRequestReviewCommentInput,
@@ -27,6 +29,7 @@ const forgeKeys = {
   accountVisibility: () => [...forgeKeys.auth(), "account-visibility"] as const,
   appearanceBackground: () =>
     [...forgeKeys.settings(), "appearance-background"] as const,
+  diffDataSettings: () => [...forgeKeys.settings(), "diff-data"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
   initialRepos: (accountId: string) =>
     [...forgeKeys.repos(), "initial", accountId] as const,
@@ -129,12 +132,26 @@ function appearanceBackgroundQueryOptions() {
   });
 }
 
+function diffDataSettingsQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.diffDataSettings(),
+    queryFn: async (): Promise<DiffDataSettings> => {
+      return trpc.settings.getDiffDataSettings.query();
+    },
+    staleTime: 0,
+  });
+}
+
 async function setAccountVisibility(enabledAccountIds: string[]) {
   return trpc.settings.setAccountVisibility.mutate({ enabledAccountIds });
 }
 
 async function setAppearanceBackground(input: AppearanceBackgroundInput) {
   return trpc.settings.setAppearanceBackground.mutate(input);
+}
+
+async function setDiffDataMode(mode: DiffDataMode) {
+  return trpc.settings.setDiffDataSettings.mutate({ mode });
 }
 
 async function selectCustomBackgroundFile() {
@@ -302,6 +319,7 @@ export {
   accountVisibilityQueryOptions,
   appearanceBackgroundQueryOptions,
   createPullRequestReviewComment,
+  diffDataSettingsQueryOptions,
   forgeKeys,
   initialReposQueryOptions,
   providerProfileQueryOptions,
@@ -319,6 +337,7 @@ export {
   searchReposQueryOptions,
   setAccountVisibility,
   setAppearanceBackground,
+  setDiffDataMode,
   selectCustomBackgroundFile,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,

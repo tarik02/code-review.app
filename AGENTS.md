@@ -56,6 +56,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - `electron/backend/providers/`: forge provider implementations for GitHub and GitLab.
 - `electron/backend/cli/`: command execution helpers and CLI discovery.
 - `electron/backend/services/`: domain services for repos, PRs, tracked PRs, review comments, and diff data.
+- `docs/effect-service-layers.md`: required pattern for writing and wiring Effect service layers.
 
 ### Module Boundary Rules
 - tRPC procedures call services; procedures should not contain SQL or large provider payload parsing.
@@ -63,6 +64,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - Provider modules own CLI commands and API/GraphQL payload parsing.
 - Keep renderer query keys stable when refactoring.
 - Prefer domain modules over generic utility growth.
+- Follow `docs/effect-service-layers.md` when adding or changing Effect service layers.
 
 ## Build/Run Policy
 - NEVER build the app yourself.

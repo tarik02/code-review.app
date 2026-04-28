@@ -28,9 +28,10 @@ import {
 } from "../queries/forge";
 import type {
   CreatePullRequestReviewCommentInput,
-  PrPatch,
+  DiffDataMode,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PrPatch,
   ProviderAccount,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
@@ -503,10 +504,13 @@ function useTrackedPullRequests({
   };
 }
 
-function useSelectedPullRequestData(selectedPr: SelectedPullRequest | null) {
+function useSelectedPullRequestData(
+  selectedPr: SelectedPullRequest | null,
+  diffDataMode: DiffDataMode,
+) {
   const selectedPatchQuery = useQuery({
     queryKey: selectedPr
-      ? forgeKeys.pullRequestPatch(selectedPr)
+      ? [...forgeKeys.pullRequestPatch(selectedPr), diffDataMode]
       : forgeKeys.pullRequestPatchIdle(),
     queryFn: () => {
       if (!selectedPr) {
@@ -524,7 +528,7 @@ function useSelectedPullRequestData(selectedPr: SelectedPullRequest | null) {
 
   const changedFilesQuery = useQuery({
     queryKey: selectedPr
-      ? forgeKeys.pullRequestFiles(selectedPr)
+      ? [...forgeKeys.pullRequestFiles(selectedPr), diffDataMode]
       : forgeKeys.pullRequestFilesIdle(),
     queryFn: () => {
       if (!selectedPr) {

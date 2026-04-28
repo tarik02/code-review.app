@@ -7,6 +7,7 @@ import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
   ProviderAuthStatus,
+  PrChangedFile,
   RepoSummary,
   ReviewThread,
 } from "../../shared/types";
@@ -26,6 +27,19 @@ type ReviewThreadInput = {
 type PullRequestRefs = {
   baseSha: string | null;
   headSha: string | null;
+};
+
+type GitRemoteAuth = {
+  envConfig: Array<{ key: string; value: string }>;
+  askPass?: {
+    username: string;
+    password: string;
+  };
+};
+
+type GitRemoteSpec = {
+  url: string;
+  auth: GitRemoteAuth;
 };
 
 type ForgeProvider = {
@@ -61,7 +75,7 @@ type ForgeProvider = {
   fetchChangedFiles(
     repo: RepoId,
     number: number,
-  ): Effect.Effect<string[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PrChangedFile[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchPullRequestRefs(
     repo: RepoId,
     number: number,
@@ -71,6 +85,9 @@ type ForgeProvider = {
     path: string,
     ref: string,
   ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  gitRemote(
+    repo: RepoId,
+  ): Effect.Effect<GitRemoteSpec, ProviderError, AuthTokenStore>;
   listReviewThreads(
     repo: RepoId,
     number: number,
@@ -95,4 +112,10 @@ type ForgeProvider = {
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };
 
-export type { ForgeProvider, PullRequestRefs, ReviewThreadInput };
+export type {
+  ForgeProvider,
+  GitRemoteAuth,
+  GitRemoteSpec,
+  PullRequestRefs,
+  ReviewThreadInput,
+};

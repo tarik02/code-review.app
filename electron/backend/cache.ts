@@ -54,10 +54,10 @@ type CacheServiceShape = {
     accountIds: string[],
     enabledAccountIds: string[],
   ): Effect.Effect<void, CacheError>;
-  readAppSetting(key: string): Effect.Effect<string | null, CacheError>;
-  writeAppSetting(
+  readAppSetting<T>(key: string): Effect.Effect<T | null, CacheError>;
+  writeAppSetting<T>(
     key: string,
-    valueJson: string,
+    value: T,
   ): Effect.Effect<void, CacheError>;
 };
 
@@ -628,10 +628,8 @@ const makeCacheService = Effect.gen(function* () {
       }),
   );
 
-  const readAppSetting: CacheServiceShape["readAppSetting"] = Effect.fn(
-    "CacheService.readAppSetting",
-  )((key) =>
-      wrap(() => {
+  const readAppSetting = (<T>(key: string) =>
+      wrap((): T | null => {
         const row = getDatabase()
           .prepare(
             `
@@ -642,13 +640,10 @@ const makeCacheService = Effect.gen(function* () {
           )
           .get(key) as { value_json: string } | undefined;
 
-        return row?.value_json ?? null;
-      }),
-  );
+        return row ? (JSON.parse(row.value_json) as T) : null;
+      })) satisfies CacheServiceShape["readAppSetting"];
 
-  const writeAppSetting: CacheServiceShape["writeAppSetting"] = Effect.fn(
-    "CacheService.writeAppSetting",
-  )((key, valueJson) =>
+  const writeAppSetting = (<T>(key: string, value: T) =>
       wrap(() => {
         getDatabase()
           .prepare(
@@ -661,9 +656,8 @@ const makeCacheService = Effect.gen(function* () {
               updated_at = excluded.updated_at
             `,
           )
-          .run(key, valueJson, nowUnixTimestamp());
-      }),
-  );
+          .run(key, JSON.stringify(value), nowUnixTimestamp());
+      })) satisfies CacheServiceShape["writeAppSetting"];
 
   return {
     listSavedRepos,

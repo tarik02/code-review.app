@@ -14,6 +14,7 @@ import {
 import type {
   OverviewPullRequestSummary,
   ProviderAuthStatus,
+  PrChangedFile,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -75,6 +76,10 @@ const GitLabMergeRequestSchema = Schema.Struct({
 
 const GitLabDiffSchema = Schema.Struct({
   new_path: Schema.String,
+  old_path: Schema.String,
+  new_file: Schema.Boolean,
+  deleted_file: Schema.Boolean,
+  renamed_file: Schema.Boolean,
 });
 
 const GitLabLineRangePointSchema = Schema.Struct({
@@ -130,6 +135,47 @@ type GitLabMergeRequest = typeof GitLabMergeRequestSchema.Type;
 type GitLabMrVersion = typeof GitLabMrVersionSchema.Type;
 type GitLabPosition = typeof GitLabPositionSchema.Type;
 type GitLabDiscussion = typeof GitLabDiscussionSchema.Type;
+type GitLabDiff = typeof GitLabDiffSchema.Type;
+
+function toChangedFile(diff: GitLabDiff): PrChangedFile {
+  const oldPath = diff.old_path.trim();
+  const newPath = diff.new_path.trim();
+  const path = newPath || oldPath;
+
+  if (diff.new_file) {
+    return {
+      path,
+      oldPath: "",
+      newPath,
+      changeType: "new",
+    };
+  }
+
+  if (diff.deleted_file) {
+    return {
+      path,
+      oldPath,
+      newPath: "",
+      changeType: "deleted",
+    };
+  }
+
+  if (diff.renamed_file) {
+    return {
+      path,
+      oldPath,
+      newPath,
+      changeType: "rename-changed",
+    };
+  }
+
+  return {
+    path,
+    oldPath,
+    newPath,
+    changeType: "change",
+  };
+}
 
 const OVERVIEW_MERGE_REQUEST_SCOPES = [
   "reviews_for_me",
@@ -897,17 +943,9 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  fetchPatch(repo: RepoId, number: number) {
-    return gitlabText(
-      repo.accountId,
-      repo.host,
-      projectEndpoint(repo, `merge_requests/${number}/raw_diffs`),
-    );
-  }
-
   fetchChangedFiles(repo: RepoId, number: number) {
     return Effect.gen(function* () {
-      const files: string[] = [];
+      const files: PrChangedFile[] = [];
       const seen = new Set<string>();
       let page = 1;
       let shouldContinue = true;
@@ -922,9 +960,10 @@ class GitLabProvider implements ForgeProvider {
           shouldContinue = false;
         } else {
           for (const diff of diffs) {
-            if (!seen.has(diff.new_path)) {
-              seen.add(diff.new_path);
-              files.push(diff.new_path);
+            const file = toChangedFile(diff);
+            if (!seen.has(file.path)) {
+              seen.add(file.path);
+              files.push(file);
             }
           }
           page += 1;
@@ -932,6 +971,14 @@ class GitLabProvider implements ForgeProvider {
       }
       return files;
     });
+  }
+
+  fetchPatch(repo: RepoId, number: number) {
+    return gitlabText(
+      repo.accountId,
+      repo.host,
+      projectEndpoint(repo, `merge_requests/${number}/raw_diffs`),
+    );
   }
 
   fetchPullRequestRefs(repo: RepoId, number: number) {
@@ -963,6 +1010,22 @@ class GitLabProvider implements ForgeProvider {
         }),
       ),
     );
+  }
+
+  gitRemote(repo: RepoId) {
+    return Effect.gen(function* () {
+      const token = yield* validAccessToken(repo.accountId);
+      return {
+        url: `https://${repo.host}/${repo.path}.git`,
+        auth: {
+          envConfig: [],
+          askPass: {
+            username: "oauth2",
+            password: token,
+          },
+        },
+      };
+    });
   }
 
   listReviewThreads(repo: RepoId, number: number) {

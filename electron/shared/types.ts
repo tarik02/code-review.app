@@ -1,4 +1,12 @@
+import type { FileDiffMetadata } from "@pierre/diffs";
+
 type ForgeProviderKind = "github" | "gitlab";
+
+type DiffDataMode = "provider-api" | "git";
+
+type DiffDataSettings = {
+  mode: DiffDataMode;
+};
 
 type RepoSummary = {
   id: string;
@@ -55,7 +63,7 @@ type PrPatch = {
   repoId: string;
   number: number;
   headSha: string;
-  patch: string;
+  fileDiffs: FileDiffMetadata[];
 };
 
 type PrFileChangeType =
@@ -64,6 +72,13 @@ type PrFileChangeType =
   | "rename-changed"
   | "new"
   | "deleted";
+
+type PrChangedFile = {
+  path: string;
+  oldPath: string;
+  newPath: string;
+  changeType: PrFileChangeType;
+};
 
 type PrFileContents = {
   repoId: string;
@@ -205,8 +220,11 @@ export type {
   AppearanceBackgroundSettings,
   AvailableUpdate,
   CreatePullRequestReviewCommentInput,
+  DiffDataMode,
+  DiffDataSettings,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PrChangedFile,
   PrFileChangeType,
   PrFileContents,
   PrPatch,

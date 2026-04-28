@@ -63,17 +63,17 @@ const DIFF_FONT_STYLE = {
 } as CSSProperties;
 
 const DIFF_EXPAND_LOG_PREFIX = "[diff-expand]";
+const DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX = ":fake-expandable";
 const DIFF_EXPANSION_LINE_COUNT = 20;
 const DIFF_CONTEXT_LINE_COUNT = 3;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
-const DIFF_FAKE_UNKNOWN_TRAILING_LINE_COUNT = 1;
 const DIFF_FAKE_BLANK_LINE = "\n";
 
 type SelectedPatch = {
   repoId: string;
   number: number;
   headSha: string;
-  patch: string;
+  fileDiffs: FileDiffMetadata[];
 };
 
 type DraftReviewCommentTarget =
@@ -138,6 +138,7 @@ type PatchViewerMainProps = {
   selectedPrKey: string | null;
   selectedPatch: SelectedPatch | null;
   selectedBaseSha: string | null;
+  isGitDiffMode: boolean;
   isPatchLoading: boolean;
   patchError: string;
   changedFiles: string[];
@@ -296,38 +297,6 @@ function shouldCreateExpandableFakeDiff(fileDiff: FileDiffMetadata) {
   );
 }
 
-function getTrailingVisibleContextLineCount(
-  hunk: FileDiffMetadata["hunks"][number],
-) {
-  let trailingContextLineCount = 0;
-
-  for (let index = hunk.hunkContent.length - 1; index >= 0; index -= 1) {
-    const content = hunk.hunkContent[index];
-    if (content.type !== "context") {
-      break;
-    }
-    trailingContextLineCount += content.lines;
-  }
-
-  return trailingContextLineCount;
-}
-
-function getFakeTrailingLineCount(fileDiff: FileDiffMetadata) {
-  const lastHunk = fileDiff.hunks.at(-1);
-  if (!lastHunk) {
-    return 0;
-  }
-
-  const trailingVisibleContextLineCount =
-    getTrailingVisibleContextLineCount(lastHunk);
-
-  if (trailingVisibleContextLineCount < DIFF_CONTEXT_LINE_COUNT) {
-    return 0;
-  }
-
-  return DIFF_FAKE_UNKNOWN_TRAILING_LINE_COUNT;
-}
-
 function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
   if (!shouldCreateExpandableFakeDiff(fileDiff)) {
     return fileDiff;
@@ -335,7 +304,6 @@ function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
 
   const deletionLines: string[] = [];
   const additionLines: string[] = [];
-  const fakeTrailingLineCount = getFakeTrailingLineCount(fileDiff);
   let splitLineCount = 0;
   let unifiedLineCount = 0;
   let lastAdditionHunkEnd = 0;
@@ -426,18 +394,12 @@ function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
   if (lastHunk) {
     padArrayLines(
       deletionLines,
-      lastHunk.deletionLineIndex +
-        lastHunk.deletionCount +
-        fakeTrailingLineCount,
+      lastHunk.deletionLineIndex + lastHunk.deletionCount,
     );
     padArrayLines(
       additionLines,
-      lastHunk.additionLineIndex +
-        lastHunk.additionCount +
-        fakeTrailingLineCount,
+      lastHunk.additionLineIndex + lastHunk.additionCount,
     );
-    splitLineCount += fakeTrailingLineCount;
-    unifiedLineCount += fakeTrailingLineCount;
   }
 
   const fakeFileDiff: FileDiffMetadata = {
@@ -448,7 +410,7 @@ function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
     additionLines,
     splitLineCount,
     unifiedLineCount,
-    cacheKey: `${fileDiff.cacheKey ?? fileDiff.name}:fake-expandable`,
+    cacheKey: `${fileDiff.cacheKey ?? fileDiff.name}${DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX}`,
   };
 
   console.info(DIFF_EXPAND_LOG_PREFIX, "create fake expandable diff", {
@@ -458,9 +420,6 @@ function createExpandableFakeFileDiff(fileDiff: FileDiffMetadata) {
       0,
     ),
     trailingPlaceholderLines: getTrailingCollapsedLineCount(fakeFileDiff),
-    trailingVisibleContextLines: lastHunk
-      ? getTrailingVisibleContextLineCount(lastHunk)
-      : 0,
   });
 
   return fakeFileDiff;
@@ -684,6 +643,7 @@ function PatchViewerMain({
   selectedPrKey,
   selectedPatch,
   selectedBaseSha,
+  isGitDiffMode,
   isPatchLoading,
   isDark,
   patchError,
@@ -716,9 +676,6 @@ function PatchViewerMain({
   >({});
   const diffInstancesByPath = useRef<
     Record<string, PierreDiffInstance | undefined>
-  >({});
-  const imperativelyRenderedFullDiffsByPath = useRef<
-    Record<string, FileDiffMetadata | undefined>
   >({});
   const expandedHunksByPathRef = useRef<ControlledExpandedHunksByPath>({});
   const appliedExpandedHunksSignatureByPath = useRef<
@@ -755,13 +712,17 @@ function PatchViewerMain({
   const expandableFileDiffsByPath = useMemo(() => {
     const fileDiffsByPath: Record<string, FileDiffMetadata | undefined> = {};
 
+    if (isGitDiffMode) {
+      return fileDiffsByPath;
+    }
+
     for (const fileDiff of parsedPatch.fileDiffs) {
       fileDiffsByPath[normalizePath(fileDiff.name)] =
         createExpandableFakeFileDiff(fileDiff);
     }
 
     return fileDiffsByPath;
-  }, [parsedPatch.fileDiffs]);
+  }, [isGitDiffMode, parsedPatch.fileDiffs]);
 
   const recordControlledHunkExpansion = useCallback(
     (path: string, expandTarget: ExpandClickTarget) => {
@@ -788,6 +749,10 @@ function PatchViewerMain({
 
   const applyControlledExpandedHunks = useCallback(
     (path: string, source: string) => {
+      if (isGitDiffMode) {
+        return;
+      }
+
       const instance = diffInstancesByPath.current[path];
       const expandedHunks = expandedHunksByPathRef.current[path];
       const signature = serializeExpandedHunks(expandedHunks);
@@ -810,6 +775,19 @@ function PatchViewerMain({
             reason: "missing pierre expansion map",
           });
         }
+        return;
+      }
+
+      if (
+        instance.fileDiff?.cacheKey?.endsWith(
+          DIFF_FAKE_EXPANDABLE_CACHE_KEY_SUFFIX,
+        )
+      ) {
+        console.info(DIFF_EXPAND_LOG_PREFIX, "skip controlled expansion", {
+          path,
+          source,
+          reason: "waiting for hydrated full diff",
+        });
         return;
       }
 
@@ -840,45 +818,7 @@ function PatchViewerMain({
         expandedHunks,
       });
     },
-    [],
-  );
-
-  const renderFullDiffImperatively = useCallback(
-    (path: string, fullFileDiff: FileDiffMetadata, source: string) => {
-      if (imperativelyRenderedFullDiffsByPath.current[path] === fullFileDiff) {
-        return;
-      }
-
-      const instance = diffInstancesByPath.current[path];
-      if (!instance) {
-        console.info(DIFF_EXPAND_LOG_PREFIX, "skip imperative diff render", {
-          path,
-          source,
-          reason: "missing pierre instance",
-        });
-        return;
-      }
-
-      imperativelyRenderedFullDiffsByPath.current[path] = fullFileDiff;
-      appliedExpandedHunksSignatureByPath.current[path] = undefined;
-      instance.fileDiff = fullFileDiff;
-      instance.renderRange = undefined;
-      instance.heightCache?.clear?.();
-      instance.computeApproximateSize?.();
-      instance.virtualizer?.instanceChanged?.(instance);
-      const didRender = instance.render({
-        fileDiff: fullFileDiff,
-        forceRender: true,
-      });
-      console.info(DIFF_EXPAND_LOG_PREFIX, "imperatively render full diff", {
-        path,
-        source,
-        didRender,
-        trailingCollapsedLines: getTrailingCollapsedLineCount(fullFileDiff),
-      });
-      applyControlledExpandedHunks(path, `${source}:controlled`);
-    },
-    [applyControlledExpandedHunks],
+    [isGitDiffMode],
   );
 
   useEffect(() => {
@@ -889,10 +829,9 @@ function PatchViewerMain({
     prefetchedFullFileDiffsByPath.current = {};
     pendingFullFileDiffsByPath.current = {};
     diffInstancesByPath.current = {};
-    imperativelyRenderedFullDiffsByPath.current = {};
     expandedHunksByPathRef.current = {};
     appliedExpandedHunksSignatureByPath.current = {};
-  }, [selectedPrKey]);
+  }, [isGitDiffMode, selectedPrKey]);
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();
@@ -902,16 +841,6 @@ function PatchViewerMain({
     reviewThreadsByFile,
     fullFileDiffsByPath,
   ]);
-
-  useEffect(() => {
-    for (const [path, fullFileDiff] of Object.entries(fullFileDiffsByPath)) {
-      if (!fullFileDiff) {
-        continue;
-      }
-
-      renderFullDiffImperatively(path, fullFileDiff, "state");
-    }
-  }, [fullFileDiffsByPath, renderFullDiffImperatively]);
 
   useEffect(() => {
     for (const path of Object.keys(expandedHunksByPath)) {
@@ -1082,6 +1011,10 @@ function PatchViewerMain({
     return loadFullFileDiff(fileDiff, true);
   }
 
+  function prefetchFullFileDiff(fileDiff: FileDiffMetadata) {
+    void loadFullFileDiff(fileDiff, false);
+  }
+
   function hydrateAndExpandFullFileDiff(
     fileDiff: FileDiffMetadata,
     expandTarget: ExpandClickTarget,
@@ -1103,11 +1036,6 @@ function PatchViewerMain({
         return;
       }
 
-      renderFullDiffImperatively(
-        normalizedFilePath,
-        fullFileDiff,
-        "expand-click",
-      );
       recordControlledHunkExpansion(normalizedFilePath, expandTarget);
       applyControlledExpandedHunks(normalizedFilePath, "expand-click");
       console.info(DIFF_EXPAND_LOG_PREFIX, "hydrated controlled expansion", {
@@ -1122,6 +1050,10 @@ function PatchViewerMain({
     fileDiff: FileDiffMetadata,
     isHydrated: boolean,
   ) {
+    if (isGitDiffMode) {
+      return;
+    }
+
     const expandTarget = getExpandClickTarget(event);
     if (!expandTarget) {
       return;
@@ -1130,13 +1062,29 @@ function PatchViewerMain({
     event.preventDefault();
     event.stopPropagation();
     const normalizedFilePath = normalizePath(fileDiff.name);
-    if (!isHydrated) {
+    if (!isHydrated && fileDiff.isPartial) {
       hydrateAndExpandFullFileDiff(fileDiff, expandTarget);
       return;
     }
 
     recordControlledHunkExpansion(normalizedFilePath, expandTarget);
     applyControlledExpandedHunks(normalizedFilePath, "expand-click");
+  }
+
+  function handleExpandControlHover(
+    event: ReactMouseEvent<HTMLDivElement>,
+    fileDiff: FileDiffMetadata,
+    isHydrated: boolean,
+  ) {
+    if (isGitDiffMode) {
+      return;
+    }
+
+    if (isHydrated || !fileDiff.isPartial || !getExpandClickTarget(event)) {
+      return;
+    }
+
+    prefetchFullFileDiff(fileDiff);
   }
 
   async function handleSubmitDraftComment(body: string) {
@@ -1351,9 +1299,9 @@ function PatchViewerMain({
                       {parsedPatch.parseError}
                     </div>
                   ) : parsedPatch.fileDiffs.length === 0 ? (
-                    <pre className="m-0 overflow-auto scrollbar-hidden whitespace-pre-wrap break-words p-5">
-                      {selectedPatch.patch}
-                    </pre>
+                    <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
+                      No diff content.
+                    </div>
                   ) : (
                     <div className="flex flex-col bg-white dark:bg-surface">
                       {parsedPatch.fileDiffs.map((fileDiff) => {
@@ -1363,11 +1311,15 @@ function PatchViewerMain({
                         );
                         const normalizedFilePath = normalizePath(fileDiff.name);
                         const fullFileDiff =
-                          fullFileDiffsByPath[normalizedFilePath] ?? null;
+                          isGitDiffMode
+                            ? null
+                            : fullFileDiffsByPath[normalizedFilePath] ?? null;
                         const renderedFileDiff =
-                          fullFileDiff ??
-                          expandableFileDiffsByPath[normalizedFilePath] ??
-                          fileDiff;
+                          isGitDiffMode
+                            ? fileDiff
+                            : fullFileDiff ??
+                              expandableFileDiffsByPath[normalizedFilePath] ??
+                              fileDiff;
                         let lineDraft: Extract<
                           DraftReviewCommentTarget,
                           { type: "line" }
@@ -1427,6 +1379,13 @@ function PatchViewerMain({
                                 Boolean(fullFileDiff),
                               )
                             }
+                            onMouseOverCapture={(event) =>
+                              handleExpandControlHover(
+                                event,
+                                fileDiff,
+                                Boolean(fullFileDiff),
+                              )
+                            }
                             ref={(node) => {
                               navigator.diff.registerDiffNode(
                                 fileDiff.name,
@@ -1440,6 +1399,7 @@ function PatchViewerMain({
                             }}
                           >
                             <FileDiff
+                              key={renderedFileDiff.cacheKey ?? renderedFileDiff.name}
                               fileDiff={renderedFileDiff}
                               metrics={VIRTUAL_FILE_METRICS}
                               lineAnnotations={lineAnnotations}
@@ -1464,17 +1424,12 @@ function PatchViewerMain({
                                   appliedExpandedHunksSignatureByPath.current[
                                     normalizedFilePath
                                   ] = undefined;
-                                  if (fullFileDiff) {
-                                    renderFullDiffImperatively(
+                                  if (!isGitDiffMode) {
+                                    applyControlledExpandedHunks(
                                       normalizedFilePath,
-                                      fullFileDiff,
                                       "post-render",
                                     );
                                   }
-                                  applyControlledExpandedHunks(
-                                    normalizedFilePath,
-                                    "post-render",
-                                  );
                                 },
                                 unsafeCSS: `
                                   [data-overflow='scroll'],

@@ -1,19 +1,7 @@
-import {
-  startTransition,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useWorkerPool } from "@pierre/diffs/react";
-import {
-  parsePatchFiles,
-  trimPatchContext,
-  type FileDiffMetadata,
-} from "@pierre/diffs";
 import type { GitStatusEntry } from "@pierre/trees";
 import {
   RepoSidebar,
@@ -21,7 +9,6 @@ import {
 } from "../components/ui/repo-sidebar";
 import { TrackPullRequestModal } from "../components/ui/track-pull-request-modal";
 import { PatchViewerMain } from "../components/ui/patch-viewer-main";
-import PatchParserWorker from "../pierre-patch-parser-worker.ts?worker";
 import {
   getErrorMessage,
   useAccountOverviewPullRequests,
@@ -36,11 +23,13 @@ import { buildReviewThreadsByFile } from "../lib/review-threads";
 import { trpc } from "../lib/trpc";
 import {
   accountVisibilityQueryOptions,
+  diffDataSettingsQueryOptions,
   forgeKeys,
   pullRequestListQueryOptions,
   savedReposQueryOptions,
 } from "../queries/forge";
 import type {
+  DiffDataMode,
   FileStatsEntry,
   ForgeProviderKind,
   PullRequestSummary,
@@ -48,44 +37,6 @@ import type {
   SelectedPullRequest,
 } from "../types/forge";
 
-type ParsedPatchState = {
-  fileDiffs: FileDiffMetadata[];
-  parseError: string;
-  isParsing: boolean;
-};
-
-type ParsePatchWorkerRequest = {
-  type: "parse-patch";
-  requestId: number;
-  patch: string;
-  cacheKeyPrefix: string;
-  contextSize: number;
-};
-
-type ParsePatchWorkerResponse =
-  | {
-      type: "parse-patch-success";
-      requestId: number;
-      fileDiffs: FileDiffMetadata[];
-    }
-  | {
-      type: "parse-patch-error";
-      requestId: number;
-      error: string;
-    };
-
-function parsePatchLocally(
-  patch: string,
-  cacheKeyPrefix: string,
-  contextSize: number,
-): FileDiffMetadata[] {
-  const trimmedPatch = trimPatchContext(patch, contextSize);
-  return parsePatchFiles(trimmedPatch, cacheKeyPrefix).flatMap(
-    (parsedPatch) => parsedPatch.files,
-  );
-}
-
-const AGGRESSIVE_PATCH_CONTEXT_SIZE = 3;
 type PullRequestPickerMode = "repo-then-pr" | "pr-only";
 type PullRequestPickerStep = "repo" | "pull-request";
 
@@ -187,18 +138,9 @@ function MainApp() {
   const [openRepoValues, setOpenRepoValues] = useState<string[]>([]);
   const [sidebarView, setSidebarView] =
     useState<SidebarPullRequestView>("overview");
-  const [parsedPatch, setParsedPatch] = useState<ParsedPatchState>({
-    fileDiffs: [],
-    parseError: "",
-    isParsing: false,
-  });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const patchParserWorkerRef = useRef<Worker | null>(null);
-  const parseRequestIdRef = useRef(0);
-  const pendingParseRequestRef = useRef<ParsePatchWorkerRequest | null>(null);
-  const previousParsedPatchKeyRef = useRef<string | null>(null);
   const refreshedReposRef = useRef<Set<string>>(new Set());
   const previousRepoNamesRef = useRef<string[]>([]);
 
@@ -390,95 +332,12 @@ function MainApp() {
   const sidebarErrors =
     sidebarView === "overview" ? {} : trackedRepoErrors;
 
-  useEffect(() => {
-    let worker: Worker | null = null;
-
-    try {
-      worker = new PatchParserWorker();
-    } catch (error) {
-      console.error("Failed to initialize patch parser worker.", error);
-      patchParserWorkerRef.current = null;
-      return undefined;
-    }
-
-    patchParserWorkerRef.current = worker;
-
-    const handleWorkerMessage = (
-      event: MessageEvent<ParsePatchWorkerResponse>,
-    ) => {
-      const message = event.data;
-      if (message.requestId !== parseRequestIdRef.current) {
-        return;
-      }
-
-      startTransition(() => {
-        if (message.type === "parse-patch-success") {
-          setParsedPatch({
-            fileDiffs: message.fileDiffs,
-            parseError: "",
-            isParsing: false,
-          });
-          return;
-        }
-
-        setParsedPatch({
-          fileDiffs: [],
-          parseError: message.error,
-          isParsing: false,
-        });
-      });
-    };
-
-    const handleWorkerError = (event: ErrorEvent) => {
-      console.error("Patch parser worker failed.", event.error ?? event.message);
-
-      const pendingRequest = pendingParseRequestRef.current;
-      if (!pendingRequest || pendingRequest.requestId !== parseRequestIdRef.current) {
-        return;
-      }
-
-      try {
-        const fileDiffs = parsePatchLocally(
-          pendingRequest.patch,
-          pendingRequest.cacheKeyPrefix,
-          pendingRequest.contextSize,
-        );
-
-        startTransition(() => {
-          setParsedPatch({
-            fileDiffs,
-            parseError: "",
-            isParsing: false,
-          });
-        });
-      } catch (error) {
-        startTransition(() => {
-          setParsedPatch({
-            fileDiffs: [],
-            parseError:
-              error instanceof Error
-                ? error.message
-                : "Failed to parse the PR patch.",
-            isParsing: false,
-          });
-        });
-      }
-    };
-
-    worker.addEventListener("message", handleWorkerMessage);
-    worker.addEventListener("error", handleWorkerError);
-
-    return () => {
-      worker.removeEventListener("message", handleWorkerMessage);
-      worker.removeEventListener("error", handleWorkerError);
-      worker.terminate();
-      patchParserWorkerRef.current = null;
-    };
-  }, []);
-
   const selectedPrKey = selectedPr
     ? `${selectedPr.repoId}#${selectedPr.number}@${selectedPr.headSha}`
     : null;
+  const diffDataSettingsQuery = useQuery(diffDataSettingsQueryOptions());
+  const diffDataMode: DiffDataMode =
+    diffDataSettingsQuery.data?.mode ?? "provider-api";
   const {
     changedFiles,
     changedFilesError,
@@ -489,10 +348,17 @@ function MainApp() {
     reviewThreads,
     reviewThreadsError,
     selectedPatch,
-  } = useSelectedPullRequestData(selectedPr);
+  } = useSelectedPullRequestData(selectedPr, diffDataMode);
   const reviewThreadsByFile = useMemo(
     () => buildReviewThreadsByFile(reviewThreads),
     [reviewThreads],
+  );
+  const parsedPatch = useMemo(
+    () => ({
+      fileDiffs: selectedPatch?.fileDiffs ?? [],
+      parseError: "",
+    }),
+    [selectedPatch],
   );
 
   const addedRepoKeys = useMemo(
@@ -570,62 +436,6 @@ function MainApp() {
   }, [repoNames]);
 
   useEffect(() => {
-    parseRequestIdRef.current += 1;
-
-    if (!selectedPatch?.patch) {
-      previousParsedPatchKeyRef.current = null;
-      setParsedPatch({ fileDiffs: [], parseError: "", isParsing: false });
-      return;
-    }
-
-    const patchKey = `${selectedPatch.repoId}#${selectedPatch.number}@${selectedPatch.headSha}`;
-    const shouldPreserveCurrentPatch =
-      previousParsedPatchKeyRef.current === patchKey;
-    previousParsedPatchKeyRef.current = patchKey;
-
-    setParsedPatch((current) => ({
-      fileDiffs: shouldPreserveCurrentPatch ? current.fileDiffs : [],
-      parseError: "",
-      isParsing: true,
-    }));
-
-    const request = {
-      type: "parse-patch",
-      requestId: parseRequestIdRef.current,
-      patch: selectedPatch.patch,
-      cacheKeyPrefix: `${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}`,
-      // Be aggressive here: the review UI only needs enough surrounding lines
-      // to orient the reader before Pierre's expand/collapse affordances take over.
-      contextSize: AGGRESSIVE_PATCH_CONTEXT_SIZE,
-    } satisfies ParsePatchWorkerRequest;
-
-    pendingParseRequestRef.current = request;
-
-    if (!patchParserWorkerRef.current) {
-      try {
-        const fileDiffs = parsePatchLocally(
-          request.patch,
-          request.cacheKeyPrefix,
-          request.contextSize,
-        );
-        setParsedPatch({ fileDiffs, parseError: "", isParsing: false });
-      } catch (error) {
-        setParsedPatch({
-          fileDiffs: [],
-          parseError:
-            error instanceof Error
-              ? error.message
-              : "Failed to parse the PR patch.",
-          isParsing: false,
-        });
-      }
-      return;
-    }
-
-    patchParserWorkerRef.current.postMessage(request);
-  }, [selectedPatch]);
-
-  useEffect(() => {
     for (const repo of repos) {
       const repoId = repo.id;
       if (refreshedReposRef.current.has(repoId)) {
@@ -637,9 +447,7 @@ function MainApp() {
     }
   }, [refreshTrackedPullRequests, repos]);
 
-  const isPatchPreparing =
-    isPatchLoading ||
-    (parsedPatch.isParsing && parsedPatch.fileDiffs.length === 0);
+  const isPatchPreparing = isPatchLoading;
 
   const fileStats = useMemo(() => {
     if (parsedPatch.fileDiffs.length === 0) return null;
@@ -956,6 +764,7 @@ function MainApp() {
             selectedPrKey={selectedPrKey}
             selectedPatch={selectedPatch}
             selectedBaseSha={selectedPr?.baseSha ?? null}
+            isGitDiffMode={diffDataMode === "git"}
             isPatchLoading={isPatchPreparing}
             isDark={isDark}
             patchError={patchError}

@@ -10,11 +10,17 @@ import { useAuthSession } from "../app/auth-session";
 import { trpc } from "../lib/trpc";
 import {
   accountVisibilityQueryOptions,
+  diffDataSettingsQueryOptions,
   forgeKeys,
   providerProfileQueryOptions,
   setAccountVisibility,
+  setDiffDataMode,
 } from "../queries/forge";
-import type { ForgeProviderKind, ProviderAccount } from "../types/forge";
+import type {
+  DiffDataMode,
+  ForgeProviderKind,
+  ProviderAccount,
+} from "../types/forge";
 
 function providerName(account: ProviderAccount) {
   return account.provider === "github" ? "GitHub" : "GitLab";
@@ -49,6 +55,7 @@ function ProfilesRoute() {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
+  const diffDataSettingsQuery = useQuery(diffDataSettingsQueryOptions());
   const knownAccountIds = useMemo(
     () => new Set(providerAccounts.map((account) => account.id)),
     [providerAccounts],
@@ -79,6 +86,18 @@ function ProfilesRoute() {
         accountVisibilityQueryOptions().queryKey,
         visibility,
       );
+    },
+  });
+  const diffDataModeMutation = useMutation({
+    mutationFn: setDiffDataMode,
+    onSuccess: async (settings) => {
+      queryClient.setQueryData(
+        diffDataSettingsQueryOptions().queryKey,
+        settings,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: forgeKeys.pullRequests(),
+      });
     },
   });
   const signOutMutation = useMutation({
@@ -141,6 +160,37 @@ function ProfilesRoute() {
           {providerStatusMessage}
         </p>
       ) : null}
+
+      <div className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+          <div>
+            <h3 className="text-sm font-semibold text-ink-900">Diff loading</h3>
+            <p className="mt-1 text-sm text-ink-500">
+              {diffDataSettingsQuery.data?.mode === "git"
+                ? "Use local git cache with blobless fetch."
+                : "Use GitHub/GitLab APIs."}
+            </p>
+            {diffDataModeMutation.error ? (
+              <p className="mt-2 text-sm text-danger-600">
+                {getErrorMessage(diffDataModeMutation.error)}
+              </p>
+            ) : null}
+          </div>
+          <select
+            className="h-10 rounded-md border border-neutral-200 bg-surface px-3 text-sm outline-hidden transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700"
+            disabled={diffDataModeMutation.isPending}
+            onChange={(event) =>
+              diffDataModeMutation.mutate(
+                event.currentTarget.value as DiffDataMode,
+              )
+            }
+            value={diffDataSettingsQuery.data?.mode ?? "provider-api"}
+          >
+            <option value="provider-api">Provider API</option>
+            <option value="git">Git partial clone</option>
+          </select>
+        </div>
+      </div>
 
       <div className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
         <h3 className="text-sm font-semibold text-ink-900">Add account</h3>

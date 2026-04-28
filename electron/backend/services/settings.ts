@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
+import { FileSystem } from "@effect/platform";
 import path from "node:path";
 import { app } from "electron";
 import { Effect, Layer } from "effect";
@@ -8,6 +8,7 @@ import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
+  DiffDataSettings,
 } from "../../shared/types";
 
 type SettingsServiceShape = {
@@ -15,6 +16,10 @@ type SettingsServiceShape = {
   setAccountVisibility(
     enabledAccountIds: string[],
   ): Effect.Effect<AccountVisibilitySettings, Error>;
+  getDiffDataSettings(): Effect.Effect<DiffDataSettings, Error>;
+  setDiffDataSettings(
+    settings: DiffDataSettings,
+  ): Effect.Effect<DiffDataSettings, Error>;
   getAppearanceBackground(): Effect.Effect<AppearanceBackgroundSettings, Error>;
   setAppearanceBackground(
     input: AppearanceBackgroundInput,
@@ -49,6 +54,7 @@ function toVisibilitySettings(
 }
 
 const APPEARANCE_BACKGROUND_KEY = "appearance.background";
+const DIFF_DATA_SETTINGS_KEY = "diff_data_settings";
 const MAX_BACKGROUND_FILE_SIZE = 15 * 1024 * 1024;
 
 type PersistedAppearanceBackgroundSettings =
@@ -87,15 +93,16 @@ function isBackgroundMimeType(value: string) {
   );
 }
 
-function parsePersistedBackground(
-  value: string | null,
-): PersistedAppearanceBackgroundSettings {
+function parsePersistedBackground(value: unknown): PersistedAppearanceBackgroundSettings {
   if (!value) {
     return { kind: "default" };
   }
 
   try {
-    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const parsed =
+      typeof value === "string"
+        ? (JSON.parse(value) as Record<string, unknown>)
+        : (value as Record<string, unknown>);
     if (parsed.kind === "default") {
       return { kind: "default" };
     }
@@ -127,7 +134,29 @@ function parsePersistedBackground(
   return { kind: "default" };
 }
 
+function parseDiffDataSettings(value: unknown): DiffDataSettings {
+  if (
+    value &&
+    typeof value === "object" &&
+    "mode" in value &&
+    (value.mode === "provider-api" || value.mode === "git")
+  ) {
+    return { mode: value.mode };
+  }
+
+  return { mode: "provider-api" };
+}
+
+function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings {
+  if (settings.mode !== "provider-api" && settings.mode !== "git") {
+    throw new Error("Unsupported diff loading mode.");
+  }
+
+  return { mode: settings.mode };
+}
+
 function readBackgroundDataUrl(
+  fileSystem: FileSystem.FileSystem,
   background: PersistedAppearanceBackgroundSettings,
 ): Effect.Effect<AppearanceBackgroundSettings, Error> {
   if (background.kind !== "customFile") {
@@ -135,14 +164,13 @@ function readBackgroundDataUrl(
   }
 
   return Effect.gen(function* () {
-    const dataUrl = yield* Effect.tryPromise({
-      try: async () => {
-        const data = await readFile(background.filePath);
-        return `data:${background.mimeType};base64,${data.toString("base64")}`;
-      },
-      catch: (error) =>
-        error instanceof Error ? error : new Error(String(error)),
-    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const dataUrl = yield* fileSystem.readFile(background.filePath).pipe(
+      Effect.map(
+        (data) =>
+          `data:${background.mimeType};base64,${Buffer.from(data).toString("base64")}`,
+      ),
+      Effect.catchAll(() => Effect.succeed(null)),
+    );
 
     return {
       kind: "customFile",
@@ -156,6 +184,7 @@ function readBackgroundDataUrl(
 const makeSettingsService = Effect.gen(function* () {
   const tokenStore = yield* AuthTokenStore;
   const cache = yield* CacheService;
+  const fileSystem = yield* FileSystem.FileSystem;
 
   const getAccountVisibility: SettingsServiceShape["getAccountVisibility"] = Effect.fn(
     "SettingsService.getAccountVisibility",
@@ -191,20 +220,39 @@ const makeSettingsService = Effect.gen(function* () {
         return toVisibilitySettings(accountIds, visibility);
   });
 
+  const getDiffDataSettings: SettingsServiceShape["getDiffDataSettings"] = Effect.fn(
+    "SettingsService.getDiffDataSettings",
+  )(function* () {
+        const persisted = yield* cache.readAppSetting<DiffDataSettings>(
+          DIFF_DATA_SETTINGS_KEY,
+        );
+        return parseDiffDataSettings(persisted);
+  });
+
+  const setDiffDataSettings: SettingsServiceShape["setDiffDataSettings"] = Effect.fn(
+    "SettingsService.setDiffDataSettings",
+  )(function* (settings) {
+        const validated = validateDiffDataSettings(settings);
+        yield* cache.writeAppSetting(DIFF_DATA_SETTINGS_KEY, validated);
+        return validated;
+  });
+
   const getAppearanceBackground: SettingsServiceShape["getAppearanceBackground"] = Effect.fn(
     "SettingsService.getAppearanceBackground",
   )(function* () {
-        const persisted = yield* cache.readAppSetting(APPEARANCE_BACKGROUND_KEY);
-        return yield* readBackgroundDataUrl(parsePersistedBackground(persisted));
+        const persisted = yield* cache.readAppSetting<PersistedAppearanceBackgroundSettings>(
+          APPEARANCE_BACKGROUND_KEY,
+        );
+        return yield* readBackgroundDataUrl(
+          fileSystem,
+          parsePersistedBackground(persisted),
+        );
   });
 
   const setAppearanceBackground: SettingsServiceShape["setAppearanceBackground"] = Effect.fn(
     "SettingsService.setAppearanceBackground",
   )(function* (input) {
-        yield* cache.writeAppSetting(
-          APPEARANCE_BACKGROUND_KEY,
-          JSON.stringify(input),
-        );
+        yield* cache.writeAppSetting(APPEARANCE_BACKGROUND_KEY, input);
         return yield* getAppearanceBackground();
   });
 
@@ -216,15 +264,15 @@ const makeSettingsService = Effect.gen(function* () {
           throw new Error("Background image must be a PNG, JPG, GIF, WebP, or AVIF file.");
         }
 
-        const sourceStats = yield* Effect.tryPromise({
-          try: () => stat(filePath),
-          catch: (error) =>
+        const sourceStats = yield* fileSystem.stat(filePath).pipe(
+          Effect.mapError((error) =>
             error instanceof Error ? error : new Error(String(error)),
-        });
-        if (!sourceStats.isFile()) {
+          ),
+        );
+        if (sourceStats.type !== "File") {
           throw new Error("Background image must be a file.");
         }
-        if (sourceStats.size > MAX_BACKGROUND_FILE_SIZE) {
+        if (Number(sourceStats.size) > MAX_BACKGROUND_FILE_SIZE) {
           throw new Error("Background image must be 15 MB or smaller.");
         }
 
@@ -233,16 +281,18 @@ const makeSettingsService = Effect.gen(function* () {
           backgroundDirectory,
           `background.${extension}`,
         );
-        yield* Effect.tryPromise({
-          try: async () => {
-            await mkdir(backgroundDirectory, { recursive: true });
-            if (path.resolve(filePath) !== path.resolve(destinationPath)) {
-              await copyFile(filePath, destinationPath);
-            }
-          },
-          catch: (error) =>
-            error instanceof Error ? error : new Error(String(error)),
-        });
+        yield* fileSystem
+          .makeDirectory(backgroundDirectory, { recursive: true })
+          .pipe(
+            Effect.flatMap(() =>
+              path.resolve(filePath) === path.resolve(destinationPath)
+                ? Effect.void
+                : fileSystem.copyFile(filePath, destinationPath),
+            ),
+            Effect.mapError((error) =>
+              error instanceof Error ? error : new Error(String(error)),
+            ),
+          );
 
         const persisted: PersistedAppearanceBackgroundSettings = {
           kind: "customFile",
@@ -251,16 +301,15 @@ const makeSettingsService = Effect.gen(function* () {
           mimeType: backgroundMimeTypes[extension],
         };
 
-        yield* cache.writeAppSetting(
-          APPEARANCE_BACKGROUND_KEY,
-          JSON.stringify(persisted),
-        );
-        return yield* readBackgroundDataUrl(persisted);
+        yield* cache.writeAppSetting(APPEARANCE_BACKGROUND_KEY, persisted);
+        return yield* readBackgroundDataUrl(fileSystem, persisted);
   });
 
   return {
     getAccountVisibility,
     setAccountVisibility,
+    getDiffDataSettings,
+    setDiffDataSettings,
     getAppearanceBackground,
     setAppearanceBackground,
     setCustomBackgroundFromPath,

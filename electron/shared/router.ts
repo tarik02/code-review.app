@@ -19,6 +19,7 @@ import {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
   createPullRequestReviewCommentInputSchema,
+  diffDataSettingsSchema,
   providerAccountSchema,
   providerProfileSchema,
   overviewPullRequestSummarySchema,
@@ -162,6 +163,24 @@ const router = t.router({
           Effect.gen(function* () {
             const service = yield* SettingsService;
             return yield* service.setAccountVisibility(input.enabledAccountIds);
+          }),
+        ),
+      ),
+    getDiffDataSettings: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          return yield* service.getDiffDataSettings();
+        }),
+      ),
+    ),
+    setDiffDataSettings: t.procedure
+      .input(diffDataSettingsSchema)
+      .mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setDiffDataSettings(input);
           }),
         ),
       ),
