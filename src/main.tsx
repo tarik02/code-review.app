@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import "@mdxeditor/editor/style.css";
 import "@fontsource/geist-mono/400.css";
 import "@fontsource/geist-mono/500.css";
 import "@fontsource/geist-mono/600.css";

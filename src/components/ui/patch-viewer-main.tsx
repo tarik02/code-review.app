@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  autoUpdate,
+  FloatingPortal,
+  offset,
+  size,
+  useFloating,
+} from "@floating-ui/react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties, UIEvent } from "react";
 import type {
   DiffLineAnnotation,
@@ -34,6 +47,7 @@ import {
 } from "../../lib/review-threads";
 import type {
   FileStatsEntry,
+  ForgeProviderKind,
   ReviewCommentSide,
 } from "../../types/forge";
 import {
@@ -65,6 +79,7 @@ const DIFF_FONT_STYLE = {
 const DIFF_EXPANSION_LINE_COUNT = 20;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
 const SCROLL_RESTORE_MAX_ATTEMPTS = 60;
+const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
 
 type HunkExpansionOwner = {
   expandHunk(
@@ -86,6 +101,7 @@ type SelectedPatch = {
 
 type DraftReviewCommentAnnotation = {
   kind: "draft";
+  portalRootId: string;
 };
 
 type PatchLineAnnotation =
@@ -149,6 +165,169 @@ function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
   }
 
   return `Lines ${startLine}-${endLine}`;
+}
+
+function getProviderFromRepoId(repoId: string): ForgeProviderKind {
+  return repoId.startsWith("gitlab:") ? "gitlab" : "github";
+}
+
+function getDiffLineContent(
+  fileDiff: FileDiffMetadata,
+  side: ReviewCommentSide,
+  line: number,
+) {
+  const isAdditionSide = side === "RIGHT";
+  const lines = isAdditionSide ? fileDiff.additionLines : fileDiff.deletionLines;
+
+  for (const hunk of fileDiff.hunks) {
+    const startLine = isAdditionSide ? hunk.additionStart : hunk.deletionStart;
+    const lineCount = isAdditionSide ? hunk.additionCount : hunk.deletionCount;
+    const lineIndex = isAdditionSide
+      ? hunk.additionLineIndex
+      : hunk.deletionLineIndex;
+
+    if (line >= startLine && line < startLine + lineCount) {
+      return lines[lineIndex + line - startLine] ?? null;
+    }
+  }
+
+  return null;
+}
+
+function getDraftSelectedText(
+  fileDiffs: FileDiffMetadata[],
+  target: DraftReviewCommentTarget | null,
+) {
+  if (!target || target.type !== "line") {
+    return "";
+  }
+
+  if (target.startSide && target.startSide !== target.side) {
+    return "";
+  }
+
+  const fileDiff = fileDiffs.find(
+    (candidate) => normalizePath(candidate.name) === normalizePath(target.path),
+  );
+  if (!fileDiff) {
+    return "";
+  }
+
+  const startLine = Math.min(target.startLine ?? target.line, target.line);
+  const endLine = Math.max(target.startLine ?? target.line, target.line);
+  const selectedLines: string[] = [];
+
+  for (let line = startLine; line <= endLine; line += 1) {
+    const lineContent = getDiffLineContent(fileDiff, target.side, line);
+    if (lineContent === null) {
+      return "";
+    }
+
+    selectedLines.push(lineContent);
+  }
+
+  return selectedLines.join("\n");
+}
+
+type FloatingLineDraftEditorProps = {
+  error: string;
+  isPending: boolean;
+  provider: ForgeProviderKind;
+  portalRootId: string;
+  selectedLineLabel?: string;
+  selectedText: string;
+  target: DraftReviewCommentTarget | null;
+  onCancel: () => void;
+  onSubmit: (body: string) => Promise<void>;
+};
+
+function FloatingLineDraftEditor({
+  error,
+  isPending,
+  provider,
+  portalRootId,
+  selectedLineLabel,
+  selectedText,
+  target,
+  onCancel,
+  onSubmit,
+}: FloatingLineDraftEditorProps) {
+  const spacerRef = useRef<HTMLDivElement | null>(null);
+  const [hasReference, setHasReference] = useState(false);
+  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const { floatingStyles, refs } = useFloating({
+    placement: "bottom-start",
+    strategy: "absolute",
+    transform: false,
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(({ rects }) => ({
+        mainAxis: -rects.reference.height,
+      })),
+      size({
+        apply({ elements, rects }) {
+          Object.assign(elements.floating.style, {
+            width: `${rects.reference.width}px`,
+          });
+
+          const nextHeight = Math.ceil(
+            elements.floating.getBoundingClientRect().height,
+          );
+          if (spacerRef.current && nextHeight > 0) {
+            spacerRef.current.style.height = `${nextHeight}px`;
+          }
+        },
+      }),
+    ],
+  });
+  const setReference = useCallback(
+    (node: HTMLDivElement | null) => {
+      spacerRef.current = node;
+      refs.setReference(node);
+      setHasReference(node !== null);
+    },
+    [refs],
+  );
+  const setFloating = useCallback(
+    (node: HTMLDivElement | null) => {
+      refs.setFloating(node);
+    },
+    [refs],
+  );
+
+  useLayoutEffect(() => {
+    setPortalRoot(document.getElementById(portalRootId));
+  }, [portalRootId]);
+
+  return (
+    <>
+      <div
+        ref={setReference}
+        style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }}
+      />
+      <FloatingPortal root={portalRoot}>
+        {hasReference && portalRoot ? (
+          <div
+            ref={setFloating}
+            className="pointer-events-auto z-50 px-3 py-2 font-sans"
+            style={floatingStyles}
+          >
+            <ReviewCommentEditor
+              error={error}
+              isPending={isPending}
+              provider={provider}
+              selectedLineLabel={selectedLineLabel}
+              selectedText={selectedText}
+              submitLabel="Comment"
+              target={target}
+              onCancel={onCancel}
+              onSubmit={onSubmit}
+            />
+          </div>
+        ) : null}
+      </FloatingPortal>
+    </>
+  );
 }
 
 function getMissingExpansion(desired: number, current: number) {
@@ -468,6 +647,13 @@ function PatchViewerMain({
           headSha: selectedPatch.headSha,
         }
       : null,
+  );
+  const selectedProvider = selectedPatch
+    ? getProviderFromRepoId(selectedPatch.repoId)
+    : "github";
+  const draftSelectedText = getDraftSelectedText(
+    parsedPatch.fileDiffs,
+    draftCommentTarget,
   );
 
   const handleVirtualizerRootChange = useCallback(
@@ -795,11 +981,14 @@ function PatchViewerMain({
   ) {
     if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
       return (
-        <ReviewCommentEditor
+        <FloatingLineDraftEditor
           error={draftCommentError}
           isPending={createCommentMutation.isPending}
+          portalRootId={annotation.metadata.portalRootId}
+          provider={selectedProvider}
           selectedLineLabel={getSelectedLineLabel(draftCommentTarget)}
-          submitLabel="Comment"
+          selectedText={draftSelectedText}
+          target={draftCommentTarget}
           onCancel={() => clearDraftComment(patchViewerSessionKey)}
           onSubmit={handleSubmitDraftComment}
         />
@@ -889,12 +1078,13 @@ function PatchViewerMain({
                     </div>
                   ) : (
                     <div className="flex flex-col bg-white dark:bg-surface">
-                      {parsedPatch.fileDiffs.map((fileDiff) => {
+                      {parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
                         const fileReviewThreads = getFileReviewThreadsForPath(
                           reviewThreadsByFile,
                           fileDiff.name,
                         );
                         const normalizedFilePath = normalizePath(fileDiff.name);
+                        const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
                         let lineDraft: Extract<
                           DraftReviewCommentTarget,
                           { type: "line" }
@@ -927,7 +1117,10 @@ function PatchViewerMain({
                                 {
                                   side: toSelectionSide(lineDraft.side),
                                   lineNumber: lineDraft.line,
-                                  metadata: { kind: "draft" },
+                                  metadata: {
+                                    kind: "draft",
+                                    portalRootId: lineDraftPortalRootId,
+                                  },
                                 },
                               ]
                             : fileReviewThreads.lineAnnotations;
@@ -945,6 +1138,7 @@ function PatchViewerMain({
 
                         return (
                           <div
+                            className="relative"
                             data-file-path={fileDiff.name}
                             key={`${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
                             ref={(node) =>
@@ -1035,6 +1229,10 @@ function PatchViewerMain({
                                 )
                               }
                             />
+                            <div
+                              id={lineDraftPortalRootId}
+                              className="pointer-events-none absolute inset-0 z-[4]"
+                            />
                             {fileReviewThreads.fileThreads.length > 0 ||
                             fileDraft ? (
                               <div className="mt-3 flex flex-col gap-3 rounded-xl border border-ink-200 bg-surface p-3">
@@ -1045,7 +1243,9 @@ function PatchViewerMain({
                                   <ReviewCommentEditor
                                     error={draftCommentError}
                                     isPending={createCommentMutation.isPending}
+                                    provider={selectedProvider}
                                     submitLabel="Comment"
+                                    target={fileDraft}
                                     onCancel={() =>
                                       clearDraftComment(patchViewerSessionKey)
                                     }

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import type { ReviewComment, ReviewThread } from "../../lib/review-threads";
 import { CommentMarkdown } from "./comment-markdown";
-import { ReviewCommentEditor } from "./review-comment-editor";
+import {
+  ReviewCommentEditor,
+  type CommentEditorTarget,
+} from "./review-comment-editor";
 
 type ReviewThreadCardProps = {
   thread: ReviewThread;
@@ -48,6 +51,24 @@ function formatThreadLineLabel(thread: ReviewThread) {
   return `Lines ${minLine}-${maxLine}`;
 }
 
+function getThreadEditorTarget(thread: ReviewThread): CommentEditorTarget {
+  if (thread.line === null || thread.side === null) {
+    return {
+      type: "file",
+      path: thread.path,
+    };
+  }
+
+  return {
+    type: "line",
+    path: thread.path,
+    line: thread.line,
+    side: thread.side,
+    startLine: thread.startLine,
+    startSide: thread.startSide,
+  };
+}
+
 function CommentAvatar({ comment }: { comment: ReviewComment }) {
   const initials = comment.authorLogin.slice(0, 1).toUpperCase();
 
@@ -89,6 +110,7 @@ function ReviewThreadCard({
     thread.comments.find((comment) => comment.replyToId === null) ??
     thread.comments[0] ??
     null;
+  const editorTarget = getThreadEditorTarget(thread);
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
@@ -240,7 +262,9 @@ function ReviewThreadCard({
                       error={actionError}
                       initialValue={comment.body}
                       isPending={isSubmitting}
+                      provider={thread.provider}
                       submitLabel="Save"
+                      target={editorTarget}
                       onCancel={() => {
                         setActionError("");
                         setActiveAction(null);
@@ -264,7 +288,9 @@ function ReviewThreadCard({
               error={actionError}
               framed={false}
               isPending={isSubmitting}
+              provider={thread.provider}
               submitLabel="Reply"
+              target={editorTarget}
               onCancel={() => {
                 setActionError("");
                 setActiveAction(null);

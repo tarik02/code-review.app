@@ -1,0 +1,230 @@
+.rudu-comment-editor {
+  --basePageBg: rgb(var(--rgb-surface));
+  --baseBase: rgb(var(--rgb-surface));
+  --baseBgSubtle: rgb(var(--rgb-canvas));
+  --baseBg: rgb(var(--rgb-canvas));
+  --baseBgHover: rgb(var(--rgb-canvas-hover));
+  --baseBgActive: rgb(var(--rgb-canvas-hover));
+  --baseLine: rgb(var(--rgb-ink-200));
+  --baseBorder: rgb(var(--rgb-ink-200));
+  --baseBorderHover: rgb(var(--rgb-ink-300));
+  --baseSolid: rgb(var(--rgb-ink-500));
+  --baseSolidHover: rgb(var(--rgb-ink-600));
+  --baseText: rgb(var(--rgb-ink-600));
+  --baseTextContrast: rgb(var(--rgb-ink-900));
+  --accentBg: rgb(var(--rgb-ink-100));
+  --accentBgHover: rgb(var(--rgb-canvas-hover));
+  --accentSolid: rgb(var(--rgb-ink-800));
+  --accentSolidHover: rgb(var(--rgb-ink-900));
+  --accentText: rgb(var(--rgb-ink-800));
+  --accentTextContrast: rgb(var(--rgb-ink-900));
+  --font-body: var(--font-sans);
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+
+  overflow: visible;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+  color: rgb(var(--rgb-ink-900));
+  cursor: text;
+}
+
+.rudu-comment-editor [class*="_editorWrapper_"] {
+  min-height: 0;
+}
+
+.rudu-comment-editor [class*="_rootContentEditableWrapper_"] {
+  min-height: 0;
+}
+
+.rudu-comment-editor-toolbar {
+  position: relative;
+  z-index: 20;
+  min-height: 2rem;
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.25rem;
+}
+
+.rudu-comment-editor-toolbar button {
+  min-height: 1.5rem;
+  min-width: 1.5rem;
+  color: rgb(var(--rgb-ink-700));
+}
+
+.rudu-comment-editor-toolbar button:hover:not(:disabled),
+.rudu-comment-editor-toolbar button[data-state="on"] {
+  background: rgb(var(--rgb-canvas-hover));
+  color: rgb(var(--rgb-ink-900));
+}
+
+.rudu-comment-editor-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.rudu-comment-editor-content {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  overflow-y: visible;
+  padding: 0.5rem 0.75rem;
+  background: rgb(var(--rgb-surface));
+  caret-color: rgb(var(--rgb-ink-900));
+  color: rgb(var(--rgb-ink-900));
+  cursor: text;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+.rudu-comment-editor-content::selection,
+.rudu-comment-editor-content *::selection,
+.rudu-comment-editor-suggestion-language::selection,
+.rudu-comment-editor-suggestion-code::selection,
+.rudu-comment-editor .cm-content::selection,
+.rudu-comment-editor .cm-content ::selection {
+  background: rgb(59 130 246 / 0.45);
+  color: rgb(var(--rgb-ink-900));
+}
+
+.rudu-comment-editor .cm-selectionBackground,
+.rudu-comment-editor .cm-focused .cm-selectionBackground {
+  background: rgb(59 130 246 / 0.45) !important;
+}
+
+.rudu-comment-editor-content:empty::before {
+  content: "\200b";
+}
+
+.rudu-comment-editor:focus-within [class*="_placeholder_"] {
+  display: none;
+}
+
+.rudu-comment-editor [class*="_placeholder_"] {
+  padding: 0.5rem 0.75rem;
+  color: rgb(var(--rgb-ink-500));
+}
+
+.rudu-comment-editor-content p {
+  margin: 0.35rem 0;
+}
+
+.rudu-comment-editor-content p:first-child {
+  margin-top: 0;
+}
+
+.rudu-comment-editor-content p:last-child {
+  margin-bottom: 0;
+}
+
+.rudu-comment-editor-content code {
+  border-radius: 0.25rem;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.125rem 0.25rem;
+  font-family: var(--font-mono);
+}
+
+.rudu-comment-editor [class*="_codeMirrorWrapper_"] {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-color: rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+  overflow: hidden;
+}
+
+.rudu-comment-editor-content pre,
+.rudu-comment-editor .cm-sourceView {
+  margin: 0;
+  background: rgb(var(--rgb-surface));
+}
+
+.rudu-comment-editor-suggestion {
+  margin: 0.5rem 0;
+  overflow: hidden;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+}
+
+.rudu-comment-editor-suggestion-language {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  background: rgb(var(--rgb-canvas));
+  color: rgb(var(--rgb-ink-700));
+  caret-color: rgb(var(--rgb-ink-900));
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  outline: none;
+  padding: 0.35rem 0.75rem;
+}
+
+.rudu-comment-editor-suggestion-language:focus {
+  color: rgb(var(--rgb-ink-900));
+}
+
+.rudu-comment-editor-suggestion-code {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  resize: none;
+  border: 0;
+  background: rgb(var(--rgb-surface));
+  caret-color: rgb(var(--rgb-ink-900));
+  color: rgb(var(--rgb-ink-900));
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5rem;
+  outline: none;
+  overflow: hidden;
+  padding: 0.5rem 0.75rem;
+  white-space: pre;
+}
+
+.rudu-comment-editor .cm-sourceView .cm-editor {
+  min-height: 96px;
+  background: rgb(var(--rgb-surface));
+}
+
+.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-editor {
+  min-height: 0;
+  background: rgb(var(--rgb-surface));
+  outline: none;
+}
+
+.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-scroller {
+  overflow: visible;
+}
+
+.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-focused,
+.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-content:focus {
+  outline: none;
+}
+
+.rudu-comment-editor [class*="_codeMirrorToolbar_"] {
+  border-bottom-left-radius: 0.375rem;
+  border-left: 1px solid rgb(var(--rgb-ink-200));
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  background: rgb(var(--rgb-canvas));
+}
+
+.rudu-comment-editor .mdxeditor-select-content,
+.rudu-comment-editor [class*="_selectContainer_"],
+.rudu-comment-editor [class*="_toolbarButtonDropdownContainer_"],
+.rudu-comment-editor [class*="_toolbarCodeBlockLanguageSelectContent_"],
+.rudu-comment-editor [class*="_popoverContent_"] {
+  z-index: 100 !important;
+}
+
+.rudu-comment-editor .cm-sourceView .cm-scroller {
+  overflow: visible;
+  color: rgb(var(--rgb-ink-900));
+}
+
+.rudu-comment-editor .cm-sourceView .cm-gutters {
+  display: none;
+}
