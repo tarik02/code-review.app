@@ -1,17 +1,21 @@
-import { useEffect } from "react";
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import type { CSSProperties, UIEvent } from "react";
 import type {
   DiffLineAnnotation,
+  ExpansionDirections,
+  FileDiff as PierreFileDiffInstance,
   FileDiffMetadata,
+  HunkExpansionRegion,
   SelectedLineRange,
   VirtualFileMetrics,
   VirtualizerConfig,
 } from "@pierre/diffs";
 import { useQuery } from "@tanstack/react-query";
 import type { GitStatusEntry } from "@pierre/trees";
-import { FileDiff, Virtualizer } from "@pierre/diffs/react";
+import { FileDiff } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
+import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
 import { ReviewCommentEditor } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
@@ -60,6 +64,18 @@ const DIFF_FONT_STYLE = {
 
 const DIFF_EXPANSION_LINE_COUNT = 20;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
+const SCROLL_RESTORE_MAX_ATTEMPTS = 60;
+
+type HunkExpansionOwner = {
+  expandHunk(
+    hunkIndex: number,
+    direction: ExpansionDirections,
+    expansionLineCountOverride?: number,
+  ): void;
+  hunksRenderer?: {
+    getExpandedHunk?(hunkIndex: number): HunkExpansionRegion;
+  };
+};
 
 type SelectedPatch = {
   repoId: string;
@@ -107,6 +123,19 @@ function toSelectionSide(side: ReviewCommentSide | null | undefined) {
   return side === "LEFT" ? "deletions" : "additions";
 }
 
+function scheduleNextFrame(callback: () => void) {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.requestAnimationFrame === "function"
+  ) {
+    const frameId = window.requestAnimationFrame(callback);
+    return () => window.cancelAnimationFrame(frameId);
+  }
+
+  const timeoutId = setTimeout(callback, 0);
+  return () => clearTimeout(timeoutId);
+}
+
 function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
   if (!target || target.type !== "line") {
     return undefined;
@@ -120,6 +149,135 @@ function getSelectedLineLabel(target: DraftReviewCommentTarget | null) {
   }
 
   return `Lines ${startLine}-${endLine}`;
+}
+
+function getMissingExpansion(desired: number, current: number) {
+  if (desired === Number.POSITIVE_INFINITY) {
+    return current === Number.POSITIVE_INFINITY ? 0 : Number.POSITIVE_INFINITY;
+  }
+
+  return Math.max(desired - current, 0);
+}
+
+function getCurrentHunkExpansion(
+  instance: HunkExpansionOwner,
+  hunkIndex: number,
+) {
+  return (
+    instance.hunksRenderer?.getExpandedHunk?.(hunkIndex) ?? {
+      fromStart: 0,
+      fromEnd: 0,
+    }
+  );
+}
+
+function replayHunkExpansions(
+  fileDiff: FileDiffMetadata,
+  instance: HunkExpansionOwner,
+  fileExpansions: Record<string, HunkExpansionRegion | undefined> | undefined,
+) {
+  if (!fileExpansions || fileDiff.isPartial) {
+    return;
+  }
+
+  for (const [hunkIndexKey, desiredRegion] of Object.entries(fileExpansions)) {
+    if (!desiredRegion) continue;
+
+    const hunkIndex = Number.parseInt(hunkIndexKey, 10);
+    if (
+      !Number.isInteger(hunkIndex) ||
+      hunkIndex < 0 ||
+      hunkIndex > fileDiff.hunks.length
+    ) {
+      continue;
+    }
+
+    const currentRegion = getCurrentHunkExpansion(instance, hunkIndex);
+    const upExpansion = getMissingExpansion(
+      desiredRegion.fromStart,
+      currentRegion.fromStart,
+    );
+    const downExpansion = getMissingExpansion(
+      desiredRegion.fromEnd,
+      currentRegion.fromEnd,
+    );
+
+    if (
+      upExpansion > 0 &&
+      downExpansion > 0 &&
+      upExpansion === downExpansion
+    ) {
+      instance.expandHunk(hunkIndex, "both", upExpansion);
+      continue;
+    }
+
+    if (upExpansion > 0) {
+      instance.expandHunk(hunkIndex, "up", upExpansion);
+    }
+
+    const nextRegion = getCurrentHunkExpansion(instance, hunkIndex);
+    const nextDownExpansion = getMissingExpansion(
+      desiredRegion.fromEnd,
+      nextRegion.fromEnd,
+    );
+
+    if (nextDownExpansion > 0) {
+      instance.expandHunk(hunkIndex, "down", nextDownExpansion);
+    }
+  }
+}
+
+function getExpansionClick(
+  event: MouseEvent,
+): {
+  hunkIndex: number;
+  direction: ExpansionDirections;
+  lineCount: number;
+} | null {
+  let direction: ExpansionDirections = "both";
+  let hunkIndex: number | null = null;
+  let isExpansionClick = false;
+  let expandAll = event.shiftKey;
+
+  for (const target of event.composedPath()) {
+    if (!(target instanceof Element)) continue;
+
+    if (
+      target.hasAttribute("data-expand-button") ||
+      target.hasAttribute("data-unmodified-lines")
+    ) {
+      isExpansionClick = true;
+      expandAll ||= target.hasAttribute("data-expand-all-button");
+
+      if (target.hasAttribute("data-expand-up")) {
+        direction = "up";
+      } else if (target.hasAttribute("data-expand-down")) {
+        direction = "down";
+      } else {
+        direction = "both";
+      }
+    }
+
+    const expandIndex = target.getAttribute("data-expand-index");
+    if (expandIndex !== null && hunkIndex === null) {
+      const parsedIndex = Number.parseInt(expandIndex, 10);
+      if (!Number.isNaN(parsedIndex)) {
+        hunkIndex = parsedIndex;
+      }
+    }
+  }
+
+  if (!isExpansionClick || hunkIndex === null) {
+    return null;
+  }
+
+  return {
+    hunkIndex,
+    direction,
+    lineCount: expandAll
+      ? Number.POSITIVE_INFINITY
+      : DIFF_EXPANSION_LINE_COUNT,
+  };
 }
 
 type ReviewThreadsPanelProps = {
@@ -274,7 +432,18 @@ function PatchViewerMain({
   const setPendingScrollPath = usePatchViewerStore(
     (state) => state.setPendingScrollPath,
   );
+  const setScrollTop = usePatchViewerStore((state) => state.setScrollTop);
+  const recordHunkExpansion = usePatchViewerStore(
+    (state) => state.recordHunkExpansion,
+  );
+  const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const restoringScrollSessionKeyRef = useRef<string | null>(null);
+  const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
+  const previousSessionKeyRef = useRef<string | null>(patchViewerSessionKey);
+  const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
   const hasSelection = selectedPrKey !== null;
+  const isDiffReady =
+    !isPatchLoading && !patchError && !parsedPatch.parseError;
   const shouldShowCommentsPanel =
     hasSelection &&
     (isReviewThreadsLoading ||
@@ -283,7 +452,7 @@ function PatchViewerMain({
   const navigator = useDiffNavigator({
     sessionKey: patchViewerSessionKey,
     prKey: selectedPrKey,
-    isDiffReady: !isPatchLoading && !patchError && !parsedPatch.parseError,
+    isDiffReady,
     hasDiffError: Boolean(patchError || parsedPatch.parseError),
   });
   const {
@@ -301,14 +470,175 @@ function PatchViewerMain({
       : null,
   );
 
+  const handleVirtualizerRootChange = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollRootRef.current = node;
+    },
+    [],
+  );
+
+  const handlePatchScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      if (restoringScrollSessionKeyRef.current === patchViewerSessionKey) {
+        return;
+      }
+
+      setScrollTop(patchViewerSessionKey, event.currentTarget.scrollTop);
+    },
+    [patchViewerSessionKey, setScrollTop],
+  );
+
+  const handleFileDiffPostRender = useCallback(
+    (
+      node: HTMLElement,
+      instance: PierreFileDiffInstance<PatchLineAnnotation>,
+      fileDiff: FileDiffMetadata,
+      normalizedFilePath: string,
+    ) => {
+      node.dataset.patchViewerSessionKey = patchViewerSessionKey ?? "";
+      node.dataset.patchViewerFilePath = normalizedFilePath;
+
+      if (!hunkExpansionNodesRef.current.has(node)) {
+        const clickListener = (event: MouseEvent) => {
+          const expansion = getExpansionClick(event);
+          if (!expansion) return;
+          const sessionKey = node.dataset.patchViewerSessionKey || null;
+          const filePath = node.dataset.patchViewerFilePath;
+          if (!filePath) return;
+
+          recordHunkExpansion(
+            sessionKey,
+            filePath,
+            expansion.hunkIndex,
+            expansion.direction,
+            expansion.lineCount,
+          );
+        };
+
+        node.addEventListener("click", clickListener, { capture: true });
+        hunkExpansionNodesRef.current.add(node);
+      }
+
+      const fileExpansions = getPatchViewerSessionState(
+        usePatchViewerStore.getState(),
+        patchViewerSessionKey,
+      ).hunkExpansionsByFile[normalizedFilePath];
+      replayHunkExpansions(
+        fileDiff,
+        instance as HunkExpansionOwner,
+        fileExpansions,
+      );
+    },
+    [patchViewerSessionKey, recordHunkExpansion],
+  );
+
+  const restoreScrollPosition = useCallback(
+    (sessionKey: string, scrollTop: number) => {
+      cancelScrollRestoreRef.current?.();
+      restoringScrollSessionKeyRef.current = sessionKey;
+
+      let attempts = 0;
+      let cancelFrame: (() => void) | null = null;
+      let cancelled = false;
+
+      const stop = () => {
+        cancelled = true;
+        cancelFrame?.();
+        cancelFrame = null;
+        cancelScrollRestoreRef.current = null;
+        if (restoringScrollSessionKeyRef.current === sessionKey) {
+          restoringScrollSessionKeyRef.current = null;
+        }
+      };
+
+      const tick = () => {
+        if (cancelled) {
+          return;
+        }
+
+        const root = scrollRootRef.current;
+        if (!root || previousSessionKeyRef.current !== sessionKey) {
+          stop();
+          return;
+        }
+
+        root.scrollTo({
+          top: scrollTop,
+          behavior: "auto",
+        });
+
+        const maxScrollTop = Math.max(root.scrollHeight - root.clientHeight, 0);
+        const isRestored =
+          Math.abs(root.scrollTop - Math.min(scrollTop, maxScrollTop)) <= 1 &&
+          maxScrollTop >= scrollTop;
+
+        attempts += 1;
+        if (isRestored || attempts >= SCROLL_RESTORE_MAX_ATTEMPTS) {
+          stop();
+          return;
+        }
+
+        cancelFrame = scheduleNextFrame(tick);
+      };
+
+      cancelScrollRestoreRef.current = stop;
+      cancelFrame = scheduleNextFrame(tick);
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    previousSessionKeyRef.current = patchViewerSessionKey;
+  }, [patchViewerSessionKey]);
+
+  useEffect(() => {
+    return () => {
+      cancelScrollRestoreRef.current?.();
+      const sessionKey = previousSessionKeyRef.current;
+      if (!sessionKey || !scrollRootRef.current) {
+        return;
+      }
+
+      setScrollTop(sessionKey, scrollRootRef.current.scrollTop);
+    };
+  }, [setScrollTop]);
+
   useEffect(() => {
     ensureSession(patchViewerSessionKey);
-    const selectedFilePath = getPatchViewerSessionState(
+    const session = getPatchViewerSessionState(
       usePatchViewerStore.getState(),
       patchViewerSessionKey,
-    ).selectedFilePath;
-    setPendingScrollPath(patchViewerSessionKey, selectedFilePath);
+    );
+    setPendingScrollPath(
+      patchViewerSessionKey,
+      session.scrollTop === null ? session.selectedFilePath : null,
+    );
   }, [ensureSession, patchViewerSessionKey, setPendingScrollPath]);
+
+  useLayoutEffect(() => {
+    if (!patchViewerSessionKey || !isDiffReady || !scrollRootRef.current) {
+      return;
+    }
+
+    const scrollTop = getPatchViewerSessionState(
+      usePatchViewerStore.getState(),
+      patchViewerSessionKey,
+    ).scrollTop;
+    if (scrollTop === null) {
+      return;
+    }
+
+    restoreScrollPosition(patchViewerSessionKey, scrollTop);
+
+    return () => {
+      cancelScrollRestoreRef.current?.();
+    };
+  }, [
+    isDiffReady,
+    parsedPatch.fileDiffs,
+    patchViewerSessionKey,
+    restoreScrollPosition,
+  ]);
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();
@@ -507,10 +837,12 @@ function PatchViewerMain({
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
         <div className="flex min-h-0 min-w-0 flex-1">
           <div className="min-h-0 min-w-[30%] flex-1">
-            <Virtualizer
+            <PatchScrollVirtualizer
               className="relative h-full min-h-0 min-w-0 overflow-y-auto scrollbar-hidden"
               config={VIRTUALIZER_CONFIG}
               contentClassName="flex min-h-full flex-col bg-white dark:bg-surface"
+              onRootChange={handleVirtualizerRootChange}
+              onScroll={handlePatchScroll}
             >
               {!selectedPrKey && !isPatchLoading ? (
                 <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-6 py-10 text-center md:min-h-full">
@@ -614,7 +946,7 @@ function PatchViewerMain({
                         return (
                           <div
                             data-file-path={fileDiff.name}
-                            key={`${selectedPatch.repoId}-${selectedPatch.number}-${normalizePath(fileDiff.name)}`}
+                            key={`${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
                             ref={(node) =>
                               navigator.diff.registerDiffNode(
                                 fileDiff.name,
@@ -687,6 +1019,13 @@ function PatchViewerMain({
                                   draftCommentTarget === null,
                                 onGutterUtilityClick: (range) =>
                                   openLineCommentDraft(fileDiff.name, range),
+                                onPostRender: (node, instance) =>
+                                  handleFileDiffPostRender(
+                                    node,
+                                    instance,
+                                    fileDiff,
+                                    normalizedFilePath,
+                                  ),
                               }}
                               renderAnnotation={renderReviewThreadAnnotations}
                               renderHeaderMetadata={() =>
@@ -731,7 +1070,7 @@ function PatchViewerMain({
                   )}
                 </div>
               ) : null}
-            </Virtualizer>
+            </PatchScrollVirtualizer>
           </div>
           <div className="min-h-0 w-1/3 min-w-[15%] shrink-0">
             <div

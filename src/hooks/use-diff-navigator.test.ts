@@ -99,22 +99,24 @@ describe("createDiffNavigatorController", () => {
     assert.equal(controller.getState().pendingScrollPath, null);
   });
 
-  it("preserves selection and queues it for scrolling when PR key changes", () => {
+  it("preserves selection without queueing scroll when PR key changes", () => {
     const { controller, getSelectedFilePath } = createController({
       prKey: "repo#1@shaA",
     });
+    const node = createFakeNode();
 
     controller.onSelectFile("src/app.ts");
+    controller.registerDiffNode("src/app.ts", node.node as HTMLDivElement);
     assert.equal(getSelectedFilePath(), "src/app.ts");
-    assert.equal(controller.getState().pendingScrollPath, "src/app.ts");
+    assert.equal(controller.getState().pendingScrollPath, null);
 
     controller.setPrKey("repo#2@shaB");
 
     assert.equal(getSelectedFilePath(), "src/app.ts");
-    assert.equal(controller.getState().pendingScrollPath, "src/app.ts");
+    assert.equal(controller.getState().pendingScrollPath, null);
   });
 
-  it("restabilizes valid selection on content change", () => {
+  it("does not re-scroll valid selection on content change", () => {
     const { controller, getSelectedFilePath } = createController();
     const node = createFakeNode();
 
@@ -125,7 +127,7 @@ describe("createDiffNavigatorController", () => {
     controller.notifyDiffContentChanged();
 
     assert.equal(getSelectedFilePath(), "src/app.ts");
-    assert.equal(node.getCallCount(), 2);
+    assert.equal(node.getCallCount(), 1);
     assert.equal(controller.getState().pendingScrollPath, null);
   });
 

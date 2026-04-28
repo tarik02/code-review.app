@@ -3,6 +3,13 @@ import type { ReviewCommentSide } from "../types/forge";
 
 const MAX_PATCH_VIEWER_SESSIONS = 20;
 
+type HunkExpansionDirection = "up" | "down" | "both";
+
+type HunkExpansionRegion = {
+  fromStart: number;
+  fromEnd: number;
+};
+
 type DraftReviewCommentTarget =
   | {
       type: "file";
@@ -22,6 +29,11 @@ type PatchViewerSessionState = {
   draftCommentError: string;
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
+  scrollTop: number | null;
+  hunkExpansionsByFile: Record<
+    string,
+    Record<string, HunkExpansionRegion | undefined> | undefined
+  >;
 };
 
 type PatchViewerStore = {
@@ -41,6 +53,14 @@ type PatchViewerStore = {
     sessionKey: string | null,
     path: string | null,
   ) => void;
+  setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
+  recordHunkExpansion: (
+    sessionKey: string | null,
+    filePath: string,
+    hunkIndex: number,
+    direction: HunkExpansionDirection,
+    lineCount: number,
+  ) => void;
   selectFile: (sessionKey: string | null, path: string) => void;
   resetNavigation: (sessionKey: string | null) => void;
 };
@@ -51,6 +71,8 @@ function createPatchViewerSessionState(): PatchViewerSessionState {
     draftCommentError: "",
     selectedFilePath: null,
     pendingScrollPath: null,
+    scrollTop: null,
+    hunkExpansionsByFile: {},
   };
 }
 
@@ -192,6 +214,40 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       updateSession(state, sessionKey, () => ({ pendingScrollPath: path })),
     );
   },
+  setScrollTop(sessionKey, scrollTop) {
+    set((state) => updateSession(state, sessionKey, () => ({ scrollTop })));
+  },
+  recordHunkExpansion(sessionKey, filePath, hunkIndex, direction, lineCount) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => {
+        const currentFileExpansions =
+          session.hunkExpansionsByFile[filePath] ?? {};
+        const currentRegion = currentFileExpansions[hunkIndex] ?? {
+          fromStart: 0,
+          fromEnd: 0,
+        };
+        const nextRegion = { ...currentRegion };
+
+        if (direction === "up" || direction === "both") {
+          nextRegion.fromStart += lineCount;
+        }
+
+        if (direction === "down" || direction === "both") {
+          nextRegion.fromEnd += lineCount;
+        }
+
+        return {
+          hunkExpansionsByFile: {
+            ...session.hunkExpansionsByFile,
+            [filePath]: {
+              ...currentFileExpansions,
+              [hunkIndex]: nextRegion,
+            },
+          },
+        };
+      }),
+    );
+  },
   selectFile(sessionKey, path) {
     set((state) =>
       updateSession(state, sessionKey, () => ({
@@ -213,5 +269,7 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
 export { getPatchViewerSessionState, usePatchViewerStore };
 export type {
   DraftReviewCommentTarget,
+  HunkExpansionDirection,
+  HunkExpansionRegion,
   PatchViewerSessionState,
 };

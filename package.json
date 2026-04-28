@@ -6,7 +6,7 @@
   "main": "out/main/index.js",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "electron-vite dev --watch",
+    "dev": "dotenv -- electron-vite dev --watch",
     "build": "tsc --noEmit && electron-vite build",
     "dist": "electron-builder",
     "preview": "electron-vite preview",
@@ -49,6 +49,7 @@
     "@types/react-dom": "^19.1.6",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
+    "dotenv-cli": "^11.0.0",
     "electron": "^41.3.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "6.0.0-beta.1",

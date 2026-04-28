@@ -132,7 +132,6 @@ function createDiffNavigatorController({
 
       prKey = nextPrKey;
       diffNodeMap.clear();
-      setPendingScrollPath(getSelectedFilePath());
     },
 
     setReadiness(nextIsDiffReady, nextHasDiffError) {
@@ -159,15 +158,17 @@ function createDiffNavigatorController({
 
     notifyDiffContentChanged() {
       const selectedFilePath = getSelectedFilePath();
-      if (!selectedFilePath) return;
 
-      if (diffNodeMap.size > 0 && !hasMatchingNode(selectedFilePath)) {
+      if (
+        selectedFilePath &&
+        diffNodeMap.size > 0 &&
+        !hasMatchingNode(selectedFilePath)
+      ) {
         setPendingScrollPath(null);
         updateSelectedFilePath(null);
         return;
       }
 
-      setPendingScrollPath(selectedFilePath);
       flushPendingScroll();
     },
 
