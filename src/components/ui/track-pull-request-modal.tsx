@@ -4,9 +4,14 @@ import { AlertDialog, AlertDialogContent } from "./alert-dialog";
 import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
 import {
   PullRequestBadgeStatus,
+  type ForgeProviderKind,
   type PullRequestSummary,
   type RepoSummary,
 } from "../../types/forge";
+import {
+  formatPullRequestDisplayTitle,
+  getDraftIndicatorLabel,
+} from "../../lib/pull-request-display";
 import LucideGitBranch from "../../assets/icons/LucideGitBranch";
 import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
 import LucideGitMerge from "../../assets/icons/LucideGitMerge";
@@ -255,6 +260,14 @@ function PullRequestStatusIcon({ status }: { status: PullRequestBadgeStatus }) {
   }
 }
 
+function DraftIndicator({ provider }: { provider: ForgeProviderKind }) {
+  return (
+    <span className="shrink-0 rounded border border-ink-300 bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-ink-600">
+      {getDraftIndicatorLabel(provider)}
+    </span>
+  );
+}
+
 function formatChangeSummary(pullRequest: PullRequestSummary) {
   if (
     pullRequest.additions !== null &&
@@ -289,6 +302,8 @@ function PullRequestSelectionStep({
   onPickPullRequest,
   onBack,
 }: PullRequestSelectionStepProps) {
+  const provider = selectedRepo?.provider ?? "github";
+
   return (
     <>
       <div className="mb-4 flex min-h-0 flex-col gap-2.5">
@@ -330,6 +345,7 @@ function PullRequestSelectionStep({
               pullRequests.map((pullRequest) => {
                 const prKey = `modal-pr-${pullRequest.number}`;
                 const status = getPullRequestStatus(pullRequest);
+                const title = formatPullRequestDisplayTitle(pullRequest.title);
                 return (
                   <button
                     className="w-full rounded-lg bg-surface py-2.5 px-2 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
@@ -346,8 +362,11 @@ function PullRequestSelectionStep({
                         <div className="shrink-0">
                           <PullRequestStatusIcon status={status.status} />
                         </div>
+                        {pullRequest.isDraft ? (
+                          <DraftIndicator provider={provider} />
+                        ) : null}
                         <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
-                          {pullRequest.title}
+                          {title}
                         </p>
                       </div>
                       <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">

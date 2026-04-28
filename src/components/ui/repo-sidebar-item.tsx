@@ -9,9 +9,14 @@ import {
 } from "./accordion";
 import {
   PullRequestBadgeStatus,
+  type ForgeProviderKind,
   type PullRequestSummary,
 } from "../../types/forge";
 import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
+import {
+  formatPullRequestDisplayTitle,
+  getDraftIndicatorLabel,
+} from "../../lib/pull-request-display";
 import LucideGitBranch from "../../assets/icons/LucideGitBranch";
 import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
 import LucideGitMerge from "../../assets/icons/LucideGitMerge";
@@ -19,6 +24,7 @@ import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestAr
 
 type RepoSidebarItemProps = {
   value: string;
+  provider: ForgeProviderKind;
   avatarUrl: string | null;
   host: string;
   nameWithOwner: string;
@@ -38,6 +44,7 @@ type SidebarPullRequestView = "overview" | "tracked";
 
 type PullRequestSidebarRowProps = {
   repoId: string;
+  provider: ForgeProviderKind;
   pullRequest: PullRequestSummary;
   selectedPrKey: string | null;
   isTrackedView: boolean;
@@ -133,6 +140,14 @@ function PullRequestStatusIcon({ status }: { status: PullRequestBadgeStatus }) {
   }
 }
 
+function DraftIndicator({ provider }: { provider: ForgeProviderKind }) {
+  return (
+    <span className="shrink-0 rounded border border-ink-300 bg-surface px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-ink-600">
+      {getDraftIndicatorLabel(provider)}
+    </span>
+  );
+}
+
 function formatChangeSummary(pullRequest: PullRequestSummary) {
   if (
     pullRequest.additions !== null &&
@@ -167,6 +182,7 @@ function ChevronIcon(props: React.ComponentProps<"svg">) {
 
 function PullRequestSidebarRow({
   repoId,
+  provider,
   pullRequest,
   selectedPrKey,
   isTrackedView,
@@ -177,6 +193,7 @@ function PullRequestSidebarRow({
   onRemovePr,
 }: PullRequestSidebarRowProps) {
   const status = getPullRequestStatus(pullRequest);
+  const title = formatPullRequestDisplayTitle(pullRequest.title);
   const isSelected =
     selectedPrKey ===
     `${repoId}#${pullRequest.number}@${pullRequest.headSha}`;
@@ -201,8 +218,9 @@ function PullRequestSidebarRow({
             <div className="shrink-0">
               <PullRequestStatusIcon status={status.status} />
             </div>
+            {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
             <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
-              {pullRequest.title}
+              {title}
             </p>
           </div>
           <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
@@ -239,6 +257,7 @@ function PullRequestSidebarRow({
 
 function RepoSidebarItem({
   value,
+  provider,
   avatarUrl,
   host,
   nameWithOwner,
@@ -323,6 +342,7 @@ function RepoSidebarItem({
                     <PullRequestSidebarRow
                       key={prKey}
                       repoId={value}
+                      provider={provider}
                       pullRequest={pullRequest}
                       selectedPrKey={selectedPrKey}
                       isTrackedView={isTrackedView}

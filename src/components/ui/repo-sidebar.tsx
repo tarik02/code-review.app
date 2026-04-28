@@ -183,6 +183,7 @@ function RepoSidebar({
               <PullRequestSidebarRow
                 key={`${repo.id}#${pullRequest.number}`}
                 repoId={repo.id}
+                provider={repo.provider}
                 pullRequest={pullRequest}
                 selectedPrKey={selectedPrKey}
                 isTrackedView={false}
@@ -220,6 +221,7 @@ function RepoSidebar({
               <RepoSidebarItem
                 key={repo.id}
                 value={repo.id}
+                provider={repo.provider}
                 avatarUrl={repo.avatarUrl}
                 host={repo.host}
                 nameWithOwner={repo.nameWithOwner}
