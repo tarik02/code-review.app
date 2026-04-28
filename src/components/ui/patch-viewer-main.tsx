@@ -6,7 +6,9 @@ import {
   useFloating,
 } from "@floating-ui/react";
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -26,7 +28,7 @@ import type {
 } from "@pierre/diffs";
 import { useQuery } from "@tanstack/react-query";
 import type { GitStatusEntry } from "@pierre/trees";
-import { FileDiff } from "@pierre/diffs/react";
+import { FileDiff, VirtualizerContext } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
 import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
@@ -150,6 +152,43 @@ type PatchViewerMainProps = {
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
 };
+
+type PatchFileDiffItemContextValue = {
+  defaultReviewEditorMode: CommentEditorMode;
+  diffNavigator: ReturnType<typeof useDiffNavigator>["diff"];
+  parsedFileDiffs: FileDiffMetadata[];
+  registerThreadAnchor: (
+    thread: ReviewThread,
+    node: HTMLDivElement | null,
+  ) => void;
+  reviewEditorSessionKey: string | null;
+  reviewThreadsByFile: Map<string, FileReviewThreads>;
+  selectedBaseSha: string | null;
+  selectedPatch: SelectedPatch;
+  selectedProvider: ForgeProviderKind;
+  viewerLogin: string | null;
+  handleEditComment: (comment: ReviewComment, body: string) => Promise<void>;
+  handleFileDiffPostRender: (
+    node: HTMLElement,
+    instance: PierreFileDiffInstance<PatchLineAnnotation>,
+    fileDiff: FileDiffMetadata,
+    normalizedFilePath: string,
+  ) => void;
+  handleReplyToThread: (thread: ReviewThread, body: string) => Promise<void>;
+  handleSubmitDraftComment: (editorId: string, body: string) => Promise<void>;
+};
+
+const PatchFileDiffItemContext =
+  createContext<PatchFileDiffItemContextValue | null>(null);
+
+function usePatchFileDiffItemContext() {
+  const context = useContext(PatchFileDiffItemContext);
+  if (!context) {
+    throw new Error("PatchFileDiffItem must be rendered inside PatchViewerMain");
+  }
+
+  return context;
+}
 
 function toGithubSide(side: SelectedLineRange["side"]): ReviewCommentSide {
   return side === "deletions" ? "LEFT" : "RIGHT";
@@ -729,6 +768,7 @@ type ReviewThreadsPanelProps = {
   isLoading: boolean;
   error: string;
   hasSelection: boolean;
+  onSelectThread: (thread: ReviewThread) => void;
 };
 
 function getThreadRefKey(thread: ReviewThread) {
@@ -744,6 +784,7 @@ function ReviewThreadsPanel({
   isLoading,
   error,
   hasSelection,
+  onSelectThread,
 }: ReviewThreadsPanelProps) {
   const activeThreads = threads.filter(isActiveReviewThread);
   const resolvedThreads = threads.filter((t) => t.isResolved || t.isOutdated);
@@ -801,6 +842,7 @@ function ReviewThreadsPanel({
                   key={getThreadRefKey(thread)}
                   slim
                   thread={thread}
+                  onClick={() => onSelectThread(thread)}
                 />
               ))}
             </div>
@@ -821,12 +863,399 @@ function ReviewThreadsPanel({
                   key={getThreadRefKey(thread)}
                   slim
                   thread={thread}
+                  onClick={() => onSelectThread(thread)}
                 />
               ))}
             </div>
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function PatchFileDiffItem({
+  fileDiff,
+  fileIndex,
+}: {
+  fileDiff: FileDiffMetadata;
+  fileIndex: number;
+}) {
+  const {
+    defaultReviewEditorMode,
+    diffNavigator,
+    parsedFileDiffs,
+    registerThreadAnchor,
+    reviewEditorSessionKey,
+    reviewThreadsByFile,
+    selectedBaseSha,
+    selectedPatch,
+    selectedProvider,
+    viewerLogin,
+    handleEditComment,
+    handleFileDiffPostRender,
+    handleReplyToThread,
+    handleSubmitDraftComment,
+  } = usePatchFileDiffItemContext();
+  const reviewEditorSession = useReviewCommentEditorStore((state) =>
+    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
+  );
+  const openNewEditor = useReviewCommentEditorStore(
+    (state) => state.openNewEditor,
+  );
+  const setEditorBody = useReviewCommentEditorStore(
+    (state) => state.setEditorBody,
+  );
+  const setEditorCursorPosition = useReviewCommentEditorStore(
+    (state) => state.setEditorCursorPosition,
+  );
+  const closeEditor = useReviewCommentEditorStore(
+    (state) => state.closeEditor,
+  );
+  const newCommentEditors = useMemo(
+    () =>
+      reviewEditorSession.editorOrder
+        .map((editorId) => reviewEditorSession.editorsById[editorId])
+        .filter(
+          (editor): editor is ReviewCommentEditorState =>
+            editor != null && editor.kind === "new" && editor.target != null,
+        ),
+    [reviewEditorSession],
+  );
+  const fileReviewThreads = getFileReviewThreadsForPath(
+    reviewThreadsByFile,
+    fileDiff.name,
+  );
+  const normalizedFilePath = normalizePath(fileDiff.name);
+  const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
+  const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
+    fileReviewThreads.lineAnnotations.map((annotation) => ({
+      ...annotation,
+      metadata: {
+        ...annotation.metadata,
+        portalRootId: lineDraftPortalRootId,
+      },
+    }));
+  const lineDraftEditors = newCommentEditors.filter(
+    (
+      editor,
+    ): editor is ReviewCommentEditorState & {
+      target: Extract<DraftReviewCommentTarget, { type: "line" }>;
+    } =>
+      editor.target?.type === "line" &&
+      normalizePath(editor.target.path) === normalizedFilePath,
+  );
+  const fileDraftEditors = newCommentEditors.filter(
+    (
+      editor,
+    ): editor is ReviewCommentEditorState & {
+      target: Extract<DraftReviewCommentTarget, { type: "file" }>;
+    } =>
+      editor.target?.type === "file" &&
+      normalizePath(editor.target.path) === normalizedFilePath,
+  );
+  const latestLineDraft = lineDraftEditors.at(-1);
+  const lineDraft: Extract<DraftReviewCommentTarget, { type: "line" }> | null =
+    latestLineDraft?.target ?? null;
+  const lineAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
+    lineDraftEditors.length > 0
+      ? [
+          ...lineThreadAnnotations,
+          ...lineDraftEditors.map((editor) => ({
+            side: toSelectionSide(editor.target.side),
+            lineNumber: editor.target.line,
+            metadata: {
+              kind: "draft" as const,
+              editorId: editor.id,
+              portalRootId: lineDraftPortalRootId,
+            },
+          })),
+        ]
+      : lineThreadAnnotations;
+  const selectedLines: SelectedLineRange | null = lineDraft
+    ? {
+        start: lineDraft.startLine ?? lineDraft.line,
+        side: toSelectionSide(lineDraft.startSide ?? lineDraft.side),
+        end: lineDraft.line,
+        endSide: toSelectionSide(lineDraft.side),
+      }
+    : null;
+  const lineAnnotationKey = lineAnnotations
+    .map((annotation) => {
+      if ("kind" in annotation.metadata) {
+        return `${annotation.side}:${annotation.lineNumber}:draft:${annotation.metadata.editorId}`;
+      }
+
+      return `${annotation.side}:${annotation.lineNumber}:thread:${getThreadRefKey(annotation.metadata.thread)}`;
+    })
+    .join("|");
+
+  function openLineCommentDraft(range: SelectedLineRange) {
+    const startSide = range.side ?? range.endSide;
+    const endSide = range.endSide ?? range.side;
+    if (!startSide || !endSide) {
+      return;
+    }
+
+    const startsFirst = range.start <= range.end;
+    const startLine = startsFirst ? range.start : range.end;
+    const startGithubSide = toGithubSide(startsFirst ? startSide : endSide);
+    const endLine = startsFirst ? range.end : range.start;
+    const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
+
+    openNewEditor(reviewEditorSessionKey, {
+      type: "line",
+      path: fileDiff.name,
+      line: endLine,
+      side: endGithubSide,
+      startLine: startLine !== endLine ? startLine : null,
+      startSide: startLine !== endLine ? startGithubSide : null,
+    });
+  }
+
+  function renderReviewThreadSummary() {
+    const hasDraft = newCommentEditors.some(
+      (editor) =>
+        editor.target?.type === "file" &&
+        normalizePath(editor.target.path) === normalizedFilePath,
+    );
+
+    return (
+      <div className="flex items-center gap-2 text-xs text-ink-500">
+        {fileReviewThreads.totalCount > 0 ? (
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
+            {fileReviewThreads.totalCount} threads
+          </span>
+        ) : null}
+        {fileReviewThreads.totalCount > 0 ? (
+          <span
+            className={cx(
+              "rounded-full px-2 py-0.5",
+              fileReviewThreads.unresolvedCount > 0
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+            )}
+          >
+            {fileReviewThreads.unresolvedCount > 0
+              ? `${fileReviewThreads.unresolvedCount} open`
+              : "All resolved"}
+          </span>
+        ) : null}
+        {hasDraft ? (
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
+            Draft open
+          </span>
+        ) : null}
+        {fileReviewThreads.fileThreads.length > 0 ? (
+          <span className="text-ink-500">
+            {fileReviewThreads.fileThreads.length} file-level
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderReviewThreadAnnotations(
+    annotation: DiffLineAnnotation<PatchLineAnnotation>,
+  ) {
+    if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
+      const editor = getReviewCommentEditorSessionState(
+        useReviewCommentEditorStore.getState(),
+        reviewEditorSessionKey,
+      ).editorsById[annotation.metadata.editorId];
+      if (!editor) {
+        return null;
+      }
+
+      return (
+        <FloatingLineDraftEditorForTarget
+          defaultMode={defaultReviewEditorMode}
+          editor={editor}
+          fileDiffs={parsedFileDiffs}
+          portalRootId={annotation.metadata.portalRootId}
+          provider={selectedProvider}
+          selectedBaseSha={selectedBaseSha}
+          selectedPatch={selectedPatch}
+          onCancel={() =>
+            closeEditor(reviewEditorSessionKey, annotation.metadata.editorId)
+          }
+          onChange={(body) =>
+            setEditorBody(
+              reviewEditorSessionKey,
+              annotation.metadata.editorId,
+              body,
+            )
+          }
+          onCursorPositionChange={(cursorPosition) =>
+            setEditorCursorPosition(
+              reviewEditorSessionKey,
+              annotation.metadata.editorId,
+              cursorPosition ?? null,
+            )
+          }
+          onSubmit={(body) =>
+            handleSubmitDraftComment(annotation.metadata.editorId, body)
+          }
+        />
+      );
+    }
+
+    const threadAnnotation = annotation.metadata as ReviewThreadLineAnnotation;
+
+    return (
+      <ReviewThreadCard
+        compact
+        containerRef={(node) =>
+          registerThreadAnchor(threadAnnotation.thread, node)
+        }
+        editorPortalRootId={threadAnnotation.portalRootId}
+        onEditComment={handleEditComment}
+        onReplyToThread={handleReplyToThread}
+        reviewEditorSessionKey={reviewEditorSessionKey}
+        thread={threadAnnotation.thread}
+        viewerLogin={viewerLogin}
+      />
+    );
+  }
+
+  const fileDiffElement = (
+    <FileDiff
+      fileDiff={fileDiff}
+      key={lineAnnotationKey}
+      metrics={VIRTUAL_FILE_METRICS}
+      lineAnnotations={lineAnnotations}
+      selectedLines={selectedLines}
+      style={DIFF_FONT_STYLE}
+      options={{
+        theme: {
+          dark: "pierre-dark",
+          light: "pierre-light",
+        },
+        diffStyle: "unified",
+        diffIndicators: "bars",
+        lineDiffType: "word",
+        overflow: "scroll",
+        expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
+        collapsedContextThreshold: DIFF_COLLAPSED_CONTEXT_THRESHOLD,
+        unsafeCSS: `
+          [data-overflow='scroll'],
+          [data-code] {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+          }
+
+          [data-overflow='scroll']::-webkit-scrollbar,
+          [data-code]::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+          }
+
+          [data-code]::-webkit-scrollbar-track,
+          [data-code]::-webkit-scrollbar-corner,
+          [data-code]::-webkit-scrollbar-thumb,
+          [data-diff]:hover [data-code]::-webkit-scrollbar-thumb,
+          [data-file]:hover [data-code]::-webkit-scrollbar-thumb {
+            background-color: transparent !important;
+          }
+
+          [data-diffs-header='default'] {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            box-shadow: inset 0 -1px 0 var(--diffs-bg-context);
+          }
+
+          :host-context(.macos) [data-diffs-header='default'] {
+            min-height: ${TOP_BAR_MACOS_HEIGHT};
+          }
+
+          :host-context(.wco) [data-diffs-header='default'] {
+            min-height: ${TOP_BAR_WCO_HEIGHT};
+          }
+
+          [data-column-number][data-selected-line]::before {
+            background-color: #f59e0b;
+            background-image: none;
+          }
+
+        `,
+        enableGutterUtility: true,
+        onGutterUtilityClick: openLineCommentDraft,
+        onPostRender: (node, instance) =>
+          handleFileDiffPostRender(
+            node,
+            instance,
+            fileDiff,
+            normalizedFilePath,
+          ),
+      }}
+      renderAnnotation={renderReviewThreadAnnotations}
+      renderHeaderMetadata={renderReviewThreadSummary}
+    />
+  );
+
+  return (
+    <div
+      className="relative"
+      data-file-path={fileDiff.name}
+      ref={(node) => diffNavigator.registerDiffNode(fileDiff.name, node)}
+    >
+      {lineAnnotations.length > 0 ? (
+        <VirtualizerContext.Provider value={undefined}>
+          {fileDiffElement}
+        </VirtualizerContext.Provider>
+      ) : (
+        fileDiffElement
+      )}
+      <div
+        id={lineDraftPortalRootId}
+        className="pointer-events-none absolute inset-0 z-[4]"
+      />
+      {fileReviewThreads.fileThreads.length > 0 ||
+      fileDraftEditors.length > 0 ? (
+        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-ink-200 bg-surface p-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-ink-500">
+            File threads
+          </div>
+          {fileDraftEditors.map((editor) => (
+            <ReviewCommentEditor
+              key={editor.id}
+              cursorPosition={editor.cursorPosition}
+              defaultMode={defaultReviewEditorMode}
+              error={editor.error}
+              isPending={editor.isSubmitting}
+              provider={selectedProvider}
+              submitLabel="Comment"
+              target={editor.target}
+              value={editor.body}
+              onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
+              onChange={(body) =>
+                setEditorBody(reviewEditorSessionKey, editor.id, body)
+              }
+              onCursorPositionChange={(cursorPosition) =>
+                setEditorCursorPosition(
+                  reviewEditorSessionKey,
+                  editor.id,
+                  cursorPosition ?? null,
+                )
+              }
+              onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
+            />
+          ))}
+          {fileReviewThreads.fileThreads.map((thread) => (
+            <ReviewThreadCard
+              key={getThreadRefKey(thread)}
+              containerRef={(node) => registerThreadAnchor(thread, node)}
+              onEditComment={handleEditComment}
+              onReplyToThread={handleReplyToThread}
+              reviewEditorSessionKey={reviewEditorSessionKey}
+              thread={thread}
+              viewerLogin={viewerLogin}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -858,25 +1287,6 @@ function PatchViewerMain({
     ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
     : null;
   const reviewEditorSessionKey = selectedPrKey;
-  const reviewEditorSession = useReviewCommentEditorStore((state) =>
-    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
-  );
-  const reviewCommentEditors = useMemo(
-    () =>
-      reviewEditorSession.editorOrder
-        .map((editorId) => reviewEditorSession.editorsById[editorId])
-        .filter(
-          (editor): editor is ReviewCommentEditorState => editor != null,
-        ),
-    [reviewEditorSession],
-  );
-  const newCommentEditors = useMemo(
-    () =>
-      reviewCommentEditors.filter(
-        (editor) => editor.kind === "new" && editor.target != null,
-      ),
-    [reviewCommentEditors],
-  );
   const ensureSession = usePatchViewerStore((state) => state.ensureSession);
   const setPendingScrollPath = usePatchViewerStore(
     (state) => state.setPendingScrollPath,
@@ -885,17 +1295,8 @@ function PatchViewerMain({
   const recordHunkExpansion = usePatchViewerStore(
     (state) => state.recordHunkExpansion,
   );
-  const openNewEditor = useReviewCommentEditorStore(
-    (state) => state.openNewEditor,
-  );
-  const setEditorBody = useReviewCommentEditorStore(
-    (state) => state.setEditorBody,
-  );
   const setEditorError = useReviewCommentEditorStore(
     (state) => state.setEditorError,
-  );
-  const setEditorCursorPosition = useReviewCommentEditorStore(
-    (state) => state.setEditorCursorPosition,
   );
   const setEditorSubmitting = useReviewCommentEditorStore(
     (state) => state.setEditorSubmitting,
@@ -906,8 +1307,10 @@ function PatchViewerMain({
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
   const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
+  const cancelThreadScrollRef = useRef<(() => void) | null>(null);
   const previousSessionKeyRef = useRef<string | null>(patchViewerSessionKey);
   const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
+  const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const hasSelection = selectedPrKey !== null;
   const isDiffReady =
     !isPatchLoading && !patchError && !parsedPatch.parseError;
@@ -955,6 +1358,70 @@ function PatchViewerMain({
       setScrollTop(patchViewerSessionKey, event.currentTarget.scrollTop);
     },
     [patchViewerSessionKey, setScrollTop],
+  );
+
+  const registerThreadAnchor = useCallback(
+    (thread: ReviewThread, node: HTMLDivElement | null) => {
+      const threadKey = getThreadRefKey(thread);
+
+      if (node) {
+        threadAnchorNodesRef.current.set(threadKey, node);
+        return;
+      }
+
+      threadAnchorNodesRef.current.delete(threadKey);
+    },
+    [],
+  );
+
+  const handleSelectReviewThread = useCallback(
+    (thread: ReviewThread) => {
+      cancelThreadScrollRef.current?.();
+      cancelThreadScrollRef.current = null;
+
+      navigator.tree.onSelectFile(thread.path);
+
+      const threadKey = getThreadRefKey(thread);
+      let attempts = 0;
+      let cancelFrame: (() => void) | null = null;
+      let cancelled = false;
+
+      const stop = () => {
+        cancelled = true;
+        cancelFrame?.();
+        cancelFrame = null;
+        cancelThreadScrollRef.current = null;
+      };
+
+      const scrollToThread = () => {
+        if (cancelled) {
+          return;
+        }
+
+        const node = threadAnchorNodesRef.current.get(threadKey);
+        if (node?.isConnected) {
+          node.scrollIntoView({
+            behavior: "auto",
+            block: "center",
+            inline: "nearest",
+          });
+          stop();
+          return;
+        }
+
+        attempts += 1;
+        if (attempts >= SCROLL_RESTORE_MAX_ATTEMPTS) {
+          stop();
+          return;
+        }
+
+        cancelFrame = scheduleNextFrame(scrollToThread);
+      };
+
+      cancelThreadScrollRef.current = stop;
+      scrollToThread();
+    },
+    [navigator.tree],
   );
 
   const handleFileDiffPostRender = useCallback(
@@ -1073,6 +1540,24 @@ function PatchViewerMain({
   }, [setScrollTop]);
 
   useEffect(() => {
+    cancelThreadScrollRef.current?.();
+    cancelThreadScrollRef.current = null;
+  }, [
+    patchViewerSessionKey,
+    selectedPatch?.headSha,
+    selectedPatch?.number,
+    selectedPatch?.repoId,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      cancelThreadScrollRef.current?.();
+      cancelThreadScrollRef.current = null;
+      threadAnchorNodesRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     ensureSession(patchViewerSessionKey);
     const session = getPatchViewerSessionState(
       usePatchViewerStore.getState(),
@@ -1116,29 +1601,6 @@ function PatchViewerMain({
     parsedPatch.fileDiffs,
     reviewThreadsByFile,
   ]);
-
-  function openLineCommentDraft(path: string, range: SelectedLineRange) {
-    const startSide = range.side ?? range.endSide;
-    const endSide = range.endSide ?? range.side;
-    if (!startSide || !endSide) {
-      return;
-    }
-
-    const startsFirst = range.start <= range.end;
-    const startLine = startsFirst ? range.start : range.end;
-    const startGithubSide = toGithubSide(startsFirst ? startSide : endSide);
-    const endLine = startsFirst ? range.end : range.start;
-    const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
-
-    openNewEditor(reviewEditorSessionKey, {
-      type: "line",
-      path,
-      line: endLine,
-      side: endGithubSide,
-      startLine: startLine !== endLine ? startLine : null,
-      startSide: startLine !== endLine ? startGithubSide : null,
-    });
-  }
 
   async function handleSubmitDraftComment(editorId: string, body: string) {
     const editor = getReviewCommentEditorSessionState(
@@ -1223,111 +1685,6 @@ function PatchViewerMain({
     });
   }
 
-  function renderReviewThreadSummary(
-    fileReviewThreads: FileReviewThreads,
-    path: string,
-  ) {
-    const hasDraft = newCommentEditors.some(
-      (editor) =>
-        editor.target?.type === "file" &&
-        normalizePath(editor.target.path) === normalizePath(path),
-    );
-
-    return (
-      <div className="flex items-center gap-2 text-xs text-ink-500">
-        {fileReviewThreads.totalCount > 0 ? (
-          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
-            {fileReviewThreads.totalCount} threads
-          </span>
-        ) : null}
-        {fileReviewThreads.totalCount > 0 ? (
-          <span
-            className={cx(
-              "rounded-full px-2 py-0.5",
-              fileReviewThreads.unresolvedCount > 0
-                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-            )}
-          >
-            {fileReviewThreads.unresolvedCount > 0
-              ? `${fileReviewThreads.unresolvedCount} open`
-              : "All resolved"}
-          </span>
-        ) : null}
-        {hasDraft ? (
-          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
-            Draft open
-          </span>
-        ) : null}
-        {fileReviewThreads.fileThreads.length > 0 ? (
-          <span className="text-ink-500">
-            {fileReviewThreads.fileThreads.length} file-level
-          </span>
-        ) : null}
-      </div>
-    );
-  }
-
-  function renderReviewThreadAnnotations(
-    annotation: DiffLineAnnotation<PatchLineAnnotation>,
-  ) {
-    if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
-      const editor = getReviewCommentEditorSessionState(
-        useReviewCommentEditorStore.getState(),
-        reviewEditorSessionKey,
-      ).editorsById[annotation.metadata.editorId];
-      if (!editor) {
-        return null;
-      }
-
-      return (
-        <FloatingLineDraftEditorForTarget
-          defaultMode={defaultReviewEditorMode}
-          editor={editor}
-          fileDiffs={parsedPatch.fileDiffs}
-          portalRootId={annotation.metadata.portalRootId}
-          provider={selectedProvider}
-          selectedBaseSha={selectedBaseSha}
-          selectedPatch={selectedPatch}
-          onCancel={() =>
-            closeEditor(reviewEditorSessionKey, annotation.metadata.editorId)
-          }
-          onChange={(body) =>
-            setEditorBody(
-              reviewEditorSessionKey,
-              annotation.metadata.editorId,
-              body,
-            )
-          }
-          onCursorPositionChange={(cursorPosition) =>
-            setEditorCursorPosition(
-              reviewEditorSessionKey,
-              annotation.metadata.editorId,
-              cursorPosition ?? null,
-            )
-          }
-          onSubmit={(body) =>
-            handleSubmitDraftComment(annotation.metadata.editorId, body)
-          }
-        />
-      );
-    }
-
-    const threadAnnotation = annotation.metadata as ReviewThreadLineAnnotation;
-
-    return (
-      <ReviewThreadCard
-        compact
-        editorPortalRootId={threadAnnotation.portalRootId}
-        onEditComment={handleEditComment}
-        onReplyToThread={handleReplyToThread}
-        reviewEditorSessionKey={reviewEditorSessionKey}
-        thread={threadAnnotation.thread}
-        viewerLogin={viewerLogin}
-      />
-    );
-  }
-
   if (!hasSelection) {
     return (
       <main className="h-full min-h-0 min-w-0 pl-0">
@@ -1397,239 +1754,34 @@ function PatchViewerMain({
                       No diff content.
                     </div>
                   ) : (
-                    <div className="flex flex-col bg-white dark:bg-surface">
-                      {parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
-                        const fileReviewThreads = getFileReviewThreadsForPath(
-                          reviewThreadsByFile,
-                          fileDiff.name,
-                        );
-                        const normalizedFilePath = normalizePath(fileDiff.name);
-                        const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
-                        const lineThreadAnnotations =
-                          fileReviewThreads.lineAnnotations.map(
-                            (annotation) => ({
-                              ...annotation,
-                              metadata: {
-                                ...annotation.metadata,
-                                portalRootId: lineDraftPortalRootId,
-                              },
-                            }),
-                          );
-                        const lineDraftEditors = newCommentEditors.filter(
-                          (
-                            editor,
-                          ): editor is ReviewCommentEditorState & {
-                            target: Extract<
-                              DraftReviewCommentTarget,
-                              { type: "line" }
-                            >;
-                          } =>
-                            editor.target?.type === "line" &&
-                            normalizePath(editor.target.path) ===
-                              normalizedFilePath,
-                        );
-                        const fileDraftEditors = newCommentEditors.filter(
-                          (
-                            editor,
-                          ): editor is ReviewCommentEditorState & {
-                            target: Extract<
-                              DraftReviewCommentTarget,
-                              { type: "file" }
-                            >;
-                          } =>
-                            editor.target?.type === "file" &&
-                            normalizePath(editor.target.path) ===
-                              normalizedFilePath,
-                        );
-                        const latestLineDraft = lineDraftEditors.at(-1);
-                        const lineDraft: Extract<
-                          DraftReviewCommentTarget,
-                          { type: "line" }
-                        > | null = latestLineDraft?.target ?? null;
-
-                        const lineAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
-                          lineDraftEditors.length > 0
-                            ? [
-                                ...lineThreadAnnotations,
-                                ...lineDraftEditors.map((editor) => ({
-                                  side: toSelectionSide(editor.target.side),
-                                  lineNumber: editor.target.line,
-                                  metadata: {
-                                    kind: "draft" as const,
-                                    editorId: editor.id,
-                                    portalRootId: lineDraftPortalRootId,
-                                  },
-                                })),
-                              ]
-                            : lineThreadAnnotations;
-                        const selectedLines: SelectedLineRange | null =
-                          lineDraft
-                            ? {
-                                start: lineDraft.startLine ?? lineDraft.line,
-                                side: toSelectionSide(
-                                  lineDraft.startSide ?? lineDraft.side,
-                                ),
-                                end: lineDraft.line,
-                                endSide: toSelectionSide(lineDraft.side),
-                              }
-                            : null;
-
-                        return (
-                          <div
-                            className="relative"
-                            data-file-path={fileDiff.name}
+                    <PatchFileDiffItemContext.Provider
+                      value={{
+                        defaultReviewEditorMode,
+                        diffNavigator: navigator.diff,
+                        parsedFileDiffs: parsedPatch.fileDiffs,
+                        registerThreadAnchor,
+                        reviewEditorSessionKey,
+                        reviewThreadsByFile,
+                        selectedBaseSha,
+                        selectedPatch,
+                        selectedProvider,
+                        viewerLogin,
+                        handleEditComment,
+                        handleFileDiffPostRender,
+                        handleReplyToThread,
+                        handleSubmitDraftComment,
+                      }}
+                    >
+                      <div className="flex flex-col bg-white dark:bg-surface">
+                        {parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
+                          <PatchFileDiffItem
+                            fileDiff={fileDiff}
+                            fileIndex={fileIndex}
                             key={`${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
-                            ref={(node) =>
-                              navigator.diff.registerDiffNode(
-                                fileDiff.name,
-                                node,
-                              )
-                            }
-                          >
-                            <FileDiff
-                              fileDiff={fileDiff}
-                              metrics={VIRTUAL_FILE_METRICS}
-                              lineAnnotations={lineAnnotations}
-                              selectedLines={selectedLines}
-                              style={DIFF_FONT_STYLE}
-                              options={{
-                                theme: {
-                                  dark: "pierre-dark",
-                                  light: "pierre-light",
-                                },
-                                diffStyle: "unified",
-                                diffIndicators: "bars",
-                                lineDiffType: "word",
-                                overflow: "scroll",
-                                expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
-                                collapsedContextThreshold:
-                                  DIFF_COLLAPSED_CONTEXT_THRESHOLD,
-                                unsafeCSS: `
-                                  [data-overflow='scroll'],
-                                  [data-code] {
-                                    scrollbar-width: none;
-                                    -ms-overflow-style: none;
-                                  }
-
-                                  [data-overflow='scroll']::-webkit-scrollbar,
-                                  [data-code]::-webkit-scrollbar {
-                                    display: none;
-                                    width: 0;
-                                    height: 0;
-                                  }
-
-                                  [data-code]::-webkit-scrollbar-track,
-                                  [data-code]::-webkit-scrollbar-corner,
-                                  [data-code]::-webkit-scrollbar-thumb,
-                                  [data-diff]:hover [data-code]::-webkit-scrollbar-thumb,
-                                  [data-file]:hover [data-code]::-webkit-scrollbar-thumb {
-                                    background-color: transparent !important;
-                                  }
-
-                                  [data-diffs-header='default'] {
-                                    position: sticky;
-                                    top: 0;
-                                    z-index: 5;
-                                    box-shadow: inset 0 -1px 0 var(--diffs-bg-context);
-                                  }
-
-                                  :host-context(.macos) [data-diffs-header='default'] {
-                                    min-height: ${TOP_BAR_MACOS_HEIGHT};
-                                  }
-
-                                  :host-context(.wco) [data-diffs-header='default'] {
-                                    min-height: ${TOP_BAR_WCO_HEIGHT};
-                                  }
-
-                                  [data-column-number][data-selected-line]::before {
-                                    background-color: #f59e0b;
-                                    background-image: none;
-                                  }
-
-                                `,
-                                enableGutterUtility: true,
-                                onGutterUtilityClick: (range) =>
-                                  openLineCommentDraft(fileDiff.name, range),
-                                onPostRender: (node, instance) =>
-                                  handleFileDiffPostRender(
-                                    node,
-                                    instance,
-                                    fileDiff,
-                                    normalizedFilePath,
-                                  ),
-                              }}
-                              renderAnnotation={renderReviewThreadAnnotations}
-                              renderHeaderMetadata={() =>
-                                renderReviewThreadSummary(
-                                  fileReviewThreads,
-                                  fileDiff.name,
-                                )
-                              }
-                            />
-                            <div
-                              id={lineDraftPortalRootId}
-                              className="pointer-events-none absolute inset-0 z-[4]"
-                            />
-                            {fileReviewThreads.fileThreads.length > 0 ||
-                            fileDraftEditors.length > 0 ? (
-                              <div className="mt-3 flex flex-col gap-3 rounded-xl border border-ink-200 bg-surface p-3">
-                                <div className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                                  File threads
-                                </div>
-                                {fileDraftEditors.map((editor) => (
-                                  <ReviewCommentEditor
-                                    key={editor.id}
-                                    cursorPosition={editor.cursorPosition}
-                                    defaultMode={defaultReviewEditorMode}
-                                    error={editor.error}
-                                    isPending={editor.isSubmitting}
-                                    provider={selectedProvider}
-                                    submitLabel="Comment"
-                                    target={editor.target}
-                                    value={editor.body}
-                                    onCancel={() =>
-                                      closeEditor(
-                                        reviewEditorSessionKey,
-                                        editor.id,
-                                      )
-                                    }
-                                    onChange={(body) =>
-                                      setEditorBody(
-                                        reviewEditorSessionKey,
-                                        editor.id,
-                                        body,
-                                      )
-                                    }
-                                    onCursorPositionChange={(cursorPosition) =>
-                                      setEditorCursorPosition(
-                                        reviewEditorSessionKey,
-                                        editor.id,
-                                        cursorPosition ?? null,
-                                      )
-                                    }
-                                    onSubmit={(body) =>
-                                      handleSubmitDraftComment(editor.id, body)
-                                    }
-                                  />
-                                ))}
-                                {fileReviewThreads.fileThreads.map((thread) => (
-                                  <ReviewThreadCard
-                                    key={getThreadRefKey(thread)}
-                                    onEditComment={handleEditComment}
-                                    onReplyToThread={handleReplyToThread}
-                                    reviewEditorSessionKey={
-                                      reviewEditorSessionKey
-                                    }
-                                    thread={thread}
-                                    viewerLogin={viewerLogin}
-                                  />
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
+                          />
+                        ))}
+                      </div>
+                    </PatchFileDiffItemContext.Provider>
                   )}
                 </div>
               ) : null}
@@ -1669,6 +1821,7 @@ function PatchViewerMain({
                     isLoading={isReviewThreadsLoading}
                     error={reviewThreadsError}
                     hasSelection={hasSelection}
+                    onSelectThread={handleSelectReviewThread}
                   />
                 </div>
               ) : null}

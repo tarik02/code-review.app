@@ -5,6 +5,7 @@ import type { ThemeRegistrationResolved } from "@shikijs/types";
 import pierreDarkTheme from "@pierre/theme/pierre-dark";
 import pierreLightTheme from "@pierre/theme/pierre-light";
 import { useDocumentDarkMode } from "../../hooks/use-document-dark-mode";
+import { getLanguageFromPath } from "./review-comment-editor/language";
 import "./comment-markdown.css";
 
 const CODE_THEME = {
@@ -55,6 +56,14 @@ function normalizeLanguage(language: string | undefined) {
   }
 }
 
+function getCodeBlockLanguage(language: string | undefined, filePath?: string) {
+  if (language?.toLowerCase().startsWith("suggestion")) {
+    return getLanguageFromPath(filePath) || "text";
+  }
+
+  return language;
+}
+
 function getThemeEntry(isDark: boolean) {
   return isDark ? CODE_THEME.dark : CODE_THEME.light;
 }
@@ -71,9 +80,11 @@ function InlineCode({ children, ...props }: ComponentProps<"code">) {
 }
 
 function MarkdownCodeBlock({
+  filePath,
   lang,
   text,
 }: {
+  filePath?: string;
   lang?: string;
   text: string;
 }) {
@@ -82,9 +93,13 @@ function MarkdownCodeBlock({
 
   useEffect(() => {
     let cancelled = false;
-    const normalizedLanguage = normalizeLanguage(lang);
+    const normalizedLanguage = normalizeLanguage(
+      getCodeBlockLanguage(lang, filePath),
+    );
     const themeEntry = getThemeEntry(isDark);
     const cacheKey = `${themeEntry.id}:${normalizedLanguage}:${text}`;
+
+    setHtml("");
 
     let promise = codeHtmlCache.get(cacheKey);
     if (!promise) {
@@ -110,7 +125,7 @@ function MarkdownCodeBlock({
     return () => {
       cancelled = true;
     };
-  }, [isDark, lang, text]);
+  }, [filePath, isDark, lang, text]);
 
   if (!html) {
     return (
@@ -128,7 +143,13 @@ function MarkdownCodeBlock({
   );
 }
 
-function CommentMarkdown({ body }: { body: string }) {
+function CommentMarkdown({
+  body,
+  filePath,
+}: {
+  body: string;
+  filePath?: string;
+}) {
   return (
     <div className="rudu-comment-markdown font-sans whitespace-normal break-words">
       <Markdown
@@ -138,6 +159,7 @@ function CommentMarkdown({ body }: { body: string }) {
             if (node.type === RuleType.codeBlock) {
               return (
                 <MarkdownCodeBlock
+                  filePath={filePath}
                   lang={node.lang}
                   text={String(node.text ?? "")}
                 />
