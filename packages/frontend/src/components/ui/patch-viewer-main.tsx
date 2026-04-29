@@ -910,6 +910,7 @@ type GlobalCommentsSectionProps = {
   isLoading: boolean;
   defaultReviewEditorMode: CommentEditorMode;
   provider: ForgeProviderKind;
+  portalRootId: string;
   reviewEditorSessionKey: string | null;
   viewerLogin: string | null;
   registerSection: (node: HTMLDivElement | null) => void;
@@ -928,6 +929,7 @@ function GlobalCommentsSection({
   isLoading,
   defaultReviewEditorMode,
   provider,
+  portalRootId,
   reviewEditorSessionKey,
   viewerLogin,
   registerSection,
@@ -966,7 +968,7 @@ function GlobalCommentsSection({
 
   return (
     <div
-      className="border-b border-ink-200 bg-white px-4 py-4 dark:bg-surface"
+      className="relative border-b border-ink-200 bg-white px-4 py-4 dark:bg-surface"
       ref={registerSection}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -987,15 +989,16 @@ function GlobalCommentsSection({
 
       <div className="mt-4 flex flex-col gap-3">
         {globalDraftEditors.map((editor) => (
-          <ReviewCommentEditor
+          <FloatingLineDraftEditor
             key={editor.id}
             cursorPosition={editor.cursorPosition}
             defaultMode={defaultReviewEditorMode}
             error={editor.error}
             isPending={editor.isSubmitting}
+            portalRootId={portalRootId}
             provider={provider}
-            secondarySubmitLabel={provider === 'gitlab' ? 'Add comment now' : undefined}
-            submitLabel={provider === 'gitlab' ? 'Add review comment' : 'Comment'}
+            selectedText=""
+            suggestionContext={null}
             target={editor.target}
             value={editor.body}
             onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
@@ -1003,10 +1006,8 @@ function GlobalCommentsSection({
             onCursorPositionChange={(cursorPosition) =>
               setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
             }
-            onSecondarySubmit={
-              provider === 'gitlab' ? (body) => onSubmitDraftCommentNow(editor.id, body) : undefined
-            }
             onSubmit={(body) => onSubmitDraftComment(editor.id, body)}
+            onSubmitNow={(body) => onSubmitDraftCommentNow(editor.id, body)}
           />
         ))}
 
@@ -1028,12 +1029,14 @@ function GlobalCommentsSection({
             onDeletePendingComment={onDeletePendingComment}
             onReplyToThread={onReplyToThread}
             onReplyToThreadNow={onReplyToThreadNow}
+            editorPortalRootId={portalRootId}
             reviewEditorSessionKey={reviewEditorSessionKey}
             thread={thread}
             viewerLogin={viewerLogin}
           />
         ))}
       </div>
+      <div id={portalRootId} className="pointer-events-none absolute inset-0 z-[4]" />
     </div>
   );
 }
@@ -1957,6 +1960,9 @@ function PatchViewerMain({
   const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
   const fileCommentsSectionNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const globalCommentsSectionNodeRef = useRef<HTMLDivElement | null>(null);
+  const globalCommentsPortalRootId = selectedPatch
+    ? `global-comments-editor-root-${selectedPatch.number}`
+    : 'global-comments-editor-root-idle';
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const hasSelection = selectedPrKey !== null;
   const isDiffReady = !isPatchLoading && !patchError && !parsedPatch.parseError;
@@ -2792,6 +2798,7 @@ function PatchViewerMain({
                           onReplyToThreadNow={handleReplyToThreadNow}
                           onSubmitDraftComment={handleSubmitDraftComment}
                           onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
+                          portalRootId={globalCommentsPortalRootId}
                           provider={selectedProvider}
                           registerSection={registerGlobalCommentsSection}
                           registerThreadAnchor={registerThreadAnchor}
