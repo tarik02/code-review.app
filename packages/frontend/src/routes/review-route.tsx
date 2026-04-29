@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "../hooks/use-forge-queries";
-import {
-  reviewEditorSettingsQueryOptions,
-  setReviewEditorDefaultMode,
-} from "../queries/forge";
+import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from "../queries/forge";
 import {
   Field,
   FieldContent,
@@ -40,27 +37,21 @@ function ReviewRoute() {
       queryClient.setQueryData(reviewEditorSettingsQueryKey, settings);
     },
   });
-  const defaultMode =
-    reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
-  const error =
-    reviewEditorModeMutation.error ?? reviewEditorSettingsQuery.error;
+  const defaultMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const error = reviewEditorModeMutation.error ?? reviewEditorSettingsQuery.error;
   const isSaving = reviewEditorModeMutation.isPending;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 px-8 py-8">
       <div>
         <h2 className="text-xl font-semibold text-ink-900">Review</h2>
-        <p className="mt-1 text-sm text-ink-500">
-          Manage review comment preferences.
-        </p>
+        <p className="mt-1 text-sm text-ink-500">Manage review comment preferences.</p>
       </div>
 
       <section className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div>
-            <h3 className="text-sm font-semibold text-ink-900">
-              Review editor
-            </h3>
+            <h3 className="text-sm font-semibold text-ink-900">Review editor</h3>
             <p className="mt-1 text-sm text-ink-500">
               Choose the starting mode for new comment editors.
             </p>
@@ -88,9 +79,7 @@ function ReviewRoute() {
                     className={[
                       "min-h-20",
                       isSaving ? "" : "hover:bg-canvasDark",
-                      isSelected
-                        ? "border-ink-900 dark:border-ink-200"
-                        : "",
+                      isSelected ? "border-ink-900 dark:border-ink-200" : "",
                     ].join(" ")}
                     orientation="horizontal"
                   >

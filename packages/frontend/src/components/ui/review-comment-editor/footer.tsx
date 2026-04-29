@@ -21,12 +21,7 @@ function ReviewCommentEditorFooter({
   return (
     <footer className="rudu-comment-editor-footer">
       {onCancel ? (
-        <Button
-          disabled={isPending}
-          variant="ghost"
-          onClick={onCancel}
-          type="button"
-        >
+        <Button disabled={isPending} variant="ghost" onClick={onCancel} type="button">
           {cancelLabel}
         </Button>
       ) : null}

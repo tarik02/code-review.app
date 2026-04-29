@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
 import {
@@ -27,16 +21,11 @@ const THEME_REVEAL_TRANSITION_CLASS = "theme-reveal-transition";
 const THEME_FADE_TRANSITION_CLASS = "theme-fade-transition";
 
 function getSystemTheme(): Theme {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return "light";
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function getStoredPreference(): ThemePreference {
@@ -68,10 +57,7 @@ function applyDocumentTheme(theme: Theme) {
 }
 
 function shouldReduceMotion() {
-  if (
-    typeof window === "undefined" ||
-    typeof window.matchMedia !== "function"
-  ) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return false;
   }
 
@@ -82,12 +68,8 @@ function useTheme() {
   const queryClient = useQueryClient();
   const themePreferenceQuery = useQuery(themePreferenceQueryOptions());
   const themePreferenceQueryKey = themePreferenceQueryOptions().queryKey;
-  const [preference, setPreferenceState] = useState<ThemePreference>(() =>
-    getStoredPreference(),
-  );
-  const [systemTheme, setSystemThemeState] = useState<Theme>(() =>
-    getSystemTheme(),
-  );
+  const [preference, setPreferenceState] = useState<ThemePreference>(() => getStoredPreference());
+  const [systemTheme, setSystemThemeState] = useState<Theme>(() => getSystemTheme());
   const isTransitionActiveRef = useRef(false);
   const initialStoredPreferenceRef = useRef(preference);
   const preferenceRef = useRef(preference);
@@ -121,10 +103,7 @@ function useTheme() {
       return;
     }
 
-    if (
-      persistedPreference === "auto" &&
-      initialStoredPreferenceRef.current !== "auto"
-    ) {
+    if (persistedPreference === "auto" && initialStoredPreferenceRef.current !== "auto") {
       const legacyPreference = initialStoredPreferenceRef.current;
       initialStoredPreferenceRef.current = "auto";
       queryClient.setQueryData(themePreferenceQueryKey, {
@@ -183,13 +162,9 @@ function useTheme() {
 
       const root = document.documentElement;
       const actualKind =
-        kind === "reveal" && trigger !== null && trigger !== undefined
-          ? "reveal"
-          : "fade";
+        kind === "reveal" && trigger !== null && trigger !== undefined ? "reveal" : "fade";
       const transitionClass =
-        actualKind === "reveal"
-          ? THEME_REVEAL_TRANSITION_CLASS
-          : THEME_FADE_TRANSITION_CLASS;
+        actualKind === "reveal" ? THEME_REVEAL_TRANSITION_CLASS : THEME_FADE_TRANSITION_CLASS;
       const rect = trigger?.getBoundingClientRect();
       const revealCenter =
         actualKind === "reveal" && rect
@@ -252,10 +227,7 @@ function useTheme() {
   );
 
   const setPreference = useCallback(
-    (
-      nextPreference: ThemePreference,
-      options: ThemeTransitionOptions = {},
-    ) => {
+    (nextPreference: ThemePreference, options: ThemeTransitionOptions = {}) => {
       const currentPreference = preferenceRef.current;
       const currentSystemTheme = systemThemeRef.current;
       const currentTheme = resolveTheme(currentPreference, currentSystemTheme);
@@ -272,8 +244,7 @@ function useTheme() {
       });
 
       runThemeTransition({
-        kind:
-          currentTheme === nextTheme ? "none" : (options.kind ?? "fade"),
+        kind: currentTheme === nextTheme ? "none" : (options.kind ?? "fade"),
         trigger: options.trigger,
         update,
       });
@@ -284,9 +255,7 @@ function useTheme() {
             preference: previousPreference,
           });
           preferenceRef.current = previousPreference;
-          applyDocumentTheme(
-            resolveTheme(previousPreference, systemThemeRef.current),
-          );
+          applyDocumentTheme(resolveTheme(previousPreference, systemThemeRef.current));
           setPreferenceState(previousPreference);
         },
       });
@@ -319,10 +288,7 @@ function useTheme() {
       };
 
       runThemeTransition({
-        kind:
-          currentPreference === "auto" && currentTheme !== nextTheme
-            ? "fade"
-            : "none",
+        kind: currentPreference === "auto" && currentTheme !== nextTheme ? "fade" : "none",
         update,
       });
     };
@@ -352,9 +318,4 @@ function useTheme() {
 }
 
 export { useTheme };
-export type {
-  Theme,
-  ThemePreference,
-  ThemeTransitionKind,
-  ThemeTransitionOptions,
-};
+export type { Theme, ThemePreference, ThemeTransitionKind, ThemeTransitionOptions };

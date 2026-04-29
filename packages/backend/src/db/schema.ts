@@ -23,9 +23,7 @@ export const authTokens = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [
-    index("idx_auth_tokens_provider_host").on(table.provider, table.host),
-  ],
+  (table) => [index("idx_auth_tokens_provider_host").on(table.provider, table.host)],
 );
 
 export const repos = sqliteTable(
@@ -46,10 +44,7 @@ export const repos = sqliteTable(
     lastOpenedAt: integer("last_opened_at"),
   },
   (table) => [
-    uniqueIndex("idx_repos_provider_id_repo_key").on(
-      table.providerId,
-      table.repoKey,
-    ),
+    uniqueIndex("idx_repos_provider_id_repo_key").on(table.providerId, table.repoKey),
     index("idx_repos_provider_host").on(
       table.provider,
       table.host,
@@ -83,18 +78,9 @@ export const pullRequests = sqliteTable(
     lastSeenAt: integer("last_seen_at").notNull(),
   },
   (table) => [
-    uniqueIndex("idx_pull_requests_repo_pr_number").on(
-      table.repoRowId,
-      table.prNumber,
-    ),
-    index("idx_pull_requests_repo_updated").on(
-      table.repoRowId,
-      sql`${table.updatedAt} desc`,
-    ),
-    index("idx_pull_requests_repo_tracked").on(
-      table.repoRowId,
-      table.isTracked,
-    ),
+    uniqueIndex("idx_pull_requests_repo_pr_number").on(table.repoRowId, table.prNumber),
+    index("idx_pull_requests_repo_updated").on(table.repoRowId, sql`${table.updatedAt} desc`),
+    index("idx_pull_requests_repo_tracked").on(table.repoRowId, table.isTracked),
   ],
 );
 
@@ -108,9 +94,7 @@ export const prPatchCache = sqliteTable(
     cachedAt: integer("cached_at").notNull(),
     lastAccessedAt: integer("last_accessed_at").notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] }),
-  ],
+  (table) => [primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] })],
 );
 
 export const prChangedFilesCache = sqliteTable(
@@ -123,9 +107,7 @@ export const prChangedFilesCache = sqliteTable(
     cachedAt: integer("cached_at").notNull(),
     lastAccessedAt: integer("last_accessed_at").notNull(),
   },
-  (table) => [
-    primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] }),
-  ],
+  (table) => [primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] })],
 );
 
 export const providerProfiles = sqliteTable("provider_profiles", {

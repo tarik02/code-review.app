@@ -13,7 +13,7 @@ import {
 } from "./shared.ts";
 
 function quoteDesktopExecArgument(value: string) {
-  return `"${value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")}"`;
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 const electronCandidates = [
@@ -38,9 +38,9 @@ function resolveSystemElectronPath() {
         continue;
       }
 
-      const resolved = yield* fileSystem.realPath(candidate).pipe(
-        Effect.catchAll(() => Effect.succeed(candidate)),
-      );
+      const resolved = yield* fileSystem
+        .realPath(candidate)
+        .pipe(Effect.catchAll(() => Effect.succeed(candidate)));
 
       return resolved;
     }
@@ -61,9 +61,9 @@ function resolveMisePath() {
       const candidate = process.env.MISE_BIN;
 
       if (yield* fileSystem.exists(candidate)) {
-        return yield* fileSystem.realPath(candidate).pipe(
-          Effect.catchAll(() => Effect.succeed(candidate)),
-        );
+        return yield* fileSystem
+          .realPath(candidate)
+          .pipe(Effect.catchAll(() => Effect.succeed(candidate)));
       }
     }
 
@@ -79,9 +79,7 @@ function resolveMisePath() {
   });
 }
 
-function buildDesktopEnvironment(
-  electronExecPath: string,
-): DesktopEnvironment {
+function buildDesktopEnvironment(electronExecPath: string): DesktopEnvironment {
   const majorVersion = inferElectronMajorVersion(electronExecPath);
   const environment: DesktopEnvironment = {
     CODE_REVIEW_APP_DISABLE_UPDATER: "1",

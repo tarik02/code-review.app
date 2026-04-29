@@ -77,23 +77,14 @@ function unwrapSelection(
 ): MarkdownTransform | null {
   const normalizedSelection = normalizeSelection(selection);
   const selectedText = getSelectedText(markdown, normalizedSelection);
-  const hasSelectedWrappers =
-    selectedText.startsWith(before) && selectedText.endsWith(after);
+  const hasSelectedWrappers = selectedText.startsWith(before) && selectedText.endsWith(after);
   const hasOuterWrappers =
-    markdown.slice(
-      normalizedSelection.start - before.length,
-      normalizedSelection.start,
-    ) === before &&
-    markdown.slice(
-      normalizedSelection.end,
-      normalizedSelection.end + after.length,
-    ) === after;
+    markdown.slice(normalizedSelection.start - before.length, normalizedSelection.start) ===
+      before &&
+    markdown.slice(normalizedSelection.end, normalizedSelection.end + after.length) === after;
 
   if (hasSelectedWrappers) {
-    const unwrappedText = selectedText.slice(
-      before.length,
-      selectedText.length - after.length,
-    );
+    const unwrappedText = selectedText.slice(before.length, selectedText.length - after.length);
     return {
       markdown:
         markdown.slice(0, normalizedSelection.start) +
@@ -122,26 +113,17 @@ function unwrapSelection(
   return null;
 }
 
-function toggleInlineCode(
-  markdown: string,
-  selection: MarkdownSelection,
-): MarkdownTransform {
+function toggleInlineCode(markdown: string, selection: MarkdownSelection): MarkdownTransform {
   const unwrapped = unwrapSelection(markdown, selection, "`", "`");
   return unwrapped ?? wrapSelection(markdown, selection, "`", "`");
 }
 
-function toggleCodeFence(
-  markdown: string,
-  selection: MarkdownSelection,
-): MarkdownTransform {
+function toggleCodeFence(markdown: string, selection: MarkdownSelection): MarkdownTransform {
   const unwrapped = unwrapSelection(markdown, selection, "```\n", "\n```");
   return unwrapped ?? wrapSelection(markdown, selection, "```\n", "\n```");
 }
 
-function toggleCodeFormatting(
-  markdown: string,
-  selection: MarkdownSelection,
-): MarkdownTransform {
+function toggleCodeFormatting(markdown: string, selection: MarkdownSelection): MarkdownTransform {
   const selectedText = getSelectedText(markdown, selection);
   return selectedText.includes("\n")
     ? toggleCodeFence(markdown, selection)
@@ -154,9 +136,7 @@ function insertFence(language: string, body: string) {
   return `\`\`\`${fenceLanguage}\n${normalizedBody}\n\`\`\``;
 }
 
-function buildGitlabSuggestionLanguage(
-  target: Extract<CommentEditorTarget, { type: "line" }>,
-) {
+function buildGitlabSuggestionLanguage(target: Extract<CommentEditorTarget, { type: "line" }>) {
   const startLine = target.startLine ?? target.line;
   const endLine = target.line;
   const linesAbove = Math.max(endLine - startLine, 0);
@@ -207,16 +187,5 @@ function buildSuggestionBlock(
   };
 }
 
-export {
-  buildSuggestionBlock,
-  insertFence,
-  toggleCodeFormatting,
-  toggleInlineCode,
-  wrapSelection,
-};
-export type {
-  CommentEditorTarget,
-  MarkdownSelection,
-  MarkdownTransform,
-  SuggestionBlockResult,
-};
+export { buildSuggestionBlock, insertFence, toggleCodeFormatting, toggleInlineCode, wrapSelection };
+export type { CommentEditorTarget, MarkdownSelection, MarkdownTransform, SuggestionBlockResult };

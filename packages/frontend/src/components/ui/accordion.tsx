@@ -6,41 +6,21 @@ function toClassName(className: unknown) {
   return typeof className === "string" ? className : undefined;
 }
 
-function AccordionRoot({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Root>) {
+function AccordionRoot({ className, ...props }: React.ComponentProps<typeof Accordion.Root>) {
   return (
-    <Accordion.Root
-      className={cx("flex flex-col gap-2.5", toClassName(className))}
-      {...props}
-    />
+    <Accordion.Root className={cx("flex flex-col gap-2.5", toClassName(className))} {...props} />
   );
 }
 
-function AccordionItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Item>) {
+function AccordionItem({ className, ...props }: React.ComponentProps<typeof Accordion.Item>) {
   return <Accordion.Item className={cx(toClassName(className))} {...props} />;
 }
 
-function AccordionHeader({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Header>) {
-  return (
-    <Accordion.Header
-      className={cx("m-0", toClassName(className))}
-      {...props}
-    />
-  );
+function AccordionHeader({ className, ...props }: React.ComponentProps<typeof Accordion.Header>) {
+  return <Accordion.Header className={cx("m-0", toClassName(className))} {...props} />;
 }
 
-function AccordionTrigger({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Trigger>) {
+function AccordionTrigger({ className, ...props }: React.ComponentProps<typeof Accordion.Trigger>) {
   return (
     <Accordion.Trigger
       className={cx(
@@ -52,10 +32,7 @@ function AccordionTrigger({
   );
 }
 
-function AccordionPanel({
-  className,
-  ...props
-}: React.ComponentProps<typeof Accordion.Panel>) {
+function AccordionPanel({ className, ...props }: React.ComponentProps<typeof Accordion.Panel>) {
   return (
     <Accordion.Panel
       className={cx(

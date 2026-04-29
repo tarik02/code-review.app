@@ -24,18 +24,12 @@ type HomeRouteSearch = {
 
 function parsePositiveInteger(value: unknown) {
   const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : Number.NaN;
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function validateHomeRouteSearch(
-  search: Record<string, unknown>,
-): HomeRouteSearch {
+function validateHomeRouteSearch(search: Record<string, unknown>): HomeRouteSearch {
   const providerId =
     typeof search.providerId === "string" && search.providerId.trim().length > 0
       ? search.providerId
@@ -65,10 +59,7 @@ function RootRoute() {
       return;
     }
 
-    window.sessionStorage.setItem(
-      SETTINGS_RETURN_HREF_STORAGE_KEY,
-      location.href,
-    );
+    window.sessionStorage.setItem(SETTINGS_RETURN_HREF_STORAGE_KEY, location.href);
   }, [location.href, location.pathname]);
 
   return <Outlet />;

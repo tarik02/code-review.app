@@ -54,11 +54,7 @@ const deviceSessions = new Map<string, DeviceOAuthSession>();
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
 function base64Url(buffer: Buffer) {
-  return buffer
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function createCodeVerifier() {
@@ -95,16 +91,11 @@ function startOAuth(
     const accountId = base64Url(randomBytes(18));
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, normalizedHost, clientId, clientSecret),
-      catch: (error) =>
-        error instanceof Error ? error : new Error(String(error)),
+      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
     });
 
     if (provider === "github" && !config.clientSecret) {
-      const deviceCode = yield* requestDeviceOAuthCode(
-        provider,
-        normalizedHost,
-        config.clientId,
-      );
+      const deviceCode = yield* requestDeviceOAuthCode(provider, normalizedHost, config.clientId);
       const expiresAt = Date.now() + deviceCode.expiresIn * 1000;
       deviceSessions.set(accountId, {
         accountId,

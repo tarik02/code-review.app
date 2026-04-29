@@ -25,8 +25,7 @@
   --accentText: rgb(var(--rgb-ink-800));
   --accentTextContrast: rgb(var(--rgb-ink-900));
   --font-body: var(--font-sans);
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, monospace;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   overflow: visible;
   border: 0;
@@ -392,13 +391,11 @@
   padding-inline: 0.375rem 0.75rem;
 }
 
-.rudu-comment-editor-suggestion-original
-  .rudu-comment-editor-suggestion-gutter-marker {
+.rudu-comment-editor-suggestion-original .rudu-comment-editor-suggestion-gutter-marker {
   color: rgb(220 38 38);
 }
 
-.rudu-comment-editor-suggestion-replacement
-  .rudu-comment-editor-suggestion-gutter-marker {
+.rudu-comment-editor-suggestion-replacement .rudu-comment-editor-suggestion-gutter-marker {
   color: rgb(22 163 74);
 }
 

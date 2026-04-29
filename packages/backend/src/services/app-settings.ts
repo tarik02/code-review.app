@@ -55,9 +55,6 @@ const makeAppSettingsService = Effect.gen(function* () {
   } satisfies AppSettingsServiceShape;
 });
 
-const AppSettingsServiceLive = Layer.effect(
-  AppSettingsService,
-  makeAppSettingsService,
-);
+const AppSettingsServiceLive = Layer.effect(AppSettingsService, makeAppSettingsService);
 
 export { AppSettingsService, AppSettingsServiceLive };

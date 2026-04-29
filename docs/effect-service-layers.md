@@ -17,17 +17,12 @@ type ExampleServiceShape = {
   run(input: string): Effect.Effect<string, Error>;
 };
 
-class ExampleService extends Effect.Tag("ExampleService")<
-  ExampleService,
-  ExampleServiceShape
->() {}
+class ExampleService extends Effect.Tag("ExampleService")<ExampleService, ExampleServiceShape>() {}
 
 const makeExampleService = Effect.gen(function* () {
   const dependency = yield* DependencyService;
 
-  const run: ExampleServiceShape["run"] = Effect.fn(
-    "ExampleService.run",
-  )(function* (input) {
+  const run: ExampleServiceShape["run"] = Effect.fn("ExampleService.run")(function* (input) {
     return yield* dependency.doWork(input);
   });
 
@@ -118,9 +113,7 @@ direction is easier to read and less error-prone.
 Current runtime stages inside `packages/backend/src/runtime.ts`:
 
 ```ts
-const PlatformLayer = NodeCommandExecutor.layer.pipe(
-  Layer.provideMerge(NodeFileSystem.layer),
-);
+const PlatformLayer = NodeCommandExecutor.layer.pipe(Layer.provideMerge(NodeFileSystem.layer));
 
 const ConfigLayer = Layer.succeed(BackendConfig, config);
 
@@ -140,20 +133,11 @@ const IndependentServiceLayer = Layer.mergeAll(
   GitServiceLive,
 );
 
-const BaseAndIndependentServiceLayer = Layer.provideMerge(
-  IndependentServiceLayer,
-  BaseLayer,
-);
+const BaseAndIndependentServiceLayer = Layer.provideMerge(IndependentServiceLayer, BaseLayer);
 
-const BaseAndServiceLayer = Layer.provideMerge(
-  DiffDataServiceLive,
-  BaseAndIndependentServiceLayer,
-);
+const BaseAndServiceLayer = Layer.provideMerge(DiffDataServiceLive, BaseAndIndependentServiceLayer);
 
-const AppLayer = Layer.provideMerge(
-  PullRequestServiceLive,
-  BaseAndServiceLayer,
-);
+const AppLayer = Layer.provideMerge(PullRequestServiceLive, BaseAndServiceLayer);
 
 return Layer.provideMerge(AppLayer, ConfigLayer);
 ```

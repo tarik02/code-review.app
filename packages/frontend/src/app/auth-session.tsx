@@ -16,11 +16,7 @@ import {
   providerAccountsQueryOptions,
   providerStatusesQueryOptions,
 } from "../queries/forge";
-import type {
-  ForgeProviderKind,
-  ProviderAccount,
-  ProviderAuthStatus,
-} from "../types/forge";
+import type { ForgeProviderKind, ProviderAccount, ProviderAuthStatus } from "../types/forge";
 
 type AuthSessionValue = {
   providerAccounts: ProviderAccount[];
@@ -30,12 +26,7 @@ type AuthSessionValue = {
   gateStatus: ProviderAuthStatus;
   providerStatusMessage: string | null;
   isSigningIn: boolean;
-  signIn(
-    provider: ForgeProviderKind,
-    host: string,
-    clientId: string,
-    clientSecret?: string,
-  ): void;
+  signIn(provider: ForgeProviderKind, host: string, clientId: string, clientSecret?: string): void;
   checkAgain(): void;
 };
 
@@ -60,9 +51,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     startedAt: number;
   } | null>(null);
   const handledOAuthCallbackUrlsRef = useRef<Set<string>>(new Set());
-  const [pendingOAuthStartedAt, setPendingOAuthStartedAt] = useState<number | null>(
-    null,
-  );
+  const [pendingOAuthStartedAt, setPendingOAuthStartedAt] = useState<number | null>(null);
   const [pendingDeviceOAuth, setPendingDeviceOAuth] = useState<{
     accountId: string;
     userCode: string;
@@ -72,12 +61,16 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   } | null>(null);
   const providerAccountsQuery = useQuery(providerAccountsQueryOptions());
   const providerStatusesQuery = useQuery(providerStatusesQueryOptions());
-  const providerAccounts = providerAccountsQuery.data ?? [];
-  const providerStatuses = providerStatusesQuery.data ?? {};
-  const providerStatusList = Object.values(providerStatuses);
-  const hasReadyProvider = providerStatusList.some(
-    (status) => status.status === "ready",
+  const providerAccounts = useMemo(
+    () => providerAccountsQuery.data ?? [],
+    [providerAccountsQuery.data],
   );
+  const providerStatuses = useMemo(
+    () => providerStatusesQuery.data ?? {},
+    [providerStatusesQuery.data],
+  );
+  const providerStatusList = Object.values(providerStatuses);
+  const hasReadyProvider = providerStatusList.some((status) => status.status === "ready");
   const gateStatus =
     providerStatusList.find((status) => status.status !== "not_authenticated") ??
     providerStatusList[0] ??
@@ -128,15 +121,9 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const signIn = useCallback(
-    async (
-      provider: ForgeProviderKind,
-      host: string,
-      clientId: string,
-      clientSecret = "",
-    ) => {
+    async (provider: ForgeProviderKind, host: string, clientId: string, clientSecret = "") => {
       const normalizedHost =
-        normalizeHostInput(host) ||
-        (provider === "github" ? "github.com" : "gitlab.com");
+        normalizeHostInput(host) || (provider === "github" ? "github.com" : "gitlab.com");
       setIsSigningIn(true);
       setAuthMessage(null);
       try {
@@ -156,9 +143,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
             expiresAt: result.expiresAt,
             intervalMs: result.intervalMs,
           });
-          setAuthMessage(
-            `Enter code ${result.userCode} in GitHub to finish signing in.`,
-          );
+          setAuthMessage(`Enter code ${result.userCode} in GitHub to finish signing in.`);
           window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
           return;
         }
@@ -245,11 +230,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     async function checkLatestOAuthCallback() {
       try {
         const callback = await trpc.auth.latestOAuthCallback.query();
-        if (
-          isDisposed ||
-          !callback ||
-          callback.emittedAt < oauthStartedAt
-        ) {
+        if (isDisposed || !callback || callback.emittedAt < oauthStartedAt) {
           return;
         }
         await handleOAuthCallback(callback.url);
@@ -350,11 +331,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return (
-    <AuthSessionContext.Provider value={value}>
-      {children}
-    </AuthSessionContext.Provider>
-  );
+  return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }
 
 function useAuthSession() {

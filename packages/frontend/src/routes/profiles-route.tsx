@@ -1,10 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "../hooks/use-forge-queries";
 import { useAuthSession } from "../app/auth-session";
 import { Button } from "../components/ui/button";
@@ -26,11 +21,7 @@ import {
   setAccountVisibility,
   setDiffDataMode,
 } from "../queries/forge";
-import type {
-  DiffDataMode,
-  ForgeProviderKind,
-  ProviderAccount,
-} from "../types/forge";
+import type { DiffDataMode, ForgeProviderKind, ProviderAccount } from "../types/forge";
 
 function providerName(account: ProviderAccount) {
   return account.provider === "github" ? "GitHub" : "GitLab";
@@ -63,17 +54,13 @@ const providerOptions: { value: ForgeProviderKind; label: string }[] = [
 
 function ProfilesRoute() {
   const queryClient = useQueryClient();
-  const {
-    providerAccounts,
-    providerStatuses,
-    providerStatusMessage,
-    isSigningIn,
-    signIn,
-  } = useAuthSession();
+  const { providerAccounts, providerStatuses, providerStatusMessage, isSigningIn, signIn } =
+    useAuthSession();
   const [provider, setProvider] = useState<ForgeProviderKind>("github");
   const [host, setHost] = useState("github.com");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const defaultHost = provider === "github" ? "github.com" : "gitlab.com";
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
   const diffDataSettingsQuery = useQuery(diffDataSettingsQueryOptions());
   const knownAccountIds = useMemo(
@@ -89,10 +76,7 @@ function ProfilesRoute() {
       knownAccountIds.has(accountId),
     );
   }, [accountVisibilityQuery.data, knownAccountIds, providerAccounts]);
-  const enabledAccountIdSet = useMemo(
-    () => new Set(enabledAccountIds),
-    [enabledAccountIds],
-  );
+  const enabledAccountIdSet = useMemo(() => new Set(enabledAccountIds), [enabledAccountIds]);
   const profileQueries = useQueries({
     queries: providerAccounts.map((account) => ({
       ...providerProfileQueryOptions(account.id),
@@ -102,27 +86,20 @@ function ProfilesRoute() {
   const visibilityMutation = useMutation({
     mutationFn: setAccountVisibility,
     onSuccess: (visibility) => {
-      queryClient.setQueryData(
-        accountVisibilityQueryOptions().queryKey,
-        visibility,
-      );
+      queryClient.setQueryData(accountVisibilityQueryOptions().queryKey, visibility);
     },
   });
   const diffDataModeMutation = useMutation({
     mutationFn: setDiffDataMode,
     onSuccess: async (settings) => {
-      queryClient.setQueryData(
-        diffDataSettingsQueryOptions().queryKey,
-        settings,
-      );
+      queryClient.setQueryData(diffDataSettingsQueryOptions().queryKey, settings);
       await queryClient.invalidateQueries({
         queryKey: forgeKeys.pullRequests(),
       });
     },
   });
   const signOutMutation = useMutation({
-    mutationFn: (accountId: string) =>
-      trpc.auth.signOut.mutate({ accountId }),
+    mutationFn: (accountId: string) => trpc.auth.signOut.mutate({ accountId }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -140,16 +117,9 @@ function ProfilesRoute() {
       ]);
     },
   });
-  const normalizedHost =
-    normalizeHostInput(host) ||
-    (provider === "github" ? "github.com" : "gitlab.com");
+  const normalizedHost = normalizeHostInput(host) || defaultHost;
   const canStartSignIn =
-    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) &&
-    !isSigningIn;
-
-  useEffect(() => {
-    setHost(provider === "github" ? "github.com" : "gitlab.com");
-  }, [provider]);
+    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) && !isSigningIn;
 
   function toggleAccountVisibility(accountId: string) {
     const nextEnabled = new Set(enabledAccountIds);
@@ -170,9 +140,7 @@ function ProfilesRoute() {
     <div className="mx-auto flex max-w-5xl flex-col gap-5 px-8 py-8">
       <div>
         <h2 className="text-xl font-semibold text-ink-900">Profiles</h2>
-        <p className="mt-1 text-sm text-ink-500">
-          Manage connected GitHub and GitLab accounts.
-        </p>
+        <p className="mt-1 text-sm text-ink-500">Manage connected GitHub and GitLab accounts.</p>
       </div>
 
       {providerStatusMessage ? (
@@ -200,9 +168,7 @@ function ProfilesRoute() {
             disabled={diffDataModeMutation.isPending}
             items={diffDataModeOptions}
             value={diffDataSettingsQuery.data?.mode ?? "provider-api"}
-            onValueChange={(mode) =>
-              diffDataModeMutation.mutate(mode as DiffDataMode)
-            }
+            onValueChange={(mode) => diffDataModeMutation.mutate(mode as DiffDataMode)}
           >
             <SelectTrigger className="w-48">
               <SelectValue />
@@ -225,9 +191,11 @@ function ProfilesRoute() {
             disabled={isSigningIn}
             items={providerOptions}
             value={provider}
-            onValueChange={(nextProvider) =>
-              setProvider(nextProvider as ForgeProviderKind)
-            }
+            onValueChange={(nextProvider) => {
+              const normalizedProvider = nextProvider as ForgeProviderKind;
+              setProvider(normalizedProvider);
+              setHost(normalizedProvider === "github" ? "github.com" : "gitlab.com");
+            }}
           >
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -243,7 +211,7 @@ function ProfilesRoute() {
           <Input
             disabled={isSigningIn}
             onChange={(event) => setHost(event.currentTarget.value)}
-            placeholder={provider === "github" ? "github.com" : "gitlab.com"}
+            placeholder={defaultHost}
             value={host}
           />
         </div>
@@ -269,9 +237,7 @@ function ProfilesRoute() {
           </div>
           <Button
             disabled={!canStartSignIn}
-            onClick={() =>
-              signIn(provider, normalizedHost, clientId, clientSecret)
-            }
+            onClick={() => signIn(provider, normalizedHost, clientId, clientSecret)}
             type="button"
           >
             {isSigningIn ? "Opening..." : "Add account"}
@@ -291,8 +257,7 @@ function ProfilesRoute() {
             const profileLogin = profileQuery?.data?.login ?? account.viewerLogin;
             const profileError = getErrorMessage(profileQuery?.error);
             const isSigningOut =
-              signOutMutation.isPending &&
-              signOutMutation.variables === account.id;
+              signOutMutation.isPending && signOutMutation.variables === account.id;
             const isReady = status?.status === "ready";
             const isVisible = enabledAccountIdSet.has(account.id);
 
@@ -306,9 +271,7 @@ function ProfilesRoute() {
                     <span className="text-sm font-semibold text-ink-900">
                       {providerName(account)}
                     </span>
-                    <span className="text-sm text-ink-700">
-                      {profileLogin ?? account.label}
-                    </span>
+                    <span className="text-sm text-ink-700">{profileLogin ?? account.label}</span>
                     <span className="rounded bg-canvasDark px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
                       {status?.status ?? "checking"}
                     </span>
@@ -320,9 +283,7 @@ function ProfilesRoute() {
                     </div>
                     <div>
                       <dt className="font-medium text-ink-600">Client ID</dt>
-                      <dd className="mt-0.5 truncate">
-                        {account.clientId || "default"}
-                      </dd>
+                      <dd className="mt-0.5 truncate">{account.clientId || "default"}</dd>
                     </div>
                   </dl>
                   {profileError ? (
@@ -337,9 +298,7 @@ function ProfilesRoute() {
                     <Checkbox
                       checked={isVisible}
                       disabled={!isReady || visibilityMutation.isPending}
-                      onCheckedChange={() =>
-                        toggleAccountVisibility(account.id)
-                      }
+                      onCheckedChange={() => toggleAccountVisibility(account.id)}
                     />
                     Visible in main app
                   </label>
@@ -359,15 +318,11 @@ function ProfilesRoute() {
       )}
 
       {visibilityMutation.error ? (
-        <p className="text-sm text-danger-600">
-          {getErrorMessage(visibilityMutation.error)}
-        </p>
+        <p className="text-sm text-danger-600">{getErrorMessage(visibilityMutation.error)}</p>
       ) : null}
 
       {signOutMutation.error ? (
-        <p className="text-sm text-danger-600">
-          {getErrorMessage(signOutMutation.error)}
-        </p>
+        <p className="text-sm text-danger-600">{getErrorMessage(signOutMutation.error)}</p>
       ) : null}
     </div>
   );

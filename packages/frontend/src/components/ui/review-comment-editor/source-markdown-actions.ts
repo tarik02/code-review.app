@@ -30,10 +30,7 @@ function replaceSourceSelection(
 function toggleSourceInlineMarker(view: EditorView, marker: string) {
   const range = selectedSourceRange(view);
   const selectedText = view.state.doc.sliceString(range.from, range.to);
-  const before = view.state.doc.sliceString(
-    Math.max(0, range.from - marker.length),
-    range.from,
-  );
+  const before = view.state.doc.sliceString(Math.max(0, range.from - marker.length), range.from);
   const after = view.state.doc.sliceString(
     range.to,
     Math.min(view.state.doc.length, range.to + marker.length),
@@ -106,10 +103,7 @@ function lineRangeForSelection(view: EditorView) {
 }
 
 function stripKnownListPrefix(line: string) {
-  return line.replace(
-    /^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+)/,
-    "$1",
-  );
+  return line.replace(/^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+)/, "$1");
 }
 
 function listPrefixFor(type: MarkdownListType, index: number) {
@@ -138,11 +132,7 @@ function toggleSourceList(view: EditorView, type: MarkdownListType) {
   const { fromLine, toLine } = lineRangeForSelection(view);
   const lines = [];
 
-  for (
-    let lineNumber = fromLine.number;
-    lineNumber <= toLine.number;
-    lineNumber += 1
-  ) {
+  for (let lineNumber = fromLine.number; lineNumber <= toLine.number; lineNumber += 1) {
     lines.push(view.state.doc.line(lineNumber).text);
   }
 
@@ -159,10 +149,7 @@ function toggleSourceList(view: EditorView, type: MarkdownListType) {
 
       return shouldRemove
         ? line.replace(prefixPattern, "$1")
-        : stripKnownListPrefix(line).replace(
-            /^(\s*)/,
-            `$1${listPrefixFor(type, index)}`,
-          );
+        : stripKnownListPrefix(line).replace(/^(\s*)/, `$1${listPrefixFor(type, index)}`);
     })
     .join("\n");
 

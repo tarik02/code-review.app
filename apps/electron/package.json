@@ -1,31 +1,33 @@
 {
   "name": "@code-review-app/electron",
-  "private": true,
   "version": "0.1.5",
+  "private": true,
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "dotenv -- electron-vite dev --watch",
-    "build": "tsc --noEmit --project ../../tsconfig.json && electron-vite build",
+    "build": "electron-vite build",
     "dist": "electron-builder",
-    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.json",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "@hadeeb/trpc-worker": "catalog:",
-    "@libsql/client": "catalog:",
     "@code-review-app/backend": "workspace:*",
     "@code-review-app/frontend": "workspace:*",
     "@code-review-app/shared": "workspace:*",
+    "@hadeeb/trpc-worker": "catalog:",
+    "@libsql/client": "catalog:",
     "@trpc/server": "catalog:",
     "effect": "catalog:",
     "electron-updater": "catalog:"
   },
   "devDependencies": {
+    "@rolldown/plugin-babel": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
     "dotenv-cli": "catalog:",
     "electron": "catalog:",
     "electron-builder": "catalog:",

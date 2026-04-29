@@ -4,11 +4,7 @@ import { applyWSSHandler } from "@trpc/server/adapters/ws";
 import { createElectronServer } from "@hadeeb/trpc-worker/adapter";
 import { createAppRouter, type BackendRouterPlatform } from "@code-review-app/backend";
 import { backendRuntime } from "./backend-runtime";
-import {
-  checkForUpdate,
-  installUpdate,
-  subscribeToUpdateEvents,
-} from "./updater";
+import { checkForUpdate, installUpdate, subscribeToUpdateEvents } from "./updater";
 import {
   getLatestOAuthCallback,
   subscribeToDeepLinks,
@@ -40,8 +36,7 @@ function createCompatibleElectronServer(): ElectronTrpcServer {
           return originalOn("message", (data: unknown) => {
             // Current @trpc/server WS handling expects Node Buffer payloads.
             // The MessagePort bridge delivers decoded strings from the renderer.
-            const rawData =
-              typeof data === "string" ? Buffer.from(data, "utf8") : data;
+            const rawData = typeof data === "string" ? Buffer.from(data, "utf8") : data;
             return clientListener(rawData, false);
           });
         }) as typeof client.on;

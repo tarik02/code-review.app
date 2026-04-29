@@ -11,7 +11,11 @@ const pendingDeepLinks: string[] = [];
 function isOAuthCallbackUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "code-review.app:" && parsed.hostname === "oauth" && parsed.pathname === "/callback";
+    return (
+      parsed.protocol === "code-review.app:" &&
+      parsed.hostname === "oauth" &&
+      parsed.pathname === "/callback"
+    );
   } catch {
     return false;
   }

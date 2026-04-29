@@ -1,3 +1,5 @@
+"use no memo";
+
 import {
   autoUpdate,
   flip,
@@ -37,9 +39,7 @@ type LinkLikeNode = LexicalNode & {
   setURL: (url: string) => void;
 };
 
-function isLinkLikeNode(
-  node: LexicalNode | null | undefined,
-): node is LinkLikeNode {
+function isLinkLikeNode(node: LexicalNode | null | undefined): node is LinkLikeNode {
   return (
     Boolean(node) &&
     typeof (node as Partial<LinkLikeNode>).setURL === "function" &&
@@ -58,19 +58,14 @@ function ReviewCommentLinkDialog() {
   const updateLink = usePublisher(updateLink$);
   const removeLink = usePublisher(removeLink$);
   const cancelLinkEdit = usePublisher(cancelLinkEdit$);
-  const switchFromPreviewToLinkEdit = usePublisher(
-    switchFromPreviewToLinkEdit$,
-  );
+  const switchFromPreviewToLinkEdit = usePublisher(switchFromPreviewToLinkEdit$);
   const [url, setUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const inputId = useId();
   const formRef = useRef<HTMLFormElement | null>(null);
   const blurCommitFrameRef = useRef<number | null>(null);
   const previousStateKeyRef = useRef("");
-  const middleware = useMemo(
-    () => [offset(6), flip({ padding: 12 }), shift({ padding: 12 })],
-    [],
-  );
+  const middleware = useMemo(() => [offset(6), flip({ padding: 12 }), shift({ padding: 12 })], []);
   const { floatingStyles, refs, update } = useFloating({
     middleware,
     placement: "bottom-start",
@@ -83,14 +78,13 @@ function ReviewCommentLinkDialog() {
       ? "inactive"
       : `${linkDialogState.type}:${linkDialogState.linkNodeKey}:${linkDialogState.url}`;
 
-  const virtualReference = useMemo<VirtualElement | null>(() => {
+  useEffect(() => {
     if (linkDialogState.type === "inactive") {
-      return null;
+      return;
     }
 
     const { height, left, top, width } = linkDialogState.rectangle;
-
-    return {
+    const virtualReference: VirtualElement = {
       contextElement: editorRootElementRef?.current ?? undefined,
       getBoundingClientRect: () => ({
         bottom: top + height,
@@ -103,16 +97,10 @@ function ReviewCommentLinkDialog() {
         y: top,
       }),
     };
-  }, [editorRootElementRef, linkDialogState]);
-
-  useEffect(() => {
-    if (!virtualReference) {
-      return;
-    }
 
     refs.setReference(virtualReference);
     void update();
-  }, [refs, update, virtualReference]);
+  }, [editorRootElementRef, linkDialogState, refs, update]);
 
   useEffect(() => {
     if (linkDialogState.type === "inactive") {
@@ -231,10 +219,7 @@ function ReviewCommentLinkDialog() {
   function scheduleBlurCommit(event: FocusEvent<HTMLInputElement>) {
     const nextFocusedElement = event.relatedTarget;
 
-    if (
-      nextFocusedElement instanceof Node &&
-      formRef.current?.contains(nextFocusedElement)
-    ) {
+    if (nextFocusedElement instanceof Node && formRef.current?.contains(nextFocusedElement)) {
       return;
     }
 

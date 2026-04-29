@@ -1,3 +1,5 @@
+"use no memo";
+
 import { indentWithTab } from "@codemirror/commands";
 import { languages } from "@codemirror/language-data";
 import { EditorState, Prec } from "@codemirror/state";
@@ -192,19 +194,14 @@ function CommentCodeMirrorEditor({
   });
   const { lexicalNode, parentEditor, setCode } = useCodeBlockEditorContext();
   const lexicalNodeRef = useRef(lexicalNode);
-  lexicalNodeRef.current = lexicalNode;
   const setEditorInFocus = usePublisher(editorInFocus$);
-  const [
-    readOnly,
-    codeMirrorExtensions,
-    autoLoadLanguageSupport,
-    codeBlockLanguages,
-  ] = useCellValues(
-    readOnly$,
-    codeMirrorExtensions$,
-    codeMirrorAutoLoadLanguageSupport$,
-    codeBlockLanguages$,
-  );
+  const [readOnly, codeMirrorExtensions, autoLoadLanguageSupport, codeBlockLanguages] =
+    useCellValues(
+      readOnly$,
+      codeMirrorExtensions$,
+      codeMirrorAutoLoadLanguageSupport$,
+      codeBlockLanguages$,
+    );
   const t = useTranslation();
   const editorCode = codeOverride ?? code;
   const effectiveLanguage = highlightLanguage || language;
@@ -221,15 +218,10 @@ function CommentCodeMirrorEditor({
     middleware: [offset(6), shift({ padding: 8 })],
   });
   const setCodeRef = useRef(setCode);
-  setCodeRef.current = setCode;
   const codeMirrorExtensionsRef = useRef(codeMirrorExtensions);
-  codeMirrorExtensionsRef.current = codeMirrorExtensions;
   const codeBlockLanguagesRef = useRef(codeBlockLanguages);
-  codeBlockLanguagesRef.current = codeBlockLanguages;
   const parentEditorRef = useRef(parentEditor);
-  parentEditorRef.current = parentEditor;
   const setEditorInFocusRef = useRef(setEditorInFocus);
-  setEditorInFocusRef.current = setEditorInFocus;
   const setCodeBlockReference = useCallback(
     (node: HTMLDivElement | null) => {
       refs.setReference(node);
@@ -242,6 +234,22 @@ function CommentCodeMirrorEditor({
     },
     [refs],
   );
+
+  useEffect(() => {
+    lexicalNodeRef.current = lexicalNode;
+    setCodeRef.current = setCode;
+    codeMirrorExtensionsRef.current = codeMirrorExtensions;
+    codeBlockLanguagesRef.current = codeBlockLanguages;
+    parentEditorRef.current = parentEditor;
+    setEditorInFocusRef.current = setEditorInFocus;
+  }, [
+    codeBlockLanguages,
+    codeMirrorExtensions,
+    lexicalNode,
+    parentEditor,
+    setCode,
+    setEditorInFocus,
+  ]);
 
   useEffect(() => {
     if (forceReadOnly) {
@@ -286,23 +294,13 @@ function CommentCodeMirrorEditor({
               run(view) {
                 const selection = view.state.selection.main;
 
-                if (
-                  readOnly ||
-                  forceReadOnly ||
-                  !selection.empty ||
-                  selection.from !== 0
-                ) {
+                if (readOnly || forceReadOnly || !selection.empty || selection.from !== 0) {
                   return false;
                 }
 
-                const textAfterCursor = view.state.doc.sliceString(
-                  selection.to,
-                );
+                const textAfterCursor = view.state.doc.sliceString(selection.to);
                 parentEditorRef.current.update(() => {
-                  replaceCodeBlockWithTextAfterCursor(
-                    lexicalNodeRef.current,
-                    textAfterCursor,
-                  );
+                  replaceCodeBlockWithTextAfterCursor(lexicalNodeRef.current, textAfterCursor);
                 });
 
                 return true;
@@ -332,19 +330,15 @@ function CommentCodeMirrorEditor({
 
       if (effectiveLanguage !== "") {
         const currentCodeBlockLanguages = codeBlockLanguagesRef.current;
-        const canonical =
-          currentCodeBlockLanguages.keyMap[effectiveLanguage] ??
-          effectiveLanguage;
-        const providedSupport =
-          currentCodeBlockLanguages.supportMap[canonical];
+        const canonical = currentCodeBlockLanguages.keyMap[effectiveLanguage] ?? effectiveLanguage;
+        const providedSupport = currentCodeBlockLanguages.supportMap[canonical];
 
         if (providedSupport) {
           extensions.push(providedSupport.extension);
         } else if (autoLoadLanguageSupport) {
           const languageData = languages.find(
             (candidate) =>
-              candidate.name.toLowerCase() ===
-                effectiveLanguage.toLowerCase() ||
+              candidate.name.toLowerCase() === effectiveLanguage.toLowerCase() ||
               candidate.alias.includes(effectiveLanguage) ||
               candidate.extensions.includes(effectiveLanguage),
           );
@@ -354,10 +348,7 @@ function CommentCodeMirrorEditor({
               const languageSupport = await languageData.load();
               extensions.push(languageSupport.extension);
             } catch {
-              console.warn(
-                "failed to load language support for",
-                effectiveLanguage,
-              );
+              console.warn("failed to load language support for", effectiveLanguage);
             }
           }
         }
@@ -388,8 +379,8 @@ function CommentCodeMirrorEditor({
     };
   }, [
     autoLoadLanguageSupport,
-    codeOverride,
     disableExpandControls,
+    editorCode,
     effectiveLanguage,
     forceReadOnly,
     lineNumberPrefix,
@@ -412,10 +403,7 @@ function CommentCodeMirrorEditor({
   }
 
   return (
-    <div
-      ref={setCodeBlockReference}
-      className={cn("rudu-comment-editor-code-block", className)}
-    >
+    <div ref={setCodeBlockReference} className={cn("rudu-comment-editor-code-block", className)}>
       {hideLanguageToolbar ? null : (
         <div
           ref={setLanguageToolbar}
@@ -424,10 +412,7 @@ function CommentCodeMirrorEditor({
           style={floatingStyles}
         >
           <Combobox
-            aria-label={t(
-              "codeBlock.selectLanguage",
-              "Select code block language",
-            )}
+            aria-label={t("codeBlock.selectLanguage", "Select code block language")}
             className="rudu-comment-editor-code-language-combobox"
             contentClassName="rudu-comment-editor-code-language-combobox-content"
             disabled={readOnly}

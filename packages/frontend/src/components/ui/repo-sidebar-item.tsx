@@ -1,12 +1,7 @@
 import * as React from "react";
 import { PlusIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxXMarkIcon } from "@heroicons/react/24/outline";
-import {
-  AccordionItem,
-  AccordionHeader,
-  AccordionTrigger,
-  AccordionPanel,
-} from "./accordion";
+import { AccordionItem, AccordionHeader, AccordionTrigger, AccordionPanel } from "./accordion";
 import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
@@ -64,9 +59,7 @@ type PullRequestStatusViewModel = {
   className: string;
 };
 
-function getPullRequestStatus(
-  pullRequest: PullRequestSummary,
-): PullRequestStatusViewModel {
+function getPullRequestStatus(pullRequest: PullRequestSummary): PullRequestStatusViewModel {
   if (pullRequest.state === "MERGED") {
     return {
       status: PullRequestBadgeStatus.Merged,
@@ -92,10 +85,7 @@ function getPullRequestStatus(
     };
   }
 
-  if (
-    pullRequest.mergeable === "CONFLICTING" ||
-    pullRequest.mergeStateStatus === "DIRTY"
-  ) {
+  if (pullRequest.mergeable === "CONFLICTING" || pullRequest.mergeStateStatus === "DIRTY") {
     return {
       status: PullRequestBadgeStatus.Conflicting,
       label: "Conflicting",
@@ -129,13 +119,9 @@ function PullRequestStatusIcon({ status }: { status: PullRequestBadgeStatus }) {
     case PullRequestBadgeStatus.Draft:
       return <LucideGitBranch className="text-ink-500" />;
     case PullRequestBadgeStatus.Conflicting:
-      return (
-        <LucideGitPullRequestClosed className="text-yellow-500 dark:text-yellow-300" />
-      );
+      return <LucideGitPullRequestClosed className="text-yellow-500 dark:text-yellow-300" />;
     case PullRequestBadgeStatus.CanMerge:
-      return (
-        <LucideGitPullRequestArrow className="text-green-600 dark:text-green-300" />
-      );
+      return <LucideGitPullRequestArrow className="text-green-600 dark:text-green-300" />;
     case PullRequestBadgeStatus.Open:
       return <LucideGitMerge className="text-green-500 dark:text-green-300" />;
     default:
@@ -152,18 +138,11 @@ function DraftIndicator({ provider }: { provider: ForgeProviderKind }) {
 }
 
 function formatChangeSummary(pullRequest: PullRequestSummary) {
-  if (
-    pullRequest.additions !== null &&
-    pullRequest.deletions !== null
-  ) {
+  if (pullRequest.additions !== null && pullRequest.deletions !== null) {
     return (
       <>
-        <span className="text-green-600 dark:text-green-300">
-          +{pullRequest.additions}
-        </span>{" "}
-        <span className="text-red-600 dark:text-red-300">
-          -{pullRequest.deletions}
-        </span>
+        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{" "}
+        <span className="text-red-600 dark:text-red-300">-{pullRequest.deletions}</span>
       </>
     );
   }
@@ -198,9 +177,7 @@ function PullRequestSidebarRow({
   const status = getPullRequestStatus(pullRequest);
   const title = formatPullRequestDisplayTitle(pullRequest.title);
   const lookupKey = repoIdentityKey(repo);
-  const isSelected =
-    selectedPrKey ===
-    `${lookupKey}#${pullRequest.number}@${pullRequest.headSha}`;
+  const isSelected = selectedPrKey === `${lookupKey}#${pullRequest.number}@${pullRequest.headSha}`;
 
   return (
     <div className="group relative">
@@ -223,9 +200,7 @@ function PullRequestSidebarRow({
               <PullRequestStatusIcon status={status.status} />
             </div>
             {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
-            <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
-              {title}
-            </p>
+            <p className="min-w-0 flex-1 truncate text-sm text-ink-700">{title}</p>
           </div>
           <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
             {formatChangeSummary(pullRequest)}
@@ -333,15 +308,12 @@ function RepoSidebarItem({
               </div>
             ) : null}
             {!error && pullRequests?.length === 0 && !isTrackedView ? (
-              <div className="px-3 py-2.5 text-sm text-ink-500">
-                No open PRs or MRs.
-              </div>
+              <div className="px-3 py-2.5 text-sm text-ink-500">No open PRs or MRs.</div>
             ) : null}
             {pullRequests
               ? pullRequests.map((pullRequest) => {
                   const prKey = `${value}#${pullRequest.number}`;
-                  const isTracked =
-                    trackedPullRequestNumbers?.has(pullRequest.number) ?? false;
+                  const isTracked = trackedPullRequestNumbers?.has(pullRequest.number) ?? false;
 
                   return (
                     <PullRequestSidebarRow

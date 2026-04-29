@@ -7,10 +7,7 @@ import {
 import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors.ts";
 import { createRepoIdentity, normalizeHost, normalizePath } from "../repo-id.ts";
-import {
-  getValidAccessToken,
-  updateViewerLogin,
-} from "../auth/provider-auth.ts";
+import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts";
 import type {
   OverviewPullRequestSummary,
   PullRequestQualityFinding,
@@ -161,15 +158,9 @@ const GitLabCodeQualitySummarySchema = Schema.Struct({
 
 const GitLabCodeQualityReportSchema = Schema.Struct({
   status: OptionalNullableString,
-  newErrors: Schema.optional(
-    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
-  ),
-  resolvedErrors: Schema.optional(
-    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
-  ),
-  existingErrors: Schema.optional(
-    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
-  ),
+  newErrors: Schema.optional(Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema))),
+  resolvedErrors: Schema.optional(Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema))),
+  existingErrors: Schema.optional(Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema))),
   summary: Schema.optional(Schema.NullOr(GitLabCodeQualitySummarySchema)),
 });
 
@@ -202,8 +193,6 @@ type GitLabMrVersion = typeof GitLabMrVersionSchema.Type;
 type GitLabPosition = typeof GitLabPositionSchema.Type;
 type GitLabDiscussion = typeof GitLabDiscussionSchema.Type;
 type GitLabDiff = typeof GitLabDiffSchema.Type;
-type GitLabCodeQualityFinding = typeof GitLabCodeQualityFindingSchema.Type;
-
 function toChangedFile(diff: GitLabDiff): PrChangedFile {
   const oldPath = diff.old_path.trim();
   const newPath = diff.new_path.trim();
@@ -327,9 +316,7 @@ function mergeRequestWebUrl(repo: RepoIdentity, number: number) {
   return gitlabWebUrl(repo.host, `/${repo.path}/-/merge_requests/${number}`);
 }
 
-function overviewMergeRequestsEndpoint(
-  scope: (typeof OVERVIEW_MERGE_REQUEST_SCOPES)[number],
-) {
+function overviewMergeRequestsEndpoint(scope: (typeof OVERVIEW_MERGE_REQUEST_SCOPES)[number]) {
   const params = new URLSearchParams({
     scope,
     state: "opened",
@@ -361,21 +348,14 @@ function parseErrorMessage(error: ParseResult.ParseError) {
 function graphQlResponseSchema<A, I, R>(dataSchema: Schema.Schema<A, I, R>) {
   return Schema.Struct({
     data: Schema.optional(Schema.NullOr(dataSchema)),
-    errors: Schema.optional(
-      Schema.NullOr(Schema.Array(GitLabGraphQlErrorSchema)),
-    ),
+    errors: Schema.optional(Schema.NullOr(Schema.Array(GitLabGraphQlErrorSchema))),
   });
 }
 
 function responseErrorMessage(error: HttpClientError.ResponseError) {
   return Effect.gen(function* () {
-    const body = yield* error.response.text.pipe(
-      Effect.catchAll(() => Effect.succeed("")),
-    );
-    return (
-      parseGitLabErrorBody(body) ||
-      `Provider API returned HTTP ${error.response.status}`
-    );
+    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+    return parseGitLabErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
   });
 }
 
@@ -402,15 +382,13 @@ function summarizeGitLabFormData(form: Array<[string, string]> | undefined) {
   const summary: Record<string, string> = {};
   for (const [key, stringValue] of form) {
     summary[key] =
-      key === "body" && stringValue.length > 500
-        ? `${stringValue.slice(0, 500)}…`
-        : stringValue;
+      key === "body" && stringValue.length > 500 ? `${stringValue.slice(0, 500)}…` : stringValue;
   }
 
   return summary;
 }
 
-function summarizeGitLabError(error: unknown) {
+function summarizeGitLabError(error: unknown): unknown {
   if (error instanceof HttpClientError.ResponseError) {
     return {
       type: error._tag,
@@ -541,7 +519,7 @@ function gitlabResponse(
   return gitlabExecute(accountId, gitlabApiUrl(host, endpoint), options, {
     host,
     endpoint,
-  }).pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
+  });
 }
 
 function gitlabJson<A, I, R>(
@@ -601,21 +579,15 @@ function gitlabGraphql<A, I, R>(
       },
     ).pipe(
       Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.flatMap(
-        HttpClientResponse.schemaBodyJson(graphQlResponseSchema(schema)),
-      ),
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(graphQlResponseSchema(schema))),
       Effect.catchAll((error) =>
-        Effect.flatMap(mapHttpError(error), (providerError) =>
-          Effect.fail(providerError),
-        ),
+        Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
       ),
     );
 
     if (response.errors?.length) {
       return yield* Effect.fail(
-        new ProviderError(
-          response.errors.map((error) => error.message).join("\n"),
-        ),
+        new ProviderError(response.errors.map((error) => error.message).join("\n")),
       );
     }
 
@@ -630,9 +602,7 @@ function gitlabForm(
   endpoint: string,
   forms: Array<[string, string]>,
 ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
-  return gitlabResponse(accountId, host, endpoint, { method, form: forms }).pipe(
-    Effect.asVoid,
-  );
+  return gitlabResponse(accountId, host, endpoint, { method, form: forms }).pipe(Effect.asVoid);
 }
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
@@ -670,8 +640,7 @@ function repoSummaryFromProject(
     name: project.name,
     nameWithOwner: project.path_with_namespace,
     description: project.description,
-    isPrivate:
-      project.visibility == null ? null : project.visibility.toLowerCase() !== "public",
+    isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== "public",
     avatarUrl: project.avatar_url,
   };
 }
@@ -758,15 +727,15 @@ function gitlabQualityAnchorState(path: string, line: number | null) {
 }
 
 function toGitLabQualityFinding(input: {
-    idPrefix: string;
-    sourceName: string;
-    path: string;
-    externalUrl?: string | null;
-    status: PullRequestQualityFinding["status"];
-    severity: string | null | undefined;
-    line: number | null;
-    description: string;
-    fingerprint?: string | null;
+  idPrefix: string;
+  sourceName: string;
+  path: string;
+  externalUrl?: string | null;
+  status: PullRequestQualityFinding["status"];
+  severity: string | null | undefined;
+  line: number | null;
+  description: string;
+  fingerprint?: string | null;
 }): PullRequestQualityFinding {
   const anchorState = gitlabQualityAnchorState(input.path, input.line);
   return {
@@ -792,6 +761,8 @@ function gitlabQualityPending(status: string | null | undefined) {
 function gitlabQualityUnavailable(status: string | null | undefined) {
   return ["failed", "error", "not_found"].includes((status ?? "").toLowerCase());
 }
+
+const EMPTY_STATUS_COUNTS: Record<string, number> = {};
 
 function gitlabQualityReportUsable(input: {
   comparerStatus: string | null | undefined;
@@ -846,12 +817,7 @@ function fetchGitLabPullRequestRefsByProject(
 }
 
 function fetchGitLabPullRequestRefs(repo: RepoIdentity, number: number) {
-  return fetchGitLabPullRequestRefsByProject(
-    repo.accountId,
-    repo.host,
-    repo.path,
-    number,
-  );
+  return fetchGitLabPullRequestRefsByProject(repo.accountId, repo.host, repo.path, number);
 }
 
 function lineSide(position: GitLabPosition): "LEFT" | "RIGHT" | null {
@@ -874,11 +840,7 @@ function lineFromPosition(position: GitLabPosition) {
 }
 
 function startLineFromPosition(position: GitLabPosition) {
-  return (
-    position.line_range?.start?.new_line ??
-    position.line_range?.start?.old_line ??
-    null
-  );
+  return position.line_range?.start?.new_line ?? position.line_range?.start?.old_line ?? null;
 }
 
 function startSideFromPosition(position: GitLabPosition): "LEFT" | "RIGHT" | null {
@@ -916,11 +878,7 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
   });
 
   const subjectType =
-    position?.position_type === "file"
-      ? "file"
-      : rootNote.type === "DiffNote"
-        ? "line"
-        : "file";
+    position?.position_type === "file" ? "file" : rootNote.type === "DiffNote" ? "line" : "file";
 
   return {
     id: discussion.id,
@@ -968,7 +926,7 @@ function noteToGlobalReviewThread(note: typeof GitLabNoteSchema.Type): ReviewThr
 
 class GitLabProvider implements ForgeProvider {
   authStatus(accountId: string): ReturnType<ForgeProvider["authStatus"]> {
-    const provider = this;
+    const viewerLogin = this.viewerLogin.bind(this);
     return Effect.gen(function* () {
       const token = yield* storedToken(accountId);
       if (!token) {
@@ -977,7 +935,7 @@ class GitLabProvider implements ForgeProvider {
           message: "Sign in with GitLab to load projects.",
         } satisfies ProviderAuthStatus;
       }
-      yield* provider.viewerLogin(accountId);
+      yield* viewerLogin(accountId);
       return { status: "ready", message: null } satisfies ProviderAuthStatus;
     }).pipe(
       Effect.catchAll((error) => {
@@ -996,12 +954,7 @@ class GitLabProvider implements ForgeProvider {
   viewerLogin(accountId: string) {
     return Effect.gen(function* () {
       const token = yield* requireStoredToken(accountId);
-      const user = yield* gitlabJson(
-        accountId,
-        token.host,
-        "user",
-        GitLabUserSchema,
-      );
+      const user = yield* gitlabJson(accountId, token.host, "user", GitLabUserSchema);
       yield* saveViewerLogin(accountId, user.username);
       return user.username;
     });
@@ -1025,13 +978,13 @@ class GitLabProvider implements ForgeProvider {
   }
 
   searchRepos(accountId: string, query: string, limit: number) {
-    const provider = this;
+    const listInitialRepos = this.listInitialRepos.bind(this);
     return Effect.gen(function* () {
       const token = yield* requireStoredToken(accountId);
       const label = labelForToken(token);
       const trimmedQuery = query.trim();
       if (trimmedQuery.length === 0) {
-        return yield* provider.listInitialRepos(accountId, limit);
+        return yield* listInitialRepos(accountId, limit);
       }
 
       const endpoint = `projects?membership=true&search=${encodeURIComponent(
@@ -1088,9 +1041,7 @@ class GitLabProvider implements ForgeProvider {
             Schema.Array(GitLabMergeRequestSchema),
           ).pipe(
             Effect.map((mergeRequests) => ({ scope, mergeRequests, error: null })),
-            Effect.catchAll((error) =>
-              Effect.succeed({ scope, mergeRequests: [], error }),
-            ),
+            Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
           ),
         { concurrency: "unbounded" },
       );
@@ -1115,20 +1066,14 @@ class GitLabProvider implements ForgeProvider {
         }
       }
 
-      if (
-        mergeRequestsByKey.size === 0 &&
-        errors.length === scopedResults.length
-      ) {
+      if (mergeRequestsByKey.size === 0 && errors.length === scopedResults.length) {
         return yield* Effect.fail(
-          new ProviderError(
-            errors[0]?.message ?? "Failed to load GitLab overview merge requests.",
-          ),
+          new ProviderError(errors[0]?.message ?? "Failed to load GitLab overview merge requests."),
         );
       }
 
       const mergeRequests = [...mergeRequestsByKey.values()].sort(
-        (left, right) =>
-          Date.parse(right.updated_at) - Date.parse(left.updated_at),
+        (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
       );
       console.info(
         `[gitlab] collected ${mergeRequests.length} overview merge requests from ${token.host}`,
@@ -1137,26 +1082,16 @@ class GitLabProvider implements ForgeProvider {
         ...new Set(
           mergeRequests
             .map((mergeRequest) => mergeRequest.project_id)
-            .filter(
-              (projectId): projectId is number => typeof projectId === "number",
-            ),
+            .filter((projectId): projectId is number => typeof projectId === "number"),
         ),
       ];
       const projectResults = yield* Effect.forEach(
         projectIds,
         (projectId) =>
-          gitlabJson(
-            accountId,
-            token.host,
-            `projects/${projectId}`,
-            GitLabProjectSchema,
-          ).pipe(
+          gitlabJson(accountId, token.host, `projects/${projectId}`, GitLabProjectSchema).pipe(
             Effect.map((project) => ({ projectId, project })),
             Effect.catchAll((error) => {
-              console.warn(
-                `[gitlab] failed to load project ${projectId} for overview`,
-                error,
-              );
+              console.warn(`[gitlab] failed to load project ${projectId} for overview`, error);
               return Effect.succeed({ projectId, project: null });
             }),
           ),
@@ -1173,9 +1108,7 @@ class GitLabProvider implements ForgeProvider {
       for (const mergeRequest of mergeRequests) {
         const projectId = mergeRequest.project_id;
         if (typeof projectId !== "number") {
-          console.warn(
-            `[gitlab] skipping overview MR !${mergeRequest.iid}: missing project_id`,
-          );
+          console.warn(`[gitlab] skipping overview MR !${mergeRequest.iid}: missing project_id`);
           continue;
         }
 
@@ -1188,9 +1121,7 @@ class GitLabProvider implements ForgeProvider {
         });
       }
 
-      console.info(
-        `[gitlab] mapped ${entries.length} overview merge requests from ${token.host}`,
-      );
+      console.info(`[gitlab] mapped ${entries.length} overview merge requests from ${token.host}`);
       return entries;
     });
   }
@@ -1207,9 +1138,7 @@ class GitLabProvider implements ForgeProvider {
         Schema.Array(GitLabMergeRequestSchema),
       );
 
-      return mergeRequests.map((mergeRequest) =>
-        toPullRequestSummary(mergeRequest),
-      );
+      return mergeRequests.map((mergeRequest) => toPullRequestSummary(mergeRequest));
     });
   }
 
@@ -1294,7 +1223,9 @@ class GitLabProvider implements ForgeProvider {
     );
   }
 
-  getPullRequestQualityReport(input: PullRequestQualityReportInput) {
+  getPullRequestQualityReport(
+    input: PullRequestQualityReportInput,
+  ): Effect.Effect<PullRequestQualityReport, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
     return Effect.gen(function* () {
       const { repo, number, headSha } = input;
       const graphqlQuery = `
@@ -1365,8 +1296,7 @@ query($fullPath: ID!, $iid: String!) {
       );
 
       const graphqlResult =
-        graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ??
-        null;
+        graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ?? null;
 
       console.info("[gitlab] GraphQL code quality response", {
         repo: repo.path,
@@ -1378,10 +1308,7 @@ query($fullPath: ID!, $iid: String!) {
         const comparerStatus = graphqlResult.status ?? null;
         const reportStatus = graphqlResult.report?.status ?? null;
 
-        if (
-          gitlabQualityPending(comparerStatus) ||
-          gitlabQualityPending(reportStatus)
-        ) {
+        if (gitlabQualityPending(comparerStatus) || gitlabQualityPending(reportStatus)) {
           return {
             provider: "gitlab",
             repoKey: repo.repoKey,
@@ -1392,7 +1319,7 @@ query($fullPath: ID!, $iid: String!) {
               totalFindings: 0,
               inlineFindings: 0,
               fileOnlyFindings: 0,
-              statusCounts: {},
+              statusCounts: EMPTY_STATUS_COUNTS,
               providerLabel: "GitLab code quality",
               detailsUrl: mergeRequestWebUrl(repo, number),
               notes: ["Code quality report is still processing."],
@@ -1442,12 +1369,8 @@ query($fullPath: ID!, $iid: String!) {
               totalFindings:
                 graphqlResult.report.summary?.total ??
                 newErrors.length + resolvedErrors.length + existingErrors.length,
-              inlineFindings: findings.filter(
-                (finding) => finding.anchorState === "inline",
-              ).length,
-              fileOnlyFindings: findings.filter(
-                (finding) => finding.anchorState === "file",
-              ).length,
+              inlineFindings: findings.filter((finding) => finding.anchorState === "inline").length,
+              fileOnlyFindings: findings.filter((finding) => finding.anchorState === "file").length,
               statusCounts: {
                 new: newErrors.length,
                 existing: existingErrors.length,
@@ -1455,12 +1378,9 @@ query($fullPath: ID!, $iid: String!) {
               },
               providerLabel: "GitLab code quality",
               detailsUrl: mergeRequestWebUrl(repo, number),
-              notes:
-                gitlabQualityUnavailable(reportStatus)
-                  ? [
-                      `GitLab reported code quality status ${reportStatus}, but returned findings.`,
-                    ]
-                  : undefined,
+              notes: gitlabQualityUnavailable(reportStatus)
+                ? [`GitLab reported code quality status ${reportStatus}, but returned findings.`]
+                : undefined,
             },
             findings,
             fetchedAt: new Date().toISOString(),
@@ -1468,8 +1388,7 @@ query($fullPath: ID!, $iid: String!) {
               source: "graphql",
               comparerStatus,
               reportStatus,
-              resolvedCount:
-                graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
+              resolvedCount: graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
               existingCount: existingErrors.length,
             },
           } satisfies PullRequestQualityReport;
@@ -1486,7 +1405,7 @@ query($fullPath: ID!, $iid: String!) {
           totalFindings: 0,
           inlineFindings: 0,
           fileOnlyFindings: 0,
-          statusCounts: {},
+          statusCounts: EMPTY_STATUS_COUNTS,
           providerLabel: "GitLab code quality",
           detailsUrl: mergeRequestWebUrl(repo, number),
           notes: [
@@ -1532,7 +1451,10 @@ query($fullPath: ID!, $iid: String!) {
         const discussions = yield* gitlabJson(
           repo.accountId,
           repo.host,
-          projectEndpoint(repo, `merge_requests/${number}/discussions?per_page=100&page=${discussionsPage}`),
+          projectEndpoint(
+            repo,
+            `merge_requests/${number}/discussions?per_page=100&page=${discussionsPage}`,
+          ),
           Schema.Array(GitLabDiscussionSchema),
         );
         if (discussions.length === 0) {
@@ -1650,10 +1572,7 @@ query($fullPath: ID!, $iid: String!) {
         repo.host,
         repo.accountId,
         "POST",
-        projectEndpoint(
-          repo,
-          `merge_requests/${number}/discussions/${trimmedThreadId}/notes`,
-        ),
+        projectEndpoint(repo, `merge_requests/${number}/discussions/${trimmedThreadId}/notes`),
         [["body", trimmedBody]],
       );
     });

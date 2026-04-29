@@ -26,14 +26,9 @@ import {
   ListOrdered,
   Pencil,
 } from "lucide-react";
-import type { MutableRefObject, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button } from "../button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
 import { CommentBlockTypeSelect } from "./block-type-select";
 import {
   insertSourceCodeBlock,
@@ -49,7 +44,6 @@ type ReviewCommentToolbarProps = {
   canInsertSuggestion: boolean;
   provider: ForgeProviderKind;
   sourceEditorView: EditorView | null;
-  sourceEditorViewRef: MutableRefObject<EditorView | null>;
   suggestionMarkdown: string;
   onInsertSuggestion: () => void;
 };
@@ -100,7 +94,6 @@ function ReviewCommentToolbar({
   canInsertSuggestion,
   provider,
   sourceEditorView,
-  sourceEditorViewRef,
   suggestionMarkdown,
   onInsertSuggestion,
 }: ReviewCommentToolbarProps) {
@@ -116,14 +109,13 @@ function ReviewCommentToolbar({
   const insertCodeBlock = usePublisher(insertCodeBlock$);
   const t = useTranslation();
   const isSourceMode = viewMode === "source";
-  const sourceView = sourceEditorView ?? sourceEditorViewRef.current;
 
   function runSourceAction(action: (view: EditorView) => void) {
-    if (!sourceView) {
+    if (!sourceEditorView) {
       return;
     }
 
-    action(sourceView);
+    action(sourceEditorView);
   }
 
   function handleFormat(format: "bold" | "italic" | "code") {
@@ -177,9 +169,7 @@ function ReviewCommentToolbar({
   }
 
   const suggestionTitle =
-    provider === "gitlab"
-      ? "Insert GitLab suggestion"
-      : "Insert GitHub suggestion";
+    provider === "gitlab" ? "Insert GitLab suggestion" : "Insert GitHub suggestion";
 
   return (
     <TooltipProvider delay={500} closeDelay={0}>
@@ -206,10 +196,7 @@ function ReviewCommentToolbar({
         >
           <Code className="size-4" />
         </ToolbarButton>
-        <ToolbarButton
-          title={t("toolbar.link", "Create link")}
-          onClick={handleLink}
-        >
+        <ToolbarButton title={t("toolbar.link", "Create link")} onClick={handleLink}>
           <Link className="size-4" />
         </ToolbarButton>
         <ToolbarSeparator />
@@ -242,7 +229,7 @@ function ReviewCommentToolbar({
         </ToolbarButton>
         <ToolbarSeparator />
         <ToolbarButton
-          disabled={!canInsertSuggestion || (isSourceMode && !sourceView)}
+          disabled={!canInsertSuggestion || (isSourceMode && !sourceEditorView)}
           title={suggestionTitle}
           onClick={handleSuggestion}
         >

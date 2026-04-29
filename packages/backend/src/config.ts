@@ -6,10 +6,7 @@ type BackendRuntimeConfig = {
   userDataPath: string;
 };
 
-class BackendConfig extends Effect.Tag("BackendConfig")<
-  BackendConfig,
-  BackendRuntimeConfig
->() {}
+class BackendConfig extends Effect.Tag("BackendConfig")<BackendConfig, BackendRuntimeConfig>() {}
 
 export { BackendConfig };
 export type { BackendRuntimeConfig };

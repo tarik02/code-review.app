@@ -32,19 +32,15 @@ const forgeKeys = {
   providerProfile: (accountId: string) =>
     [...forgeKeys.auth(), "provider-profile", accountId] as const,
   accountVisibility: () => [...forgeKeys.auth(), "account-visibility"] as const,
-  appearanceBackground: () =>
-    [...forgeKeys.settings(), "appearance-background"] as const,
+  appearanceBackground: () => [...forgeKeys.settings(), "appearance-background"] as const,
   diffDataSettings: () => [...forgeKeys.settings(), "diff-data"] as const,
   themePreference: () => [...forgeKeys.settings(), "theme-preference"] as const,
-  reviewEditorSettings: () =>
-    [...forgeKeys.settings(), "review-editor"] as const,
+  reviewEditorSettings: () => [...forgeKeys.settings(), "review-editor"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
-  initialRepos: (accountId: string) =>
-    [...forgeKeys.repos(), "initial", accountId] as const,
+  initialRepos: (accountId: string) => [...forgeKeys.repos(), "initial", accountId] as const,
   searchRepos: (accountId: string, query: string) =>
     [...forgeKeys.repos(), "search", accountId, query] as const,
-  viewerLogin: (accountId: string) =>
-    [...forgeKeys.repos(), "viewer-login", accountId] as const,
+  viewerLogin: (accountId: string) => [...forgeKeys.repos(), "viewer-login", accountId] as const,
   pullRequests: () => [...forgeKeys.all, "pull-requests"] as const,
   pullRequestOverview: (accountId: string) =>
     [...forgeKeys.pullRequests(), "overview", accountId] as const,
@@ -56,9 +52,23 @@ const forgeKeys = {
   trackedPullRequestList: (repo: RepoIdentity) =>
     [...forgeKeys.trackedPullRequests(), "list", repo.providerId, repo.repoKey] as const,
   pullRequestPatch: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "patch", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
+    [
+      ...forgeKeys.pullRequests(),
+      "patch",
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestFiles: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "files", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
+    [
+      ...forgeKeys.pullRequests(),
+      "files",
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestQualityReport: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
@@ -91,7 +101,14 @@ const forgeKeys = {
       input.changeType,
     ] as const,
   pullRequestReviewThreads: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "review-threads", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
+    [
+      ...forgeKeys.pullRequests(),
+      "review-threads",
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), "patch", "idle"] as const,
   pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), "files", "idle"] as const,
   pullRequestReviewThreadsIdle: () =>
@@ -230,11 +247,7 @@ function initialReposQueryOptions(accountId: string) {
   });
 }
 
-function searchReposQueryOptions(
-  query: string,
-  accountId: string,
-  provider: string,
-) {
+function searchReposQueryOptions(query: string, accountId: string, provider: string) {
   return queryOptions({
     queryKey: forgeKeys.searchRepos(accountId, query),
     queryFn: async () => {
@@ -359,9 +372,7 @@ function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
   });
 }
 
-async function createPullRequestReviewComment(
-  input: CreatePullRequestReviewCommentInput,
-) {
+async function createPullRequestReviewComment(input: CreatePullRequestReviewCommentInput) {
   await trpc.reviewComments.create.mutate({
     providerId: input.providerId,
     repoKey: input.repoKey,
@@ -378,9 +389,7 @@ async function createPullRequestReviewComment(
   });
 }
 
-async function replyToPullRequestReviewComment(
-  input: ReplyToPullRequestReviewCommentInput,
-) {
+async function replyToPullRequestReviewComment(input: ReplyToPullRequestReviewCommentInput) {
   await trpc.reviewComments.reply.mutate({
     providerId: input.providerId,
     repoKey: input.repoKey,
@@ -390,9 +399,7 @@ async function replyToPullRequestReviewComment(
   });
 }
 
-async function updatePullRequestReviewComment(
-  input: UpdatePullRequestReviewCommentInput,
-) {
+async function updatePullRequestReviewComment(input: UpdatePullRequestReviewCommentInput) {
   await trpc.reviewComments.update.mutate({
     providerId: input.providerId,
     repoKey: input.repoKey,

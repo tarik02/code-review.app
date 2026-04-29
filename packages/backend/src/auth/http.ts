@@ -1,8 +1,4 @@
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "@effect/platform";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
 import { Effect } from "effect";
 import { ProviderError } from "../errors.ts";
 import { getValidAccessToken } from "./provider-auth.ts";
@@ -54,9 +50,7 @@ function providerFetch(
   AuthTokenStore | HttpClient.HttpClient
 > {
   return Effect.gen(function* () {
-    const token = yield* getValidAccessToken(accountId).pipe(
-      Effect.mapError(toProviderError),
-    );
+    const token = yield* getValidAccessToken(accountId).pipe(Effect.mapError(toProviderError));
     const method = options.method?.toUpperCase() ?? "GET";
     const baseRequest =
       method === "POST"
@@ -76,9 +70,7 @@ function providerFetch(
     }
     if (typeof options.body === "string") {
       const contentType =
-        options.headers?.["Content-Type"] ??
-        options.headers?.["content-type"] ??
-        "text/plain";
+        options.headers?.["Content-Type"] ?? options.headers?.["content-type"] ?? "text/plain";
       request = request.pipe(HttpClientRequest.bodyText(options.body, contentType));
     }
 
@@ -86,8 +78,7 @@ function providerFetch(
     return yield* client.execute(request).pipe(
       Effect.timeoutFail({
         duration: API_REQUEST_TIMEOUT,
-        onTimeout: () =>
-          new ProviderError(`Provider API request timed out after 30s: ${url}`),
+        onTimeout: () => new ProviderError(`Provider API request timed out after 30s: ${url}`),
       }),
       Effect.flatMap((response) =>
         HttpClientResponse.filterStatusOk(response).pipe(
@@ -95,9 +86,7 @@ function providerFetch(
             Effect.gen(function* () {
               const message = yield* readResponseBody(response);
               return yield* Effect.fail(
-                new ProviderError(
-                  message || `Provider API returned HTTP ${response.status}`,
-                ),
+                new ProviderError(message || `Provider API returned HTTP ${response.status}`),
               );
             }),
           ),

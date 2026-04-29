@@ -16,9 +16,7 @@ type DatabaseHandle = {
 };
 
 type DatabaseServiceShape = {
-  query<A>(
-    operation: (database: Database) => Promise<A>,
-  ): Effect.Effect<A, CacheError>;
+  query<A>(operation: (database: Database) => Promise<A>): Effect.Effect<A, CacheError>;
   transaction<A>(
     operation: (database: DatabaseTransaction) => Promise<A>,
   ): Effect.Effect<A, CacheError>;
@@ -33,9 +31,7 @@ function toCacheError(error: unknown) {
   return new CacheError(error instanceof Error ? error.message : String(error));
 }
 
-async function initializeDatabase(
-  config: BackendRuntimeConfig,
-): Promise<DatabaseHandle> {
+async function initializeDatabase(config: BackendRuntimeConfig): Promise<DatabaseHandle> {
   const client = createClient({ url: pathToFileURL(config.databasePath).href });
   const db = drizzle(client, { schema });
 
@@ -67,39 +63,32 @@ const makeDatabaseService = Effect.gen(function* () {
       }),
   );
 
-    let operationQueue: Promise<unknown> = Promise.resolve();
+  let operationQueue: Promise<unknown> = Promise.resolve();
 
-    const runQueued = async <A>(operation: () => Promise<A>) => {
-      const queuedOperation = operationQueue
-        .catch(() => undefined)
-        .then(operation);
-      operationQueue = queuedOperation.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queuedOperation;
-    };
+  const runQueued = async <A>(operation: () => Promise<A>) => {
+    const queuedOperation = operationQueue.catch(() => undefined).then(operation);
+    operationQueue = queuedOperation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return queuedOperation;
+  };
 
   return {
-      query: <A>(operation: (database: Database) => Promise<A>) =>
-        Effect.tryPromise({
-          try: () => runQueued(() => operation(handle.db)),
-          catch: toCacheError,
-        }),
-      transaction: <A>(
-        operation: (database: DatabaseTransaction) => Promise<A>,
-      ) =>
-        Effect.tryPromise({
-          try: () => runQueued(() => handle.db.transaction(operation)),
-          catch: toCacheError,
-        }),
+    query: <A>(operation: (database: Database) => Promise<A>) =>
+      Effect.tryPromise({
+        try: () => runQueued(() => operation(handle.db)),
+        catch: toCacheError,
+      }),
+    transaction: <A>(operation: (database: DatabaseTransaction) => Promise<A>) =>
+      Effect.tryPromise({
+        try: () => runQueued(() => handle.db.transaction(operation)),
+        catch: toCacheError,
+      }),
   } satisfies DatabaseServiceShape;
 });
 
-const DatabaseServiceLive = Layer.scoped(
-  DatabaseService,
-  makeDatabaseService,
-);
+const DatabaseServiceLive = Layer.scoped(DatabaseService, makeDatabaseService);
 
 export { DatabaseService, DatabaseServiceLive };
 export type { Database, DatabaseTransaction };

@@ -14,10 +14,7 @@ type RepoServiceShape = {
   listProviderAccounts(): Effect.Effect<ProviderAccount[], Error>;
   getProviderStatuses(): Effect.Effect<Record<string, ProviderAuthStatus>, Error>;
   getProviderProfile(accountId: string): Effect.Effect<ProviderProfile, Error>;
-  listInitialRepos(
-    accountId: string,
-    limit?: number,
-  ): Effect.Effect<RepoSummary[], Error>;
+  listInitialRepos(accountId: string, limit?: number): Effect.Effect<RepoSummary[], Error>;
   searchRepos(
     accountId: string,
     query: string,
@@ -52,63 +49,61 @@ const makeRepoService = Effect.gen(function* () {
   const getProviderStatuses: RepoServiceShape["getProviderStatuses"] = Effect.fn(
     "RepoService.getProviderStatuses",
   )(function* () {
-        const accounts = yield* tokenStore.listAccounts();
-        const statuses: Record<string, ProviderAuthStatus> = {};
-        for (const account of accounts) {
-          statuses[account.id] = yield* provideProviderDeps(
-            providerFor(account.provider).authStatus(account.id),
-          );
-        }
-        return statuses;
+    const accounts = yield* tokenStore.listAccounts();
+    const statuses: Record<string, ProviderAuthStatus> = {};
+    for (const account of accounts) {
+      statuses[account.id] = yield* provideProviderDeps(
+        providerFor(account.provider).authStatus(account.id),
+      );
+    }
+    return statuses;
   });
 
   const getProviderProfile: RepoServiceShape["getProviderProfile"] = Effect.fn(
     "RepoService.getProviderProfile",
   )(function* (accountId) {
-        const account = yield* tokenStore.get(accountId);
-        if (!account) throw new Error("Provider account is not signed in.");
-        const cached = yield* cache
-          .readProviderProfile(accountId)
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
-        if (cached) return cached;
+    const account = yield* tokenStore.get(accountId);
+    if (!account) throw new Error("Provider account is not signed in.");
+    const cached = yield* cache
+      .readProviderProfile(accountId)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    if (cached) return cached;
 
-        const login = yield* provideProviderDeps(
-          providerFor(account.provider).viewerLogin(accountId),
-        );
-        const profile = { accountId, login };
-        yield* cache.writeProviderProfile(profile);
-        return profile;
+    const login = yield* provideProviderDeps(providerFor(account.provider).viewerLogin(accountId));
+    const profile = { accountId, login };
+    yield* cache.writeProviderProfile(profile);
+    return profile;
   });
 
   const listInitialRepos: RepoServiceShape["listInitialRepos"] = Effect.fn(
     "RepoService.listInitialRepos",
   )(function* (accountId, limit = 5) {
-        const account = yield* tokenStore.get(accountId);
-        if (!account) return [];
-        return yield* provideProviderDeps(
-          providerFor(account.provider).listInitialRepos(accountId, limit),
-        );
+    const account = yield* tokenStore.get(accountId);
+    if (!account) return [];
+    return yield* provideProviderDeps(
+      providerFor(account.provider).listInitialRepos(accountId, limit),
+    );
   });
 
-  const searchRepos: RepoServiceShape["searchRepos"] = Effect.fn(
-    "RepoService.searchRepos",
-  )(function* (accountId, query, limit = 20) {
-        const account = yield* tokenStore.get(accountId);
-        if (!account) return [];
-        return yield* provideProviderDeps(
-          providerFor(account.provider).searchRepos(accountId, query, limit),
-        );
-  });
+  const searchRepos: RepoServiceShape["searchRepos"] = Effect.fn("RepoService.searchRepos")(
+    function* (accountId, query, limit = 20) {
+      const account = yield* tokenStore.get(accountId);
+      if (!account) return [];
+      return yield* provideProviderDeps(
+        providerFor(account.provider).searchRepos(accountId, query, limit),
+      );
+    },
+  );
 
-  const validateRepo: RepoServiceShape["validateRepo"] = Effect.fn(
-    "RepoService.validateRepo",
-  )(function* (accountId, repo) {
-        const account = yield* tokenStore.get(accountId);
-        if (!account) throw new Error("Provider account is not signed in.");
-        return yield* provideProviderDeps(
-          providerFor(account.provider).validateRepo(accountId, repo),
-        );
-  });
+  const validateRepo: RepoServiceShape["validateRepo"] = Effect.fn("RepoService.validateRepo")(
+    function* (accountId, repo) {
+      const account = yield* tokenStore.get(accountId);
+      if (!account) throw new Error("Provider account is not signed in.");
+      return yield* provideProviderDeps(
+        providerFor(account.provider).validateRepo(accountId, repo),
+      );
+    },
+  );
 
   const listSavedRepos: RepoServiceShape["listSavedRepos"] = Effect.fn(
     "RepoService.listSavedRepos",
@@ -116,19 +111,19 @@ const makeRepoService = Effect.gen(function* () {
     return yield* cache.listSavedRepos();
   });
 
-  const saveRepo: RepoServiceShape["saveRepo"] = Effect.fn(
-    "RepoService.saveRepo",
-  )(function* (repo) {
-    const account = yield* tokenStore.get(repo.providerAccountId);
-    if (account?.viewerLogin) {
-      yield* cache.writeProviderProfile({
-        accountId: repo.providerAccountId,
-        login: account.viewerLogin,
-      });
-    }
-    yield* cache.saveRepo(repo);
-    return repo;
-  });
+  const saveRepo: RepoServiceShape["saveRepo"] = Effect.fn("RepoService.saveRepo")(
+    function* (repo) {
+      const account = yield* tokenStore.get(repo.providerAccountId);
+      if (account?.viewerLogin) {
+        yield* cache.writeProviderProfile({
+          accountId: repo.providerAccountId,
+          login: account.viewerLogin,
+        });
+      }
+      yield* cache.saveRepo(repo);
+      return repo;
+    },
+  );
 
   return {
     listProviderAccounts,

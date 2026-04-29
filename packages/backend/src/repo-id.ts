@@ -48,11 +48,7 @@ function decodeKeyComponent(value: string) {
   }
 }
 
-function createProviderId(
-  provider: ForgeProviderKind,
-  host: string,
-  accountId: string,
-) {
+function createProviderId(provider: ForgeProviderKind, host: string, accountId: string) {
   const normalizedHost = normalizeHost(host);
   const normalizedAccountId = accountId.trim();
   if (!normalizedAccountId) {
@@ -112,12 +108,7 @@ function createRepoIdentity(
 
 function createRepoIdentityFromParts(providerId: string, repoKey: string): RepoIdentity {
   const provider = parseProviderId(providerId);
-  return createRepoIdentity(
-    provider.provider,
-    provider.host,
-    provider.accountId,
-    repoKey,
-  );
+  return createRepoIdentity(provider.provider, provider.host, provider.accountId, repoKey);
 }
 
 function repoIdentityCacheKey(repo: { providerId: string; repoKey: string }) {

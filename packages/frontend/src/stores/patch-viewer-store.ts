@@ -13,10 +13,7 @@ type PatchViewerSessionState = {
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
   scrollTop: number | null;
-  hunkExpansionsByFile: Record<
-    string,
-    Record<string, HunkExpansionRegion | undefined> | undefined
-  >;
+  hunkExpansionsByFile: Record<string, Record<string, HunkExpansionRegion | undefined> | undefined>;
 };
 
 type PatchViewerStore = {
@@ -26,10 +23,7 @@ type PatchViewerStore = {
   resetSession: (sessionKey: string | null) => void;
   removeSession: (sessionKey: string | null) => void;
   setSelectedFilePath: (sessionKey: string | null, path: string | null) => void;
-  setPendingScrollPath: (
-    sessionKey: string | null,
-    path: string | null,
-  ) => void;
+  setPendingScrollPath: (sessionKey: string | null, path: string | null) => void;
   setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
   recordHunkExpansion: (
     sessionKey: string | null,
@@ -66,17 +60,12 @@ function getPatchViewerSessionState(
 
 function touchSessionKey(sessionOrder: string[], sessionKey: string) {
   return [
-    ...sessionOrder.filter(
-      (currentSessionKey) => currentSessionKey !== sessionKey,
-    ),
+    ...sessionOrder.filter((currentSessionKey) => currentSessionKey !== sessionKey),
     sessionKey,
   ];
 }
 
-function pruneSessions(
-  sessionsByKey: PatchViewerStore["sessionsByKey"],
-  sessionOrder: string[],
-) {
+function pruneSessions(sessionsByKey: PatchViewerStore["sessionsByKey"], sessionOrder: string[]) {
   if (sessionOrder.length <= MAX_PATCH_VIEWER_SESSIONS) {
     return { sessionsByKey, sessionOrder };
   }
@@ -98,16 +87,13 @@ function pruneSessions(
 function updateSession(
   state: PatchViewerStore,
   sessionKey: string | null,
-  update: (
-    session: PatchViewerSessionState,
-  ) => Partial<PatchViewerSessionState>,
+  update: (session: PatchViewerSessionState) => Partial<PatchViewerSessionState>,
 ) {
   if (!sessionKey) {
     return state;
   }
 
-  const currentSession =
-    state.sessionsByKey[sessionKey] ?? createPatchViewerSessionState();
+  const currentSession = state.sessionsByKey[sessionKey] ?? createPatchViewerSessionState();
   const nextSession = {
     ...currentSession,
     ...update(currentSession),
@@ -131,18 +117,14 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       return;
     }
 
-    set((state) =>
-      updateSession(state, sessionKey, () => createPatchViewerSessionState()),
-    );
+    set((state) => updateSession(state, sessionKey, () => createPatchViewerSessionState()));
   },
   resetSession(sessionKey) {
     if (!sessionKey) {
       return;
     }
 
-    set((state) =>
-      updateSession(state, sessionKey, () => createPatchViewerSessionState()),
-    );
+    set((state) => updateSession(state, sessionKey, () => createPatchViewerSessionState()));
   },
   removeSession(sessionKey) {
     if (!sessionKey) {
@@ -162,14 +144,10 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
     });
   },
   setSelectedFilePath(sessionKey, path) {
-    set((state) =>
-      updateSession(state, sessionKey, () => ({ selectedFilePath: path })),
-    );
+    set((state) => updateSession(state, sessionKey, () => ({ selectedFilePath: path })));
   },
   setPendingScrollPath(sessionKey, path) {
-    set((state) =>
-      updateSession(state, sessionKey, () => ({ pendingScrollPath: path })),
-    );
+    set((state) => updateSession(state, sessionKey, () => ({ pendingScrollPath: path })));
   },
   setScrollTop(sessionKey, scrollTop) {
     set((state) => updateSession(state, sessionKey, () => ({ scrollTop })));
@@ -177,8 +155,7 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
   recordHunkExpansion(sessionKey, filePath, hunkIndex, direction, lineCount) {
     set((state) =>
       updateSession(state, sessionKey, (session) => {
-        const currentFileExpansions =
-          session.hunkExpansionsByFile[filePath] ?? {};
+        const currentFileExpansions = session.hunkExpansionsByFile[filePath] ?? {};
         const currentRegion = currentFileExpansions[hunkIndex] ?? {
           fromStart: 0,
           fromEnd: 0,
@@ -224,8 +201,4 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
 }));
 
 export { getPatchViewerSessionState, usePatchViewerStore };
-export type {
-  HunkExpansionDirection,
-  HunkExpansionRegion,
-  PatchViewerSessionState,
-};
+export type { HunkExpansionDirection, HunkExpansionRegion, PatchViewerSessionState };

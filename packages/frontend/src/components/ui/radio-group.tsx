@@ -2,22 +2,11 @@ import { Radio } from "@base-ui/react/radio";
 import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group";
 import { cn } from "@/lib/utils";
 
-function RadioGroup<Value>({
-  className,
-  ...props
-}: RadioGroupPrimitive.Props<Value>) {
-  return (
-    <RadioGroupPrimitive
-      className={cn("grid gap-2", className)}
-      {...props}
-    />
-  );
+function RadioGroup<Value>({ className, ...props }: RadioGroupPrimitive.Props<Value>) {
+  return <RadioGroupPrimitive className={cn("grid gap-2", className)} {...props} />;
 }
 
-function RadioGroupItem<Value>({
-  className,
-  ...props
-}: Radio.Root.Props<Value>) {
+function RadioGroupItem<Value>({ className, ...props }: Radio.Root.Props<Value>) {
   return (
     <Radio.Root
       className={cn(

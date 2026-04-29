@@ -28,12 +28,7 @@ function AppearanceBackground({
       : "/outerworld.jpg";
 
   return (
-    <img
-      alt=""
-      aria-hidden="true"
-      className={`${className} ${imageClassName}`.trim()}
-      src={src}
-    />
+    <img alt="" aria-hidden="true" className={`${className} ${imageClassName}`.trim()} src={src} />
   );
 }
 

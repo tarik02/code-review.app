@@ -1,8 +1,4 @@
-import {
-  NodeCommandExecutor,
-  NodeFileSystem,
-  NodeHttpClient,
-} from "@effect/platform-node";
+import { NodeCommandExecutor, NodeFileSystem, NodeHttpClient } from "@effect/platform-node";
 import { Layer, ManagedRuntime } from "effect";
 import { EncryptionService } from "./auth/encryption.ts";
 import { AuthTokenStoreLive } from "./auth/token-store.ts";
@@ -23,10 +19,7 @@ type BackendRuntimeOptions = BackendRuntimeConfig & {
   encryptionLayer: Layer.Layer<EncryptionService>;
 };
 
-const PlatformLayer = Layer.provideMerge(
-  NodeCommandExecutor.layer,
-  NodeFileSystem.layer,
-);
+const PlatformLayer = Layer.provideMerge(NodeCommandExecutor.layer, NodeFileSystem.layer);
 
 function createAppLayer(options: BackendRuntimeOptions) {
   const ConfigLayer = Layer.succeed(BackendConfig, {
@@ -40,15 +33,9 @@ function createAppLayer(options: BackendRuntimeOptions) {
     Layer.mergeAll(DatabaseServiceLive, options.encryptionLayer),
   );
 
-  const BaseServiceLayer = Layer.mergeAll(
-    DatabaseDependentLayer,
-    NodeHttpClient.layerUndici,
-  );
+  const BaseServiceLayer = Layer.mergeAll(DatabaseDependentLayer, NodeHttpClient.layerUndici);
 
-  const BaseLayer = Layer.provideMerge(
-    BaseServiceLayer,
-    PlatformLayer,
-  );
+  const BaseLayer = Layer.provideMerge(BaseServiceLayer, PlatformLayer);
 
   const IndependentServiceLayer = Layer.mergeAll(
     RepoServiceLive,
@@ -58,10 +45,7 @@ function createAppLayer(options: BackendRuntimeOptions) {
     GitServiceLive,
   );
 
-  const BaseAndIndependentServiceLayer = Layer.provideMerge(
-    IndependentServiceLayer,
-    BaseLayer,
-  );
+  const BaseAndIndependentServiceLayer = Layer.provideMerge(IndependentServiceLayer, BaseLayer);
 
   const BaseAndServiceLayer = Layer.provideMerge(
     DiffDataServiceLive,

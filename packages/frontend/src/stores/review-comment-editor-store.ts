@@ -51,10 +51,7 @@ type ReviewCommentEditorSessionState = {
 type ReviewCommentEditorStore = {
   sessionsByKey: Record<string, ReviewCommentEditorSessionState | undefined>;
   sessionOrder: string[];
-  openNewEditor: (
-    sessionKey: string | null,
-    target: DraftReviewCommentTarget,
-  ) => void;
+  openNewEditor: (sessionKey: string | null, target: DraftReviewCommentTarget) => void;
   openReplyEditor: (sessionKey: string | null, threadId: string) => void;
   openEditEditor: (
     sessionKey: string | null,
@@ -62,26 +59,14 @@ type ReviewCommentEditorStore = {
     commentId: string,
     initialBody: string,
   ) => void;
-  setEditorBody: (
-    sessionKey: string | null,
-    editorId: string,
-    body: string,
-  ) => void;
-  setEditorError: (
-    sessionKey: string | null,
-    editorId: string,
-    error: string,
-  ) => void;
+  setEditorBody: (sessionKey: string | null, editorId: string, body: string) => void;
+  setEditorError: (sessionKey: string | null, editorId: string, error: string) => void;
   setEditorCursorPosition: (
     sessionKey: string | null,
     editorId: string,
     cursorPosition: ReviewCommentEditorCursorPosition | null,
   ) => void;
-  setEditorSubmitting: (
-    sessionKey: string | null,
-    editorId: string,
-    isSubmitting: boolean,
-  ) => void;
+  setEditorSubmitting: (sessionKey: string | null, editorId: string, isSubmitting: boolean) => void;
   closeEditor: (sessionKey: string | null, editorId: string) => void;
 };
 
@@ -122,9 +107,7 @@ function getReviewCommentEditorSessionState(
     return emptyReviewCommentEditorSessionState;
   }
 
-  return (
-    state.sessionsByKey[sessionKey] ?? emptyReviewCommentEditorSessionState
-  );
+  return state.sessionsByKey[sessionKey] ?? emptyReviewCommentEditorSessionState;
 }
 
 function getSessionEditors(
@@ -139,18 +122,13 @@ function getSessionEditors(
 
 function touchSessionKey(sessionOrder: string[], sessionKey: string) {
   return [
-    ...sessionOrder.filter(
-      (currentSessionKey) => currentSessionKey !== sessionKey,
-    ),
+    ...sessionOrder.filter((currentSessionKey) => currentSessionKey !== sessionKey),
     sessionKey,
   ];
 }
 
 function touchEditorId(editorOrder: string[], editorId: string) {
-  return [
-    ...editorOrder.filter((currentEditorId) => currentEditorId !== editorId),
-    editorId,
-  ];
+  return [...editorOrder.filter((currentEditorId) => currentEditorId !== editorId), editorId];
 }
 
 function pruneSessions(
@@ -161,9 +139,7 @@ function pruneSessions(
     return { sessionsByKey, sessionOrder };
   }
 
-  const nextSessionOrder = sessionOrder.slice(
-    -MAX_REVIEW_COMMENT_EDITOR_SESSIONS,
-  );
+  const nextSessionOrder = sessionOrder.slice(-MAX_REVIEW_COMMENT_EDITOR_SESSIONS);
   const retainedSessionKeys = new Set(nextSessionOrder);
   const nextSessionsByKey: ReviewCommentEditorStore["sessionsByKey"] = {};
 
@@ -180,16 +156,13 @@ function pruneSessions(
 function updateSession(
   state: ReviewCommentEditorStore,
   sessionKey: string | null,
-  update: (
-    session: ReviewCommentEditorSessionState,
-  ) => ReviewCommentEditorSessionState,
+  update: (session: ReviewCommentEditorSessionState) => ReviewCommentEditorSessionState,
 ) {
   if (!sessionKey) {
     return state;
   }
 
-  const currentSession =
-    state.sessionsByKey[sessionKey] ?? emptyReviewCommentEditorSessionState;
+  const currentSession = state.sessionsByKey[sessionKey] ?? emptyReviewCommentEditorSessionState;
   const nextSession = update(currentSession);
   if (nextSession === currentSession) {
     return state;
@@ -209,9 +182,7 @@ function updateSession(
 function updateEditor(
   session: ReviewCommentEditorSessionState,
   editorId: string,
-  update: (
-    editor: ReviewCommentEditorState,
-  ) => Partial<ReviewCommentEditorState>,
+  update: (editor: ReviewCommentEditorState) => Partial<ReviewCommentEditorState>,
 ) {
   const editor = session.editorsById[editorId];
   if (!editor) {
@@ -252,136 +223,130 @@ function areCursorPositionsEqual(
     first.focusOffset === second.focusOffset &&
     first.anchorPath.length === second.anchorPath.length &&
     first.focusPath.length === second.focusPath.length &&
-    first.anchorPath.every(
-      (value, index) => value === second.anchorPath[index],
-    ) &&
+    first.anchorPath.every((value, index) => value === second.anchorPath[index]) &&
     first.focusPath.every((value, index) => value === second.focusPath[index])
   );
 }
 
-const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()(
-  (set) => ({
-    sessionsByKey: {},
-    sessionOrder: [],
-    openNewEditor(sessionKey, target) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) => {
-          const id = getNewEditorId(target);
-          const currentEditor = session.editorsById[id];
+const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => ({
+  sessionsByKey: {},
+  sessionOrder: [],
+  openNewEditor(sessionKey, target) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => {
+        const id = getNewEditorId(target);
+        const currentEditor = session.editorsById[id];
 
-          return {
-            editorsById: {
-              ...session.editorsById,
-              [id]: currentEditor ?? {
-                id,
-                kind: "new",
-                body: "",
-                error: "",
-                isSubmitting: false,
-                target,
-              },
+        return {
+          editorsById: {
+            ...session.editorsById,
+            [id]: currentEditor ?? {
+              id,
+              kind: "new",
+              body: "",
+              error: "",
+              isSubmitting: false,
+              target,
             },
-            editorOrder: touchEditorId(session.editorOrder, id),
-          };
-        }),
-      );
-    },
-    openReplyEditor(sessionKey, threadId) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) => {
-          const id = getReplyEditorId(threadId);
-          const currentEditor = session.editorsById[id];
+          },
+          editorOrder: touchEditorId(session.editorOrder, id),
+        };
+      }),
+    );
+  },
+  openReplyEditor(sessionKey, threadId) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => {
+        const id = getReplyEditorId(threadId);
+        const currentEditor = session.editorsById[id];
 
-          return {
-            editorsById: {
-              ...session.editorsById,
-              [id]: currentEditor ?? {
-                id,
-                kind: "reply",
-                body: "",
-                error: "",
-                isSubmitting: false,
-                threadId,
-              },
+        return {
+          editorsById: {
+            ...session.editorsById,
+            [id]: currentEditor ?? {
+              id,
+              kind: "reply",
+              body: "",
+              error: "",
+              isSubmitting: false,
+              threadId,
             },
-            editorOrder: touchEditorId(session.editorOrder, id),
-          };
-        }),
-      );
-    },
-    openEditEditor(sessionKey, threadId, commentId, initialBody) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) => {
-          const id = getEditEditorId(commentId);
-          const currentEditor = session.editorsById[id];
+          },
+          editorOrder: touchEditorId(session.editorOrder, id),
+        };
+      }),
+    );
+  },
+  openEditEditor(sessionKey, threadId, commentId, initialBody) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => {
+        const id = getEditEditorId(commentId);
+        const currentEditor = session.editorsById[id];
 
-          return {
-            editorsById: {
-              ...session.editorsById,
-              [id]: currentEditor ?? {
-                id,
-                kind: "edit",
-                body: initialBody,
-                error: "",
-                isSubmitting: false,
-                threadId,
-                commentId,
-              },
+        return {
+          editorsById: {
+            ...session.editorsById,
+            [id]: currentEditor ?? {
+              id,
+              kind: "edit",
+              body: initialBody,
+              error: "",
+              isSubmitting: false,
+              threadId,
+              commentId,
             },
-            editorOrder: touchEditorId(session.editorOrder, id),
-          };
-        }),
-      );
-    },
-    setEditorBody(sessionKey, editorId, body) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) =>
-          updateEditor(session, editorId, () => ({ body })),
+          },
+          editorOrder: touchEditorId(session.editorOrder, id),
+        };
+      }),
+    );
+  },
+  setEditorBody(sessionKey, editorId, body) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) =>
+        updateEditor(session, editorId, () => ({ body })),
+      ),
+    );
+  },
+  setEditorError(sessionKey, editorId, error) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) =>
+        updateEditor(session, editorId, () => ({ error })),
+      ),
+    );
+  },
+  setEditorCursorPosition(sessionKey, editorId, cursorPosition) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) =>
+        updateEditor(session, editorId, (editor) =>
+          areCursorPositionsEqual(editor.cursorPosition, cursorPosition) ? {} : { cursorPosition },
         ),
-      );
-    },
-    setEditorError(sessionKey, editorId, error) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) =>
-          updateEditor(session, editorId, () => ({ error })),
-        ),
-      );
-    },
-    setEditorCursorPosition(sessionKey, editorId, cursorPosition) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) =>
-          updateEditor(session, editorId, (editor) =>
-            areCursorPositionsEqual(editor.cursorPosition, cursorPosition)
-              ? {}
-              : { cursorPosition },
+      ),
+    );
+  },
+  setEditorSubmitting(sessionKey, editorId, isSubmitting) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) =>
+        updateEditor(session, editorId, () => ({ isSubmitting })),
+      ),
+    );
+  },
+  closeEditor(sessionKey, editorId) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => {
+        const nextEditorsById = { ...session.editorsById };
+        delete nextEditorsById[editorId];
+
+        return {
+          editorsById: nextEditorsById,
+          editorOrder: session.editorOrder.filter(
+            (currentEditorId) => currentEditorId !== editorId,
           ),
-        ),
-      );
-    },
-    setEditorSubmitting(sessionKey, editorId, isSubmitting) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) =>
-          updateEditor(session, editorId, () => ({ isSubmitting })),
-        ),
-      );
-    },
-    closeEditor(sessionKey, editorId) {
-      set((state) =>
-        updateSession(state, sessionKey, (session) => {
-          const nextEditorsById = { ...session.editorsById };
-          delete nextEditorsById[editorId];
-
-          return {
-            editorsById: nextEditorsById,
-            editorOrder: session.editorOrder.filter(
-              (currentEditorId) => currentEditorId !== editorId,
-            ),
-          };
-        }),
-      );
-    },
-  }),
-);
+        };
+      }),
+    );
+  },
+}));
 
 export {
   getEditEditorId,

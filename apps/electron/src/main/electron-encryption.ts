@@ -1,9 +1,6 @@
 import { safeStorage } from "electron";
 import { Effect, Layer } from "effect";
-import {
-  EncryptionService,
-  type EncryptionServiceShape,
-} from "@code-review-app/backend";
+import { EncryptionService, type EncryptionServiceShape } from "@code-review-app/backend";
 
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error));
@@ -14,15 +11,12 @@ function assertEncryptionAvailable() {
     throw new Error("Secure credential storage is not available on this system.");
   }
 
-  if (
-    process.platform === "linux" &&
-    safeStorage.getSelectedStorageBackend?.() === "basic_text"
-  ) {
+  if (process.platform === "linux" && safeStorage.getSelectedStorageBackend?.() === "basic_text") {
     throw new Error("Secure credential storage is not available for this Linux session.");
   }
 }
 
-const makeElectronSafeStorageEncryption = Effect.gen(function* () {
+const makeElectronSafeStorageEncryption = Effect.sync(() => {
   const encryptString: EncryptionServiceShape["encryptString"] = Effect.fn(
     "EncryptionService.encryptString",
   )((value) =>

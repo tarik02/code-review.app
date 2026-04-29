@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppearanceBackground } from "../components/ui/appearance-background";
 import { Button } from "../components/ui/button";
@@ -11,10 +11,7 @@ import {
   setAppearanceBackground,
   selectCustomBackgroundFile,
 } from "../queries/forge";
-import type {
-  AppearanceBackgroundInput,
-  AppearanceBackgroundSettings,
-} from "../types/forge";
+import type { AppearanceBackgroundInput, AppearanceBackgroundSettings } from "../types/forge";
 
 const themeOptions: { value: ThemePreference; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -36,14 +33,9 @@ function AppearanceRoute() {
   const { theme, preference, setPreference } = useTheme();
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const background = backgroundQuery.data;
-  const [solidColor, setSolidColor] = useState("#18181b");
+  const [draftSolidColor, setDraftSolidColor] = useState("#18181b");
   const backgroundQueryKey = appearanceBackgroundQueryOptions().queryKey;
-
-  useEffect(() => {
-    if (background?.kind === "solid") {
-      setSolidColor(background.color);
-    }
-  }, [background]);
+  const solidColor = background?.kind === "solid" ? background.color : draftSolidColor;
 
   const backgroundMutation = useMutation({
     mutationFn: setAppearanceBackground,
@@ -63,8 +55,7 @@ function AppearanceRoute() {
   }
 
   const activeBackgroundKind = background?.kind ?? "default";
-  const isSavingBackground =
-    backgroundMutation.isPending || customFileMutation.isPending;
+  const isSavingBackground = backgroundMutation.isPending || customFileMutation.isPending;
   const backgroundError =
     backgroundMutation.error ?? customFileMutation.error ?? backgroundQuery.error;
 
@@ -72,9 +63,7 @@ function AppearanceRoute() {
     <div className="mx-auto flex max-w-5xl flex-col gap-5 px-8 py-8">
       <div>
         <h2 className="text-xl font-semibold text-ink-900">Appearance</h2>
-        <p className="mt-1 text-sm text-ink-500">
-          Manage color theme and background preferences.
-        </p>
+        <p className="mt-1 text-sm text-ink-500">Manage color theme and background preferences.</p>
       </div>
 
       <section className="rounded-md border border-neutral-200 bg-surface p-4 dark:border-neutral-700">
@@ -117,6 +106,7 @@ function AppearanceRoute() {
                 if (selectedBackgroundKind === "default") {
                   updateBackground({ kind: "default" });
                 } else if (selectedBackgroundKind === "solid") {
+                  setDraftSolidColor(solidColor);
                   updateBackground({ kind: "solid", color: solidColor });
                 } else if (selectedBackgroundKind === "customFile") {
                   customFileMutation.mutate();
@@ -140,15 +130,13 @@ function AppearanceRoute() {
                   disabled={isSavingBackground}
                   onChange={(event) => {
                     const nextColor = event.currentTarget.value;
-                    setSolidColor(nextColor);
+                    setDraftSolidColor(nextColor);
                     updateBackground({ kind: "solid", color: nextColor });
                   }}
                   type="color"
                   value={solidColor}
                 />
-                <span className="font-mono text-xs text-ink-500">
-                  {solidColor}
-                </span>
+                <span className="font-mono text-xs text-ink-500">{solidColor}</span>
               </label>
             ) : null}
 
@@ -157,15 +145,13 @@ function AppearanceRoute() {
                 {background?.kind === "customFile" ? (
                   <p className="text-sm text-ink-600">
                     Selected image:{" "}
-                    <span className="font-medium text-ink-900">
-                      {background.fileName}
-                    </span>
+                    <span className="font-medium text-ink-900">{background.fileName}</span>
                   </p>
                 ) : null}
                 {background?.kind === "customFile" && !background.dataUrl ? (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-                    The selected image could not be loaded. Choose another image
-                    or switch backgrounds.
+                    The selected image could not be loaded. Choose another image or switch
+                    backgrounds.
                   </p>
                 ) : null}
                 <Button
@@ -173,9 +159,7 @@ function AppearanceRoute() {
                   onClick={() => customFileMutation.mutate()}
                   type="button"
                 >
-                  {customFileMutation.isPending
-                    ? "Choosing..."
-                    : "Choose image..."}
+                  {customFileMutation.isPending ? "Choosing..." : "Choose image..."}
                 </Button>
               </div>
             ) : null}

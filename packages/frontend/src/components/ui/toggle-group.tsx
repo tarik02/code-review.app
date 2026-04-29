@@ -19,10 +19,7 @@ function ToggleGroup<Value extends string>({
   );
 }
 
-function ToggleGroupItem<Value extends string>({
-  className,
-  ...props
-}: Toggle.Props<Value>) {
+function ToggleGroupItem<Value extends string>({ className, ...props }: Toggle.Props<Value>) {
   return (
     <Toggle
       data-slot="toggle-group-item"

@@ -35,8 +35,7 @@ type ElectronPackageJson = Schema.Schema.Type<typeof ElectronPackageJsonSchema>;
 const repoRoot = path.resolve(scriptDir, "..");
 const iconPath = path.join(repoRoot, "apps/electron/build/icons/128x128.png");
 const packageJsonPath = path.join(repoRoot, "apps/electron/package.json");
-const dataHome =
-  process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local/share");
+const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local/share");
 const desktopDir = path.join(dataHome, "applications");
 const desktopPath = path.join(desktopDir, "code-review.app-dev.desktop");
 
@@ -60,8 +59,7 @@ function formatError(error: unknown) {
 function parseElectronPackageJson(source: string) {
   return Effect.try({
     try: () => JSON.parse(source),
-    catch: (error) =>
-      new Error(`Failed to parse ${packageJsonPath}: ${formatError(error)}`),
+    catch: (error) => new Error(`Failed to parse ${packageJsonPath}: ${formatError(error)}`),
   }).pipe(
     Effect.flatMap(Schema.decodeUnknown(ElectronPackageJsonSchema)),
     Effect.mapError((error) => {
@@ -72,10 +70,7 @@ function parseElectronPackageJson(source: string) {
       return new Error(formatError(error));
     }),
     Effect.mapError(
-      (error) =>
-        new Error(
-          `Invalid desktop metadata in ${packageJsonPath}: ${formatError(error)}`,
-        ),
+      (error) => new Error(`Invalid desktop metadata in ${packageJsonPath}: ${formatError(error)}`),
     ),
   );
 }
@@ -106,7 +101,7 @@ function readDesktopEntry() {
   });
 }
 
-function provideNodeContext<A, E>(effect: Effect.Effect<A, E>) {
+function provideNodeContext<A, E, R>(effect: Effect.Effect<A, E, R>) {
   return effect.pipe(Effect.provide(NodeContext.layer));
 }
 

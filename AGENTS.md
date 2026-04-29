@@ -1,9 +1,11 @@
 # AGENTS.md
 
 ## Purpose
+
 This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rendering diffs with Pierre components.
 
 ## Stack
+
 - Frontend: React + TypeScript + Vite + Tailwind
 - Desktop shell: Electron
 - Backend: TypeScript in Electron main process, Effect services, tRPC over Electron IPC
@@ -11,6 +13,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - JavaScript runtime/package manager: Node.js + pnpm
 
 ## Important Structure
+
 - `packages/frontend/src/App.tsx`: top-level state and orchestration for repo/PR selection.
 - `packages/frontend/src/components/ui/repo-sidebar.tsx`: repo + PR list/selection.
 - `packages/frontend/src/components/ui/patch-viewer-main.tsx`: main patch area, tree/diff layout, tree hide/show UX.
@@ -23,12 +26,14 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - `packages/backend/src/`: Effect services, tRPC router, provider implementations, CLI execution, repo id helpers, and SQLite cache.
 
 ## Current UX Behavior (keep consistent)
+
 - App shell is fixed to viewport height (`h-screen`) with internal scrolling only.
 - Main content has a single shared container for file tree + diff content.
 - File tree takes roughly 1/3 width when visible.
 - File tree can be hidden; hidden state uses Base UI Popover to access the tree.
 
 ## Backend Contract
+
 - `pullRequests.list(providerId, repoKey)` returns PR/MR summaries and refreshes the repo cache.
 - `pullRequests.getPatch(providerId, repoKey, number, headSha)` returns patch text for rendering.
 - `pullRequests.listChangedFiles(providerId, repoKey, number, headSha)` returns changed file paths.
@@ -37,16 +42,19 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - `preflight.getCliStatuses(gitlabHost)` reports provider CLI readiness.
 
 ## Dependency Notes
+
 - Use the pinned `@pierre/trees` version from `package.json`.
 - Do not switch to a floating/latest tag without checking installability; newer metadata can fail in this repo setup.
 
 ## Working Rules For Agents
+
 - Keep UI changes aligned with existing Tailwind design tokens (`bg-canvas`, `bg-surface`, etc.).
 - Prefer small focused components over growing `App.tsx`.
 - Keep tree and diff states decoupled: one may fail while the other still renders.
 - Use pnpm everywhere for JS tasks (`pnpm install`, `pnpm add`, `pnpm run ...`); do not use npm.
 
 ## Electron Backend Architecture
+
 - `apps/electron/src/main/index.ts`: app lifecycle only.
 - `apps/electron/src/main/window.ts`: BrowserWindow creation, preload wiring, and navigation/window-open security.
 - `apps/electron/src/main/trpc.ts`: tRPC IPC registration and Electron platform adapter only.
@@ -59,6 +67,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - `docs/effect-service-layers.md`: required pattern for writing and wiring Effect service layers.
 
 ### Module Boundary Rules
+
 - tRPC procedures call services; procedures should not contain SQL or large provider payload parsing.
 - Cache code should stay isolated from Electron window/UI concerns.
 - Provider modules own CLI commands and API/GraphQL payload parsing.
@@ -67,6 +76,7 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - Follow `docs/effect-service-layers.md` when adding or changing Effect service layers.
 
 ## Build/Run Policy
+
 - NEVER build the app yourself.
 - Do not run build commands like:
   - `pnpm run build`

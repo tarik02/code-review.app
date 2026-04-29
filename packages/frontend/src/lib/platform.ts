@@ -18,7 +18,8 @@ function getNavigatorPlatform(): string {
 }
 
 function detectPlatform(): Platform | null {
-  const platformSource = `${getNavigatorPlatform()} ${typeof navigator === "undefined" ? "" : navigator.userAgent}`.toLowerCase();
+  const platformSource =
+    `${getNavigatorPlatform()} ${typeof navigator === "undefined" ? "" : navigator.userAgent}`.toLowerCase();
 
   if (platformSource.includes("win")) {
     return "windows";

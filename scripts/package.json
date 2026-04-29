@@ -1,10 +1,11 @@
 {
   "name": "@code-review-app/scripts",
-  "private": true,
   "version": "0.1.5",
+  "private": true,
   "type": "module",
   "scripts": {
-    "install-linux-dev-desktop": "node --import tsx ./install-linux-dev-desktop.ts"
+    "install-linux-dev-desktop": "node --import tsx ./install-linux-dev-desktop.ts",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@effect/platform": "catalog:",

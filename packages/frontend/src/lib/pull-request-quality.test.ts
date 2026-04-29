@@ -49,10 +49,8 @@ function createReport(findings: PullRequestQualityReport["findings"]): PullReque
     status: "warning",
     summary: {
       totalFindings: findings.length,
-      inlineFindings: findings.filter((finding) => finding.anchorState === "inline")
-        .length,
-      fileOnlyFindings: findings.filter((finding) => finding.anchorState !== "inline")
-        .length,
+      inlineFindings: findings.filter((finding) => finding.anchorState === "inline").length,
+      fileOnlyFindings: findings.filter((finding) => finding.anchorState !== "inline").length,
       providerLabel: "GitHub checks",
     },
     findings,
@@ -76,17 +74,12 @@ describe("buildPullRequestQualityView", () => {
       },
     ]);
 
-    const view = buildPullRequestQualityView(report, [
-      createFileDiff("src/app.ts", 10, 5),
-    ]);
+    const view = buildPullRequestQualityView(report, [createFileDiff("src/app.ts", 10, 5)]);
 
     assert.equal(view.displayedInlineCount, 1);
     assert.equal(view.displayedFileCount, 0);
     assert.equal(view.unmappedFindings.length, 0);
-    assert.equal(
-      view.byFile.get("src/app.ts")?.inlineAnnotations[0]?.lineNumber,
-      12,
-    );
+    assert.equal(view.byFile.get("src/app.ts")?.inlineAnnotations[0]?.lineNumber, 12);
   });
 
   it("falls back to file-level when the line is outside rendered additions", () => {
@@ -104,9 +97,7 @@ describe("buildPullRequestQualityView", () => {
       },
     ]);
 
-    const view = buildPullRequestQualityView(report, [
-      createFileDiff("src/app.ts", 10, 5),
-    ]);
+    const view = buildPullRequestQualityView(report, [createFileDiff("src/app.ts", 10, 5)]);
 
     assert.equal(view.displayedInlineCount, 0);
     assert.equal(view.displayedFileCount, 1);
@@ -128,9 +119,7 @@ describe("buildPullRequestQualityView", () => {
       },
     ]);
 
-    const view = buildPullRequestQualityView(report, [
-      createFileDiff("src/app.ts", 1, 10),
-    ]);
+    const view = buildPullRequestQualityView(report, [createFileDiff("src/app.ts", 1, 10)]);
 
     assert.equal(view.displayedInlineCount, 0);
     assert.equal(view.displayedFileCount, 0);

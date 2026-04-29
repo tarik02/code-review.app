@@ -20,21 +20,9 @@ const pullRequestQualityFindingSeveritySchema = z.enum([
   "critical",
   "unknown",
 ]);
-const pullRequestQualityFindingStatusSchema = z.enum([
-  "new",
-  "existing",
-  "resolved",
-  "unknown",
-]);
-const pullRequestQualityFindingAnchorStateSchema = z.enum([
-  "inline",
-  "file",
-  "unmapped",
-]);
-const pullRequestQualityFindingSourceTypeSchema = z.enum([
-  "github-check",
-  "gitlab-code-quality",
-]);
+const pullRequestQualityFindingStatusSchema = z.enum(["new", "existing", "resolved", "unknown"]);
+const pullRequestQualityFindingAnchorStateSchema = z.enum(["inline", "file", "unmapped"]);
+const pullRequestQualityFindingSourceTypeSchema = z.enum(["github-check", "gitlab-code-quality"]);
 
 const repoSummarySchema = z.object({
   providerId: z.string(),
@@ -203,11 +191,12 @@ const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend
   body: z.string(),
 });
 
-const updatePullRequestReviewCommentInputSchema =
-  replyToPullRequestReviewCommentInputSchema.extend({
+const updatePullRequestReviewCommentInputSchema = replyToPullRequestReviewCommentInputSchema.extend(
+  {
     commentId: z.string(),
     subjectType: z.enum(["file", "line", "global"]),
-  });
+  },
+);
 
 export {
   accountVisibilitySettingsSchema,

@@ -21,9 +21,7 @@ type SettingsServiceShape = {
     enabledAccountIds: string[],
   ): Effect.Effect<AccountVisibilitySettings, Error>;
   getDiffDataSettings(): Effect.Effect<DiffDataSettings, Error>;
-  setDiffDataSettings(
-    settings: DiffDataSettings,
-  ): Effect.Effect<DiffDataSettings, Error>;
+  setDiffDataSettings(settings: DiffDataSettings): Effect.Effect<DiffDataSettings, Error>;
   getThemePreference(): Effect.Effect<ThemePreferenceSettings, Error>;
   setThemePreference(
     settings: ThemePreferenceSettings,
@@ -36,9 +34,7 @@ type SettingsServiceShape = {
   setAppearanceBackground(
     input: AppearanceBackgroundInput,
   ): Effect.Effect<AppearanceBackgroundSettings, Error>;
-  setCustomBackgroundFromPath(
-    filePath: string,
-  ): Effect.Effect<AppearanceBackgroundSettings, Error>;
+  setCustomBackgroundFromPath(filePath: string): Effect.Effect<AppearanceBackgroundSettings, Error>;
 };
 
 class SettingsService extends Effect.Tag("SettingsService")<
@@ -92,9 +88,7 @@ const backgroundMimeTypes = {
 
 function getBackgroundExtension(filePath: string) {
   const extension = path.extname(filePath).slice(1).toLowerCase();
-  return extension in backgroundMimeTypes
-    ? (extension as keyof typeof backgroundMimeTypes)
-    : null;
+  return extension in backgroundMimeTypes ? (extension as keyof typeof backgroundMimeTypes) : null;
 }
 
 function isHexColor(value: string) {
@@ -120,11 +114,7 @@ function parsePersistedBackground(value: unknown): PersistedAppearanceBackground
     if (parsed.kind === "default") {
       return { kind: "default" };
     }
-    if (
-      parsed.kind === "solid" &&
-      typeof parsed.color === "string" &&
-      isHexColor(parsed.color)
-    ) {
+    if (parsed.kind === "solid" && typeof parsed.color === "string" && isHexColor(parsed.color)) {
       return { kind: "solid", color: parsed.color };
     }
     if (
@@ -209,13 +199,8 @@ function parseReviewEditorSettings(value: unknown): ReviewEditorSettings {
   return { defaultMode: "rich-text" };
 }
 
-function validateReviewEditorSettings(
-  settings: ReviewEditorSettings,
-): ReviewEditorSettings {
-  if (
-    settings.defaultMode !== "rich-text" &&
-    settings.defaultMode !== "source"
-  ) {
+function validateReviewEditorSettings(settings: ReviewEditorSettings): ReviewEditorSettings {
+  if (settings.defaultMode !== "rich-text" && settings.defaultMode !== "source") {
     throw new Error("Unsupported review editor mode.");
   }
 
@@ -233,8 +218,7 @@ function readBackgroundDataUrl(
   return Effect.gen(function* () {
     const dataUrl = yield* fileSystem.readFile(background.filePath).pipe(
       Effect.map(
-        (data) =>
-          `data:${background.mimeType};base64,${Buffer.from(data).toString("base64")}`,
+        (data) => `data:${background.mimeType};base64,${Buffer.from(data).toString("base64")}`,
       ),
       Effect.catchAll(() => Effect.succeed(null)),
     );
@@ -258,155 +242,136 @@ const makeSettingsService = Effect.gen(function* () {
   const getAccountVisibility: SettingsServiceShape["getAccountVisibility"] = Effect.fn(
     "SettingsService.getAccountVisibility",
   )(function* () {
-        const accounts = yield* tokenStore.listAccounts();
-        const accountIds = accounts.map((account) => account.id);
-        const visibility = yield* cache.readProviderAccountVisibility(accountIds);
-        return toVisibilitySettings(accountIds, visibility);
+    const accounts = yield* tokenStore.listAccounts();
+    const accountIds = accounts.map((account) => account.id);
+    const visibility = yield* cache.readProviderAccountVisibility(accountIds);
+    return toVisibilitySettings(accountIds, visibility);
   });
 
   const setAccountVisibility: SettingsServiceShape["setAccountVisibility"] = Effect.fn(
     "SettingsService.setAccountVisibility",
   )(function* (enabledAccountIds) {
-        const accounts = yield* tokenStore.listAccounts();
-        const accountIds = accounts.map((account) => account.id);
-        const knownAccountIds = new Set(accountIds);
-        const unknownAccountId = enabledAccountIds.find(
-          (accountId) => !knownAccountIds.has(accountId),
-        );
-        if (unknownAccountId) {
-          throw new Error("Account visibility includes an unknown provider account.");
-        }
-        const filteredEnabledAccountIds = enabledAccountIds.filter((accountId) =>
-          knownAccountIds.has(accountId),
-        );
+    const accounts = yield* tokenStore.listAccounts();
+    const accountIds = accounts.map((account) => account.id);
+    const knownAccountIds = new Set(accountIds);
+    const unknownAccountId = enabledAccountIds.find((accountId) => !knownAccountIds.has(accountId));
+    if (unknownAccountId) {
+      throw new Error("Account visibility includes an unknown provider account.");
+    }
+    const filteredEnabledAccountIds = enabledAccountIds.filter((accountId) =>
+      knownAccountIds.has(accountId),
+    );
 
-        yield* cache.setProviderAccountVisibility(
-          accountIds,
-          filteredEnabledAccountIds,
-        );
+    yield* cache.setProviderAccountVisibility(accountIds, filteredEnabledAccountIds);
 
-        const visibility = yield* cache.readProviderAccountVisibility(accountIds);
-        return toVisibilitySettings(accountIds, visibility);
+    const visibility = yield* cache.readProviderAccountVisibility(accountIds);
+    return toVisibilitySettings(accountIds, visibility);
   });
 
   const getDiffDataSettings: SettingsServiceShape["getDiffDataSettings"] = Effect.fn(
     "SettingsService.getDiffDataSettings",
   )(function* () {
-        const persisted = yield* appSettings.read<DiffDataSettings>(
-          DIFF_DATA_SETTINGS_KEY,
-        );
-        return parseDiffDataSettings(persisted);
+    const persisted = yield* appSettings.read<DiffDataSettings>(DIFF_DATA_SETTINGS_KEY);
+    return parseDiffDataSettings(persisted);
   });
 
   const setDiffDataSettings: SettingsServiceShape["setDiffDataSettings"] = Effect.fn(
     "SettingsService.setDiffDataSettings",
   )(function* (settings) {
-        const validated = validateDiffDataSettings(settings);
-        yield* appSettings.write(DIFF_DATA_SETTINGS_KEY, validated);
-        return validated;
+    const validated = validateDiffDataSettings(settings);
+    yield* appSettings.write(DIFF_DATA_SETTINGS_KEY, validated);
+    return validated;
   });
 
   const getThemePreference: SettingsServiceShape["getThemePreference"] = Effect.fn(
     "SettingsService.getThemePreference",
   )(function* () {
-        const persisted = yield* appSettings
-          .read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY)
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
-        return parseThemePreferenceSettings(persisted);
+    const persisted = yield* appSettings
+      .read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    return parseThemePreferenceSettings(persisted);
   });
 
   const setThemePreference: SettingsServiceShape["setThemePreference"] = Effect.fn(
     "SettingsService.setThemePreference",
   )(function* (settings) {
-        const validated = validateThemePreferenceSettings(settings);
-        yield* appSettings.write(THEME_PREFERENCE_KEY, validated);
-        return validated;
+    const validated = validateThemePreferenceSettings(settings);
+    yield* appSettings.write(THEME_PREFERENCE_KEY, validated);
+    return validated;
   });
 
   const getReviewEditorSettings: SettingsServiceShape["getReviewEditorSettings"] = Effect.fn(
     "SettingsService.getReviewEditorSettings",
   )(function* () {
-        const persisted = yield* appSettings
-          .read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
-        return parseReviewEditorSettings(persisted);
+    const persisted = yield* appSettings
+      .read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    return parseReviewEditorSettings(persisted);
   });
 
   const setReviewEditorSettings: SettingsServiceShape["setReviewEditorSettings"] = Effect.fn(
     "SettingsService.setReviewEditorSettings",
   )(function* (settings) {
-        const validated = validateReviewEditorSettings(settings);
-        yield* appSettings.write(REVIEW_EDITOR_SETTINGS_KEY, validated);
-        return validated;
+    const validated = validateReviewEditorSettings(settings);
+    yield* appSettings.write(REVIEW_EDITOR_SETTINGS_KEY, validated);
+    return validated;
   });
 
   const getAppearanceBackground: SettingsServiceShape["getAppearanceBackground"] = Effect.fn(
     "SettingsService.getAppearanceBackground",
   )(function* () {
-        const persisted = yield* appSettings.read<PersistedAppearanceBackgroundSettings>(
-          APPEARANCE_BACKGROUND_KEY,
-        );
-        return yield* readBackgroundDataUrl(
-          fileSystem,
-          parsePersistedBackground(persisted),
-        );
+    const persisted =
+      yield* appSettings.read<PersistedAppearanceBackgroundSettings>(APPEARANCE_BACKGROUND_KEY);
+    return yield* readBackgroundDataUrl(fileSystem, parsePersistedBackground(persisted));
   });
 
   const setAppearanceBackground: SettingsServiceShape["setAppearanceBackground"] = Effect.fn(
     "SettingsService.setAppearanceBackground",
   )(function* (input) {
-        yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, input);
-        return yield* getAppearanceBackground();
+    yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, input);
+    return yield* getAppearanceBackground();
   });
 
-  const setCustomBackgroundFromPath: SettingsServiceShape["setCustomBackgroundFromPath"] = Effect.fn(
-    "SettingsService.setCustomBackgroundFromPath",
-  )(function* (filePath) {
-        const extension = getBackgroundExtension(filePath);
-        if (!extension) {
-          throw new Error("Background image must be a PNG, JPG, GIF, WebP, or AVIF file.");
-        }
+  const setCustomBackgroundFromPath: SettingsServiceShape["setCustomBackgroundFromPath"] =
+    Effect.fn("SettingsService.setCustomBackgroundFromPath")(function* (filePath) {
+      const extension = getBackgroundExtension(filePath);
+      if (!extension) {
+        throw new Error("Background image must be a PNG, JPG, GIF, WebP, or AVIF file.");
+      }
 
-        const sourceStats = yield* fileSystem.stat(filePath).pipe(
-          Effect.mapError((error) =>
-            error instanceof Error ? error : new Error(String(error)),
-          ),
+      const sourceStats = yield* fileSystem
+        .stat(filePath)
+        .pipe(
+          Effect.mapError((error) => (error instanceof Error ? error : new Error(String(error)))),
         );
-        if (sourceStats.type !== "File") {
-          throw new Error("Background image must be a file.");
-        }
-        if (Number(sourceStats.size) > MAX_BACKGROUND_FILE_SIZE) {
-          throw new Error("Background image must be 15 MB or smaller.");
-        }
+      if (sourceStats.type !== "File") {
+        throw new Error("Background image must be a file.");
+      }
+      if (Number(sourceStats.size) > MAX_BACKGROUND_FILE_SIZE) {
+        throw new Error("Background image must be 15 MB or smaller.");
+      }
 
-        const backgroundDirectory = path.join(config.userDataPath, "appearance");
-        const destinationPath = path.join(
-          backgroundDirectory,
-          `background.${extension}`,
-        );
-        yield* fileSystem
-          .makeDirectory(backgroundDirectory, { recursive: true })
-          .pipe(
-            Effect.flatMap(() =>
-              path.resolve(filePath) === path.resolve(destinationPath)
-                ? Effect.void
-                : fileSystem.copyFile(filePath, destinationPath),
-            ),
-            Effect.mapError((error) =>
-              error instanceof Error ? error : new Error(String(error)),
-            ),
-          );
+      const backgroundDirectory = path.join(config.userDataPath, "appearance");
+      const destinationPath = path.join(backgroundDirectory, `background.${extension}`);
+      yield* fileSystem.makeDirectory(backgroundDirectory, { recursive: true }).pipe(
+        Effect.flatMap(() =>
+          path.resolve(filePath) === path.resolve(destinationPath)
+            ? Effect.void
+            : fileSystem.copyFile(filePath, destinationPath),
+        ),
+        Effect.mapError((error) => (error instanceof Error ? error : new Error(String(error)))),
+      );
 
-        const persisted: PersistedAppearanceBackgroundSettings = {
-          kind: "customFile",
-          filePath: destinationPath,
-          fileName: path.basename(filePath),
-          mimeType: backgroundMimeTypes[extension],
-        };
+      const persisted: PersistedAppearanceBackgroundSettings = {
+        kind: "customFile",
+        filePath: destinationPath,
+        fileName: path.basename(filePath),
+        mimeType: backgroundMimeTypes[extension],
+      };
 
-        yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, persisted);
-        return yield* readBackgroundDataUrl(fileSystem, persisted);
-  });
+      yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, persisted);
+      return yield* readBackgroundDataUrl(fileSystem, persisted);
+    });
 
   return {
     getAccountVisibility,

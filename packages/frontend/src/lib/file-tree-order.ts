@@ -1,9 +1,6 @@
 import { prepareFileTreeInput } from "@pierre/trees";
 
-function sortByFileTreePathOrder<T>(
-  items: readonly T[],
-  getPath: (item: T) => string,
-): T[] {
+function sortByFileTreePathOrder<T>(items: readonly T[], getPath: (item: T) => string): T[] {
   const decoratedItems = items.map((item, index) => ({
     index,
     item,
@@ -28,9 +25,7 @@ function sortByFileTreePathOrder<T>(
       const rightOrder = pathOrder.get(right.path);
 
       if (leftOrder !== undefined && rightOrder !== undefined) {
-        return leftOrder === rightOrder
-          ? left.index - right.index
-          : leftOrder - rightOrder;
+        return leftOrder === rightOrder ? left.index - right.index : leftOrder - rightOrder;
       }
 
       if (leftOrder !== undefined) return -1;

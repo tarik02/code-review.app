@@ -8,17 +8,10 @@ import {
   type PullRequestSummary,
   type SidebarPullRequestView,
 } from "./repo-sidebar-item";
-import type {
-  OverviewPullRequestSummary,
-  RepoIdentity,
-  RepoSummary,
-} from "../../types/forge";
+import type { OverviewPullRequestSummary, RepoIdentity, RepoSummary } from "../../types/forge";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { TopBar } from "./top-bar";
-import {
-  repoIdentity,
-  repoIdentityKey,
-} from "../../lib/repo-identity";
+import { repoIdentity, repoIdentityKey } from "../../lib/repo-identity";
 
 type RepoSidebarProps = {
   repos: RepoSummary[];
@@ -81,9 +74,7 @@ function RepoSidebar({
   const sortedOverviewPullRequests = useMemo(
     () =>
       [...overviewPullRequests].sort(
-        (a, b) =>
-          toTimestamp(b.pullRequest.updatedAt) -
-          toTimestamp(a.pullRequest.updatedAt),
+        (a, b) => toTimestamp(b.pullRequest.updatedAt) - toTimestamp(a.pullRequest.updatedAt),
       ),
     [overviewPullRequests],
   );
@@ -100,23 +91,20 @@ function RepoSidebar({
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-ink-300 bg-canvas md:border-b-0">
       <div className="sticky top-0 z-10 flex flex-col">
-        <TopBar
-          position="left"
-          className="cursor-grab app-region-drag flex"
-        >
+        <TopBar position="left" className="cursor-grab app-region-drag flex">
           <div className="grow flex items-center justify-between gap-2.5 px-3">
-          <div>code-review.app</div>
+            <div>code-review.app</div>
 
-          <div className="flex items-center gap-2.5">
-            <Link
-              aria-label="Settings"
-              className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-              style={noDragRegionStyle}
-              to="/settings/appearance"
-            >
-              <Cog6ToothIcon className="size-5 shrink-0" />
-            </Link>
-          </div>
+            <div className="flex items-center gap-2.5">
+              <Link
+                aria-label="Settings"
+                className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
+                style={noDragRegionStyle}
+                to="/settings/appearance"
+              >
+                <Cog6ToothIcon className="size-5 shrink-0" />
+              </Link>
+            </div>
           </div>
         </TopBar>
 
@@ -182,9 +170,7 @@ function RepoSidebar({
               </div>
             ) : null}
             {sortedOverviewPullRequests.length === 0 && isOverviewLoading ? (
-              <div className="px-3 py-2.5 text-sm text-ink-500">
-                Loading pull requests...
-              </div>
+              <div className="px-3 py-2.5 text-sm text-ink-500">Loading pull requests...</div>
             ) : null}
             {sortedOverviewPullRequests.map(({ repo, pullRequest }) => (
               <PullRequestSidebarRow
@@ -195,9 +181,8 @@ function RepoSidebar({
                 selectedPrKey={selectedPrKey}
                 isTrackedView={false}
                 isTracked={
-                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
-                    pullRequest.number,
-                  ) ?? false
+                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(pullRequest.number) ??
+                  false
                 }
                 repoLabel={getRepoLabel(repo)}
                 onSelectPr={onSelectPr}
@@ -206,18 +191,12 @@ function RepoSidebar({
               />
             ))}
             {overviewErrors.map((error, index) => (
-              <div
-                className="px-3 py-2.5 text-sm text-danger-600"
-                key={`${index}:${error}`}
-              >
+              <div className="px-3 py-2.5 text-sm text-danger-600" key={`${index}:${error}`}>
                 {error}
               </div>
             ))}
             {repoErrorEntries.map(({ repo, error }) => (
-              <div
-                className="px-3 py-2.5 text-sm text-danger-600"
-                key={repoIdentityKey(repo)}
-              >
+              <div className="px-3 py-2.5 text-sm text-danger-600" key={repoIdentityKey(repo)}>
                 {getRepoLabel(repo)}: {error}
               </div>
             ))}
@@ -237,9 +216,7 @@ function RepoSidebar({
                 error={repoErrors[repoIdentityKey(repo)]}
                 view={view}
                 selectedPrKey={selectedPrKey}
-                trackedPullRequestNumbers={
-                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]
-                }
+                trackedPullRequestNumbers={trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]}
                 onSelectPr={(identity, pr) => onSelectPr(identity, pr)}
                 onAddPr={(identity) => onAddPr(identity)}
                 onTrackPr={(identity, pr) => onTrackPr(identity, pr)}

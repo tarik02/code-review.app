@@ -52,9 +52,7 @@ type ReviewCommentEditorProps = {
   error?: string;
   autoFocus?: boolean;
   onChange?: (body: string) => void;
-  onCursorPositionChange?: (
-    cursorPosition: ReviewCommentEditorCursorPosition | null,
-  ) => void;
+  onCursorPositionChange?: (cursorPosition: ReviewCommentEditorCursorPosition | null) => void;
   onCancel?: () => void;
   onSubmit: (body: string) => Promise<void> | void;
 };

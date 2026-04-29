@@ -1,6 +1,7 @@
+import babel from "@rolldown/plugin-babel";
 import { defineConfig } from "electron-vite";
-import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 
 const repoRoot = resolve("../..");
@@ -11,11 +12,11 @@ const workspaceAliases = {
   "@code-review-app/shared": resolve(repoRoot, "packages/shared/src/index.ts"),
 };
 const workspacePackages = ["@code-review-app/backend", "@code-review-app/shared"];
-const nativeExternalPackages = [
-  "@libsql/client",
-  "@libsql/client/sqlite3",
-  "libsql",
-];
+const nativeExternalPackages = ["@libsql/client", "@libsql/client/sqlite3", "libsql"];
+const reactCompilerBabelPlugin = await babel({
+  presets: [reactCompilerPreset()],
+});
+
 export default defineConfig({
   main: {
     resolve: {
@@ -29,10 +30,7 @@ export default defineConfig({
         exclude: workspacePackages,
       },
       rolldownOptions: {
-        external: [
-          ...nativeExternalPackages,
-          /^@libsql\/.+/,
-        ],
+        external: [...nativeExternalPackages, /^@libsql\/.+/],
         input: resolve("src/main/index.ts"),
       },
     },
@@ -50,7 +48,7 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(repoRoot, "packages/frontend"),
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), reactCompilerBabelPlugin, ...tailwindcss()],
     resolve: {
       alias: {
         ...workspaceAliases,

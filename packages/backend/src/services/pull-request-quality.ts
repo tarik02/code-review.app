@@ -18,9 +18,10 @@ type PullRequestQualityServiceShape = {
   ): Effect.Effect<PullRequestQualityReport, Error>;
 };
 
-class PullRequestQualityService extends Effect.Tag(
-  "PullRequestQualityService",
-)<PullRequestQualityService, PullRequestQualityServiceShape>() {}
+class PullRequestQualityService extends Effect.Tag("PullRequestQualityService")<
+  PullRequestQualityService,
+  PullRequestQualityServiceShape
+>() {}
 
 function requireRepo(repo: RepoIdentity) {
   if (!repo.providerId.trim() || !repo.repoKey.trim()) {
@@ -74,43 +75,34 @@ const makePullRequestQualityService = Effect.gen(function* () {
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
 
-  const get: PullRequestQualityServiceShape["get"] = Effect.fn(
-    "PullRequestQualityService.get",
-  )(function* (repoInput, number, headSha) {
-    const repoIdentity = requireRepo(repoInput);
-    const repo = createRepoIdentityFromParts(
-      repoIdentity.providerId,
-      repoIdentity.repoKey,
-    );
+  const get: PullRequestQualityServiceShape["get"] = Effect.fn("PullRequestQualityService.get")(
+    function* (repoInput, number, headSha) {
+      const repoIdentity = requireRepo(repoInput);
+      const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
 
-    return yield* provideProviderDeps(
-      providerFor(repo.provider).getPullRequestQualityReport({
-        repo,
-        number,
-        headSha,
-      }),
-    ).pipe(
-      Effect.catchAll((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.warn("[pull-request-quality] failed to load quality report", {
-          provider: repo.provider,
-          repo: repo.path,
+      return yield* provideProviderDeps(
+        providerFor(repo.provider).getPullRequestQualityReport({
+          repo,
           number,
           headSha,
-          message,
-        });
-        return Effect.succeed(
-          unavailableQualityReport(
-            repo.provider,
-            repoIdentity,
+        }),
+      ).pipe(
+        Effect.catchAll((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn("[pull-request-quality] failed to load quality report", {
+            provider: repo.provider,
+            repo: repo.path,
             number,
             headSha,
             message,
-          ),
-        );
-      }),
-    );
-  });
+          });
+          return Effect.succeed(
+            unavailableQualityReport(repo.provider, repoIdentity, number, headSha, message),
+          );
+        }),
+      );
+    },
+  );
 
   return {
     get,

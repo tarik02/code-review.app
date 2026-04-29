@@ -76,23 +76,17 @@ function ChangedFilesTree({
     fileSetRef.current = fileSet;
   }, [fileSet]);
 
-  const handleSelectionChange = useCallback(
-    (selectedPaths: readonly string[]) => {
-      const selectedFile = [...selectedPaths]
-        .reverse()
-        .find((path) => fileSetRef.current.has(path));
+  const handleSelectionChange = useCallback((selectedPaths: readonly string[]) => {
+    const selectedFile = [...selectedPaths].reverse().find((path) => fileSetRef.current.has(path));
 
-      if (!selectedFile) return;
-      if (selectedFile === selectedFilePathRef.current) return;
+    if (!selectedFile) return;
+    if (selectedFile === selectedFilePathRef.current) return;
 
-      onSelectFileRef.current?.(selectedFile);
-    },
-    [],
-  );
+    onSelectFileRef.current?.(selectedFile);
+  }, []);
 
   const selectedTreePaths = useMemo(
-    () =>
-      selectedFilePath && fileSet.has(selectedFilePath) ? [selectedFilePath] : [],
+    () => (selectedFilePath && fileSet.has(selectedFilePath) ? [selectedFilePath] : []),
     [fileSet, selectedFilePath],
   );
 
@@ -104,7 +98,7 @@ function ChangedFilesTree({
     gitStatus,
     onSelectionChange: handleSelectionChange,
     paths: files,
-    density: 'compact',
+    density: "compact",
   });
 
   useEffect(() => {
@@ -155,11 +149,13 @@ function ChangedFilesTree({
           : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       }
     >
-      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface text-xs text-ink-500 cursor-grab app-region-drag flex">
+      <TopBar
+        position="right"
+        className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface text-xs text-ink-500 cursor-grab app-region-drag flex"
+      >
         <div className="grow flex items-center justify-between px-3 py-2">
           <p className="text-sm text-ink-900">
-            Changed files{" "}
-            <span className="ml-2 text-ink-500">{files.length}</span>
+            Changed files <span className="ml-2 text-ink-500">{files.length}</span>
           </p>
           <div className="flex items-center gap-2 font-mono font-bold">
             {totals ? (
@@ -202,11 +198,7 @@ function ChangedFilesTree({
         ) : null}
 
         {hasSelection && !isLoading && !error && files.length > 0 ? (
-          <FileTree
-            className="h-full min-h-[220px]"
-            model={model}
-            style={fileTreeStyle}
-          />
+          <FileTree className="h-full min-h-[220px]" model={model} style={fileTreeStyle} />
         ) : null}
       </div>
     </section>

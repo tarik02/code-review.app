@@ -1,9 +1,6 @@
 import type { CSSProperties, ReactNode, UIEvent } from "react";
 import { useCallback, useState } from "react";
-import {
-  Virtualizer as PierreVirtualizer,
-  type VirtualizerConfig,
-} from "@pierre/diffs";
+import { Virtualizer as PierreVirtualizer, type VirtualizerConfig } from "@pierre/diffs";
 import { VirtualizerContext } from "@pierre/diffs/react";
 
 type PatchScrollVirtualizerProps = {
@@ -47,12 +44,7 @@ function PatchScrollVirtualizer({
 
   return (
     <VirtualizerContext.Provider value={instance}>
-      <div
-        className={className}
-        onScroll={onScroll}
-        ref={setRoot}
-        style={style}
-      >
+      <div className={className} onScroll={onScroll} ref={setRoot} style={style}>
         <div className={contentClassName} style={contentStyle}>
           {children}
         </div>

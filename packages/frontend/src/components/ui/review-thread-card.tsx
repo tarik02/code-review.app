@@ -1,12 +1,6 @@
-import {
-  FloatingPortal,
-  autoUpdate,
-  offset,
-  size,
-  useFloating,
-} from "@floating-ui/react";
+import { FloatingPortal, autoUpdate, offset, size, useFloating } from "@floating-ui/react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isGlobalReviewThread,
   type ReviewComment,
@@ -96,10 +90,7 @@ function getCommentPreviewText(body: string) {
     .replace(/^\s*\d+[.)]\s+/gm, "")
     .replace(/`([^`]*)`/g, "$1")
     .replace(/~~([^~]*)~~/g, "$1")
-    .replace(
-      /(^|[\s([{])([*_]{1,3})(?=\S)(.+?\S)\2(?=[\s)\]}.,!?;:]|$)/g,
-      "$1$3",
-    )
+    .replace(/(^|[\s([{])([*_]{1,3})(?=\S)(.+?\S)\2(?=[\s)\]}.,!?;:]|$)/g, "$1$3")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -153,8 +144,10 @@ function FloatingReviewCommentEditor({
   ...editorProps
 }: ReviewCommentEditorProps & { portalRootId?: string }) {
   const spacerRef = useRef<HTMLDivElement | null>(null);
+  const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const portalRoot =
+    portalRootId && typeof document !== "undefined" ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
     placement: "bottom-start",
     strategy: "absolute",
@@ -169,17 +162,33 @@ function FloatingReviewCommentEditor({
           Object.assign(elements.floating.style, {
             width: `${rects.reference.width}px`,
           });
-
-          const nextHeight = Math.ceil(
-            elements.floating.getBoundingClientRect().height,
-          );
-          if (spacerRef.current && nextHeight > 0) {
-            spacerRef.current.style.height = `${nextHeight}px`;
-          }
         },
       }),
     ],
   });
+  useEffect(() => {
+    const floatingNode = floatingNodeRef.current;
+    if (!floatingNode || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const syncSpacerHeight = () => {
+      if (!spacerRef.current) {
+        return;
+      }
+
+      const nextHeight = Math.ceil(floatingNode.getBoundingClientRect().height);
+      if (nextHeight > 0) {
+        spacerRef.current.style.height = `${nextHeight}px`;
+      }
+    };
+
+    syncSpacerHeight();
+    const observer = new ResizeObserver(syncSpacerHeight);
+    observer.observe(floatingNode);
+    return () => observer.disconnect();
+  }, [hasReference]);
+
   const setReference = useCallback(
     (node: HTMLDivElement | null) => {
       spacerRef.current = node;
@@ -190,33 +199,22 @@ function FloatingReviewCommentEditor({
   );
   const setFloating = useCallback(
     (node: HTMLDivElement | null) => {
+      floatingNodeRef.current = node;
       refs.setFloating(node);
     },
     [refs],
   );
 
-  useLayoutEffect(() => {
-    setPortalRoot(portalRootId ? document.getElementById(portalRootId) : null);
-  }, [portalRootId]);
-
-  const shouldRenderFloating =
-    hasReference && (!portalRootId || portalRoot !== null);
+  const shouldRenderFloating = hasReference && (!portalRootId || portalRoot !== null);
   const floatingEditor = shouldRenderFloating ? (
-    <div
-      ref={setFloating}
-      className="pointer-events-auto z-50 font-sans"
-      style={floatingStyles}
-    >
+    <div ref={setFloating} className="pointer-events-auto z-50 font-sans" style={floatingStyles}>
       <ReviewCommentEditor {...editorProps} />
     </div>
   ) : null;
 
   return (
     <>
-      <div
-        ref={setReference}
-        style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }}
-      />
+      <div ref={setReference} style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }} />
       {portalRootId ? (
         <FloatingPortal root={portalRoot}>{floatingEditor}</FloatingPortal>
       ) : (
@@ -239,9 +237,7 @@ function ReviewThreadCard({
   containerRef,
 }: ReviewThreadCardProps) {
   const rootComment =
-    thread.comments.find((comment) => comment.replyToId === null) ??
-    thread.comments[0] ??
-    null;
+    thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null;
   const editorTarget = getThreadEditorTarget(thread);
   const reviewEditorSession = useReviewCommentEditorStore((state) =>
     getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
@@ -256,47 +252,30 @@ function ReviewThreadCard({
         ),
     [reviewEditorSession, thread.id],
   );
-  const openReplyEditor = useReviewCommentEditorStore(
-    (state) => state.openReplyEditor,
-  );
-  const openEditEditor = useReviewCommentEditorStore(
-    (state) => state.openEditEditor,
-  );
-  const setEditorBody = useReviewCommentEditorStore(
-    (state) => state.setEditorBody,
-  );
-  const setEditorError = useReviewCommentEditorStore(
-    (state) => state.setEditorError,
-  );
+  const openReplyEditor = useReviewCommentEditorStore((state) => state.openReplyEditor);
+  const openEditEditor = useReviewCommentEditorStore((state) => state.openEditEditor);
+  const setEditorBody = useReviewCommentEditorStore((state) => state.setEditorBody);
+  const setEditorError = useReviewCommentEditorStore((state) => state.setEditorError);
   const setEditorCursorPosition = useReviewCommentEditorStore(
     (state) => state.setEditorCursorPosition,
   );
-  const setEditorSubmitting = useReviewCommentEditorStore(
-    (state) => state.setEditorSubmitting,
-  );
-  const closeEditor = useReviewCommentEditorStore(
-    (state) => state.closeEditor,
-  );
+  const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
+  const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
   const canCreateEditor =
-    reviewEditorSessionKey != null &&
-    (onReplyToThread != null || onEditComment != null);
+    reviewEditorSessionKey != null && (onReplyToThread != null || onEditComment != null);
   const reviewEditorSettingsQuery = useQuery({
     ...reviewEditorSettingsQueryOptions(),
     enabled: canCreateEditor,
   });
-  const defaultReviewEditorMode =
-    reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
   const replyEditor =
-    thread.id.length > 0
-      ? threadEditors.find((editor) => editor.kind === "reply")
-      : undefined;
+    thread.id.length > 0 ? threadEditors.find((editor) => editor.kind === "reply") : undefined;
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
-    const locationLabel =
-      isGlobalReviewThread(thread)
-        ? "Global comment"
-        : threadLine === null
+    const locationLabel = isGlobalReviewThread(thread)
+      ? "Global comment"
+      : threadLine === null
         ? `${thread.path} - File comment`
         : `${thread.path}:${threadLine}`;
     const summaryBody = getCommentPreviewText(rootComment?.body ?? "");
@@ -319,8 +298,7 @@ function ReviewThreadCard({
       </>
     );
 
-    const baseClassName =
-      "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left";
+    const baseClassName = "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left";
 
     return onClick ? (
       <button
@@ -364,11 +342,7 @@ function ReviewThreadCard({
     }
   }
 
-  async function handleEditSubmit(
-    editorId: string,
-    comment: ReviewComment,
-    body: string,
-  ) {
+  async function handleEditSubmit(editorId: string, comment: ReviewComment, body: string) {
     if (!onEditComment) {
       return;
     }
@@ -403,9 +377,7 @@ function ReviewThreadCard({
       ref={containerRef}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-ink-500">
-        <span className="font-sans font-medium text-ink-900">
-          {formatThreadLineLabel(thread)}
-        </span>
+        <span className="font-sans font-medium text-ink-900">{formatThreadLineLabel(thread)}</span>
         {thread.isResolved ? (
           <span className="rounded-full bg-canvas px-2 py-0.5 font-sans text-ink-700">
             Resolved
@@ -422,8 +394,7 @@ function ReviewThreadCard({
       <div className="flex flex-col gap-3">
         {thread.comments.map((comment) => {
           const editEditor = threadEditors.find(
-            (editor) =>
-              editor.kind === "edit" && editor.commentId === comment.id,
+            (editor) => editor.kind === "edit" && editor.commentId === comment.id,
           );
           const canEdit =
             viewerLogin != null &&
@@ -434,16 +405,11 @@ function ReviewThreadCard({
             onEditComment != null;
 
           return (
-            <div
-              className="grid grid-cols-[auto_minmax(0,1fr)] gap-3"
-              key={comment.id}
-            >
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3" key={comment.id}>
               <CommentAvatar comment={comment} />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
-                  <span className="font-sans font-medium text-ink-900">
-                    {comment.authorLogin}
-                  </span>
+                  <span className="font-sans font-medium text-ink-900">{comment.authorLogin}</span>
                   <span>{formatTimestamp(comment.createdAt)}</span>
                   {!compact && comment.url ? (
                     <a
@@ -459,12 +425,7 @@ function ReviewThreadCard({
                     <button
                       className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
                       onClick={() => {
-                        openEditEditor(
-                          reviewEditorSessionKey,
-                          thread.id,
-                          comment.id,
-                          comment.body,
-                        );
+                        openEditEditor(reviewEditorSessionKey, thread.id, comment.id, comment.body);
                       }}
                       type="button"
                     >
@@ -485,15 +446,9 @@ function ReviewThreadCard({
                       submitLabel="Save"
                       target={editorTarget}
                       value={editEditor.body}
-                      onCancel={() =>
-                        closeEditor(reviewEditorSessionKey, editEditor.id)
-                      }
+                      onCancel={() => closeEditor(reviewEditorSessionKey, editEditor.id)}
                       onChange={(body) =>
-                        setEditorBody(
-                          reviewEditorSessionKey,
-                          editEditor.id,
-                          body,
-                        )
+                        setEditorBody(reviewEditorSessionKey, editEditor.id, body)
                       }
                       onCursorPositionChange={(cursorPosition) =>
                         setEditorCursorPosition(
@@ -502,15 +457,10 @@ function ReviewThreadCard({
                           cursorPosition ?? null,
                         )
                       }
-                      onSubmit={(body) =>
-                        handleEditSubmit(editEditor.id, comment, body)
-                      }
+                      onSubmit={(body) => handleEditSubmit(editEditor.id, comment, body)}
                     />
                   ) : (
-                    <CommentMarkdown
-                      body={comment.body}
-                      filePath={thread.path || undefined}
-                    />
+                    <CommentMarkdown body={comment.body} filePath={thread.path || undefined} />
                   )}
                 </div>
               </div>
@@ -519,10 +469,7 @@ function ReviewThreadCard({
         })}
       </div>
 
-      {rootComment &&
-      onReplyToThread &&
-      thread.id.length > 0 &&
-      reviewEditorSessionKey != null ? (
+      {rootComment && onReplyToThread && thread.id.length > 0 && reviewEditorSessionKey != null ? (
         <div className="mt-3 border-t border-ink-200 pt-3">
           {replyEditor ? (
             <FloatingReviewCommentEditor
@@ -535,12 +482,8 @@ function ReviewThreadCard({
               submitLabel="Reply"
               target={editorTarget}
               value={replyEditor.body}
-              onCancel={() =>
-                closeEditor(reviewEditorSessionKey, replyEditor.id)
-              }
-              onChange={(body) =>
-                setEditorBody(reviewEditorSessionKey, replyEditor.id, body)
-              }
+              onCancel={() => closeEditor(reviewEditorSessionKey, replyEditor.id)}
+              onChange={(body) => setEditorBody(reviewEditorSessionKey, replyEditor.id, body)}
               onCursorPositionChange={(cursorPosition) =>
                 setEditorCursorPosition(
                   reviewEditorSessionKey,

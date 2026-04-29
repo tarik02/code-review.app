@@ -50,8 +50,12 @@ type GitRemoteSpec = {
 };
 
 type ForgeProvider = {
-  authStatus(accountId: string): Effect.Effect<ProviderAuthStatus, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  viewerLogin(accountId: string): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  authStatus(
+    accountId: string,
+  ): Effect.Effect<ProviderAuthStatus, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  viewerLogin(
+    accountId: string,
+  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listInitialRepos(
     accountId: string,
     limit: number,
@@ -67,7 +71,11 @@ type ForgeProvider = {
   ): Effect.Effect<RepoSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listOverviewPullRequests(
     accountId: string,
-  ): Effect.Effect<OverviewPullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    OverviewPullRequestSummary[],
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   listPullRequests(
     repo: RepoIdentity,
   ): Effect.Effect<PullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
@@ -94,11 +102,7 @@ type ForgeProvider = {
   ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   getPullRequestQualityReport(
     input: PullRequestQualityReportInput,
-  ): Effect.Effect<
-    PullRequestQualityReport,
-    ProviderError,
-    AuthTokenStore | HttpClient.HttpClient
-  >;
+  ): Effect.Effect<PullRequestQualityReport, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   gitRemote(
     repo: RepoIdentity,
   ): Effect.Effect<GitRemoteSpec, ProviderError, AuthTokenStore | HttpClient.HttpClient>;

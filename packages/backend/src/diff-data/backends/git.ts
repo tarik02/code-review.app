@@ -21,11 +21,7 @@ import { AuthTokenStore } from "../../auth/token-store.ts";
 import type { PrFileContents } from "@code-review-app/shared";
 import type { GitRemoteSpec, PullRequestRefs } from "../../providers/types.ts";
 import { repoIdentityCacheKey, type RepoIdentity } from "../../repo-id.ts";
-import type {
-  DiffBackendFileContentsInput,
-  DiffBackendInput,
-  DiffDataBackend,
-} from "./types.ts";
+import type { DiffBackendFileContentsInput, DiffBackendInput, DiffDataBackend } from "./types.ts";
 
 type ProvideProviderDeps = <A, E>(
   effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
@@ -78,10 +74,7 @@ function gitErrorToProviderError(error: GitError) {
 function logGitError(context: string, error: GitError) {
   console.debug("[diff-data]", context, {
     tag: error._tag,
-    error:
-      error instanceof GitUnknownCommandError
-        ? { args: error.args }
-        : error,
+    error: error instanceof GitUnknownCommandError ? { args: error.args } : error,
   });
 }
 
@@ -151,27 +144,16 @@ function prepareGitDiff(
       providerFor(input.repo.provider).gitRemote(input.repo),
     );
     const handle = yield* git.ensureRepo(input.repo, remoteSpec).pipe(
-      Effect.tapError((error) =>
-        Effect.sync(() => logGitError("git ensure repo failed", error)),
-      ),
+      Effect.tapError((error) => Effect.sync(() => logGitError("git ensure repo failed", error))),
       Effect.mapError(gitErrorToProviderError),
     );
 
     yield* git.fetchRefs(handle, refs.baseSha, refs.headSha, remoteSpec).pipe(
-      Effect.tapError((error) =>
-        Effect.sync(() => logGitError("git fetch refs failed", error)),
-      ),
+      Effect.tapError((error) => Effect.sync(() => logGitError("git fetch refs failed", error))),
       Effect.mapError(gitErrorToProviderError),
     );
-    const diffBaseSha = yield* git.mergeBase(
-      handle,
-      refs.baseSha,
-      refs.headSha,
-      remoteSpec,
-    ).pipe(
-      Effect.tapError((error) =>
-        Effect.sync(() => logGitError("git merge-base failed", error)),
-      ),
+    const diffBaseSha = yield* git.mergeBase(handle, refs.baseSha, refs.headSha, remoteSpec).pipe(
+      Effect.tapError((error) => Effect.sync(() => logGitError("git merge-base failed", error))),
       Effect.mapError(gitErrorToProviderError),
     );
 
@@ -188,49 +170,48 @@ function makeGitDiffBackend(
   git: GitServiceShape,
   provideProviderDeps: ProvideProviderDeps,
 ): DiffDataBackend {
-  const getPatch: DiffDataBackend["getPatch"] = Effect.fn(
-    "GitDiffBackend.getPatch",
-  )(function* (input, options) {
-    const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
-    const handle = { repo: input.repo, path: prepared.cachePath };
-    const patch = yield* git.diffPatch(
-      handle,
-      prepared.diffBaseSha,
-      prepared.headSha,
-      prepared.remoteSpec,
-      options?.contextLines,
-    ).pipe(
-      Effect.tapError((error) =>
-        Effect.sync(() => logGitError("git diff patch failed", error)),
-      ),
-      Effect.mapError(gitErrorToProviderError),
-    );
-    console.info("[diff-data] git patch generated", {
-      repo: repoIdentityCacheKey(input.repo),
-      number: input.number,
-      headSha: prepared.headSha,
-      cachePath: prepared.cachePath,
-      length: patch.length,
-    });
-    return patch;
-  });
+  const getPatch: DiffDataBackend["getPatch"] = Effect.fn("GitDiffBackend.getPatch")(
+    function* (input, options) {
+      const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
+      const handle = { repo: input.repo, path: prepared.cachePath };
+      const patch = yield* git
+        .diffPatch(
+          handle,
+          prepared.diffBaseSha,
+          prepared.headSha,
+          prepared.remoteSpec,
+          options?.contextLines,
+        )
+        .pipe(
+          Effect.tapError((error) =>
+            Effect.sync(() => logGitError("git diff patch failed", error)),
+          ),
+          Effect.mapError(gitErrorToProviderError),
+        );
+      console.info("[diff-data] git patch generated", {
+        repo: repoIdentityCacheKey(input.repo),
+        number: input.number,
+        headSha: prepared.headSha,
+        cachePath: prepared.cachePath,
+        length: patch.length,
+      });
+      return patch;
+    },
+  );
 
   const getChangedFiles: DiffDataBackend["getChangedFiles"] = Effect.fn(
     "GitDiffBackend.getChangedFiles",
   )(function* (input) {
     const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
     const handle = { repo: input.repo, path: prepared.cachePath };
-    const files = yield* git.diffNameStatus(
-      handle,
-      prepared.diffBaseSha,
-      prepared.headSha,
-      prepared.remoteSpec,
-    ).pipe(
-      Effect.tapError((error) =>
-        Effect.sync(() => logGitError("git changed files failed", error)),
-      ),
-      Effect.mapError(gitErrorToProviderError),
-    );
+    const files = yield* git
+      .diffNameStatus(handle, prepared.diffBaseSha, prepared.headSha, prepared.remoteSpec)
+      .pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => logGitError("git changed files failed", error)),
+        ),
+        Effect.mapError(gitErrorToProviderError),
+      );
     console.info("[diff-data] git changed files generated", {
       repo: repoIdentityCacheKey(input.repo),
       number: input.number,
@@ -260,26 +241,18 @@ function makeGitDiffBackend(
     let newContent = "";
 
     if (input.changeType !== "new") {
-      oldContent = yield* git.showFile(
-        handle,
-        prepared.diffBaseSha,
-        oldPath,
-        prepared.remoteSpec,
-      ).pipe(
-        Effect.tapError((error) =>
-          Effect.sync(() => logGitError("git show old file failed", error)),
-        ),
-        Effect.mapError(gitErrorToProviderError),
-      );
+      oldContent = yield* git
+        .showFile(handle, prepared.diffBaseSha, oldPath, prepared.remoteSpec)
+        .pipe(
+          Effect.tapError((error) =>
+            Effect.sync(() => logGitError("git show old file failed", error)),
+          ),
+          Effect.mapError(gitErrorToProviderError),
+        );
     }
 
     if (input.changeType !== "deleted") {
-      newContent = yield* git.showFile(
-        handle,
-        prepared.headSha,
-        newPath,
-        prepared.remoteSpec,
-      ).pipe(
+      newContent = yield* git.showFile(handle, prepared.headSha, newPath, prepared.remoteSpec).pipe(
         Effect.tapError((error) =>
           Effect.sync(() => logGitError("git show new file failed", error)),
         ),

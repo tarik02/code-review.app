@@ -4,9 +4,7 @@ import type { DiffDataMode } from "@code-review-app/shared";
 const GIT_PATCH_CONTEXT_SIZE = 3;
 
 function parsePatch(patch: string, cacheKeyPrefix: string) {
-  return parsePatchFiles(patch, cacheKeyPrefix).flatMap(
-    (parsedPatch) => parsedPatch.files,
-  );
+  return parsePatchFiles(patch, cacheKeyPrefix).flatMap((parsedPatch) => parsedPatch.files);
 }
 
 type Hunk = FileDiffMetadata["hunks"][number];
@@ -73,13 +71,8 @@ function groupHasChange(group: HunkContent[]) {
   return group.some((content) => content.type === "change");
 }
 
-function hasLaterChange(
-  hunkContent: HunkContent[],
-  startIndex: number,
-) {
-  return hunkContent
-    .slice(startIndex)
-    .some((content) => content.type === "change");
+function hasLaterChange(hunkContent: HunkContent[], startIndex: number) {
+  return hunkContent.slice(startIndex).some((content) => content.type === "change");
 }
 
 function compactHunkContent(hunkContent: HunkContent[], contextSize: number) {
@@ -112,12 +105,7 @@ function compactHunkContent(hunkContent: HunkContent[], contextSize: number) {
     }
 
     if (!nextHasChange) {
-      appendContextContent(
-        group,
-        content,
-        0,
-        Math.min(content.lines, contextSize),
-      );
+      appendContextContent(group, content, 0, Math.min(content.lines, contextSize));
       continue;
     }
 
@@ -128,12 +116,7 @@ function compactHunkContent(hunkContent: HunkContent[], contextSize: number) {
 
     appendContextContent(group, content, 0, contextSize);
     closeGroup();
-    appendContextContent(
-      group,
-      content,
-      content.lines - contextSize,
-      contextSize,
-    );
+    appendContextContent(group, content, content.lines - contextSize, contextSize);
   }
 
   closeGroup();
@@ -185,13 +168,11 @@ function createCompactedHunk(input: {
     deletionCount,
     additionCount,
     deletionLines: input.hunkContent.reduce(
-      (count, content) =>
-        count + (content.type === "change" ? content.deletions : 0),
+      (count, content) => count + (content.type === "change" ? content.deletions : 0),
       0,
     ),
     additionLines: input.hunkContent.reduce(
-      (count, content) =>
-        count + (content.type === "change" ? content.additions : 0),
+      (count, content) => count + (content.type === "change" ? content.additions : 0),
       0,
     ),
     splitLineStart: input.splitLineStart + collapsedBefore,
@@ -226,10 +207,7 @@ function compactFullFileDiffHunks(fileDiff: FileDiffMetadata) {
   let unifiedLineStart = 0;
 
   for (const baseHunk of fileDiff.hunks) {
-    const groups = compactHunkContent(
-      baseHunk.hunkContent,
-      GIT_PATCH_CONTEXT_SIZE,
-    );
+    const groups = compactHunkContent(baseHunk.hunkContent, GIT_PATCH_CONTEXT_SIZE);
 
     for (const hunkContent of groups) {
       const hunk = createCompactedHunk({

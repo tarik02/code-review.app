@@ -8,10 +8,7 @@ import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors.ts";
 import { parseOwnerRepo } from "../repo-id.ts";
 import { createRepoIdentity } from "../repo-id.ts";
-import {
-  getValidAccessToken,
-  updateViewerLogin,
-} from "../auth/provider-auth.ts";
+import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts";
 import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
@@ -22,11 +19,7 @@ import type {
   ReviewComment,
   ReviewThread,
 } from "@code-review-app/shared";
-import type {
-  ForgeProvider,
-  PullRequestQualityReportInput,
-  ReviewThreadInput,
-} from "./types.ts";
+import type { ForgeProvider, PullRequestQualityReportInput, ReviewThreadInput } from "./types.ts";
 import type { RepoIdentity } from "../repo-id.ts";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
 
@@ -428,13 +421,8 @@ function parseErrorMessage(error: ParseResult.ParseError) {
 
 function responseErrorMessage(error: HttpClientError.ResponseError) {
   return Effect.gen(function* () {
-    const body = yield* error.response.text.pipe(
-      Effect.catchAll(() => Effect.succeed("")),
-    );
-    return (
-      parseGitHubErrorBody(body) ||
-      `Provider API returned HTTP ${error.response.status}`
-    );
+    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+    return parseGitHubErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
   });
 }
 
@@ -456,9 +444,7 @@ function mapHttpError(error: unknown) {
 function graphqlErrors<T>(response: GraphQlResponse<T>): Effect.Effect<void, ProviderError> {
   if (!response.errors?.length) return Effect.void;
   const message = response.errors.map((error) => error.message).join("\n");
-  return Effect.fail(
-    new ProviderError(message || "GitHub returned an unknown GraphQL error"),
-  );
+  return Effect.fail(new ProviderError(message || "GitHub returned an unknown GraphQL error"));
 }
 
 function githubApiBase(host: string) {
@@ -475,9 +461,7 @@ function githubApiUrl(host: string, pathOrUrl: string) {
 
 function requestFor(url: string, token: string, options: GitHubRequestOptions = {}) {
   const request =
-    options.method === "POST"
-      ? HttpClientRequest.post(url)
-      : HttpClientRequest.get(url);
+    options.method === "POST" ? HttpClientRequest.post(url) : HttpClientRequest.get(url);
 
   return request.pipe(
     HttpClientRequest.accept(options.accept ?? "application/json"),
@@ -640,9 +624,7 @@ query($owner: String!, $name: String!, $number: Int!) {
 }
 
 function toGitHubReviewComment(
-  comment:
-    | typeof GraphQlReviewCommentSchema.Type
-    | typeof GraphQlConversationCommentSchema.Type,
+  comment: typeof GraphQlReviewCommentSchema.Type | typeof GraphQlConversationCommentSchema.Type,
 ): ReviewComment {
   return {
     id: comment.id,
@@ -654,11 +636,16 @@ function toGitHubReviewComment(
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
     url: comment.url,
-    replyToId: "replyTo" in comment ? comment.replyTo?.id ?? null : null,
+    replyToId: "replyTo" in comment ? (comment.replyTo?.id ?? null) : null,
   };
 }
 
-function repoSummaryFromSearch(accountId: string, host: string, label: string, repo: GhSearchRepo): RepoSummary {
+function repoSummaryFromSearch(
+  accountId: string,
+  host: string,
+  label: string,
+  repo: GhSearchRepo,
+): RepoSummary {
   return {
     ...createRepoIdentity("github", host, accountId, repo.full_name),
     provider: "github",
@@ -673,7 +660,12 @@ function repoSummaryFromSearch(accountId: string, host: string, label: string, r
   };
 }
 
-function repoSummaryFromRest(accountId: string, host: string, label: string, repo: GhRestRepo): RepoSummary {
+function repoSummaryFromRest(
+  accountId: string,
+  host: string,
+  label: string,
+  repo: GhRestRepo,
+): RepoSummary {
   return {
     ...createRepoIdentity("github", host, accountId, repo.full_name),
     provider: "github",
@@ -732,9 +724,7 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
   };
 }
 
-function githubQualitySeverity(
-  level: string,
-): PullRequestQualityFinding["severity"] {
+function githubQualitySeverity(level: string): PullRequestQualityFinding["severity"] {
   switch (level.toLowerCase()) {
     case "failure":
       return "major";
@@ -758,9 +748,7 @@ function githubQualityStatus(checkRuns: GhCheckRun[]) {
 
   if (
     conclusions.some((conclusion) =>
-      ["action_required", "failure", "startup_failure", "timed_out"].includes(
-        conclusion,
-      ),
+      ["action_required", "failure", "startup_failure", "timed_out"].includes(conclusion),
     )
   ) {
     return "failed" as const;
@@ -790,9 +778,7 @@ function githubCheckRunStatusCounts(checkRuns: GhCheckRun[]) {
 
 function githubCheckRunSourceName(checkRun: GhCheckRun) {
   const appName = checkRun.app?.name?.trim();
-  return appName && appName !== checkRun.name
-    ? `${appName} · ${checkRun.name}`
-    : checkRun.name;
+  return appName && appName !== checkRun.name ? `${appName} · ${checkRun.name}` : checkRun.name;
 }
 
 function toGitHubQualityFinding(
@@ -824,7 +810,7 @@ function toGitHubQualityFinding(
 
 class GitHubProvider implements ForgeProvider {
   authStatus(accountId: string): ReturnType<ForgeProvider["authStatus"]> {
-    const provider = this;
+    const viewerLogin = this.viewerLogin.bind(this);
     return Effect.gen(function* () {
       const token = yield* storedToken(accountId);
       if (!token) {
@@ -833,7 +819,7 @@ class GitHubProvider implements ForgeProvider {
           message: "Sign in with GitHub to load repositories.",
         } satisfies ProviderAuthStatus;
       }
-      yield* provider.viewerLogin(accountId);
+      yield* viewerLogin(accountId);
       return { status: "ready", message: null } satisfies ProviderAuthStatus;
     }).pipe(
       Effect.catchAll((error) => {
@@ -878,13 +864,13 @@ class GitHubProvider implements ForgeProvider {
   }
 
   searchRepos(accountId: string, query: string, limit: number) {
-    const provider = this;
+    const listInitialRepos = this.listInitialRepos.bind(this);
     return Effect.gen(function* () {
       const token = yield* requireStoredToken(accountId);
       const label = labelForToken(token);
       const trimmedQuery = query.trim();
       if (trimmedQuery.length === 0) {
-        return yield* provider.listInitialRepos(accountId, limit);
+        return yield* listInitialRepos(accountId, limit);
       }
 
       const owners = yield* ensureUserContext(accountId, token.host);
@@ -972,9 +958,7 @@ query($query: String!, $first: Int!) {
 }
 `;
       const searchQuery = `is:pr is:open archived:false involves:${login} sort:updated-desc`;
-      console.info(
-        `[github] loading overview pull requests from ${token.host} for ${login}`,
-      );
+      console.info(`[github] loading overview pull requests from ${token.host} for ${login}`);
       const response = yield* githubGraphql(
         accountId,
         token.host,
@@ -993,9 +977,7 @@ query($query: String!, $first: Int!) {
         ];
       });
 
-      console.info(
-        `[github] loaded ${entries.length} overview pull requests from ${token.host}`,
-      );
+      console.info(`[github] loaded ${entries.length} overview pull requests from ${token.host}`);
       return entries;
     });
   }
@@ -1033,9 +1015,7 @@ query($owner: String!, $name: String!) {
         { owner, name },
         ListPullRequestsQueryDataSchema,
       );
-      return (response.data?.repository?.pullRequests.nodes ?? []).map(
-        toPullRequestSummary,
-      );
+      return (response.data?.repository?.pullRequests.nodes ?? []).map(toPullRequestSummary);
     });
   }
 
@@ -1231,11 +1211,7 @@ query($owner: String!, $name: String!, $number: Int!) {
             ...annotations
               .slice(0, remainingCapacity)
               .map((annotation, index) =>
-                toGitHubQualityFinding(
-                  checkRun,
-                  annotation,
-                  (annotationPage - 1) * 100 + index,
-                ),
+                toGitHubQualityFinding(checkRun, annotation, (annotationPage - 1) * 100 + index),
               ),
           );
 
@@ -1270,9 +1246,7 @@ query($owner: String!, $name: String!, $number: Int!) {
           inlineFindings: findings.filter(
             (finding) => finding.anchorState === "inline" && finding.line !== null,
           ).length,
-          fileOnlyFindings: findings.filter(
-            (finding) => finding.anchorState === "file",
-          ).length,
+          fileOnlyFindings: findings.filter((finding) => finding.anchorState === "file").length,
           statusCounts,
           providerLabel: "GitHub checks",
           detailsUrl,
@@ -1382,9 +1356,7 @@ query($owner: String!, $name: String!, $number: Int!) {
       const reviewThreads = (pullRequest?.reviewThreads.nodes ?? []).flatMap(
         (thread): ReviewThread[] => {
           if (thread.comments.nodes.length === 0) return [];
-          const comments: ReviewComment[] = thread.comments.nodes.map(
-            toGitHubReviewComment,
-          );
+          const comments: ReviewComment[] = thread.comments.nodes.map(toGitHubReviewComment);
           return [
             {
               id: thread.id,
@@ -1396,12 +1368,10 @@ query($owner: String!, $name: String!, $number: Int!) {
               startLine: thread.startLine ?? thread.originalStartLine ?? null,
               side: thread.diffSide === "LEFT" ? "LEFT" : "RIGHT",
               startSide:
-                thread.startDiffSide === "LEFT" ||
-                thread.startDiffSide === "RIGHT"
+                thread.startDiffSide === "LEFT" || thread.startDiffSide === "RIGHT"
                   ? thread.startDiffSide
                   : null,
-              subjectType:
-                thread.subjectType.toLowerCase() === "file" ? "file" : "line",
+              subjectType: thread.subjectType.toLowerCase() === "file" ? "file" : "line",
               comments,
             },
           ];

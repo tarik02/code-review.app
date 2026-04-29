@@ -6,15 +6,11 @@ function toClassName(className: unknown) {
   return typeof className === "string" ? className : undefined;
 }
 
-function AlertDialog(
-  props: React.ComponentProps<typeof AlertDialogPrimitive.Root>,
-) {
+function AlertDialog(props: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
   return <AlertDialogPrimitive.Root {...props} />;
 }
 
-function AlertDialogTrigger(
-  props: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>,
-) {
+function AlertDialogTrigger(props: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
   return <AlertDialogPrimitive.Trigger {...props} />;
 }
 
@@ -41,28 +37,12 @@ function AlertDialogContent({
   );
 }
 
-function AlertDialogHeader({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cx("flex flex-col gap-1.5", toClassName(className))}
-      {...props}
-    />
-  );
+function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cx("flex flex-col gap-1.5", toClassName(className))} {...props} />;
 }
 
-function AlertDialogFooter({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cx("flex justify-end gap-2.5", toClassName(className))}
-      {...props}
-    />
-  );
+function AlertDialogFooter({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cx("flex justify-end gap-2.5", toClassName(className))} {...props} />;
 }
 
 function AlertDialogTitle({
@@ -104,10 +84,7 @@ function AlertDialogCancel({
   );
 }
 
-function AlertDialogAction({
-  className,
-  ...props
-}: React.ComponentProps<"button">) {
+function AlertDialogAction({ className, ...props }: React.ComponentProps<"button">) {
   return (
     <button
       className={cx(

@@ -1,16 +1,19 @@
 {
   "name": "@code-review-app/frontend",
-  "private": true,
   "version": "0.1.5",
+  "private": true,
   "type": "module",
   "exports": {
     ".": "./src/main.tsx"
   },
   "scripts": {
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@code-review-app/backend": "workspace:*",
+    "@code-review-app/shared": "workspace:*",
     "@codemirror/commands": "catalog:",
     "@codemirror/language-data": "catalog:",
     "@codemirror/state": "catalog:",
@@ -26,8 +29,6 @@
     "@pierre/theme": "catalog:",
     "@pierre/trees": "catalog:",
     "@pierre/truncate": "catalog:",
-    "@code-review-app/backend": "workspace:*",
-    "@code-review-app/shared": "workspace:*",
     "@shikijs/types": "catalog:",
     "@tanstack/react-hotkeys": "catalog:",
     "@tanstack/react-query": "catalog:",

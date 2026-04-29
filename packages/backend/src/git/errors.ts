@@ -67,7 +67,12 @@ type GitError =
   | GitUnknownCommandError;
 
 function firstLine(value: string) {
-  return value.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() ?? "";
+  return (
+    value
+      .split(/\r?\n/)
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? ""
+  );
 }
 
 export {

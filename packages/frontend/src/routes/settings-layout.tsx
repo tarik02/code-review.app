@@ -9,9 +9,7 @@ function SettingsLayout() {
   const navigate = useNavigate();
 
   function handleBackToPrs() {
-    const returnHref = window.sessionStorage.getItem(
-      SETTINGS_RETURN_HREF_STORAGE_KEY,
-    );
+    const returnHref = window.sessionStorage.getItem(SETTINGS_RETURN_HREF_STORAGE_KEY);
 
     if (returnHref) {
       void navigate({ href: returnHref });
@@ -33,9 +31,7 @@ function SettingsLayout() {
         <div className="grow flex flex-col justify-between px-3 py-4">
           <div className="mb-6 px-2">
             <p className="text-xs font-medium uppercase text-ink-500">code-review.app</p>
-            <h1 className="mt-1 text-lg font-semibold text-ink-900">
-              Settings
-            </h1>
+            <h1 className="mt-1 text-lg font-semibold text-ink-900">Settings</h1>
           </div>
 
           <nav className="flex flex-1 flex-col gap-1">

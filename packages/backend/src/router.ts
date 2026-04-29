@@ -73,7 +73,7 @@ function mapError(error: unknown): TRPCError {
   });
 }
 
-function summarizeRouterError(error: unknown) {
+function summarizeRouterError(error: unknown): unknown {
   if (error instanceof Error) {
     return {
       name: error.name,
@@ -84,11 +84,12 @@ function summarizeRouterError(error: unknown) {
   }
 
   if (typeof error === "object" && error !== null) {
-    return {
-      ...Object.fromEntries(
-        Object.entries(error).map(([key, value]) => [key, summarizeRouterError(value)]),
-      ),
-    };
+    return Object.fromEntries(
+      Object.entries(error).map(([key, value]): [string, unknown] => [
+        key,
+        summarizeRouterError(value),
+      ]),
+    );
   }
 
   return {
@@ -97,10 +98,7 @@ function summarizeRouterError(error: unknown) {
 }
 
 function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
-  async function runEffect<A, E, R>(
-    effect: Effect.Effect<A, E, R>,
-    label = "effect",
-  ) {
+  async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>, label = "effect") {
     try {
       return await runtime.runPromise(effect as Effect.Effect<A, E, never>);
     } catch (error) {
@@ -110,26 +108,24 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
   }
 
   return t.router({
-  auth: t.router({
-    listProviderAccounts: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* RepoService;
-          return yield* service.listProviderAccounts();
-        }),
+    auth: t.router({
+      listProviderAccounts: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            return yield* service.listProviderAccounts();
+          }),
+        ),
       ),
-    ),
-    getProviderStatuses: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* RepoService;
-          return yield* service.getProviderStatuses();
-        }),
+      getProviderStatuses: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            return yield* service.getProviderStatuses();
+          }),
+        ),
       ),
-    ),
-    getProviderProfile: t.procedure
-      .input(providerAccountSchema)
-      .query(({ input }) =>
+      getProviderProfile: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
@@ -139,84 +135,77 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-    startOAuth: t.procedure.input(providerHostSchema).mutation(({ input }) =>
-      runEffect(
-        startOAuth(
-          input.provider,
-          input.host,
-          input.clientId,
-          input.clientSecret,
+      startOAuth: t.procedure
+        .input(providerHostSchema)
+        .mutation(({ input }) =>
+          runEffect(startOAuth(input.provider, input.host, input.clientId, input.clientSecret)),
         ),
-      ),
-    ),
-    pollDeviceOAuth: t.procedure.input(providerAccountSchema).mutation(({ input }) =>
-      runEffect(pollDeviceOAuth(input.accountId)),
-    ),
-    completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
-      try {
-        const session = await runEffect(completeOAuth(input.code, input.state));
-        const statuses = await runEffect(
+      pollDeviceOAuth: t.procedure
+        .input(providerAccountSchema)
+        .mutation(({ input }) => runEffect(pollDeviceOAuth(input.accountId))),
+      completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
+        try {
+          const session = await runEffect(completeOAuth(input.code, input.state));
+          const statuses = await runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.getProviderStatuses();
+            }),
+          );
+          const status = statuses[session.accountId];
+          if (!status) {
+            throw new Error("Provider auth status was not returned.");
+          }
+          return status;
+        } catch (error) {
+          throw mapError(error);
+        }
+      }),
+      signOut: t.procedure.input(providerAccountSchema).mutation(async ({ input }) => {
+        return runEffect(
           Effect.gen(function* () {
-            const service = yield* RepoService;
-            return yield* service.getProviderStatuses();
+            const tokenStore = yield* AuthTokenStore;
+            yield* tokenStore.delete(input.accountId);
           }),
         );
-        const status = statuses[session.accountId];
-        if (!status) {
-          throw new Error("Provider auth status was not returned.");
-        }
-        return status;
-      } catch (error) {
-        throw mapError(error);
-      }
-    }),
-    signOut: t.procedure.input(providerAccountSchema).mutation(async ({ input }) => {
-      return runEffect(
-        Effect.gen(function* () {
-          const tokenStore = yield* AuthTokenStore;
-          yield* tokenStore.delete(input.accountId);
-        }),
-      );
-    }),
-    oauthCallbacks: t.procedure.subscription(() =>
-      observable<string>((emit) => {
-        const unsubscribe = platform.subscribeToOAuthCallbacks((url) => emit.next(url));
-        return unsubscribe;
       }),
-    ),
-    latestOAuthCallback: t.procedure.query(() => platform.getLatestOAuthCallback()),
-  }),
-
-  settings: t.router({
-    getAccountVisibility: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          return yield* service.getAccountVisibility();
+      oauthCallbacks: t.procedure.subscription(() =>
+        observable<string>((emit) => {
+          const unsubscribe = platform.subscribeToOAuthCallbacks((url) => emit.next(url));
+          return unsubscribe;
         }),
       ),
-    ),
-    setAccountVisibility: t.procedure
-      .input(accountVisibilitySettingsSchema)
-      .mutation(({ input }) =>
+      latestOAuthCallback: t.procedure.query(() => platform.getLatestOAuthCallback()),
+    }),
+
+    settings: t.router({
+      getAccountVisibility: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* SettingsService;
-            return yield* service.setAccountVisibility(input.enabledAccountIds);
+            return yield* service.getAccountVisibility();
           }),
         ),
       ),
-    getDiffDataSettings: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          return yield* service.getDiffDataSettings();
-        }),
+      setAccountVisibility: t.procedure
+        .input(accountVisibilitySettingsSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* SettingsService;
+              return yield* service.setAccountVisibility(input.enabledAccountIds);
+            }),
+          ),
+        ),
+      getDiffDataSettings: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.getDiffDataSettings();
+          }),
+        ),
       ),
-    ),
-    setDiffDataSettings: t.procedure
-      .input(diffDataSettingsSchema)
-      .mutation(({ input }) =>
+      setDiffDataSettings: t.procedure.input(diffDataSettingsSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* SettingsService;
@@ -224,37 +213,35 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-    getThemePreference: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          return yield* service.getThemePreference();
-        }),
-      ),
-    ),
-    setThemePreference: t.procedure
-      .input(themePreferenceSettingsSchema)
-      .mutation(async ({ input }) => {
-        const settings = await runEffect(
+      getThemePreference: t.procedure.query(() =>
+        runEffect(
           Effect.gen(function* () {
             const service = yield* SettingsService;
-            return yield* service.setThemePreference(input);
+            return yield* service.getThemePreference();
           }),
-        );
-        platform.setNativeTheme(settings.preference);
-        return settings;
-      }),
-    getReviewEditorSettings: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          return yield* service.getReviewEditorSettings();
-        }),
+        ),
       ),
-    ),
-    setReviewEditorSettings: t.procedure
-      .input(reviewEditorSettingsSchema)
-      .mutation(({ input }) =>
+      setThemePreference: t.procedure
+        .input(themePreferenceSettingsSchema)
+        .mutation(async ({ input }) => {
+          const settings = await runEffect(
+            Effect.gen(function* () {
+              const service = yield* SettingsService;
+              return yield* service.setThemePreference(input);
+            }),
+          );
+          platform.setNativeTheme(settings.preference);
+          return settings;
+        }),
+      getReviewEditorSettings: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.getReviewEditorSettings();
+          }),
+        ),
+      ),
+      setReviewEditorSettings: t.procedure.input(reviewEditorSettingsSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* SettingsService;
@@ -262,98 +249,94 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-    getAppearanceBackground: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          return yield* service.getAppearanceBackground();
-        }),
-      ),
-    ),
-    setAppearanceBackground: t.procedure
-      .input(appearanceBackgroundInputSchema)
-      .mutation(({ input }) =>
+      getAppearanceBackground: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* SettingsService;
-            return yield* service.setAppearanceBackground(input);
-          }),
-        ),
-      ),
-    selectCustomBackgroundFile: t.procedure.mutation(async () => {
-      const filePath = await platform.selectCustomBackgroundFile();
-
-      return runEffect(
-        Effect.gen(function* () {
-          const service = yield* SettingsService;
-          if (!filePath) {
             return yield* service.getAppearanceBackground();
-          }
+          }),
+        ),
+      ),
+      setAppearanceBackground: t.procedure
+        .input(appearanceBackgroundInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* SettingsService;
+              return yield* service.setAppearanceBackground(input);
+            }),
+          ),
+        ),
+      selectCustomBackgroundFile: t.procedure.mutation(async () => {
+        const filePath = await platform.selectCustomBackgroundFile();
 
-          return yield* service.setCustomBackgroundFromPath(filePath);
-        }),
-      );
-    }),
-  }),
+        return runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            if (!filePath) {
+              return yield* service.getAppearanceBackground();
+            }
 
-  deepLinks: t.router({
-    urls: t.procedure.subscription(() =>
-      observable<string>((emit) => {
-        const unsubscribe = platform.subscribeToDeepLinks((url) => emit.next(url));
-        return unsubscribe;
+            return yield* service.setCustomBackgroundFromPath(filePath);
+          }),
+        );
       }),
-    ),
-  }),
+    }),
 
-  repos: t.router({
-    listInitial: t.procedure
-      .input(providerAccountSchema.extend({ limit: z.number().int().positive().optional() }))
-      .query(({ input }) =>
-        runEffect(
-          Effect.gen(function* () {
-            const service = yield* RepoService;
-            return yield* service.listInitialRepos(input.accountId, input.limit);
-          }),
-        ),
-      ),
-    search: t.procedure
-      .input(
-        providerAccountSchema.extend({
-          query: z.string(),
-          limit: z.number().int().positive().optional(),
-        }),
-      )
-      .query(({ input }) =>
-        runEffect(
-          Effect.gen(function* () {
-            const service = yield* RepoService;
-            return yield* service.searchRepos(input.accountId, input.query, input.limit);
-          }),
-        ),
-      ),
-    validate: t.procedure
-      .input(
-        providerAccountSchema.extend({ repo: z.string() }),
-      )
-      .query(({ input }) =>
-        runEffect(
-          Effect.gen(function* () {
-            const service = yield* RepoService;
-            return yield* service.validateRepo(input.accountId, input.repo);
-          }),
-        ),
-      ),
-    listSaved: t.procedure.query(() =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* RepoService;
-          return yield* service.listSavedRepos();
+    deepLinks: t.router({
+      urls: t.procedure.subscription(() =>
+        observable<string>((emit) => {
+          const unsubscribe = platform.subscribeToDeepLinks((url) => emit.next(url));
+          return unsubscribe;
         }),
       ),
-    ),
-    save: t.procedure
-      .input(z.object({ repo: repoSummarySchema }))
-      .mutation(({ input }) =>
+    }),
+
+    repos: t.router({
+      listInitial: t.procedure
+        .input(providerAccountSchema.extend({ limit: z.number().int().positive().optional() }))
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.listInitialRepos(input.accountId, input.limit);
+            }),
+          ),
+        ),
+      search: t.procedure
+        .input(
+          providerAccountSchema.extend({
+            query: z.string(),
+            limit: z.number().int().positive().optional(),
+          }),
+        )
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.searchRepos(input.accountId, input.query, input.limit);
+            }),
+          ),
+        ),
+      validate: t.procedure
+        .input(providerAccountSchema.extend({ repo: z.string() }))
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.validateRepo(input.accountId, input.repo);
+            }),
+          ),
+        ),
+      listSaved: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            return yield* service.listSavedRepos();
+          }),
+        ),
+      ),
+      save: t.procedure.input(z.object({ repo: repoSummarySchema })).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* RepoService;
@@ -361,85 +344,69 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-  }),
+    }),
 
-  pullRequests: t.router({
-    listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          console.info(`[trpc] pullRequests.listOverview ${input.accountId}`);
-          const service = yield* PullRequestService;
-          const pullRequests = yield* service.listOverview(input.accountId);
-          return pullRequests.map((entry) =>
-            overviewPullRequestSummarySchema.parse(entry),
-          );
-        }),
-      ),
-    ),
-    listCached: t.procedure.input(repoIdentitySchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* PullRequestService;
-          return yield* service.listCached(input);
-        }),
-      ),
-    ),
-    list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* PullRequestService;
-          return yield* service.list(input);
-        }),
-      ),
-    ),
-    get: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* PullRequestService;
-          return yield* service.get(input, input.number);
-        }),
-      ),
-    ),
-    getPatch: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* PullRequestService;
-          return yield* service.getPatch(input, input.number, input.headSha);
-        }),
-      ),
-    ),
-    listChangedFiles: t.procedure
-      .input(pullRequestVersionedInputSchema)
-      .query(({ input }) =>
+    pullRequests: t.router({
+      listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
+            console.info(`[trpc] pullRequests.listOverview ${input.accountId}`);
             const service = yield* PullRequestService;
-            return yield* service.listChangedFiles(
-              input,
-              input.number,
-              input.headSha,
-            );
+            const pullRequests = yield* service.listOverview(input.accountId);
+            return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
           }),
         ),
       ),
-    getQualityReport: t.procedure
-      .input(pullRequestVersionedInputSchema)
-      .query(({ input }) =>
+      listCached: t.procedure.input(repoIdentitySchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.listCached(input);
+          }),
+        ),
+      ),
+      list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.list(input);
+          }),
+        ),
+      ),
+      get: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.get(input, input.number);
+          }),
+        ),
+      ),
+      getPatch: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.getPatch(input, input.number, input.headSha);
+          }),
+        ),
+      ),
+      listChangedFiles: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.listChangedFiles(input, input.number, input.headSha);
+          }),
+        ),
+      ),
+      getQualityReport: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* PullRequestQualityService;
-            const report = yield* service.get(
-              input,
-              input.number,
-              input.headSha,
-            );
+            const report = yield* service.get(input, input.number, input.headSha);
             return pullRequestQualityReportSchema.parse(report);
           }),
         ),
       ),
-    getFileContents: t.procedure
-      .input(pullRequestFileContentsInputSchema)
-      .query(({ input }) =>
+      getFileContents: t.procedure.input(pullRequestFileContentsInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* PullRequestService;
@@ -447,49 +414,47 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-  }),
+    }),
 
-  tracked: t.router({
-    list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* TrackedPullRequestService;
-          return yield* service.list(input);
-        }),
-      ),
-    ),
-    track: t.procedure
-      .input(repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }))
-      .mutation(({ input }) =>
+    tracked: t.router({
+      list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* TrackedPullRequestService;
-            return yield* service.track(input, input.pullRequest);
+            return yield* service.list(input);
           }),
         ),
       ),
-    remove: t.procedure.input(pullRequestInputSchema).mutation(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* TrackedPullRequestService;
-          return yield* service.remove(input, input.number);
-        }),
+      track: t.procedure
+        .input(repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }))
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* TrackedPullRequestService;
+              return yield* service.track(input, input.pullRequest);
+            }),
+          ),
+        ),
+      remove: t.procedure.input(pullRequestInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* TrackedPullRequestService;
+            return yield* service.remove(input, input.number);
+          }),
+        ),
       ),
-    ),
-    refresh: t.procedure.input(repoIdentitySchema).mutation(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* TrackedPullRequestService;
-          return yield* service.refresh(input);
-        }),
+      refresh: t.procedure.input(repoIdentitySchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* TrackedPullRequestService;
+            return yield* service.refresh(input);
+          }),
+        ),
       ),
-    ),
-  }),
+    }),
 
-  reviewComments: t.router({
-    getViewerLogin: t.procedure
-      .input(providerAccountSchema)
-      .query(({ input }) =>
+    reviewComments: t.router({
+      getViewerLogin: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
@@ -497,18 +462,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-    listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
-      runEffect(
-        Effect.gen(function* () {
-          const service = yield* ReviewCommentService;
-          return yield* service.listThreads(input, input.number);
-        }),
-        "reviewComments.listThreads",
+      listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.listThreads(input, input.number);
+          }),
+          "reviewComments.listThreads",
+        ),
       ),
-    ),
-    create: t.procedure
-      .input(createPullRequestReviewCommentInputSchema)
-      .mutation(({ input }) =>
+      create: t.procedure.input(createPullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
@@ -517,9 +480,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           "reviewComments.create",
         ),
       ),
-    reply: t.procedure
-      .input(replyToPullRequestReviewCommentInputSchema)
-      .mutation(({ input }) =>
+      reply: t.procedure.input(replyToPullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
@@ -528,9 +489,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           "reviewComments.reply",
         ),
       ),
-    update: t.procedure
-      .input(updatePullRequestReviewCommentInputSchema)
-      .mutation(({ input }) =>
+      update: t.procedure.input(updatePullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
@@ -539,40 +498,40 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           "reviewComments.update",
         ),
       ),
-  }),
-
-  window: t.router({
-    fullScreenStatus: t.procedure.subscription(() =>
-      observable<boolean>((emit) => {
-        return platform.subscribeToFullScreenStatus((value) => emit.next(value));
-      }),
-    ),
-    toggleMaximize: t.procedure.mutation(() => platform.toggleMaximize()),
-  }),
-
-  updates: t.router({
-    getCurrentVersion: t.procedure.query(() => platform.getCurrentVersion()),
-    check: t.procedure.query(async () => {
-      try {
-        return await platform.checkForUpdate();
-      } catch (error) {
-        throw mapError(error);
-      }
     }),
-    install: t.procedure.mutation(async () => {
-      try {
-        await platform.installUpdate();
-      } catch (error) {
-        throw mapError(error);
-      }
+
+    window: t.router({
+      fullScreenStatus: t.procedure.subscription(() =>
+        observable<boolean>((emit) => {
+          return platform.subscribeToFullScreenStatus((value) => emit.next(value));
+        }),
+      ),
+      toggleMaximize: t.procedure.mutation(() => platform.toggleMaximize()),
     }),
-    events: t.procedure.subscription(() =>
-      observable<UpdateEvent>((emit) => {
-        const unsubscribe = platform.subscribeToUpdateEvents((event) => emit.next(event));
-        return unsubscribe;
+
+    updates: t.router({
+      getCurrentVersion: t.procedure.query(() => platform.getCurrentVersion()),
+      check: t.procedure.query(async () => {
+        try {
+          return await platform.checkForUpdate();
+        } catch (error) {
+          throw mapError(error);
+        }
       }),
-    ),
-  }),
+      install: t.procedure.mutation(async () => {
+        try {
+          await platform.installUpdate();
+        } catch (error) {
+          throw mapError(error);
+        }
+      }),
+      events: t.procedure.subscription(() =>
+        observable<UpdateEvent>((emit) => {
+          const unsubscribe = platform.subscribeToUpdateEvents((event) => emit.next(event));
+          return unsubscribe;
+        }),
+      ),
+    }),
   });
 }
 

@@ -15,10 +15,8 @@
     "packages/backend/src",
     "packages/backend/drizzle.config.ts",
     "packages/frontend/src",
-    "packages/shared/src"
+    "packages/shared/src",
+    "vite.config.ts"
   ],
-  "exclude": [
-    "packages/frontend/src/**/*.test.ts",
-    "packages/frontend/src/**/*.test.tsx"
-  ]
+  "exclude": ["packages/frontend/src/**/*.test.ts", "packages/frontend/src/**/*.test.tsx"]
 }

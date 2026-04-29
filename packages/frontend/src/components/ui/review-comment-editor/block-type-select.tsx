@@ -1,8 +1,4 @@
-import {
-  $createHeadingNode,
-  $createQuoteNode,
-  type HeadingTagType,
-} from "@lexical/rich-text";
+import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
 import { useCellValue, usePublisher } from "@mdxeditor/gurx";
 import {
   activePlugins$,
@@ -13,13 +9,7 @@ import {
   type BlockType,
 } from "@mdxeditor/editor";
 import { $createParagraphNode } from "lexical";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../select";
 
 type CommentBlockType = Exclude<BlockType, "">;
 
@@ -28,9 +18,7 @@ type CommentBlockTypeOption = {
   value: CommentBlockType;
 };
 
-function isHeadingBlockType(
-  blockType: CommentBlockType,
-): blockType is HeadingTagType {
+function isHeadingBlockType(blockType: CommentBlockType): blockType is HeadingTagType {
   return blockType.startsWith("h");
 }
 
@@ -38,9 +26,7 @@ type CommentBlockTypeSelectProps = {
   disabled?: boolean;
 };
 
-function CommentBlockTypeSelect({
-  disabled = false,
-}: CommentBlockTypeSelectProps) {
+function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProps) {
   const convertSelectionToNode = usePublisher(convertSelectionToNode$);
   const currentBlockType = useCellValue(currentBlockType$);
   const activePlugins = useCellValue(activePlugins$);
@@ -78,14 +64,9 @@ function CommentBlockTypeSelect({
     );
   }
 
-  const isSupportedBlockType = blockTypeOptions.some(
-    (option) => option.value === currentBlockType,
-  );
-  const isUnsupportedBlockType =
-    disabled || (currentBlockType !== "" && !isSupportedBlockType);
-  const selectedBlockType = isUnsupportedBlockType
-    ? "paragraph"
-    : currentBlockType || "paragraph";
+  const isSupportedBlockType = blockTypeOptions.some((option) => option.value === currentBlockType);
+  const isUnsupportedBlockType = disabled || (currentBlockType !== "" && !isSupportedBlockType);
+  const selectedBlockType = isUnsupportedBlockType ? "paragraph" : currentBlockType || "paragraph";
 
   function handleBlockTypeChange(blockType: CommentBlockType | null) {
     if (!blockType) {
@@ -114,27 +95,17 @@ function CommentBlockTypeSelect({
       disabled={isUnsupportedBlockType}
       items={blockTypeOptions}
       value={selectedBlockType}
-      onValueChange={(blockType) =>
-        handleBlockTypeChange(blockType as CommentBlockType | null)
-      }
+      onValueChange={(blockType) => handleBlockTypeChange(blockType as CommentBlockType | null)}
     >
       <SelectTrigger
-        aria-label={t(
-          "toolbar.blockTypeSelect.selectBlockTypeTooltip",
-          "Select block type",
-        )}
+        aria-label={t("toolbar.blockTypeSelect.selectBlockTypeTooltip", "Select block type")}
         className="rudu-comment-editor-block-select"
         disabled={isUnsupportedBlockType}
         size="sm"
       >
-        <SelectValue
-          placeholder={t("toolbar.blockTypeSelect.placeholder", "Block type")}
-        />
+        <SelectValue placeholder={t("toolbar.blockTypeSelect.placeholder", "Block type")} />
       </SelectTrigger>
-      <SelectContent
-        align="start"
-        className="rudu-comment-editor-block-select-content"
-      >
+      <SelectContent align="start" className="rudu-comment-editor-block-select-content">
         {blockTypeOptions.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}

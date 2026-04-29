@@ -1,8 +1,5 @@
 import type { DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs";
-import type {
-  PullRequestQualityFinding,
-  PullRequestQualityReport,
-} from "../types/forge";
+import type { PullRequestQualityFinding, PullRequestQualityReport } from "../types/forge";
 import { normalizePath } from "./review-threads";
 
 type QualityFindingAnnotation = {
@@ -31,15 +28,11 @@ type PullRequestQualityView = {
 function fileContainsAdditionLine(fileDiff: FileDiffMetadata, lineNumber: number) {
   return fileDiff.hunks.some(
     (hunk) =>
-      lineNumber >= hunk.additionStart &&
-      lineNumber < hunk.additionStart + hunk.additionCount,
+      lineNumber >= hunk.additionStart && lineNumber < hunk.additionStart + hunk.additionCount,
   );
 }
 
-function compareQualityFindings(
-  left: PullRequestQualityFinding,
-  right: PullRequestQualityFinding,
-) {
+function compareQualityFindings(left: PullRequestQualityFinding, right: PullRequestQualityFinding) {
   const leftLine = left.line ?? Number.MAX_SAFE_INTEGER;
   const rightLine = right.line ?? Number.MAX_SAFE_INTEGER;
 
@@ -91,22 +84,22 @@ function buildPullRequestQualityView(
       continue;
     }
 
-    const existing =
-      grouped.get(resolvedPath) ?? {
-        inlineAnnotations: [],
-        fileFindings: [],
-        totalCount: 0,
-      };
+    const existing = grouped.get(resolvedPath) ?? {
+      inlineAnnotations: [],
+      fileFindings: [],
+      totalCount: 0,
+    };
 
+    const lineNumber = finding.line;
     const canInline =
-      finding.line !== null &&
+      lineNumber !== null &&
       finding.anchorState !== "unmapped" &&
-      fileContainsAdditionLine(fileDiff, finding.line);
+      fileContainsAdditionLine(fileDiff, lineNumber);
 
     if (canInline) {
       existing.inlineAnnotations.push({
         side: "additions",
-        lineNumber: finding.line,
+        lineNumber,
         metadata: { finding },
       });
       displayedInlineCount += 1;
@@ -121,9 +114,7 @@ function buildPullRequestQualityView(
 
   for (const entry of grouped.values()) {
     entry.fileFindings.sort(compareQualityFindings);
-    entry.inlineAnnotations.sort(
-      (left, right) => left.lineNumber - right.lineNumber,
-    );
+    entry.inlineAnnotations.sort((left, right) => left.lineNumber - right.lineNumber);
   }
 
   unmappedFindings.sort(compareQualityFindings);
@@ -136,20 +127,9 @@ function buildPullRequestQualityView(
   };
 }
 
-function getFileQualityFindings(
-  byFile: Map<string, FileQualityFindings>,
-  filePath: string,
-) {
+function getFileQualityFindings(byFile: Map<string, FileQualityFindings>, filePath: string) {
   return byFile.get(normalizePath(filePath)) ?? EMPTY_FILE_QUALITY_FINDINGS;
 }
 
-export {
-  buildPullRequestQualityView,
-  EMPTY_FILE_QUALITY_FINDINGS,
-  getFileQualityFindings,
-};
-export type {
-  FileQualityFindings,
-  PullRequestQualityView,
-  QualityFindingAnnotation,
-};
+export { buildPullRequestQualityView, EMPTY_FILE_QUALITY_FINDINGS, getFileQualityFindings };
+export type { FileQualityFindings, PullRequestQualityView, QualityFindingAnnotation };

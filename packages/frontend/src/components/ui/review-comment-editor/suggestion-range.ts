@@ -17,10 +17,7 @@ function parseGitlabSuggestionRange(
   };
 }
 
-function clampSuggestionRange(
-  range: SuggestionRange,
-  sourceLines: SuggestionSourceLine[],
-) {
+function clampSuggestionRange(range: SuggestionRange, sourceLines: SuggestionSourceLine[]) {
   if (sourceLines.length === 0) {
     return range;
   }
@@ -48,8 +45,4 @@ function getSuggestionLanguageForRange(
   )}`;
 }
 
-export {
-  clampSuggestionRange,
-  getSuggestionLanguageForRange,
-  parseGitlabSuggestionRange,
-};
+export { clampSuggestionRange, getSuggestionLanguageForRange, parseGitlabSuggestionRange };

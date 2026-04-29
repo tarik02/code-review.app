@@ -8,10 +8,7 @@ export function syncDocumentWindowFullscreenClass(): () => void {
   }
 
   const update = (isFullScreen: boolean) => {
-    document.documentElement.classList.toggle(
-      WINDOW_FULLSCREEN_CLASS_NAME,
-      isFullScreen,
-    );
+    document.documentElement.classList.toggle(WINDOW_FULLSCREEN_CLASS_NAME, isFullScreen);
   };
 
   const subscription = trpc.window.fullScreenStatus.subscribe(undefined, {

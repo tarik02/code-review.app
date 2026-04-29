@@ -62,9 +62,7 @@ function PullRequestQualitySummary({
 
   if (error && !report) {
     return (
-      <div className="border-b border-ink-200 px-4 pb-3 pt-3 text-sm text-danger-600">
-        {error}
-      </div>
+      <div className="border-b border-ink-200 px-4 pb-3 pt-3 text-sm text-danger-600">{error}</div>
     );
   }
 
@@ -77,30 +75,17 @@ function PullRequestQualitySummary({
   return (
     <div className="border-b border-ink-200 px-4 pb-3 pt-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-ink-900">
-          {report.summary.providerLabel}
-        </span>
+        <span className="text-sm font-medium text-ink-900">{report.summary.providerLabel}</span>
         <span
-          className={cx(
-            "rounded-full px-2 py-0.5 text-xs font-medium",
-            statusTone(report.status),
-          )}
+          className={cx("rounded-full px-2 py-0.5 text-xs font-medium", statusTone(report.status))}
         >
           {statusLabel(report.status)}
         </span>
-        <span className="text-xs text-ink-500">
-          {report.summary.totalFindings} total
-        </span>
-        <span className="text-xs text-ink-500">
-          {displayedInlineCount} inline
-        </span>
-        <span className="text-xs text-ink-500">
-          {displayedFileCount} file-level
-        </span>
+        <span className="text-xs text-ink-500">{report.summary.totalFindings} total</span>
+        <span className="text-xs text-ink-500">{displayedInlineCount} inline</span>
+        <span className="text-xs text-ink-500">{displayedFileCount} file-level</span>
         {unmappedFindings.length > 0 ? (
-          <span className="text-xs text-ink-500">
-            {unmappedFindings.length} unmapped
-          </span>
+          <span className="text-xs text-ink-500">{unmappedFindings.length} unmapped</span>
         ) : null}
         {report.summary.detailsUrl ? (
           <a
@@ -124,9 +109,7 @@ function PullRequestQualitySummary({
 
       {unmappedFindings.length > 0 ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-ink-200 pt-3">
-          <p className="text-xs font-medium text-ink-700">
-            Unmapped findings
-          </p>
+          <p className="text-xs font-medium text-ink-700">Unmapped findings</p>
           <div className="flex flex-col gap-2">
             {unmappedFindings.slice(0, 5).map((finding) => (
               <div
@@ -134,14 +117,10 @@ function PullRequestQualitySummary({
                 key={finding.id}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-ink-900">
-                    {finding.title}
-                  </span>
+                  <span className="font-medium text-ink-900">{finding.title}</span>
                   <span className="text-ink-500">{finding.sourceName}</span>
                 </div>
-                <p className="mt-1 text-ink-600">
-                  {finding.path || "No file path provided"}
-                </p>
+                <p className="mt-1 text-ink-600">{finding.path || "No file path provided"}</p>
               </div>
             ))}
             {unmappedFindings.length > 5 ? (

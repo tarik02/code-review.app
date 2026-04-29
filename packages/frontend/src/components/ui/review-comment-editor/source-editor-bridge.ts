@@ -1,23 +1,18 @@
 import type { Extension } from "@codemirror/state";
 import { ViewPlugin, type EditorView } from "@codemirror/view";
-import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
 function createSourceEditorViewBridge(
-  sourceEditorViewRef: MutableRefObject<EditorView | null>,
   setSourceEditorView: Dispatch<SetStateAction<EditorView | null>>,
 ): Extension {
   return ViewPlugin.fromClass(
     class {
       constructor(private readonly view: EditorView) {
-        sourceEditorViewRef.current = view;
         setSourceEditorView(view);
       }
 
       destroy() {
-        if (sourceEditorViewRef.current === this.view) {
-          sourceEditorViewRef.current = null;
-          setSourceEditorView(null);
-        }
+        setSourceEditorView((current) => (current === this.view ? null : current));
       }
     },
   );

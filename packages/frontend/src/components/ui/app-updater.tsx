@@ -43,10 +43,7 @@ function formatProgress(progress: DownloadProgress | null) {
     return `Downloaded ${Math.round(progress.downloaded / 1024)} KB`;
   }
 
-  const percent = Math.min(
-    100,
-    Math.round((progress.downloaded / progress.contentLength) * 100),
-  );
+  const percent = Math.min(100, Math.round((progress.downloaded / progress.contentLength) * 100));
   return `Downloaded ${percent}%`;
 }
 
@@ -60,8 +57,7 @@ function AppUpdater({
   const [feedback, setFeedback] = useState<string>("");
   const [isInstalling, setIsInstalling] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [availableUpdate, setAvailableUpdate] =
-    useState<AvailableUpdate | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
 
   useEffect(() => {
@@ -147,12 +143,7 @@ function AppUpdater({
   return (
     <>
       {availableUpdate ? (
-        <div
-          className={cx(
-            "flex min-w-0 shrink-0 flex-col items-end gap-1",
-            containerClassName,
-          )}
-        >
+        <div className={cx("flex min-w-0 shrink-0 flex-col items-end gap-1", containerClassName)}>
           <button
             className={cx(
               "flex items-center gap-1 rounded-full border border-ink-300 bg-white px-3 py-1 pl-1 text-xs font-medium transition hover:bg-canvas dark:bg-surface dark:hover:bg-canvasDark",
@@ -195,9 +186,7 @@ function AppUpdater({
             </div>
           ) : null}
 
-          {progressLabel ? (
-            <p className="text-sm text-ink-600">{progressLabel}</p>
-          ) : null}
+          {progressLabel ? <p className="text-sm text-ink-600">{progressLabel}</p> : null}
 
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isInstalling} type="button">

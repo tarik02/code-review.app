@@ -1,10 +1,6 @@
-import {
-  autoUpdate,
-  FloatingPortal,
-  offset,
-  size,
-  useFloating,
-} from "@floating-ui/react";
+"use no memo";
+
+import { autoUpdate, FloatingPortal, offset, size, useFloating } from "@floating-ui/react";
 import {
   createContext,
   useCallback,
@@ -35,10 +31,7 @@ import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
 import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
 import { PullRequestQualitySummary } from "./pull-request-quality-summary";
-import {
-  ReviewCommentEditor,
-  type CommentEditorMode,
-} from "./review-comment-editor";
+import { ReviewCommentEditor, type CommentEditorMode } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
 import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
@@ -76,14 +69,8 @@ import type {
   RepoIdentity,
   ReviewCommentSide,
 } from "../../types/forge";
-import {
-  providerFromProviderId,
-  repoIdentityKey,
-} from "../../lib/repo-identity";
-import {
-  getPatchViewerSessionState,
-  usePatchViewerStore,
-} from "../../stores/patch-viewer-store";
+import { providerFromProviderId, repoIdentityKey } from "../../lib/repo-identity";
+import { getPatchViewerSessionState, usePatchViewerStore } from "../../stores/patch-viewer-store";
 import {
   getReviewCommentEditorSessionState,
   useReviewCommentEditorStore,
@@ -188,14 +175,8 @@ type PatchFileDiffItemContextValue = {
   diffNavigator: ReturnType<typeof useDiffNavigator>["diff"];
   isInactiveFileCommentsExpanded: (filePath: string) => boolean;
   parsedFileDiffs: FileDiffMetadata[];
-  registerFileCommentsSection: (
-    filePath: string,
-    node: HTMLDivElement | null,
-  ) => void;
-  registerThreadAnchor: (
-    thread: ReviewThread,
-    node: HTMLDivElement | null,
-  ) => void;
+  registerFileCommentsSection: (filePath: string, node: HTMLDivElement | null) => void;
+  registerThreadAnchor: (thread: ReviewThread, node: HTMLDivElement | null) => void;
   reviewEditorSessionKey: string | null;
   qualityFindingsByFile: Map<string, FileQualityFindings>;
   reviewThreadsByFile: Map<string, FileReviewThreads>;
@@ -203,10 +184,7 @@ type PatchFileDiffItemContextValue = {
   selectedBaseSha: string | null;
   selectedPatch: SelectedPatch;
   selectedProvider: ForgeProviderKind;
-  setInactiveFileCommentsExpanded: (
-    filePath: string,
-    expanded: boolean,
-  ) => void;
+  setInactiveFileCommentsExpanded: (filePath: string, expanded: boolean) => void;
   viewerLogin: string | null;
   handleEditComment: (comment: ReviewComment, body: string) => Promise<void>;
   handleFileDiffPostRender: (
@@ -219,8 +197,7 @@ type PatchFileDiffItemContextValue = {
   handleSubmitDraftComment: (editorId: string, body: string) => Promise<void>;
 };
 
-const PatchFileDiffItemContext =
-  createContext<PatchFileDiffItemContextValue | null>(null);
+const PatchFileDiffItemContext = createContext<PatchFileDiffItemContextValue | null>(null);
 
 function usePatchFileDiffItemContext() {
   const context = useContext(PatchFileDiffItemContext);
@@ -235,9 +212,7 @@ function toGithubSide(side: SelectedLineRange["side"]): ReviewCommentSide {
   return side === "deletions" ? "LEFT" : "RIGHT";
 }
 
-function toSelectionSide(
-  side: ReviewCommentSide | null | undefined,
-): AnnotationSide {
+function toSelectionSide(side: ReviewCommentSide | null | undefined): AnnotationSide {
   return side === "LEFT" ? "deletions" : "additions";
 }
 
@@ -294,33 +269,28 @@ function getFileChangeTypePresentation(changeType: PrFileChangeType): {
   switch (changeType) {
     case "new":
       return {
-        iconClassName:
-          "text-emerald-600 dark:text-emerald-400",
+        iconClassName: "text-emerald-600 dark:text-emerald-400",
         label: "Added file",
       };
     case "deleted":
       return {
-        iconClassName:
-          "text-red-600 dark:text-red-400",
+        iconClassName: "text-red-600 dark:text-red-400",
         label: "Deleted file",
       };
     case "rename-pure":
       return {
-        iconClassName:
-          "text-sky-600 dark:text-sky-400",
+        iconClassName: "text-sky-600 dark:text-sky-400",
         label: "Renamed file",
       };
     case "rename-changed":
       return {
-        iconClassName:
-          "text-amber-600 dark:text-amber-400",
+        iconClassName: "text-amber-600 dark:text-amber-400",
         label: "Renamed and changed file",
       };
     case "change":
     default:
       return {
-        iconClassName:
-          "text-ink-500 dark:text-ink-400",
+        iconClassName: "text-ink-500 dark:text-ink-400",
         label: "Modified file",
       };
   }
@@ -336,24 +306,14 @@ function PierreChangeTypeIcon({
   switch (changeType) {
     case "new":
       return (
-        <svg
-          aria-hidden
-          className={className}
-          fill="currentColor"
-          viewBox="0 0 16 16"
-        >
+        <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4" />
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
         </svg>
       );
     case "deleted":
       return (
-        <svg
-          aria-hidden
-          className={className}
-          fill="currentColor"
-          viewBox="0 0 16 16"
-        >
+        <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M4 8a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 8" />
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
         </svg>
@@ -361,12 +321,7 @@ function PierreChangeTypeIcon({
     case "rename-pure":
     case "rename-changed":
       return (
-        <svg
-          aria-hidden
-          className={className}
-          fill="currentColor"
-          viewBox="0 0 16 16"
-        >
+        <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
           <path d="M8.495 4.695a.75.75 0 0 0-.05 1.06L10.486 8l-2.041 2.246a.75.75 0 0 0 1.11 1.008l2.5-2.75a.75.75 0 0 0 0-1.008l-2.5-2.75a.75.75 0 0 0-1.06-.051m-4 0a.75.75 0 0 0-.05 1.06l2.044 2.248-1.796 1.995a.75.75 0 0 0 1.114 1.004l2.25-2.5a.75.75 0 0 0-.002-1.007l-2.5-2.75a.75.75 0 0 0-1.06-.05" />
         </svg>
@@ -374,12 +329,7 @@ function PierreChangeTypeIcon({
     case "change":
     default:
       return (
-        <svg
-          aria-hidden
-          className={className}
-          fill="currentColor"
-          viewBox="0 0 16 16"
-        >
+        <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M1.5 8c0 1.613.088 2.806.288 3.704.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706C1.588 5.194 1.5 6.387 1.5 8M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8m8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6" />
         </svg>
       );
@@ -388,22 +338,14 @@ function PierreChangeTypeIcon({
 
 function PierreRenameArrowIcon({ className }: { className?: string }) {
   return (
-    <svg
-      aria-hidden
-      className={className}
-      fill="currentColor"
-      viewBox="0 0 16 16"
-    >
+    <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
       <path d="M8.47 4.22a.75.75 0 0 0 0 1.06l1.97 1.97H3.75a.75.75 0 0 0 0 1.5h6.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06L9.53 4.22a.75.75 0 0 0-1.06 0" />
     </svg>
   );
 }
 
 function scheduleNextFrame(callback: () => void) {
-  if (
-    typeof window !== "undefined" &&
-    typeof window.requestAnimationFrame === "function"
-  ) {
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     const frameId = window.requestAnimationFrame(callback);
     return () => window.cancelAnimationFrame(frameId);
   }
@@ -428,20 +370,14 @@ function splitFileContentLines(content: string) {
   return lines;
 }
 
-function getDiffLineContent(
-  fileDiff: FileDiffMetadata,
-  side: ReviewCommentSide,
-  line: number,
-) {
+function getDiffLineContent(fileDiff: FileDiffMetadata, side: ReviewCommentSide, line: number) {
   const isAdditionSide = side === "RIGHT";
   const lines = isAdditionSide ? fileDiff.additionLines : fileDiff.deletionLines;
 
   for (const hunk of fileDiff.hunks) {
     const startLine = isAdditionSide ? hunk.additionStart : hunk.deletionStart;
     const lineCount = isAdditionSide ? hunk.additionCount : hunk.deletionCount;
-    const lineIndex = isAdditionSide
-      ? hunk.additionLineIndex
-      : hunk.deletionLineIndex;
+    const lineIndex = isAdditionSide ? hunk.additionLineIndex : hunk.deletionLineIndex;
 
     if (line >= startLine && line < startLine + lineCount) {
       return normalizeDiffLineText(lines[lineIndex + line - startLine] ?? "");
@@ -498,11 +434,7 @@ function getDraftSelectedText(
   return selectedLines.join("\n");
 }
 
-function createSuggestionSourceLine(
-  content: string,
-  line: number,
-  side: ReviewCommentSide,
-) {
+function createSuggestionSourceLine(content: string, line: number, side: ReviewCommentSide) {
   return {
     content: normalizeDiffLineText(content),
     line,
@@ -519,26 +451,18 @@ function getFullFileSuggestionLines(
     return null;
   }
 
-  const sourceContent =
-    side === "RIGHT" ? fileContents.newContent : fileContents.oldContent;
+  const sourceContent = side === "RIGHT" ? fileContents.newContent : fileContents.oldContent;
   const lines = splitFileContentLines(sourceContent);
   if (lines.length === 0) {
     return null;
   }
 
-  return lines.map((content, index) =>
-    createSuggestionSourceLine(content, index + 1, side),
-  );
+  return lines.map((content, index) => createSuggestionSourceLine(content, index + 1, side));
 }
 
-function getPatchSuggestionLines(
-  fileDiff: FileDiffMetadata,
-  side: ReviewCommentSide,
-) {
+function getPatchSuggestionLines(fileDiff: FileDiffMetadata, side: ReviewCommentSide) {
   const isAdditionSide = side === "RIGHT";
-  const sourceLines = isAdditionSide
-    ? fileDiff.additionLines
-    : fileDiff.deletionLines;
+  const sourceLines = isAdditionSide ? fileDiff.additionLines : fileDiff.deletionLines;
 
   if (!fileDiff.isPartial) {
     return sourceLines.map((content, index) =>
@@ -546,27 +470,18 @@ function getPatchSuggestionLines(
     );
   }
 
-  const linesByNumber = new Map<
-    number,
-    ReturnType<typeof createSuggestionSourceLine>
-  >();
+  const linesByNumber = new Map<number, ReturnType<typeof createSuggestionSourceLine>>();
 
   for (const hunk of fileDiff.hunks) {
     const startLine = isAdditionSide ? hunk.additionStart : hunk.deletionStart;
     const lineCount = isAdditionSide ? hunk.additionCount : hunk.deletionCount;
-    const lineIndex = isAdditionSide
-      ? hunk.additionLineIndex
-      : hunk.deletionLineIndex;
+    const lineIndex = isAdditionSide ? hunk.additionLineIndex : hunk.deletionLineIndex;
 
     for (let index = 0; index < lineCount; index += 1) {
       const line = startLine + index;
       linesByNumber.set(
         line,
-        createSuggestionSourceLine(
-          sourceLines[lineIndex + index] ?? "",
-          line,
-          side,
-        ),
+        createSuggestionSourceLine(sourceLines[lineIndex + index] ?? "", line, side),
       );
     }
   }
@@ -649,9 +564,7 @@ type FloatingLineDraftEditorProps = {
   value: string;
   onCancel: () => void;
   onChange: (body: string) => void;
-  onCursorPositionChange: (
-    cursorPosition: ReviewCommentEditorState["cursorPosition"],
-  ) => void;
+  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState["cursorPosition"]) => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
@@ -672,8 +585,10 @@ function FloatingLineDraftEditor({
   onSubmit,
 }: FloatingLineDraftEditorProps) {
   const spacerRef = useRef<HTMLDivElement | null>(null);
+  const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
-  const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
+  const portalRoot =
+    typeof document !== "undefined" ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
     placement: "bottom-start",
     strategy: "absolute",
@@ -688,17 +603,33 @@ function FloatingLineDraftEditor({
           Object.assign(elements.floating.style, {
             width: `${rects.reference.width}px`,
           });
-
-          const nextHeight = Math.ceil(
-            elements.floating.getBoundingClientRect().height,
-          );
-          if (spacerRef.current && nextHeight > 0) {
-            spacerRef.current.style.height = `${nextHeight}px`;
-          }
         },
       }),
     ],
   });
+  useEffect(() => {
+    const floatingNode = floatingNodeRef.current;
+    if (!floatingNode || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const syncSpacerHeight = () => {
+      if (!spacerRef.current) {
+        return;
+      }
+
+      const nextHeight = Math.ceil(floatingNode.getBoundingClientRect().height);
+      if (nextHeight > 0) {
+        spacerRef.current.style.height = `${nextHeight}px`;
+      }
+    };
+
+    syncSpacerHeight();
+    const observer = new ResizeObserver(syncSpacerHeight);
+    observer.observe(floatingNode);
+    return () => observer.disconnect();
+  }, [hasReference]);
+
   const setReference = useCallback(
     (node: HTMLDivElement | null) => {
       spacerRef.current = node;
@@ -709,21 +640,15 @@ function FloatingLineDraftEditor({
   );
   const setFloating = useCallback(
     (node: HTMLDivElement | null) => {
+      floatingNodeRef.current = node;
       refs.setFloating(node);
     },
     [refs],
   );
 
-  useLayoutEffect(() => {
-    setPortalRoot(document.getElementById(portalRootId));
-  }, [portalRootId]);
-
   return (
     <>
-      <div
-        ref={setReference}
-        style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }}
-      />
+      <div ref={setReference} style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }} />
       <FloatingPortal root={portalRoot}>
         {hasReference && portalRoot ? (
           <div
@@ -764,9 +689,7 @@ type FloatingLineDraftEditorForTargetProps = {
   selectedPatch: SelectedPatch | null;
   onCancel: () => void;
   onChange: (body: string) => void;
-  onCursorPositionChange: (
-    cursorPosition: ReviewCommentEditorState["cursorPosition"],
-  ) => void;
+  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState["cursorPosition"]) => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
@@ -785,8 +708,7 @@ function FloatingLineDraftEditorForTarget({
 }: FloatingLineDraftEditorForTargetProps) {
   const target = editor.target ?? null;
   const fileContentsInput = useMemo(
-    () =>
-      getFileContentsInput(selectedPatch, selectedBaseSha, fileDiffs, target),
+    () => getFileContentsInput(selectedPatch, selectedBaseSha, fileDiffs, target),
     [fileDiffs, selectedBaseSha, selectedPatch, target],
   );
   const fileContentsQuery = useQuery({
@@ -841,10 +763,7 @@ function getMissingExpansion(desired: number, current: number) {
   return Math.max(desired - current, 0);
 }
 
-function getCurrentHunkExpansion(
-  instance: HunkExpansionOwner,
-  hunkIndex: number,
-) {
+function getCurrentHunkExpansion(instance: HunkExpansionOwner, hunkIndex: number) {
   return (
     instance.hunksRenderer?.getExpandedHunk?.(hunkIndex) ?? {
       fromStart: 0,
@@ -866,29 +785,15 @@ function replayHunkExpansions(
     if (!desiredRegion) continue;
 
     const hunkIndex = Number.parseInt(hunkIndexKey, 10);
-    if (
-      !Number.isInteger(hunkIndex) ||
-      hunkIndex < 0 ||
-      hunkIndex > fileDiff.hunks.length
-    ) {
+    if (!Number.isInteger(hunkIndex) || hunkIndex < 0 || hunkIndex > fileDiff.hunks.length) {
       continue;
     }
 
     const currentRegion = getCurrentHunkExpansion(instance, hunkIndex);
-    const upExpansion = getMissingExpansion(
-      desiredRegion.fromStart,
-      currentRegion.fromStart,
-    );
-    const downExpansion = getMissingExpansion(
-      desiredRegion.fromEnd,
-      currentRegion.fromEnd,
-    );
+    const upExpansion = getMissingExpansion(desiredRegion.fromStart, currentRegion.fromStart);
+    const downExpansion = getMissingExpansion(desiredRegion.fromEnd, currentRegion.fromEnd);
 
-    if (
-      upExpansion > 0 &&
-      downExpansion > 0 &&
-      upExpansion === downExpansion
-    ) {
+    if (upExpansion > 0 && downExpansion > 0 && upExpansion === downExpansion) {
       instance.expandHunk(hunkIndex, "both", upExpansion);
       continue;
     }
@@ -898,10 +803,7 @@ function replayHunkExpansions(
     }
 
     const nextRegion = getCurrentHunkExpansion(instance, hunkIndex);
-    const nextDownExpansion = getMissingExpansion(
-      desiredRegion.fromEnd,
-      nextRegion.fromEnd,
-    );
+    const nextDownExpansion = getMissingExpansion(desiredRegion.fromEnd, nextRegion.fromEnd);
 
     if (nextDownExpansion > 0) {
       instance.expandHunk(hunkIndex, "down", nextDownExpansion);
@@ -909,9 +811,7 @@ function replayHunkExpansions(
   }
 }
 
-function getExpansionClick(
-  event: MouseEvent,
-): {
+function getExpansionClick(event: MouseEvent): {
   hunkIndex: number;
   direction: ExpansionDirections;
   lineCount: number;
@@ -924,10 +824,7 @@ function getExpansionClick(
   for (const target of event.composedPath()) {
     if (!(target instanceof Element)) continue;
 
-    if (
-      target.hasAttribute("data-expand-button") ||
-      target.hasAttribute("data-unmodified-lines")
-    ) {
+    if (target.hasAttribute("data-expand-button") || target.hasAttribute("data-unmodified-lines")) {
       isExpansionClick = true;
       expandAll ||= target.hasAttribute("data-expand-all-button");
 
@@ -956,9 +853,7 @@ function getExpansionClick(
   return {
     hunkIndex,
     direction,
-    lineCount: expandAll
-      ? Number.POSITIVE_INFINITY
-      : DIFF_EXPANSION_LINE_COUNT,
+    lineCount: expandAll ? Number.POSITIVE_INFINITY : DIFF_EXPANSION_LINE_COUNT,
   };
 }
 
@@ -986,10 +881,7 @@ type GlobalCommentsSectionProps = {
   reviewEditorSessionKey: string | null;
   viewerLogin: string | null;
   registerSection: (node: HTMLDivElement | null) => void;
-  registerThreadAnchor: (
-    thread: ReviewThread,
-    node: HTMLDivElement | null,
-  ) => void;
+  registerThreadAnchor: (thread: ReviewThread, node: HTMLDivElement | null) => void;
   onEditComment: (comment: ReviewComment, body: string) => Promise<void>;
   onOpenNewComment: () => void;
   onReplyToThread: (thread: ReviewThread, body: string) => Promise<void>;
@@ -1013,15 +905,11 @@ function GlobalCommentsSection({
   const reviewEditorSession = useReviewCommentEditorStore((state) =>
     getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
   );
-  const setEditorBody = useReviewCommentEditorStore(
-    (state) => state.setEditorBody,
-  );
+  const setEditorBody = useReviewCommentEditorStore((state) => state.setEditorBody);
   const setEditorCursorPosition = useReviewCommentEditorStore(
     (state) => state.setEditorCursorPosition,
   );
-  const closeEditor = useReviewCommentEditorStore(
-    (state) => state.closeEditor,
-  );
+  const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
   const globalDraftEditors = useMemo(
     () =>
       reviewEditorSession.editorOrder
@@ -1031,10 +919,7 @@ function GlobalCommentsSection({
             editor,
           ): editor is ReviewCommentEditorState & {
             target: Extract<DraftReviewCommentTarget, { type: "global" }>;
-          } =>
-            editor != null &&
-            editor.kind === "new" &&
-            editor.target?.type === "global",
+          } => editor != null && editor.kind === "new" && editor.target?.type === "global",
         ),
     [reviewEditorSession],
   );
@@ -1075,15 +960,9 @@ function GlobalCommentsSection({
             target={editor.target}
             value={editor.body}
             onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
-            onChange={(body) =>
-              setEditorBody(reviewEditorSessionKey, editor.id, body)
-            }
+            onChange={(body) => setEditorBody(reviewEditorSessionKey, editor.id, body)}
             onCursorPositionChange={(cursorPosition) =>
-              setEditorCursorPosition(
-                reviewEditorSessionKey,
-                editor.id,
-                cursorPosition ?? null,
-              )
+              setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
             }
             onSubmit={(body) => onSubmitDraftComment(editor.id, body)}
           />
@@ -1213,9 +1092,7 @@ function ReviewThreadsPanel({
           <div>
             <div className="sticky top-0 z-10 mb-2 bg-surface px-1 py-1 text-xs font-medium tracking-wide text-ink-500">
               Inactive
-              <span className="ml-2 text-ink-400">
-                {resolvedThreads.length}
-              </span>
+              <span className="ml-2 text-ink-400">{resolvedThreads.length}</span>
             </div>
             <div className="flex flex-col gap-2">
               {resolvedThreads.map((thread) => (
@@ -1265,18 +1142,12 @@ function PatchFileDiffItem({
   const reviewEditorSession = useReviewCommentEditorStore((state) =>
     getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
   );
-  const openNewEditor = useReviewCommentEditorStore(
-    (state) => state.openNewEditor,
-  );
-  const setEditorBody = useReviewCommentEditorStore(
-    (state) => state.setEditorBody,
-  );
+  const openNewEditor = useReviewCommentEditorStore((state) => state.openNewEditor);
+  const setEditorBody = useReviewCommentEditorStore((state) => state.setEditorBody);
   const setEditorCursorPosition = useReviewCommentEditorStore(
     (state) => state.setEditorCursorPosition,
   );
-  const closeEditor = useReviewCommentEditorStore(
-    (state) => state.closeEditor,
-  );
+  const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
   const newCommentEditors = useMemo(
     () =>
       reviewEditorSession.editorOrder
@@ -1287,21 +1158,13 @@ function PatchFileDiffItem({
         ),
     [reviewEditorSession],
   );
-  const fileReviewThreads = getFileReviewThreadsForPath(
-    reviewThreadsByFile,
-    fileDiff.name,
-  );
-  const fileQualityFindings = getFileQualityFindings(
-    qualityFindingsByFile,
-    fileDiff.name,
-  );
+  const fileReviewThreads = getFileReviewThreadsForPath(reviewThreadsByFile, fileDiff.name);
+  const fileQualityFindings = getFileQualityFindings(qualityFindingsByFile, fileDiff.name);
   const normalizedFilePath = normalizePath(fileDiff.name);
-  const inactiveFileCommentsExpanded =
-    isInactiveFileCommentsExpanded(normalizedFilePath);
+  const inactiveFileCommentsExpanded = isInactiveFileCommentsExpanded(normalizedFilePath);
   const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
   const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
-  const [fileCommentsPortalHost, setFileCommentsPortalHost] =
-    useState<HTMLDivElement | null>(null);
+  const [fileCommentsPortalHost, setFileCommentsPortalHost] = useState<HTMLDivElement | null>(null);
   const fileCommentsPortalHostRef = useRef<HTMLDivElement | null>(null);
   const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
     fileReviewThreads.activeLineAnnotations.map((annotation) => ({
@@ -1324,18 +1187,14 @@ function PatchFileDiffItem({
       editor,
     ): editor is ReviewCommentEditorState & {
       target: Extract<DraftReviewCommentTarget, { type: "line" }>;
-    } =>
-      editor.target?.type === "line" &&
-      normalizePath(editor.target.path) === normalizedFilePath,
+    } => editor.target?.type === "line" && normalizePath(editor.target.path) === normalizedFilePath,
   );
   const fileDraftEditors = newCommentEditors.filter(
     (
       editor,
     ): editor is ReviewCommentEditorState & {
       target: Extract<DraftReviewCommentTarget, { type: "file" }>;
-    } =>
-      editor.target?.type === "file" &&
-      normalizePath(editor.target.path) === normalizedFilePath,
+    } => editor.target?.type === "file" && normalizePath(editor.target.path) === normalizedFilePath,
   );
   const latestLineDraft = lineDraftEditors.at(-1);
   const lineDraft: Extract<DraftReviewCommentTarget, { type: "line" }> | null =
@@ -1383,10 +1242,8 @@ function PatchFileDiffItem({
     fileQualityFindings.fileFindings.length > 0;
   const { additions, deletions } = getFileDiffLineCounts(fileDiff);
   const changeType = fileDiff.type as PrFileChangeType;
-  const {
-    iconClassName: fileChangeIconClassName,
-    label: fileChangeLabel,
-  } = getFileChangeTypePresentation(changeType);
+  const { iconClassName: fileChangeIconClassName, label: fileChangeLabel } =
+    getFileChangeTypePresentation(changeType);
 
   function openFileCommentDraft() {
     openNewEditor(reviewEditorSessionKey, createFileDraftTarget(fileDiff));
@@ -1419,8 +1276,7 @@ function PatchFileDiffItem({
   function renderReviewThreadSummary() {
     const hasDraft = newCommentEditors.some(
       (editor) =>
-        editor.target?.type === "file" &&
-        normalizePath(editor.target.path) === normalizedFilePath,
+        editor.target?.type === "file" && normalizePath(editor.target.path) === normalizedFilePath,
     );
 
     return (
@@ -1445,14 +1301,10 @@ function PatchFileDiffItem({
           </span>
         ) : null}
         {hasDraft ? (
-          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
-            Draft open
-          </span>
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">Draft open</span>
         ) : null}
         {fileReviewThreads.fileThreadCount > 0 ? (
-          <span className="text-ink-500">
-            {fileReviewThreads.fileThreadCount} file comments
-          </span>
+          <span className="text-ink-500">{fileReviewThreads.fileThreadCount} file comments</span>
         ) : null}
         {fileQualityFindings.totalCount > 0 ? (
           <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
@@ -1492,15 +1344,9 @@ function PatchFileDiffItem({
             target={editor.target}
             value={editor.body}
             onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
-            onChange={(body) =>
-              setEditorBody(reviewEditorSessionKey, editor.id, body)
-            }
+            onChange={(body) => setEditorBody(reviewEditorSessionKey, editor.id, body)}
             onCursorPositionChange={(cursorPosition) =>
-              setEditorCursorPosition(
-                reviewEditorSessionKey,
-                editor.id,
-                cursorPosition ?? null,
-              )
+              setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
             }
             onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
           />
@@ -1513,9 +1359,7 @@ function PatchFileDiffItem({
                 key={finding.id}
               >
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-medium text-ink-900">
-                    {finding.title}
-                  </span>
+                  <span className="font-medium text-ink-900">{finding.title}</span>
                   <span className="text-ink-500">{finding.sourceName}</span>
                   {finding.line !== null ? (
                     <span className="text-ink-500">L{finding.line}</span>
@@ -1554,17 +1398,12 @@ function PatchFileDiffItem({
             <button
               className="self-start text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
               onClick={() =>
-                setInactiveFileCommentsExpanded(
-                  normalizedFilePath,
-                  !inactiveFileCommentsExpanded,
-                )
+                setInactiveFileCommentsExpanded(normalizedFilePath, !inactiveFileCommentsExpanded)
               }
               type="button"
             >
-              {inactiveFileCommentsExpanded
-                ? "Hide inactive comments"
-                : "Show inactive comments"}{" "}
-              ({fileReviewThreads.inactiveFileThreads.length})
+              {inactiveFileCommentsExpanded ? "Hide inactive comments" : "Show inactive comments"} (
+              {fileReviewThreads.inactiveFileThreads.length})
             </button>
             {inactiveFileCommentsExpanded ? (
               <div className="flex flex-col gap-3">
@@ -1612,14 +1451,10 @@ function PatchFileDiffItem({
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {deletions > 0 || additions === 0 ? (
-              <span className="font-mono text-red-600 dark:text-red-400">
-                -{deletions}
-              </span>
+              <span className="font-mono text-red-600 dark:text-red-400">-{deletions}</span>
             ) : null}
             {additions > 0 || deletions === 0 ? (
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                +{additions}
-              </span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400">+{additions}</span>
             ) : null}
             {renderReviewThreadSummary()}
           </div>
@@ -1656,7 +1491,7 @@ function PatchFileDiffItem({
       return;
     }
 
-    let slotContainer = shadowRoot.querySelector(
+    let slotContainer: HTMLDivElement | null = shadowRoot.querySelector(
       `[data-file-comments-slot-container="${fileCommentsSlotName}"]`,
     );
     if (!(slotContainer instanceof HTMLDivElement)) {
@@ -1693,9 +1528,7 @@ function PatchFileDiffItem({
     }
   }
 
-  function renderReviewThreadAnnotations(
-    annotation: DiffLineAnnotation<PatchLineAnnotation>,
-  ) {
+  function renderReviewThreadAnnotations(annotation: DiffLineAnnotation<PatchLineAnnotation>) {
     if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
       const draftAnnotation = annotation.metadata;
       const editor = getReviewCommentEditorSessionState(
@@ -1715,16 +1548,8 @@ function PatchFileDiffItem({
           provider={selectedProvider}
           selectedBaseSha={selectedBaseSha}
           selectedPatch={selectedPatch}
-          onCancel={() =>
-            closeEditor(reviewEditorSessionKey, draftAnnotation.editorId)
-          }
-          onChange={(body) =>
-            setEditorBody(
-              reviewEditorSessionKey,
-              draftAnnotation.editorId,
-              body,
-            )
-          }
+          onCancel={() => closeEditor(reviewEditorSessionKey, draftAnnotation.editorId)}
+          onChange={(body) => setEditorBody(reviewEditorSessionKey, draftAnnotation.editorId, body)}
           onCursorPositionChange={(cursorPosition) =>
             setEditorCursorPosition(
               reviewEditorSessionKey,
@@ -1732,9 +1557,7 @@ function PatchFileDiffItem({
               cursorPosition ?? null,
             )
           }
-          onSubmit={(body) =>
-            handleSubmitDraftComment(draftAnnotation.editorId, body)
-          }
+          onSubmit={(body) => handleSubmitDraftComment(draftAnnotation.editorId, body)}
         />
       );
     }
@@ -1758,9 +1581,7 @@ function PatchFileDiffItem({
               </a>
             ) : null}
           </div>
-          {finding.message ? (
-            <p className="mt-1 text-xs text-ink-600">{finding.message}</p>
-          ) : null}
+          {finding.message ? <p className="mt-1 text-xs text-ink-600">{finding.message}</p> : null}
         </div>
       );
     }
@@ -1770,9 +1591,7 @@ function PatchFileDiffItem({
     return (
       <ReviewThreadCard
         compact
-        containerRef={(node) =>
-          registerThreadAnchor(threadAnnotation.thread, node)
-        }
+        containerRef={(node) => registerThreadAnchor(threadAnnotation.thread, node)}
         editorPortalRootId={threadAnnotation.portalRootId}
         onEditComment={handleEditComment}
         onReplyToThread={handleReplyToThread}
@@ -1858,12 +1677,7 @@ function PatchFileDiffItem({
         onGutterUtilityClick: openLineCommentDraft,
         onPostRender: (node, instance) => {
           syncFileCommentsPortalHost(node);
-          handleFileDiffPostRender(
-            node,
-            instance,
-            fileDiff,
-            normalizedFilePath,
-          );
+          handleFileDiffPostRender(node, instance, fileDiff, normalizedFilePath);
         },
       }}
       renderAnnotation={renderReviewThreadAnnotations}
@@ -1887,16 +1701,11 @@ function PatchFileDiffItem({
       )}
       {fileCommentsPortalHost
         ? createPortal(
-            <div className="bg-white px-4 pb-3 dark:bg-surface">
-              {renderFileCommentsContent()}
-            </div>,
+            <div className="bg-white px-4 pb-3 dark:bg-surface">{renderFileCommentsContent()}</div>,
             fileCommentsPortalHost,
           )
         : null}
-      <div
-        id={lineDraftPortalRootId}
-        className="pointer-events-none absolute inset-0 z-[4]"
-      />
+      <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-[4]" />
     </div>
   );
 }
@@ -1930,31 +1739,32 @@ function PatchViewerMain({
 }: PatchViewerMainProps) {
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
-  const defaultReviewEditorMode =
-    reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
   const patchViewerSessionKey = selectedPrKey
     ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
     : null;
   const reviewEditorSessionKey = selectedPrKey;
   const ensureSession = usePatchViewerStore((state) => state.ensureSession);
-  const setPendingScrollPath = usePatchViewerStore(
-    (state) => state.setPendingScrollPath,
-  );
+  const setPendingScrollPath = usePatchViewerStore((state) => state.setPendingScrollPath);
   const setScrollTop = usePatchViewerStore((state) => state.setScrollTop);
-  const recordHunkExpansion = usePatchViewerStore(
-    (state) => state.recordHunkExpansion,
-  );
-  const setEditorError = useReviewCommentEditorStore(
-    (state) => state.setEditorError,
-  );
-  const setEditorSubmitting = useReviewCommentEditorStore(
-    (state) => state.setEditorSubmitting,
-  );
-  const closeEditor = useReviewCommentEditorStore(
-    (state) => state.closeEditor,
-  );
-  const [expandedInactiveFileCommentsByPath, setExpandedInactiveFileCommentsByPath] =
-    useState<Record<string, boolean>>({});
+  const recordHunkExpansion = usePatchViewerStore((state) => state.recordHunkExpansion);
+  const setEditorError = useReviewCommentEditorStore((state) => state.setEditorError);
+  const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
+  const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
+  const inactiveFileCommentsScopeKey = [
+    patchViewerSessionKey ?? "",
+    selectedPatch?.providerId ?? "",
+    selectedPatch?.repoKey ?? "",
+    selectedPatch?.number ?? "",
+    selectedPatch?.headSha ?? "",
+  ].join("::");
+  const [inactiveFileCommentsState, setInactiveFileCommentsState] = useState<{
+    byPath: Record<string, boolean>;
+    scopeKey: string;
+  }>({
+    byPath: {},
+    scopeKey: inactiveFileCommentsScopeKey,
+  });
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
   const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
@@ -1966,43 +1776,33 @@ function PatchViewerMain({
   const globalCommentsSectionNodeRef = useRef<HTMLDivElement | null>(null);
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const hasSelection = selectedPrKey !== null;
-  const isDiffReady =
-    !isPatchLoading && !patchError && !parsedPatch.parseError;
+  const isDiffReady = !isPatchLoading && !patchError && !parsedPatch.parseError;
   const shouldShowCommentsPanel =
     hasSelection &&
-    (isReviewThreadsLoading ||
-      Boolean(reviewThreadsError) ||
-      reviewThreads.length > 0);
+    (isReviewThreadsLoading || Boolean(reviewThreadsError) || reviewThreads.length > 0);
   const navigator = useDiffNavigator({
     sessionKey: patchViewerSessionKey,
     prKey: selectedPrKey,
     isDiffReady,
     hasDiffError: Boolean(patchError || parsedPatch.parseError),
   });
-  const {
-    createCommentMutation,
-    replyCommentMutation,
-    updateCommentMutation,
-    viewerLogin,
-  } = usePullRequestReviewCommentMutations(
-    selectedPatch
-      ? {
-          providerId: selectedPatch.providerId,
-          repoKey: selectedPatch.repoKey,
-          number: selectedPatch.number,
-          headSha: selectedPatch.headSha,
-        }
-      : null,
-  );
+  const { createCommentMutation, replyCommentMutation, updateCommentMutation, viewerLogin } =
+    usePullRequestReviewCommentMutations(
+      selectedPatch
+        ? {
+            providerId: selectedPatch.providerId,
+            repoKey: selectedPatch.repoKey,
+            number: selectedPatch.number,
+            headSha: selectedPatch.headSha,
+          }
+        : null,
+    );
   const selectedProvider = selectedPatch
     ? providerFromProviderId(selectedPatch.providerId)
     : "github";
-  const handleVirtualizerRootChange = useCallback(
-    (node: HTMLDivElement | null) => {
-      scrollRootRef.current = node;
-    },
-    [],
-  );
+  const handleVirtualizerRootChange = useCallback((node: HTMLDivElement | null) => {
+    scrollRootRef.current = node;
+  }, []);
 
   const handlePatchScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -2014,33 +1814,46 @@ function PatchViewerMain({
     },
     [patchViewerSessionKey, setScrollTop],
   );
+  const expandedInactiveFileCommentsByPath = useMemo(
+    () =>
+      inactiveFileCommentsState.scopeKey === inactiveFileCommentsScopeKey
+        ? inactiveFileCommentsState.byPath
+        : {},
+    [inactiveFileCommentsScopeKey, inactiveFileCommentsState],
+  );
 
   const isInactiveFileCommentsExpanded = useCallback(
     (filePath: string) => Boolean(expandedInactiveFileCommentsByPath[filePath]),
     [expandedInactiveFileCommentsByPath],
   );
 
-  const setInactiveFileCommentsExpanded = useCallback(
-    (filePath: string, expanded: boolean) => {
-      setExpandedInactiveFileCommentsByPath((current) => {
-        if (Boolean(current[filePath]) === expanded) {
-          return current;
-        }
+  const setInactiveFileCommentsExpanded = useCallback((filePath: string, expanded: boolean) => {
+    setInactiveFileCommentsState((current) => {
+      const currentByPath =
+        current.scopeKey === inactiveFileCommentsScopeKey ? current.byPath : {};
 
-        if (expanded) {
-          return {
-            ...current,
+      if (Boolean(currentByPath[filePath]) === expanded) {
+        return current;
+      }
+
+      if (expanded) {
+        return {
+          byPath: {
+            ...currentByPath,
             [filePath]: true,
-          };
-        }
+          },
+          scopeKey: inactiveFileCommentsScopeKey,
+        };
+      }
 
-        const next = { ...current };
-        delete next[filePath];
-        return next;
-      });
-    },
-    [],
-  );
+      const next = { ...currentByPath };
+      delete next[filePath];
+      return {
+        byPath: next,
+        scopeKey: inactiveFileCommentsScopeKey,
+      };
+    });
+  }, [inactiveFileCommentsScopeKey]);
 
   const registerFileCommentsSection = useCallback(
     (filePath: string, node: HTMLDivElement | null) => {
@@ -2054,12 +1867,9 @@ function PatchViewerMain({
     [],
   );
 
-  const registerGlobalCommentsSection = useCallback(
-    (node: HTMLDivElement | null) => {
-      globalCommentsSectionNodeRef.current = node;
-    },
-    [],
-  );
+  const registerGlobalCommentsSection = useCallback((node: HTMLDivElement | null) => {
+    globalCommentsSectionNodeRef.current = node;
+  }, []);
 
   const scrollToFileCommentsSection = useCallback((filePath: string) => {
     cancelFileCommentsSectionScrollRef.current?.();
@@ -2105,19 +1915,16 @@ function PatchViewerMain({
     scrollToSection();
   }, []);
 
-  const registerThreadAnchor = useCallback(
-    (thread: ReviewThread, node: HTMLDivElement | null) => {
-      const threadKey = getThreadRefKey(thread);
+  const registerThreadAnchor = useCallback((thread: ReviewThread, node: HTMLDivElement | null) => {
+    const threadKey = getThreadRefKey(thread);
 
-      if (node) {
-        threadAnchorNodesRef.current.set(threadKey, node);
-        return;
-      }
+    if (node) {
+      threadAnchorNodesRef.current.set(threadKey, node);
+      return;
+    }
 
-      threadAnchorNodesRef.current.delete(threadKey);
-    },
-    [],
-  );
+    threadAnchorNodesRef.current.delete(threadKey);
+  }, []);
 
   const handleSelectReviewThread = useCallback(
     (thread: ReviewThread) => {
@@ -2222,69 +2029,62 @@ function PatchViewerMain({
         usePatchViewerStore.getState(),
         patchViewerSessionKey,
       ).hunkExpansionsByFile[normalizedFilePath];
-      replayHunkExpansions(
-        fileDiff,
-        instance as unknown as HunkExpansionOwner,
-        fileExpansions,
-      );
+      replayHunkExpansions(fileDiff, instance as unknown as HunkExpansionOwner, fileExpansions);
     },
     [patchViewerSessionKey, recordHunkExpansion],
   );
 
-  const restoreScrollPosition = useCallback(
-    (sessionKey: string, scrollTop: number) => {
-      cancelScrollRestoreRef.current?.();
-      restoringScrollSessionKeyRef.current = sessionKey;
+  const restoreScrollPosition = useCallback((sessionKey: string, scrollTop: number) => {
+    cancelScrollRestoreRef.current?.();
+    restoringScrollSessionKeyRef.current = sessionKey;
 
-      let attempts = 0;
-      let cancelFrame: (() => void) | null = null;
-      let cancelled = false;
+    let attempts = 0;
+    let cancelFrame: (() => void) | null = null;
+    let cancelled = false;
 
-      const stop = () => {
-        cancelled = true;
-        cancelFrame?.();
-        cancelFrame = null;
-        cancelScrollRestoreRef.current = null;
-        if (restoringScrollSessionKeyRef.current === sessionKey) {
-          restoringScrollSessionKeyRef.current = null;
-        }
-      };
+    const stop = () => {
+      cancelled = true;
+      cancelFrame?.();
+      cancelFrame = null;
+      cancelScrollRestoreRef.current = null;
+      if (restoringScrollSessionKeyRef.current === sessionKey) {
+        restoringScrollSessionKeyRef.current = null;
+      }
+    };
 
-      const tick = () => {
-        if (cancelled) {
-          return;
-        }
+    const tick = () => {
+      if (cancelled) {
+        return;
+      }
 
-        const root = scrollRootRef.current;
-        if (!root || previousSessionKeyRef.current !== sessionKey) {
-          stop();
-          return;
-        }
+      const root = scrollRootRef.current;
+      if (!root || previousSessionKeyRef.current !== sessionKey) {
+        stop();
+        return;
+      }
 
-        root.scrollTo({
-          top: scrollTop,
-          behavior: "auto",
-        });
+      root.scrollTo({
+        top: scrollTop,
+        behavior: "auto",
+      });
 
-        const maxScrollTop = Math.max(root.scrollHeight - root.clientHeight, 0);
-        const isRestored =
-          Math.abs(root.scrollTop - Math.min(scrollTop, maxScrollTop)) <= 1 &&
-          maxScrollTop >= scrollTop;
+      const maxScrollTop = Math.max(root.scrollHeight - root.clientHeight, 0);
+      const isRestored =
+        Math.abs(root.scrollTop - Math.min(scrollTop, maxScrollTop)) <= 1 &&
+        maxScrollTop >= scrollTop;
 
-        attempts += 1;
-        if (isRestored || attempts >= SCROLL_RESTORE_MAX_ATTEMPTS) {
-          stop();
-          return;
-        }
+      attempts += 1;
+      if (isRestored || attempts >= SCROLL_RESTORE_MAX_ATTEMPTS) {
+        stop();
+        return;
+      }
 
-        cancelFrame = scheduleNextFrame(tick);
-      };
-
-      cancelScrollRestoreRef.current = stop;
       cancelFrame = scheduleNextFrame(tick);
-    },
-    [],
-  );
+    };
+
+    cancelScrollRestoreRef.current = stop;
+    cancelFrame = scheduleNextFrame(tick);
+  }, []);
 
   useLayoutEffect(() => {
     previousSessionKeyRef.current = patchViewerSessionKey;
@@ -2309,7 +2109,6 @@ function PatchViewerMain({
     cancelThreadScrollRef.current = null;
     fileCommentsSectionNodesRef.current.clear();
     globalCommentsSectionNodeRef.current = null;
-    setExpandedInactiveFileCommentsByPath({});
   }, [
     patchViewerSessionKey,
     selectedPatch?.headSha,
@@ -2319,14 +2118,16 @@ function PatchViewerMain({
   ]);
 
   useEffect(() => {
+    const fileCommentsSectionNodes = fileCommentsSectionNodesRef.current;
+    const threadAnchorNodes = threadAnchorNodesRef.current;
     return () => {
       cancelFileCommentsSectionScrollRef.current?.();
       cancelFileCommentsSectionScrollRef.current = null;
       cancelThreadScrollRef.current?.();
       cancelThreadScrollRef.current = null;
-      fileCommentsSectionNodesRef.current.clear();
+      fileCommentsSectionNodes.clear();
       globalCommentsSectionNodeRef.current = null;
-      threadAnchorNodesRef.current.clear();
+      threadAnchorNodes.clear();
     };
   }, []);
 
@@ -2360,21 +2161,11 @@ function PatchViewerMain({
     return () => {
       cancelScrollRestoreRef.current?.();
     };
-  }, [
-    isDiffReady,
-    parsedPatch.fileDiffs,
-    patchViewerSessionKey,
-    restoreScrollPosition,
-  ]);
+  }, [isDiffReady, parsedPatch.fileDiffs, patchViewerSessionKey, restoreScrollPosition]);
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();
-  }, [
-    navigator.actions,
-    parsedPatch.fileDiffs,
-    qualityFindingsByFile,
-    reviewThreadsByFile,
-  ]);
+  }, [navigator.actions, parsedPatch.fileDiffs, qualityFindingsByFile, reviewThreadsByFile]);
 
   async function handleSubmitDraftComment(editorId: string, body: string) {
     const editor = getReviewCommentEditorSessionState(
@@ -2397,17 +2188,9 @@ function PatchViewerMain({
         body,
         path: target.type === "global" ? "" : target.path,
         oldPath:
-          target.type === "global"
-            ? ""
-            : target.type === "file"
-              ? target.oldPath
-              : target.path,
+          target.type === "global" ? "" : target.type === "file" ? target.oldPath : target.path,
         newPath:
-          target.type === "global"
-            ? ""
-            : target.type === "file"
-              ? target.newPath
-              : target.path,
+          target.type === "global" ? "" : target.type === "file" ? target.newPath : target.path,
         line: target.type === "line" ? target.line : null,
         side: target.type === "line" ? target.side : null,
         startLine: target.type === "line" ? target.startLine : null,
@@ -2553,15 +2336,11 @@ function PatchViewerMain({
               ) : null}
 
               {!isPatchLoading && !patchError && isReviewThreadsLoading ? (
-                <div className="px-4 pb-2 pt-1 text-sm text-ink-500">
-                  Loading review threads...
-                </div>
+                <div className="px-4 pb-2 pt-1 text-sm text-ink-500">Loading review threads...</div>
               ) : null}
 
               {!isPatchLoading && !patchError && reviewThreadsError ? (
-                <div className="px-4 pb-2 pt-1 text-sm text-danger-600">
-                  {reviewThreadsError}
-                </div>
+                <div className="px-4 pb-2 pt-1 text-sm text-danger-600">{reviewThreadsError}</div>
               ) : null}
 
               {!isPatchLoading && !patchError && selectedPatch ? (

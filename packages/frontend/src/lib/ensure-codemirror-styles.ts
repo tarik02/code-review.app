@@ -6,8 +6,7 @@ const rootsWithCodeMirrorStyles = new WeakSet<CodeMirrorStyleRoot>();
 
 function isCodeMirrorStyleRoot(root: Node): root is CodeMirrorStyleRoot {
   return (
-    root instanceof Document ||
-    (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot)
+    root instanceof Document || (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot)
   );
 }
 
@@ -22,10 +21,7 @@ function ensureCodeMirrorStyles(root?: Node | null) {
 
   const targetRoot = root ?? document;
 
-  if (
-    !isCodeMirrorStyleRoot(targetRoot) ||
-    rootsWithCodeMirrorStyles.has(targetRoot)
-  ) {
+  if (!isCodeMirrorStyleRoot(targetRoot) || rootsWithCodeMirrorStyles.has(targetRoot)) {
     return;
   }
 

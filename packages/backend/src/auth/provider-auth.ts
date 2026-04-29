@@ -1,7 +1,4 @@
-import {
-  HttpClient,
-  HttpClientRequest,
-} from "@effect/platform";
+import { HttpClient, HttpClientRequest } from "@effect/platform";
 import { normalizeHost } from "../repo-id.ts";
 import { Effect } from "effect";
 import { AuthTokenStore } from "./token-store.ts";
@@ -75,14 +72,9 @@ function defaultClientSecret() {
   return "";
 }
 
-function resolveClientId(
-  provider: ForgeProviderKind,
-  host: string,
-  clientId: string,
-) {
+function resolveClientId(provider: ForgeProviderKind, host: string, clientId: string) {
   const normalizedHost = normalizeHost(host);
-  const resolvedClientId =
-    clientId.trim() || defaultClientId(provider, normalizedHost);
+  const resolvedClientId = clientId.trim() || defaultClientId(provider, normalizedHost);
   if (resolvedClientId) {
     return resolvedClientId;
   }
@@ -106,8 +98,7 @@ function oauthConfig(
 ): OAuthProviderConfig {
   const normalizedHost = normalizeHost(host);
   const resolvedClientId = resolveClientId(provider, normalizedHost, clientId);
-  const resolvedClientSecret =
-    clientSecret.trim() || defaultClientSecret();
+  const resolvedClientSecret = clientSecret.trim() || defaultClientSecret();
   if (provider === "github") {
     return {
       clientId: resolvedClientId,
@@ -184,15 +175,10 @@ function oauthFormJson<A>(
     const request = HttpClientRequest.post(url).pipe(
       HttpClientRequest.accept("application/json"),
       HttpClientRequest.setHeader("User-Agent", "code-review.app"),
-      HttpClientRequest.bodyText(
-        body.toString(),
-        "application/x-www-form-urlencoded",
-      ),
+      HttpClientRequest.bodyText(body.toString(), "application/x-www-form-urlencoded"),
     );
     const client = yield* HttpClient.HttpClient;
-    const response = yield* client.execute(request).pipe(
-      Effect.mapError(toError),
-    );
+    const response = yield* client.execute(request).pipe(Effect.mapError(toError));
     return yield* response.json.pipe(
       Effect.map((payload) => payload as A),
       Effect.mapError(toError),
@@ -204,44 +190,36 @@ function requestDeviceOAuthCode(
   provider: ForgeProviderKind,
   host: string,
   clientId: string,
-): Effect.Effect<{
-  clientId: string;
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  expiresIn: number;
-  intervalMs: number;
-}, Error, HttpClient.HttpClient> {
+): Effect.Effect<
+  {
+    clientId: string;
+    deviceCode: string;
+    userCode: string;
+    verificationUri: string;
+    expiresIn: number;
+    intervalMs: number;
+  },
+  Error,
+  HttpClient.HttpClient
+> {
   return Effect.gen(function* () {
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, host, clientId),
       catch: toError,
     });
     if (!config.deviceCodeUrl) {
-      return yield* Effect.fail(
-        new Error("Device authorization is only supported for GitHub."),
-      );
+      return yield* Effect.fail(new Error("Device authorization is only supported for GitHub."));
     }
 
     const body = new URLSearchParams({
       client_id: config.clientId,
       scope: config.scopes.join(" "),
     });
-    const payload = yield* oauthFormJson<OAuthDeviceCodeResponse>(
-      config.deviceCodeUrl,
-      body,
-    );
-    if (
-      payload.error ||
-      !payload.device_code ||
-      !payload.user_code ||
-      !payload.verification_uri
-    ) {
+    const payload = yield* oauthFormJson<OAuthDeviceCodeResponse>(config.deviceCodeUrl, body);
+    if (payload.error || !payload.device_code || !payload.user_code || !payload.verification_uri) {
       return yield* Effect.fail(
         new Error(
-          payload.error_description ??
-            payload.error ??
-            "OAuth device authorization failed.",
+          payload.error_description ?? payload.error ?? "OAuth device authorization failed.",
         ),
       );
     }
@@ -309,11 +287,7 @@ function exchangeDeviceOAuthCode(
   host: string,
   clientId: string,
   deviceCode: string,
-): Effect.Effect<
-  DeviceOAuthPollResult,
-  Error,
-  AuthTokenStore | HttpClient.HttpClient
-> {
+): Effect.Effect<DeviceOAuthPollResult, Error, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
@@ -342,9 +316,7 @@ function exchangeDeviceOAuthCode(
     if (payload.error || !payload.access_token) {
       return yield* Effect.fail(
         new Error(
-          payload.error_description ??
-            payload.error ??
-            "OAuth device token exchange failed.",
+          payload.error_description ?? payload.error ?? "OAuth device token exchange failed.",
         ),
       );
     }

@@ -3,11 +3,7 @@ import { useAuthSession } from "../app/auth-session";
 import { MainApp } from "../app/main-app";
 
 function HomeRoute() {
-  const {
-    providerStatuses,
-    isCheckingAuth,
-    hasReadyProvider,
-  } = useAuthSession();
+  const { providerStatuses, isCheckingAuth, hasReadyProvider } = useAuthSession();
 
   if (isCheckingAuth && Object.keys(providerStatuses).length === 0) {
     return (

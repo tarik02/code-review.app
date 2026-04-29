@@ -26,10 +26,7 @@ type AuthTokenStoreShape = {
   delete(accountId: string): Effect.Effect<void, Error>;
 };
 
-class AuthTokenStore extends Effect.Tag("AuthTokenStore")<
-  AuthTokenStore,
-  AuthTokenStoreShape
->() {}
+class AuthTokenStore extends Effect.Tag("AuthTokenStore")<AuthTokenStore, AuthTokenStoreShape>() {}
 
 type AuthTokenRow = typeof authTokens.$inferSelect;
 
@@ -61,9 +58,7 @@ const makeAuthTokenStore = Effect.gen(function* () {
   const database = yield* DatabaseService;
   const encryption = yield* EncryptionService;
 
-  const get: AuthTokenStoreShape["get"] = Effect.fn(
-    "AuthTokenStore.get",
-  )(function* (accountId) {
+  const get: AuthTokenStoreShape["get"] = Effect.fn("AuthTokenStore.get")(function* (accountId) {
     const row = yield* database.query(async (db) => {
       const [record] = await db
         .select()
@@ -97,17 +92,12 @@ const makeAuthTokenStore = Effect.gen(function* () {
     "AuthTokenStore.listAccounts",
   )(() =>
     database.query(async (db) => {
-      const rows = await db
-        .select()
-        .from(authTokens)
-        .orderBy(asc(authTokens.createdAt));
+      const rows = await db.select().from(authTokens).orderBy(asc(authTokens.createdAt));
       return rows.map(rowToProviderAccount);
     }),
   );
 
-  const save: AuthTokenStoreShape["save"] = Effect.fn(
-    "AuthTokenStore.save",
-  )(function* (token) {
+  const save: AuthTokenStoreShape["save"] = Effect.fn("AuthTokenStore.save")(function* (token) {
     const normalizedHost = normalizeHost(token.host);
     const accessToken = yield* encryption.encryptString(token.accessToken);
     const refreshToken = token.refreshToken
@@ -148,13 +138,13 @@ const makeAuthTokenStore = Effect.gen(function* () {
     });
   });
 
-  const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn(
-    "AuthTokenStore.delete",
-  )(function* (accountId) {
-    yield* database.transaction(async (tx) => {
-      await tx.delete(authTokens).where(eq(authTokens.accountId, accountId));
-    });
-  });
+  const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn("AuthTokenStore.delete")(
+    function* (accountId) {
+      yield* database.transaction(async (tx) => {
+        await tx.delete(authTokens).where(eq(authTokens.accountId, accountId));
+      });
+    },
+  );
 
   return {
     get,

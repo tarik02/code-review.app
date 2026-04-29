@@ -1,8 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import {
   type QueryKey,
   useMutation,
@@ -81,10 +77,7 @@ function createOptimisticComment(
   };
 }
 
-function insertOptimisticThread(
-  threads: ReviewThread[],
-  thread: ReviewThread,
-): ReviewThread[] {
+function insertOptimisticThread(threads: ReviewThread[], thread: ReviewThread): ReviewThread[] {
   return [...threads, thread];
 }
 
@@ -170,8 +163,7 @@ function useRepoPickerRepos(
   }, [accountId, enabled, queryClient]);
 
   const availableRepos = trimmedQuery.length > 0 ? searchRepos : initialRepos;
-  const isLoadingRepos =
-    enabled && (trimmedQuery.length > 0 ? isSearchLoading : isInitialLoading);
+  const isLoadingRepos = enabled && (trimmedQuery.length > 0 ? isSearchLoading : isInitialLoading);
 
   return {
     availableRepos,
@@ -188,10 +180,7 @@ function useRepoPickerReposForAccounts(
 ) {
   const queryClient = useQueryClient();
   const trimmedQuery = debouncedQuery.trim();
-  const enabledAccountIdSet = useMemo(
-    () => new Set(enabledAccountIds),
-    [enabledAccountIds],
-  );
+  const enabledAccountIdSet = useMemo(() => new Set(enabledAccountIds), [enabledAccountIds]);
   const activeAccounts = useMemo(
     () => accounts.filter((account) => enabledAccountIdSet.has(account.id)),
     [accounts, enabledAccountIdSet],
@@ -233,8 +222,7 @@ function useRepoPickerReposForAccounts(
     return [...byId.values()];
   }, [activeQueries]);
   const isLoadingRepos =
-    shouldQuery &&
-    activeQueries.some((query) => query.isPending || query.isFetching);
+    shouldQuery && activeQueries.some((query) => query.isPending || query.isFetching);
   const availableReposError = useMemo(() => {
     if (!shouldQuery || isLoadingRepos) {
       return null;
@@ -332,16 +320,11 @@ function useAccountOverviewPullRequests(
       const query = overviewQueries[i];
       if (!query) continue;
       if (query.error) {
-        console.error(
-          `[overview] failed for account ${accountIds[i]}`,
-          query.error,
-        );
+        console.error(`[overview] failed for account ${accountIds[i]}`, query.error);
         continue;
       }
       if (query.data) {
-        console.info(
-          `[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`,
-        );
+        console.info(`[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`);
       }
     }
   }, [accountIds, enabled, overviewQueries]);
@@ -381,18 +364,9 @@ type UseOverviewPullRequestsArgs = {
   enabled: boolean;
 };
 
-function useOverviewPullRequests({
-  repos,
-  enabled,
-}: UseOverviewPullRequestsArgs) {
-  const repoNames = useMemo(
-    () => repos.map((repo) => repoIdentityKey(repo)),
-    [repos],
-  );
-  const repoIdentities = useMemo(
-    () => repos.map((repo) => repoIdentity(repo)),
-    [repos],
-  );
+function useOverviewPullRequests({ repos, enabled }: UseOverviewPullRequestsArgs) {
+  const repoNames = useMemo(() => repos.map((repo) => repoIdentityKey(repo)), [repos]);
+  const repoIdentities = useMemo(() => repos.map((repo) => repoIdentity(repo)), [repos]);
 
   const cachedPullRequestQueries = useQueries({
     queries: repoIdentities.map((repo) => ({
@@ -440,18 +414,10 @@ function useOverviewPullRequests({
   };
 }
 
-function useTrackedPullRequests({
-  repos,
-}: UseRepoPullRequestsArgs) {
+function useTrackedPullRequests({ repos }: UseRepoPullRequestsArgs) {
   const queryClient = useQueryClient();
-  const repoNames = useMemo(
-    () => repos.map((repo) => repoIdentityKey(repo)),
-    [repos],
-  );
-  const repoIdentities = useMemo(
-    () => repos.map((repo) => repoIdentity(repo)),
-    [repos],
-  );
+  const repoNames = useMemo(() => repos.map((repo) => repoIdentityKey(repo)), [repos]);
+  const repoIdentities = useMemo(() => repos.map((repo) => repoIdentity(repo)), [repos]);
 
   const trackedPullRequestQueries = useQueries({
     queries: repoIdentities.map((repo) => ({
@@ -494,9 +460,10 @@ function useTrackedPullRequests({
 
         return pullRequests;
       } catch {
-        return queryClient.getQueryData<PullRequestSummary[]>(
-          forgeKeys.trackedPullRequestList(repo),
-        ) ?? [];
+        return (
+          queryClient.getQueryData<PullRequestSummary[]>(forgeKeys.trackedPullRequestList(repo)) ??
+          []
+        );
       }
     },
     [queryClient],
@@ -592,27 +559,21 @@ function useSelectedPullRequestData(
 
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
-  const reviewThreads =
-    (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
-  const qualityReport =
-    (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
+  const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
+  const qualityReport = (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
 
   const isPatchLoading =
     selectedPr !== null &&
-    (selectedPatchQuery.isPending ||
-      (selectedPatchQuery.isFetching && !selectedPatchQuery.data));
+    (selectedPatchQuery.isPending || (selectedPatchQuery.isFetching && !selectedPatchQuery.data));
   const isChangedFilesLoading =
     selectedPr !== null &&
-    (changedFilesQuery.isPending ||
-      (changedFilesQuery.isFetching && !changedFilesQuery.data));
+    (changedFilesQuery.isPending || (changedFilesQuery.isFetching && !changedFilesQuery.data));
   const isReviewThreadsLoading =
     selectedPr !== null &&
-    (reviewThreadsQuery.isPending ||
-      (reviewThreadsQuery.isFetching && !reviewThreadsQuery.data));
+    (reviewThreadsQuery.isPending || (reviewThreadsQuery.isFetching && !reviewThreadsQuery.data));
   const isQualityReportLoading =
     selectedPr !== null &&
-    (qualityReportQuery.isPending ||
-      (qualityReportQuery.isFetching && !qualityReportQuery.data));
+    (qualityReportQuery.isPending || (qualityReportQuery.isFetching && !qualityReportQuery.data));
 
   return {
     changedFiles,
@@ -630,22 +591,16 @@ function useSelectedPullRequestData(
   };
 }
 
-function usePullRequestReviewCommentMutations(
-  selectedPr: SelectedPullRequest | null,
-) {
+function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | null) {
   const queryClient = useQueryClient();
-  const viewerAccountId = selectedPr
-    ? providerAccountIdFromProviderId(selectedPr.providerId)
-    : "";
+  const viewerAccountId = selectedPr ? providerAccountIdFromProviderId(selectedPr.providerId) : "";
   const viewerLoginQuery = useQuery({
     ...viewerLoginQueryOptions(viewerAccountId),
     enabled: selectedPr !== null,
   });
   const viewerLogin = viewerLoginQuery.data?.login ?? "You";
 
-  const reviewThreadsQueryKey = selectedPr
-    ? forgeKeys.pullRequestReviewThreads(selectedPr)
-    : null;
+  const reviewThreadsQueryKey = selectedPr ? forgeKeys.pullRequestReviewThreads(selectedPr) : null;
 
   const invalidateReviewThreads = useCallback(async () => {
     if (!reviewThreadsQueryKey) {
@@ -665,24 +620,22 @@ function usePullRequestReviewCommentMutations(
     await queryClient.cancelQueries({ queryKey: reviewThreadsQueryKey });
 
     return {
-      previousReviewThreads:
-        queryClient.getQueryData<ReviewThread[]>(reviewThreadsQueryKey) ?? [],
+      previousReviewThreads: queryClient.getQueryData<ReviewThread[]>(reviewThreadsQueryKey) ?? [],
       reviewThreadsQueryKey,
     };
   }
 
-  function restoreOptimisticUpdate(context: {
-    previousReviewThreads: ReviewThread[];
-    reviewThreadsQueryKey: QueryKey;
-  } | null) {
+  function restoreOptimisticUpdate(
+    context: {
+      previousReviewThreads: ReviewThread[];
+      reviewThreadsQueryKey: QueryKey;
+    } | null,
+  ) {
     if (!context) {
       return;
     }
 
-    queryClient.setQueryData(
-      context.reviewThreadsQueryKey,
-      context.previousReviewThreads,
-    );
+    queryClient.setQueryData(context.reviewThreadsQueryKey, context.previousReviewThreads);
   }
 
   const createCommentMutation = useMutation({
@@ -739,19 +692,11 @@ function usePullRequestReviewCommentMutations(
         targetThread?.comments.find((comment) => comment.replyToId === null)?.id ??
         targetThread?.comments[0]?.id ??
         null;
-      const optimisticReply = createOptimisticComment(
-        input.body,
-        viewerLogin,
-        rootCommentId,
-      );
+      const optimisticReply = createOptimisticComment(input.body, viewerLogin, rootCommentId);
 
       queryClient.setQueryData<ReviewThread[]>(
         context.reviewThreadsQueryKey,
-        appendOptimisticReply(
-          context.previousReviewThreads,
-          input.threadId,
-          optimisticReply,
-        ),
+        appendOptimisticReply(context.previousReviewThreads, input.threadId, optimisticReply),
       );
 
       return context;
@@ -772,11 +717,7 @@ function usePullRequestReviewCommentMutations(
 
       queryClient.setQueryData<ReviewThread[]>(
         context.reviewThreadsQueryKey,
-        updateOptimisticComment(
-          context.previousReviewThreads,
-          input.commentId,
-          input.body,
-        ),
+        updateOptimisticComment(context.previousReviewThreads, input.commentId, input.body),
       );
 
       return context;

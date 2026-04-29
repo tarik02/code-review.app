@@ -1,6 +1,6 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { appearanceBackgroundQueryOptions } from "../../queries/forge";
 import type {
   ForgeProviderKind,
@@ -57,27 +57,27 @@ function AuthGateScreen({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
+  const defaultHost = provider === "github" ? "github.com" : "gitlab.com";
 
-  useEffect(() => {
-    setHost(provider === "github" ? "github.com" : "gitlab.com");
-  }, [provider]);
-
-  const normalizedHost =
-    normalizeHostInput(host) || (provider === "github" ? "github.com" : "gitlab.com");
+  const normalizedHost = normalizeHostInput(host) || defaultHost;
   const canStartSignIn =
     (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) &&
     !isChecking &&
     !isSigningIn;
-  const title = isChecking
-    ? <>Checking provider auth...</>
-    : status === "not_authenticated"
-      ? <>Sign in to a provider</>
-      : <>Couldn't verify provider auth.</>;
-  const description = isChecking
-    ? <>Hold on while we verify your provider sessions.</>
-    : status === "not_authenticated"
-      ? <>Connect GitHub or GitLab to load repositories and review threads.</>
-      : <>Try again after checking the provider configuration.</>;
+  const title = isChecking ? (
+    <>Checking provider auth...</>
+  ) : status === "not_authenticated" ? (
+    <>Sign in to a provider</>
+  ) : (
+    <>Couldn't verify provider auth.</>
+  );
+  const description = isChecking ? (
+    <>Hold on while we verify your provider sessions.</>
+  ) : status === "not_authenticated" ? (
+    <>Connect GitHub or GitLab to load repositories and review threads.</>
+  ) : (
+    <>Try again after checking the provider configuration.</>
+  );
 
   return (
     <div className="relative h-screen w-full overflow-hidden bg-black text-ink-50">
@@ -101,9 +101,11 @@ function AuthGateScreen({
                 <select
                   className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden"
                   disabled={isChecking || isSigningIn}
-                  onChange={(event) =>
-                    setProvider(event.currentTarget.value as ForgeProviderKind)
-                  }
+                  onChange={(event) => {
+                    const nextProvider = event.currentTarget.value as ForgeProviderKind;
+                    setProvider(nextProvider);
+                    setHost(nextProvider === "github" ? "github.com" : "gitlab.com");
+                  }}
                   value={provider}
                 >
                   <option value="github">GitHub</option>
@@ -113,7 +115,7 @@ function AuthGateScreen({
                   className="rounded-md border border-white/20 bg-black/45 px-3 py-2 text-sm text-white outline-hidden placeholder:text-white/45"
                   disabled={isChecking || isSigningIn}
                   onChange={(event) => setHost(event.currentTarget.value)}
-                  placeholder={provider === "github" ? "github.com" : "gitlab.com"}
+                  placeholder={defaultHost}
                   value={host}
                 />
               </div>
@@ -139,9 +141,7 @@ function AuthGateScreen({
               <button
                 className="mt-2 w-full rounded-md bg-white px-3 py-2 text-sm font-medium text-ink-950 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={!canStartSignIn}
-                onClick={() =>
-                  onSignIn(provider, normalizedHost, clientId, clientSecret)
-                }
+                onClick={() => onSignIn(provider, normalizedHost, clientId, clientSecret)}
                 type="button"
               >
                 {isSigningIn
@@ -152,9 +152,7 @@ function AuthGateScreen({
 
             {accounts.length > 0 ? (
               <div className="mt-4 w-full max-w-lg rounded-md border border-white/15 bg-black/35 p-3 text-left">
-                <p className="text-xs font-medium uppercase text-white/55">
-                  Configured accounts
-                </p>
+                <p className="text-xs font-medium uppercase text-white/55">Configured accounts</p>
                 <div className="mt-2 flex max-h-36 flex-col gap-1 overflow-y-auto">
                   {accounts.map((account) => {
                     const accountStatus = statuses[account.id];
@@ -164,8 +162,7 @@ function AuthGateScreen({
                         key={account.id}
                       >
                         <span className="min-w-0 truncate">
-                          {account.provider === "github" ? "GitHub" : "GitLab"} ·{" "}
-                          {account.label}
+                          {account.provider === "github" ? "GitHub" : "GitLab"} · {account.label}
                         </span>
                         <span className="shrink-0 text-white/55">
                           {accountStatus?.status ?? "checking"}
@@ -177,9 +174,7 @@ function AuthGateScreen({
               </div>
             ) : null}
 
-            {message ? (
-              <p className="mt-4 max-w-xl text-xs text-white/65">{message}</p>
-            ) : null}
+            {message ? <p className="mt-4 max-w-xl text-xs text-white/65">{message}</p> : null}
 
             <button
               className="mt-6 inline-flex items-center gap-2 px-1 py-1 text-sm font-medium text-white transition hover:text-white/80 disabled:cursor-not-allowed disabled:opacity-60"

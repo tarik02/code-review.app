@@ -1,10 +1,6 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer } from "effect";
-import {
-  DatabaseService,
-  type Database,
-  type DatabaseTransaction,
-} from "./db/client.ts";
+import { DatabaseService, type Database, type DatabaseTransaction } from "./db/client.ts";
 import {
   prChangedFilesCache,
   prPatchCache,
@@ -69,10 +65,7 @@ type CacheServiceShape = {
   writeProviderProfile(profile: ProviderProfile): Effect.Effect<void, CacheError>;
 };
 
-class CacheService extends Effect.Tag("CacheService")<
-  CacheService,
-  CacheServiceShape
->() {}
+class CacheService extends Effect.Tag("CacheService")<CacheService, CacheServiceShape>() {}
 
 type PullRequestCacheRow = typeof pullRequests.$inferSelect;
 
@@ -142,19 +135,11 @@ async function getProviderProfileRowId(
   return row.id;
 }
 
-async function findRepoRowId(
-  database: Database | DatabaseTransaction,
-  repo: RepoIdentity,
-) {
+async function findRepoRowId(database: Database | DatabaseTransaction, repo: RepoIdentity) {
   const [row] = await database
     .select({ id: repos.id })
     .from(repos)
-    .where(
-      and(
-        eq(repos.providerId, repo.providerId),
-        eq(repos.repoKey, repo.repoKey),
-      ),
-    )
+    .where(and(eq(repos.providerId, repo.providerId), eq(repos.repoKey, repo.repoKey)))
     .limit(1);
 
   return row?.id ?? null;
@@ -233,21 +218,14 @@ const makeCacheService = Effect.gen(function* () {
           profileLogin: providerProfiles.login,
         })
         .from(repos)
-        .leftJoin(
-          providerProfiles,
-          eq(providerProfiles.id, repos.providerProfileId),
-        )
+        .leftJoin(providerProfiles, eq(providerProfiles.id, repos.providerProfileId))
         .orderBy(asc(repos.addedAt));
 
-      return rows.map((row) =>
-        rowToRepo(row.repo, row.profileAccountId, row.profileLogin),
-      );
+      return rows.map((row) => rowToRepo(row.repo, row.profileAccountId, row.profileLogin));
     }),
   );
 
-  const saveRepo: CacheServiceShape["saveRepo"] = Effect.fn(
-    "CacheService.saveRepo",
-  )((repo) =>
+  const saveRepo: CacheServiceShape["saveRepo"] = Effect.fn("CacheService.saveRepo")((repo) =>
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();
       const identity = repoIdentityFromSummary(repo);
@@ -317,26 +295,24 @@ const makeCacheService = Effect.gen(function* () {
 
       await tx
         .delete(pullRequests)
-        .where(
-          and(
-            eq(pullRequests.repoRowId, repoRowId),
-            eq(pullRequests.isTracked, false),
-          ),
-        );
+        .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.isTracked, false)));
 
       if (summaries.length === 0) return;
 
-      await tx.insert(pullRequests).values(
-        summaries.map((pullRequest) => ({
-          ...pullRequestValues(repoRowId, pullRequest),
-          isTracked: false,
-          cachedAt: timestamp,
-          lastSeenAt: timestamp,
-        })),
-      ).onConflictDoUpdate({
-        target: [pullRequests.repoRowId, pullRequests.prNumber],
-        set: pullRequestCacheUpdateValues(timestamp),
-      });
+      await tx
+        .insert(pullRequests)
+        .values(
+          summaries.map((pullRequest) => ({
+            ...pullRequestValues(repoRowId, pullRequest),
+            isTracked: false,
+            cachedAt: timestamp,
+            lastSeenAt: timestamp,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [pullRequests.repoRowId, pullRequests.prNumber],
+          set: pullRequestCacheUpdateValues(timestamp),
+        });
     }),
   );
 
@@ -350,12 +326,7 @@ const makeCacheService = Effect.gen(function* () {
       const rows = await db
         .select()
         .from(pullRequests)
-        .where(
-          and(
-            eq(pullRequests.repoRowId, repoRowId),
-            eq(pullRequests.isTracked, true),
-          ),
-        )
+        .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.isTracked, true)))
         .orderBy(desc(pullRequests.updatedAt));
 
       return rows.map(rowToPullRequest);
@@ -400,12 +371,7 @@ const makeCacheService = Effect.gen(function* () {
       await tx
         .update(pullRequests)
         .set({ isTracked: false })
-        .where(
-          and(
-            eq(pullRequests.repoRowId, repoRowId),
-            eq(pullRequests.prNumber, number),
-          ),
-        );
+        .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.prNumber, number)));
     }),
   );
 
@@ -445,38 +411,33 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const storePatch: CacheServiceShape["storePatch"] = Effect.fn(
-    "CacheService.storePatch",
-  )((repo, number, headSha, patch) =>
-    database.transaction(async (tx) => {
-      const repoRowId = await findRepoRowId(tx, repo);
-      if (repoRowId === null) return;
+  const storePatch: CacheServiceShape["storePatch"] = Effect.fn("CacheService.storePatch")(
+    (repo, number, headSha, patch) =>
+      database.transaction(async (tx) => {
+        const repoRowId = await findRepoRowId(tx, repo);
+        if (repoRowId === null) return;
 
-      const timestamp = nowUnixTimestamp();
+        const timestamp = nowUnixTimestamp();
 
-      await tx
-        .insert(prPatchCache)
-        .values({
-          repoRowId,
-          prNumber: number,
-          headSha,
-          patchText: patch,
-          cachedAt: timestamp,
-          lastAccessedAt: timestamp,
-        })
-        .onConflictDoUpdate({
-          target: [
-            prPatchCache.repoRowId,
-            prPatchCache.prNumber,
-            prPatchCache.headSha,
-          ],
-          set: {
+        await tx
+          .insert(prPatchCache)
+          .values({
+            repoRowId,
+            prNumber: number,
+            headSha,
             patchText: patch,
             cachedAt: timestamp,
             lastAccessedAt: timestamp,
-          },
-        });
-    }),
+          })
+          .onConflictDoUpdate({
+            target: [prPatchCache.repoRowId, prPatchCache.prNumber, prPatchCache.headSha],
+            set: {
+              patchText: patch,
+              cachedAt: timestamp,
+              lastAccessedAt: timestamp,
+            },
+          });
+      }),
   );
 
   const getCachedChangedFiles: CacheServiceShape["getCachedChangedFiles"] = Effect.fn(
@@ -557,34 +518,26 @@ const makeCacheService = Effect.gen(function* () {
       await tx
         .update(repos)
         .set({ lastOpenedAt: nowUnixTimestamp() })
-        .where(
-          and(
-            eq(repos.providerId, repo.providerId),
-            eq(repos.repoKey, repo.repoKey),
-          ),
-        );
+        .where(and(eq(repos.providerId, repo.providerId), eq(repos.repoKey, repo.repoKey)));
     }),
   );
 
-  const readProviderAccountVisibility: CacheServiceShape["readProviderAccountVisibility"] = Effect.fn(
-    "CacheService.readProviderAccountVisibility",
-  )((accountIds) =>
-    accountIds.length === 0
-      ? Effect.succeed({})
-      : database.query(async (db) => {
-          const rows = await db
-            .select({
-              providerAccountId: providerProfiles.accountId,
-              isEnabled: providerProfiles.isEnabled,
-            })
-            .from(providerProfiles)
-            .where(inArray(providerProfiles.accountId, accountIds));
+  const readProviderAccountVisibility: CacheServiceShape["readProviderAccountVisibility"] =
+    Effect.fn("CacheService.readProviderAccountVisibility")((accountIds) =>
+      accountIds.length === 0
+        ? Effect.succeed({})
+        : database.query(async (db) => {
+            const rows = await db
+              .select({
+                providerAccountId: providerProfiles.accountId,
+                isEnabled: providerProfiles.isEnabled,
+              })
+              .from(providerProfiles)
+              .where(inArray(providerProfiles.accountId, accountIds));
 
-          return Object.fromEntries(
-            rows.map((row) => [row.providerAccountId, row.isEnabled]),
-          );
-        }),
-  );
+            return Object.fromEntries(rows.map((row) => [row.providerAccountId, row.isEnabled]));
+          }),
+    );
 
   const setProviderAccountVisibility: CacheServiceShape["setProviderAccountVisibility"] = Effect.fn(
     "CacheService.setProviderAccountVisibility",

@@ -90,9 +90,7 @@ function RepoSelectionStep({
         <p className="font-sans text-xs text-neutral-500 px-4">Repositories</p>
 
         {isLoadingRepos ? (
-          <div className="px-4 py-3 text-sm text-ink-500">
-            Loading repositories...
-          </div>
+          <div className="px-4 py-3 text-sm text-ink-500">Loading repositories...</div>
         ) : null}
 
         {availableReposError ? (
@@ -182,9 +180,7 @@ type PullRequestStatusViewModel = {
   className: string;
 };
 
-function getPullRequestStatus(
-  pullRequest: PullRequestSummary,
-): PullRequestStatusViewModel {
+function getPullRequestStatus(pullRequest: PullRequestSummary): PullRequestStatusViewModel {
   if (pullRequest.state === "MERGED") {
     return {
       status: PullRequestBadgeStatus.Merged,
@@ -210,10 +206,7 @@ function getPullRequestStatus(
     };
   }
 
-  if (
-    pullRequest.mergeable === "CONFLICTING" ||
-    pullRequest.mergeStateStatus === "DIRTY"
-  ) {
+  if (pullRequest.mergeable === "CONFLICTING" || pullRequest.mergeStateStatus === "DIRTY") {
     return {
       status: PullRequestBadgeStatus.Conflicting,
       label: "Conflicting",
@@ -247,13 +240,9 @@ function PullRequestStatusIcon({ status }: { status: PullRequestBadgeStatus }) {
     case PullRequestBadgeStatus.Draft:
       return <LucideGitBranch className="text-ink-500" />;
     case PullRequestBadgeStatus.Conflicting:
-      return (
-        <LucideGitPullRequestClosed className="text-yellow-500 dark:text-yellow-300" />
-      );
+      return <LucideGitPullRequestClosed className="text-yellow-500 dark:text-yellow-300" />;
     case PullRequestBadgeStatus.CanMerge:
-      return (
-        <LucideGitPullRequestArrow className="text-green-600 dark:text-green-300" />
-      );
+      return <LucideGitPullRequestArrow className="text-green-600 dark:text-green-300" />;
     case PullRequestBadgeStatus.Open:
       return <LucideGitMerge className="text-green-500 dark:text-green-300" />;
     default:
@@ -270,18 +259,11 @@ function DraftIndicator({ provider }: { provider: ForgeProviderKind }) {
 }
 
 function formatChangeSummary(pullRequest: PullRequestSummary) {
-  if (
-    pullRequest.additions !== null &&
-    pullRequest.deletions !== null
-  ) {
+  if (pullRequest.additions !== null && pullRequest.deletions !== null) {
     return (
       <>
-        <span className="text-green-600 dark:text-green-300">
-          +{pullRequest.additions}
-        </span>{" "}
-        <span className="text-red-600 dark:text-red-300">
-          -{pullRequest.deletions}
-        </span>
+        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{" "}
+        <span className="text-red-600 dark:text-red-300">-{pullRequest.deletions}</span>
       </>
     );
   }
@@ -320,9 +302,7 @@ function PullRequestSelectionStep({
             </button>
           ) : null}
           <p className="font-sans text-xs text-neutral-500">
-            {selectedRepo
-              ? `Pull Requests in ${selectedRepo.nameWithOwner}`
-              : "Pull Requests"}
+            {selectedRepo ? `Pull Requests in ${selectedRepo.nameWithOwner}` : "Pull Requests"}
           </p>
         </div>
 
@@ -331,17 +311,13 @@ function PullRequestSelectionStep({
         ) : null}
 
         {pullRequestsError ? (
-          <div className="text-sm text-danger-600 px-4 py-3">
-            {pullRequestsError}
-          </div>
+          <div className="text-sm text-danger-600 px-4 py-3">{pullRequestsError}</div>
         ) : null}
 
         {!isLoadingPullRequests && !pullRequestsError ? (
           <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
             {pullRequests.length === 0 ? (
-              <div className="px-0 py-2 text-sm text-ink-500">
-                No PRs to add.
-              </div>
+              <div className="px-0 py-2 text-sm text-ink-500">No PRs to add.</div>
             ) : (
               pullRequests.map((pullRequest) => {
                 const prKey = `modal-pr-${pullRequest.number}`;
@@ -355,20 +331,14 @@ function PullRequestSelectionStep({
                     onClick={() => onPickPullRequest(pullRequest)}
                     type="button"
                   >
-                    <p className="text-xs text-neutral-500">
-                      {pullRequest.authorLogin}
-                    </p>
+                    <p className="text-xs text-neutral-500">{pullRequest.authorLogin}</p>
                     <div className="flex items-center gap-3">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <div className="shrink-0">
                           <PullRequestStatusIcon status={status.status} />
                         </div>
-                        {pullRequest.isDraft ? (
-                          <DraftIndicator provider={provider} />
-                        ) : null}
-                        <p className="min-w-0 flex-1 truncate text-sm text-ink-700">
-                          {title}
-                        </p>
+                        {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
+                        <p className="min-w-0 flex-1 truncate text-sm text-ink-700">{title}</p>
                       </div>
                       <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">
                         {formatChangeSummary(pullRequest)}
@@ -443,8 +413,4 @@ function TrackPullRequestModal({
 }
 
 export { TrackPullRequestModal };
-export type {
-  TrackPullRequestModalMode,
-  TrackPullRequestModalProps,
-  TrackPullRequestModalStep,
-};
+export type { TrackPullRequestModalMode, TrackPullRequestModalProps, TrackPullRequestModalStep };

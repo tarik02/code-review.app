@@ -1,9 +1,5 @@
 import type { Effect } from "effect";
-import type {
-  PrChangedFile,
-  PrFileChangeType,
-  PrFileContents,
-} from "@code-review-app/shared";
+import type { PrChangedFile, PrFileChangeType, PrFileContents } from "@code-review-app/shared";
 import type { RepoIdentity } from "../../repo-id.ts";
 
 type DiffBackendInput = {
@@ -33,9 +29,7 @@ type DiffDataBackend = {
     options?: DiffBackendPatchOptions,
   ): Effect.Effect<string, Error>;
   getChangedFiles(input: DiffBackendInput): Effect.Effect<PrChangedFile[], Error>;
-  getFileContents(
-    input: DiffBackendFileContentsInput,
-  ): Effect.Effect<PrFileContents, Error>;
+  getFileContents(input: DiffBackendFileContentsInput): Effect.Effect<PrFileContents, Error>;
 };
 
 export type {

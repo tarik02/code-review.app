@@ -11,16 +11,14 @@ type ProvideProviderDeps = <A, E>(
   effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
 ) => Effect.Effect<A, E>;
 
-function makeProviderApiDiffBackend(
-  provideProviderDeps: ProvideProviderDeps,
-): DiffDataBackend {
-  const getPatch: DiffDataBackend["getPatch"] = Effect.fn(
-    "ProviderApiDiffBackend.getPatch",
-  )(function* (input, _options) {
-    return yield* provideProviderDeps(
-      providerFor(input.repo.provider).fetchPatch(input.repo, input.number),
-    );
-  });
+function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): DiffDataBackend {
+  const getPatch: DiffDataBackend["getPatch"] = Effect.fn("ProviderApiDiffBackend.getPatch")(
+    function* (input, _options) {
+      return yield* provideProviderDeps(
+        providerFor(input.repo.provider).fetchPatch(input.repo, input.number),
+      );
+    },
+  );
 
   const getChangedFiles: DiffDataBackend["getChangedFiles"] = Effect.fn(
     "ProviderApiDiffBackend.getChangedFiles",
@@ -41,9 +39,7 @@ function makeProviderApiDiffBackend(
       }
       return unique;
     },
-    Effect.mapError((error) =>
-      error instanceof Error ? error : new ProviderError(String(error)),
-    ),
+    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
   );
 
   const getFileContents: DiffDataBackend["getFileContents"] = Effect.fn(
@@ -109,9 +105,7 @@ function makeProviderApiDiffBackend(
         newContent,
       } satisfies PrFileContents;
     },
-    Effect.mapError((error) =>
-      error instanceof Error ? error : new ProviderError(String(error)),
-    ),
+    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
   );
 
   return {

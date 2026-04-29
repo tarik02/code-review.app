@@ -37,7 +37,7 @@ function getWindowTitleBarOptions(): WindowTitleBarOptions {
   if (process.platform === "darwin") {
     return {
       titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 16, y: (TITLEBAR_HEIGHT-TRAFFIC_LIGHT_SIZE)/2 },
+      trafficLightPosition: { x: 16, y: (TITLEBAR_HEIGHT - TRAFFIC_LIGHT_SIZE) / 2 },
     };
   }
 
@@ -84,9 +84,7 @@ nativeTheme.on("updated", syncAllWindowAppearance);
 
 function forwardRendererConsole(window: BrowserWindow): void {
   window.webContents.on("console-message", (details) => {
-    const source = details.sourceId
-      ? ` ${details.sourceId}:${details.lineNumber}`
-      : "";
+    const source = details.sourceId ? ` ${details.sourceId}:${details.lineNumber}` : "";
     console.log(`[renderer:${details.level}] ${details.message}${source}`);
   });
 }

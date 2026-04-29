@@ -70,10 +70,7 @@ function getThemeEntry(isDark: boolean) {
 
 function InlineCode({ children, ...props }: ComponentProps<"code">) {
   return (
-    <code
-      {...props}
-      className="rounded bg-canvas px-1 py-0.5 font-mono text-[0.92em] text-ink-900"
-    >
+    <code {...props} className="rounded bg-canvas px-1 py-0.5 font-mono text-[0.92em] text-ink-900">
       {children}
     </code>
   );
@@ -88,18 +85,14 @@ function MarkdownCodeBlock({
   lang?: string;
   text: string;
 }) {
-  const [html, setHtml] = useState<string>("");
+  const [resolvedHtml, setResolvedHtml] = useState<{ cacheKey: string; html: string } | null>(null);
   const isDark = useDocumentDarkMode();
+  const normalizedLanguage = normalizeLanguage(getCodeBlockLanguage(lang, filePath));
+  const themeEntry = getThemeEntry(isDark);
+  const cacheKey = `${themeEntry.id}:${normalizedLanguage}:${text}`;
 
   useEffect(() => {
     let cancelled = false;
-    const normalizedLanguage = normalizeLanguage(
-      getCodeBlockLanguage(lang, filePath),
-    );
-    const themeEntry = getThemeEntry(isDark);
-    const cacheKey = `${themeEntry.id}:${normalizedLanguage}:${text}`;
-
-    setHtml("");
 
     let promise = codeHtmlCache.get(cacheKey);
     if (!promise) {
@@ -113,21 +106,21 @@ function MarkdownCodeBlock({
     void promise
       .then((result) => {
         if (!cancelled) {
-          setHtml(result);
+          setResolvedHtml({ cacheKey, html: result });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setHtml("");
+          setResolvedHtml(null);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [filePath, isDark, lang, text]);
+  }, [cacheKey, normalizedLanguage, text, themeEntry.theme]);
 
-  if (!html) {
+  if (resolvedHtml?.cacheKey !== cacheKey) {
     return (
       <pre className="m-0 overflow-x-auto rounded-lg border border-ink-200 bg-canvas p-3 text-sm leading-6 text-ink-800">
         <code>{text}</code>
@@ -138,18 +131,12 @@ function MarkdownCodeBlock({
   return (
     <div
       className="overflow-x-auto rounded-lg border border-ink-200 bg-canvas text-sm [&_.shiki]:m-0 [&_.shiki]:p-3"
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: resolvedHtml.html }}
     />
   );
 }
 
-function CommentMarkdown({
-  body,
-  filePath,
-}: {
-  body: string;
-  filePath?: string;
-}) {
+function CommentMarkdown({ body, filePath }: { body: string; filePath?: string }) {
   return (
     <div className="rudu-comment-markdown font-sans whitespace-normal break-words">
       <Markdown

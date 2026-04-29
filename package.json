@@ -1,19 +1,25 @@
 {
   "name": "code-review.app",
-  "private": true,
   "version": "0.1.5",
+  "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.33.2",
   "scripts": {
     "dev": "pnpm --filter @code-review-app/electron dev",
     "build": "pnpm --filter @code-review-app/electron build",
     "dist": "pnpm --filter @code-review-app/electron dist",
     "preview": "pnpm --filter @code-review-app/electron preview",
-    "test": "pnpm --filter @code-review-app/frontend test"
+    "test": "pnpm --filter @code-review-app/frontend test",
+    "typecheck": "tsc -p tsconfig.json",
+    "typecheck:all": "pnpm run typecheck && pnpm --filter @code-review-app/shared typecheck && pnpm --filter @code-review-app/backend typecheck && pnpm --filter @code-review-app/frontend typecheck && pnpm --filter @code-review-app/electron typecheck && pnpm --filter @code-review-app/scripts typecheck",
+    "lint": "vp lint",
+    "fmt": "vp fmt"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
-  }
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@10.33.2"
 }

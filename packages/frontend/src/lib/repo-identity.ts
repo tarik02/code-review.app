@@ -1,7 +1,4 @@
-import type {
-  ForgeProviderKind,
-  RepoIdentity,
-} from "../types/forge";
+import type { ForgeProviderKind, RepoIdentity } from "../types/forge";
 
 function repoIdentity(repo: RepoIdentity): RepoIdentity {
   return {
@@ -14,14 +11,8 @@ function repoIdentityKey(repo: RepoIdentity) {
   return `${repo.providerId}:${repo.repoKey}`;
 }
 
-function sameRepoIdentity(
-  left: RepoIdentity,
-  right: RepoIdentity,
-) {
-  return (
-    left.providerId === right.providerId &&
-    left.repoKey === right.repoKey
-  );
+function sameRepoIdentity(left: RepoIdentity, right: RepoIdentity) {
+  return left.providerId === right.providerId && left.repoKey === right.repoKey;
 }
 
 function providerFromProviderId(providerId: string): ForgeProviderKind {
@@ -36,8 +27,7 @@ function decodeProviderIdComponent(value: string) {
 
 function providerAccountIdFromProviderId(providerId: string) {
   const firstSeparator = providerId.indexOf(":");
-  const secondSeparator =
-    firstSeparator === -1 ? -1 : providerId.indexOf(":", firstSeparator + 1);
+  const secondSeparator = firstSeparator === -1 ? -1 : providerId.indexOf(":", firstSeparator + 1);
   if (secondSeparator === -1) {
     return "";
   }

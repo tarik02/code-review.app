@@ -119,10 +119,7 @@
       "indexes": {
         "idx_auth_tokens_provider_host": {
           "name": "idx_auth_tokens_provider_host",
-          "columns": [
-            "provider",
-            "host"
-          ],
+          "columns": ["provider", "host"],
           "isUnique": false
         }
       },
@@ -181,11 +178,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "pr_changed_files_cache_repo_row_id_pr_number_head_sha_pk": {
-          "columns": [
-            "repo_row_id",
-            "pr_number",
-            "head_sha"
-          ],
+          "columns": ["repo_row_id", "pr_number", "head_sha"],
           "name": "pr_changed_files_cache_repo_row_id_pr_number_head_sha_pk"
         }
       },
@@ -242,11 +235,7 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "pr_patch_cache_repo_row_id_pr_number_head_sha_pk": {
-          "columns": [
-            "repo_row_id",
-            "pr_number",
-            "head_sha"
-          ],
+          "columns": ["repo_row_id", "pr_number", "head_sha"],
           "name": "pr_patch_cache_repo_row_id_pr_number_head_sha_pk"
         }
       },
@@ -296,9 +285,7 @@
       "indexes": {
         "provider_profiles_account_id_unique": {
           "name": "provider_profiles_account_id_unique",
-          "columns": [
-            "account_id"
-          ],
+          "columns": ["account_id"],
           "isUnique": true
         }
       },
@@ -451,26 +438,17 @@
       "indexes": {
         "idx_pull_requests_repo_pr_number": {
           "name": "idx_pull_requests_repo_pr_number",
-          "columns": [
-            "repo_row_id",
-            "pr_number"
-          ],
+          "columns": ["repo_row_id", "pr_number"],
           "isUnique": true
         },
         "idx_pull_requests_repo_updated": {
           "name": "idx_pull_requests_repo_updated",
-          "columns": [
-            "repo_row_id",
-            "\"updated_at\" desc"
-          ],
+          "columns": ["repo_row_id", "\"updated_at\" desc"],
           "isUnique": false
         },
         "idx_pull_requests_repo_tracked": {
           "name": "idx_pull_requests_repo_tracked",
-          "columns": [
-            "repo_row_id",
-            "is_tracked"
-          ],
+          "columns": ["repo_row_id", "is_tracked"],
           "isUnique": false
         }
       },
@@ -577,20 +555,12 @@
       "indexes": {
         "idx_repos_provider_id_repo_key": {
           "name": "idx_repos_provider_id_repo_key",
-          "columns": [
-            "provider_id",
-            "repo_key"
-          ],
+          "columns": ["provider_id", "repo_key"],
           "isUnique": true
         },
         "idx_repos_provider_host": {
           "name": "idx_repos_provider_host",
-          "columns": [
-            "provider",
-            "host",
-            "provider_profile_id",
-            "repo_key"
-          ],
+          "columns": ["provider", "host", "provider_profile_id", "repo_key"],
           "isUnique": false
         }
       },

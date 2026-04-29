@@ -136,10 +136,7 @@ describe("createDiffNavigatorController", () => {
     const selectedNode = createFakeNode();
     const otherNode = createFakeNode();
 
-    controller.registerDiffNode(
-      "src/selected.ts",
-      selectedNode.node as HTMLDivElement,
-    );
+    controller.registerDiffNode("src/selected.ts", selectedNode.node as HTMLDivElement);
     controller.registerDiffNode("src/other.ts", otherNode.node as HTMLDivElement);
     controller.onSelectFile("src/selected.ts");
     assert.equal(getSelectedFilePath(), "src/selected.ts");

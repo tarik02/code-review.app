@@ -85,12 +85,7 @@ type PrPatch = RepoIdentity & {
   fileDiffs: FileDiffMetadata[];
 };
 
-type PrFileChangeType =
-  | "change"
-  | "rename-pure"
-  | "rename-changed"
-  | "new"
-  | "deleted";
+type PrFileChangeType = "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
 
 type PrChangedFile = {
   path: string;
@@ -127,19 +122,14 @@ type AppearanceBackgroundSettings =
       dataUrl: string | null;
     };
 
-type AppearanceBackgroundInput =
-  | { kind: "default" }
-  | { kind: "solid"; color: string };
+type AppearanceBackgroundInput = { kind: "default" } | { kind: "solid"; color: string };
 
 type ProviderProfile = {
   accountId: string;
   login: string;
 };
 
-type ProviderAuthStatusKind =
-  | "ready"
-  | "not_authenticated"
-  | "unknown_error";
+type ProviderAuthStatusKind = "ready" | "not_authenticated" | "unknown_error";
 
 type ProviderAuthStatus = {
   status: ProviderAuthStatusKind;
@@ -189,12 +179,7 @@ type ReviewThread = {
   isOptimistic?: boolean;
 };
 
-type PullRequestQualityReportStatus =
-  | "ok"
-  | "warning"
-  | "failed"
-  | "pending"
-  | "unavailable";
+type PullRequestQualityReportStatus = "ok" | "warning" | "failed" | "pending" | "unavailable";
 
 type PullRequestQualityFindingSeverity =
   | "info"
@@ -204,17 +189,11 @@ type PullRequestQualityFindingSeverity =
   | "critical"
   | "unknown";
 
-type PullRequestQualityFindingStatus =
-  | "new"
-  | "existing"
-  | "resolved"
-  | "unknown";
+type PullRequestQualityFindingStatus = "new" | "existing" | "resolved" | "unknown";
 
 type PullRequestQualityFindingAnchorState = "inline" | "file" | "unmapped";
 
-type PullRequestQualityFindingSourceType =
-  | "github-check"
-  | "gitlab-code-quality";
+type PullRequestQualityFindingSourceType = "github-check" | "gitlab-code-quality";
 
 type PullRequestQualitySummary = {
   totalFindings: number;

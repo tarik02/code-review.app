@@ -87,9 +87,7 @@ function isFileReviewThread(thread: ReviewThread) {
   }
 
   return (
-    thread.subjectType === "file" ||
-    thread.line === null ||
-    getAnnotationSide(thread.side) === null
+    thread.subjectType === "file" || thread.line === null || getAnnotationSide(thread.side) === null
   );
 }
 
@@ -123,9 +121,7 @@ function createFileReviewThreads(fileThreads: ReviewThread[]): FileReviewThreads
   };
 }
 
-function buildReviewThreadsByFile(
-  reviewThreads: ReviewThread[],
-): Map<string, FileReviewThreads> {
+function buildReviewThreadsByFile(reviewThreads: ReviewThread[]): Map<string, FileReviewThreads> {
   const groupedThreads = new Map<string, ReviewThread[]>();
 
   for (const thread of reviewThreads) {
@@ -155,33 +151,27 @@ function buildReviewThreadsByFile(
 
 function getThreadRootComment(thread: ReviewThread) {
   return (
-    thread.comments.find((comment) => comment.replyToId === null) ??
-    thread.comments[0] ??
-    null
+    thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null
   );
 }
 
 function getGlobalReviewThreads(reviewThreads: ReviewThread[]): ReviewThread[] {
-  return [...reviewThreads]
-    .filter(isGlobalReviewThread)
-    .sort((left, right) => {
-      const leftCreatedAt = Date.parse(getThreadRootComment(left)?.createdAt ?? "");
-      const rightCreatedAt = Date.parse(
-        getThreadRootComment(right)?.createdAt ?? "",
-      );
+  return [...reviewThreads].filter(isGlobalReviewThread).sort((left, right) => {
+    const leftCreatedAt = Date.parse(getThreadRootComment(left)?.createdAt ?? "");
+    const rightCreatedAt = Date.parse(getThreadRootComment(right)?.createdAt ?? "");
 
-      if (Number.isNaN(leftCreatedAt) && Number.isNaN(rightCreatedAt)) {
-        return 0;
-      }
-      if (Number.isNaN(leftCreatedAt)) {
-        return 1;
-      }
-      if (Number.isNaN(rightCreatedAt)) {
-        return -1;
-      }
+    if (Number.isNaN(leftCreatedAt) && Number.isNaN(rightCreatedAt)) {
+      return 0;
+    }
+    if (Number.isNaN(leftCreatedAt)) {
+      return 1;
+    }
+    if (Number.isNaN(rightCreatedAt)) {
+      return -1;
+    }
 
-      return leftCreatedAt - rightCreatedAt;
-    });
+    return leftCreatedAt - rightCreatedAt;
+  });
 }
 
 function getFileReviewThreadsForPath(

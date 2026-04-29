@@ -3,8 +3,7 @@ import { cx } from "../../lib/cx";
 import { trpc } from "../../lib/trpc";
 
 const TOP_BAR_MACOS_HEIGHT = "40px";
-const TOP_BAR_WCO_HEIGHT =
-  "calc(env(titlebar-area-y) + env(titlebar-area-height))";
+const TOP_BAR_WCO_HEIGHT = "calc(env(titlebar-area-y) + env(titlebar-area-height))";
 
 interface Props {
   position: "left" | "middle" | "right";
