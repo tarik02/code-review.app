@@ -1,7 +1,6 @@
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { loadEnv } from "vite";
 import { resolve } from "node:path";
 
 const repoRoot = resolve("../..");
@@ -16,77 +15,58 @@ const nativeExternalPackages = [
   "@libsql/client/sqlite3",
   "libsql",
 ];
-const buildTimeEnvKeys = [
-  "GITHUB_CLIENT_ID",
-  "GITHUB_CLIENT_SECRET",
-  "GITLAB_CLIENT_ID",
-  "GITLAB_CLIENT_SECRET",
-  "RUDU_OAUTH_REDIRECT_URI",
-];
-
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, repoRoot, "");
-  const buildTimeEnv = Object.fromEntries(
-    buildTimeEnvKeys.map((key) => [
-      `process.env.${key}`,
-      JSON.stringify(env[key] ?? ""),
-    ]),
-  );
-
-  return {
-    main: {
-      define: buildTimeEnv,
-      resolve: {
-        alias: workspaceAliases,
+export default defineConfig({
+  main: {
+    resolve: {
+      alias: workspaceAliases,
+    },
+    ssr: {
+      noExternal: workspacePackages,
+    },
+    build: {
+      externalizeDeps: {
+        exclude: workspacePackages,
       },
-      ssr: {
-        noExternal: workspacePackages,
+      rolldownOptions: {
+        external: [
+          ...nativeExternalPackages,
+          /^@libsql\/.+/,
+        ],
+        input: resolve("src/main/index.ts"),
       },
-      build: {
-        externalizeDeps: {
-          exclude: workspacePackages,
-        },
-        rolldownOptions: {
-          external: [
-            ...nativeExternalPackages,
-            /^@libsql\/.+/,
-          ],
-          input: resolve("src/main/index.ts"),
+    },
+  },
+  preload: {
+    build: {
+      externalizeDeps: false,
+      rolldownOptions: {
+        input: resolve("src/preload/index.ts"),
+        output: {
+          entryFileNames: "[name].mjs",
         },
       },
     },
-    preload: {
-      build: {
-        externalizeDeps: false,
-        rolldownOptions: {
-          input: resolve("src/preload/index.ts"),
-          output: {
-            entryFileNames: "[name].mjs",
-          },
-        },
+  },
+  renderer: {
+    root: resolve(repoRoot, "packages/frontend"),
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: {
+        ...workspaceAliases,
+        "@": resolve(repoRoot, "packages/frontend/src"),
       },
     },
-    renderer: {
-      root: resolve(repoRoot, "packages/frontend"),
-      plugins: [react(), tailwindcss()],
-      resolve: {
-        alias: {
-          ...workspaceAliases,
-          "@": resolve(repoRoot, "packages/frontend/src"),
-        },
-      },
-      ssr: {
-        noExternal: workspacePackages,
-      },
-      build: {
-        target: "chrome120",
-        rolldownOptions: {
-          input: resolve(repoRoot, "packages/frontend/index.html"),
-        },
-      },
-      worker: {
-        format: "es",
+    ssr: {
+      noExternal: workspacePackages,
+    },
+    build: {
+      target: "chrome120",
+      rolldownOptions: {
+        input: resolve(repoRoot, "packages/frontend/index.html"),
       },
     },
-  };
+    worker: {
+      format: "es",
+    },
+  },
 });

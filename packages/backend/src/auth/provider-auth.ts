@@ -5,6 +5,11 @@ import {
 import { normalizeHost } from "../repo-id.ts";
 import { Effect } from "effect";
 import { AuthTokenStore } from "./token-store.ts";
+import {
+  DEFAULT_GITHUB_CLIENT_ID,
+  DEFAULT_GITLAB_CLIENT_ID,
+  DEFAULT_OAUTH_REDIRECT_URI,
+} from "./constants.ts";
 import type { ForgeProviderKind } from "@rudu/shared";
 import type { StoredAuthToken } from "./token-store.ts";
 
@@ -44,55 +49,29 @@ type DeviceOAuthPollResult =
   | { status: "pending"; intervalMs: number }
   | { status: "complete"; token: StoredAuthToken };
 
-const DEFAULT_REDIRECT_URI = "code-review.app://oauth/callback";
 const REFRESH_SKEW_MS = 60_000;
 
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function envValue(key: string) {
-  switch (key) {
-    case "GITHUB_CLIENT_ID":
-      return process.env.GITHUB_CLIENT_ID?.trim() ?? "";
-    case "GITHUB_CLIENT_SECRET":
-      return process.env.GITHUB_CLIENT_SECRET?.trim() ?? "";
-    case "GITLAB_CLIENT_ID":
-      return process.env.GITLAB_CLIENT_ID?.trim() ?? "";
-    case "GITLAB_CLIENT_SECRET":
-      return process.env.GITLAB_CLIENT_SECRET?.trim() ?? "";
-    case "RUDU_OAUTH_REDIRECT_URI":
-      return process.env.RUDU_OAUTH_REDIRECT_URI?.trim() ?? "";
-    default:
-      return "";
-  }
-}
-
 function redirectUri() {
-  return envValue("RUDU_OAUTH_REDIRECT_URI") || DEFAULT_REDIRECT_URI;
+  return DEFAULT_OAUTH_REDIRECT_URI;
 }
 
 function defaultClientId(provider: ForgeProviderKind, host: string) {
   if (provider === "github" && host === "github.com") {
-    return envValue("GITHUB_CLIENT_ID");
+    return DEFAULT_GITHUB_CLIENT_ID;
   }
 
   if (provider === "gitlab" && host === "gitlab.com") {
-    return envValue("GITLAB_CLIENT_ID");
+    return DEFAULT_GITLAB_CLIENT_ID;
   }
 
   return "";
 }
 
-function defaultClientSecret(provider: ForgeProviderKind, host: string) {
-  if (provider === "github" && host === "github.com") {
-    return envValue("GITHUB_CLIENT_SECRET");
-  }
-
-  if (provider === "gitlab" && host === "gitlab.com") {
-    return envValue("GITLAB_CLIENT_SECRET");
-  }
-
+function defaultClientSecret() {
   return "";
 }
 
@@ -128,7 +107,7 @@ function oauthConfig(
   const normalizedHost = normalizeHost(host);
   const resolvedClientId = resolveClientId(provider, normalizedHost, clientId);
   const resolvedClientSecret =
-    clientSecret.trim() || defaultClientSecret(provider, normalizedHost);
+    clientSecret.trim() || defaultClientSecret();
   if (provider === "github") {
     return {
       clientId: resolvedClientId,
