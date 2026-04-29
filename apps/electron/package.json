@@ -1,0 +1,85 @@
+{
+  "name": "@rudu/electron",
+  "private": true,
+  "version": "0.1.5",
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "dotenv -- electron-vite dev --watch",
+    "build": "tsc --noEmit --project ../../tsconfig.json && electron-vite build",
+    "dist": "electron-builder",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@hadeeb/trpc-worker": "^0.1.0",
+    "@libsql/client": "0.17.3",
+    "@rudu/backend": "workspace:*",
+    "@rudu/frontend": "workspace:*",
+    "@rudu/shared": "workspace:*",
+    "@trpc/server": "^11.16.0",
+    "effect": "^3.21.2",
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "^22.19.17",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "dotenv-cli": "^11.0.0",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "6.0.0-beta.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "~5.8.3",
+    "vite": "^8.0.10"
+  },
+  "build": {
+    "appId": "com.tanvesh.rudu",
+    "productName": "rudu",
+    "directories": {
+      "output": "../../release"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "package.json",
+      {
+        "from": "../../packages/backend/drizzle",
+        "to": "drizzle",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icons/icon.icns",
+      "entitlements": "build/entitlements.mac.plist"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icons"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icons/icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tanvesh01",
+        "repo": "rudu"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": false
+  }
+}

@@ -11,16 +11,16 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - JavaScript runtime/package manager: Node.js + pnpm
 
 ## Important Structure
-- `src/App.tsx`: top-level state and orchestration for repo/PR selection.
-- `src/components/ui/repo-sidebar.tsx`: repo + PR list/selection.
-- `src/components/ui/patch-viewer-main.tsx`: main patch area, tree/diff layout, tree hide/show UX.
-- `src/components/ui/changed-files-tree.tsx`: changed-files tree panel.
-- `src/queries/forge.ts`: renderer React Query options backed by tRPC.
-- `src/lib/trpc.ts`: renderer tRPC client.
-- `electron/main/`: Electron bootstrap, window security, updater, and tRPC IPC registration.
-- `electron/preload/`: isolated preload exposure for `electron-trpc`.
-- `electron/shared/`: shared DTOs and tRPC router type.
-- `electron/backend/`: Effect services, provider implementations, CLI execution, repo id helpers, and SQLite cache.
+- `packages/frontend/src/App.tsx`: top-level state and orchestration for repo/PR selection.
+- `packages/frontend/src/components/ui/repo-sidebar.tsx`: repo + PR list/selection.
+- `packages/frontend/src/components/ui/patch-viewer-main.tsx`: main patch area, tree/diff layout, tree hide/show UX.
+- `packages/frontend/src/components/ui/changed-files-tree.tsx`: changed-files tree panel.
+- `packages/frontend/src/queries/forge.ts`: renderer React Query options backed by tRPC.
+- `packages/frontend/src/lib/trpc.ts`: renderer tRPC client.
+- `apps/electron/src/main/`: Electron bootstrap, window security, updater, and tRPC IPC registration.
+- `apps/electron/src/preload/`: isolated preload exposure for `electron-trpc`.
+- `packages/shared/src/`: shared DTOs and schemas.
+- `packages/backend/src/`: Effect services, tRPC router, provider implementations, CLI execution, repo id helpers, and SQLite cache.
 
 ## Current UX Behavior (keep consistent)
 - App shell is fixed to viewport height (`h-screen`) with internal scrolling only.
@@ -47,15 +47,15 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - Use pnpm everywhere for JS tasks (`pnpm install`, `pnpm add`, `pnpm run ...`); do not use npm.
 
 ## Electron Backend Architecture
-- `electron/main/index.ts`: app lifecycle only.
-- `electron/main/window.ts`: BrowserWindow creation, preload wiring, and navigation/window-open security.
-- `electron/main/trpc.ts`: tRPC IPC registration only.
-- `electron/main/updater.ts`: Electron updater integration.
-- `electron/shared/router.ts`: tRPC procedures as thin adapters over Effect services.
-- `electron/backend/cache.ts`: SQLite init and cache persistence.
-- `electron/backend/providers/`: forge provider implementations for GitHub and GitLab.
-- `electron/backend/cli/`: command execution helpers and CLI discovery.
-- `electron/backend/services/`: domain services for repos, PRs, tracked PRs, review comments, and diff data.
+- `apps/electron/src/main/index.ts`: app lifecycle only.
+- `apps/electron/src/main/window.ts`: BrowserWindow creation, preload wiring, and navigation/window-open security.
+- `apps/electron/src/main/trpc.ts`: tRPC IPC registration and Electron platform adapter only.
+- `apps/electron/src/main/updater.ts`: Electron updater integration.
+- `packages/backend/src/router.ts`: tRPC procedures as thin adapters over Effect services and injected platform capabilities.
+- `packages/backend/src/cache.ts`: SQLite cache persistence.
+- `packages/backend/src/db/client.ts`: SQLite init and migrations using the Electron-provided database and migration paths.
+- `packages/backend/src/providers/`: forge provider implementations for GitHub and GitLab.
+- `packages/backend/src/services/`: domain services for repos, PRs, tracked PRs, review comments, and diff data.
 - `docs/effect-service-layers.md`: required pattern for writing and wiring Effect service layers.
 
 ### Module Boundary Rules

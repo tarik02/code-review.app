@@ -1,8 +1,10 @@
 # Effect Service Layers
 
-This backend uses Effect services for Electron main-process domain logic. Service
-implementations should be constructed as layer effects that acquire dependencies
-once, define named methods with `Effect.fn`, and export a named live layer.
+This backend uses Effect services for forge, auth, diff, settings, and cache
+domain logic. Service implementations should be constructed as layer effects
+that acquire dependencies once, define named methods with `Effect.fn`, and
+export a named live layer. Runtime-specific concerns, such as Electron paths and
+safe-storage encryption, are injected by the host package.
 
 ## Service File Pattern
 
@@ -113,12 +115,14 @@ another layer, use explicit binary `Layer.provideMerge(dependent, provider)`.
 Use binary calls rather than pipe form for `provideMerge`; the dependency
 direction is easier to read and less error-prone.
 
-Current runtime stages:
+Current runtime stages inside `packages/backend/src/runtime.ts`:
 
 ```ts
 const PlatformLayer = NodeCommandExecutor.layer.pipe(
   Layer.provideMerge(NodeFileSystem.layer),
 );
+
+const ConfigLayer = Layer.succeed(BackendConfig, config);
 
 const BaseServiceLayer = Layer.mergeAll(
   AuthTokenStoreLive,
@@ -150,6 +154,8 @@ const AppLayer = Layer.provideMerge(
   PullRequestServiceLive,
   BaseAndServiceLayer,
 );
+
+return Layer.provideMerge(AppLayer, ConfigLayer);
 ```
 
 Layer stages should reflect constructor dependencies:
@@ -159,6 +165,8 @@ Layer stages should reflect constructor dependencies:
 - Independent services may depend on platform/base services, but not on each other.
 - `DiffDataServiceLive` depends on base services plus `SettingsServiceLive` and `GitServiceLive`.
 - `PullRequestServiceLive` depends on base services plus `DiffDataServiceLive`.
+- `BackendConfig` supplies `databasePath`, `migrationsPath`, and `userDataPath`
+  from the host package.
 
 When adding a new service, place it in the earliest stage where all constructor
 dependencies are already provided.
