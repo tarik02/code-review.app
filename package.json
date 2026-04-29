@@ -1,0 +1,31 @@
+{
+  "name": "code-review.app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "changeset": "changeset",
+    "dev": "pnpm --filter @code-review-app/electron dev",
+    "build": "pnpm --filter @code-review-app/electron build",
+    "dist": "pnpm --filter @code-review-app/electron dist",
+    "preview": "pnpm --filter @code-review-app/electron preview",
+    "release:merge-metadata": "pnpm --filter @code-review-app/scripts run merge-update-metadata",
+    "test": "vp test",
+    "typecheck": "tsc -p tsconfig.json",
+    "typecheck:all": "pnpm run typecheck && pnpm -r exec tsc -p tsconfig.json",
+    "typecheck:ci": "pnpm exec tsc -p tsconfig.json --pretty false && pnpm -r exec tsc -p tsconfig.json --pretty false",
+    "lint": "vp lint",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
+    "version:release": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "catalog:",
+    "@types/node": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

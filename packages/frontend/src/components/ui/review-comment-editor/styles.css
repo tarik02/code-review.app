@@ -1,0 +1,484 @@
+.comment-editor-shell {
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor {
+  --basePageBg: rgb(var(--rgb-surface));
+  --baseBase: rgb(var(--rgb-surface));
+  --baseBgSubtle: rgb(var(--rgb-canvas));
+  --baseBg: rgb(var(--rgb-canvas));
+  --baseBgHover: rgb(var(--rgb-canvas-hover));
+  --baseBgActive: rgb(var(--rgb-canvas-hover));
+  --baseLine: rgb(var(--rgb-ink-200));
+  --baseBorder: rgb(var(--rgb-ink-200));
+  --baseBorderHover: rgb(var(--rgb-ink-300));
+  --baseSolid: rgb(var(--rgb-ink-500));
+  --baseSolidHover: rgb(var(--rgb-ink-600));
+  --baseText: rgb(var(--rgb-ink-600));
+  --baseTextContrast: rgb(var(--rgb-ink-900));
+  --accentBg: rgb(var(--rgb-ink-100));
+  --accentBgHover: rgb(var(--rgb-canvas-hover));
+  --accentSolid: rgb(var(--rgb-ink-800));
+  --accentSolidHover: rgb(var(--rgb-ink-900));
+  --accentText: rgb(var(--rgb-ink-800));
+  --accentTextContrast: rgb(var(--rgb-ink-900));
+  --font-body: var(--font-sans);
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  overflow: visible;
+  border: 0;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: rgb(var(--rgb-surface));
+  color: rgb(var(--rgb-ink-900));
+  cursor: text;
+}
+
+.comment-editor [class*='_editorWrapper_'] {
+  min-height: 0;
+}
+
+.comment-editor [class*='_rootContentEditableWrapper_'] {
+  min-height: 0;
+}
+
+.comment-editor-toolbar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.25rem;
+}
+
+.comment-editor-toolbar-actions,
+.comment-editor-toolbar-modes {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.comment-editor-toolbar-actions {
+  flex: 1;
+}
+
+.comment-editor-toolbar-modes {
+  flex-shrink: 0;
+}
+
+.comment-editor-toolbar-button {
+  color: rgb(var(--rgb-ink-700));
+}
+
+.comment-editor-toolbar-button:hover:not(:disabled),
+.comment-editor-toolbar-button[data-active='true'] {
+  background: rgb(var(--rgb-canvas-hover));
+  color: rgb(var(--rgb-ink-900));
+}
+
+.comment-editor-toolbar-button[data-active='true'] {
+  border-color: rgb(var(--rgb-ink-200));
+}
+
+.comment-editor-toolbar-separator {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: rgb(var(--rgb-ink-200));
+}
+
+.comment-editor-link-popover {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  width: min(22rem, calc(100vw - 1.5rem));
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+  pointer-events: auto;
+  padding: 0.25rem;
+  box-shadow: 0 8px 20px rgb(var(--rgb-ink-900) / 0.12);
+}
+
+.comment-editor-block-select {
+  min-width: 7rem;
+  border-color: transparent;
+  background: transparent;
+  color: rgb(var(--rgb-ink-700));
+}
+
+.comment-editor-block-select:hover,
+.comment-editor-block-select[data-popup-open] {
+  background: rgb(var(--rgb-canvas-hover));
+  color: rgb(var(--rgb-ink-900));
+}
+
+.comment-editor-block-select-content {
+  z-index: 100;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor-content {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  overflow-y: visible;
+  padding: 0.5rem 0.75rem;
+  background: rgb(var(--rgb-surface));
+  caret-color: rgb(var(--rgb-ink-900));
+  color: rgb(var(--rgb-ink-900));
+  cursor: text;
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+.comment-editor-content::selection,
+.comment-editor-content *::selection,
+.comment-editor .cm-content::selection,
+.comment-editor .cm-content ::selection {
+  background: rgb(59 130 246 / 0.45);
+  color: rgb(var(--rgb-ink-900));
+}
+
+.comment-editor .cm-selectionBackground,
+.comment-editor .cm-focused .cm-selectionBackground {
+  background: rgb(59 130 246 / 0.45) !important;
+}
+
+.comment-editor-content:empty::before {
+  content: '\200b';
+}
+
+.comment-editor:focus-within [class*='_placeholder_'] {
+  display: none;
+}
+
+.comment-editor [class*='_placeholder_'] {
+  padding: 0.5rem 0.75rem;
+  color: rgb(var(--rgb-ink-500));
+}
+
+.comment-editor-content code {
+  border-radius: 0.25rem;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.125rem 0.25rem;
+  font-family: var(--font-mono);
+}
+
+.comment-editor-code-block,
+.comment-editor [class*='_codeMirrorWrapper_'] {
+  position: relative;
+  margin: 0.5rem 0;
+  overflow: visible;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor-code-block .cm-editor {
+  overflow: hidden;
+  border-radius: calc(0.5rem - 1px);
+}
+
+.comment-editor .cm-gutters,
+.comment-editor-code-block .cm-gutters {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.comment-editor .cm-gutterElement,
+.comment-editor-code-block .cm-gutterElement {
+  line-height: 20px;
+}
+
+.comment-editor-code-toolbar {
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 0;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.25rem;
+  box-shadow: 0 8px 20px rgb(var(--rgb-ink-900) / 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.125rem);
+  visibility: hidden;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    visibility 0s linear 150ms;
+}
+
+.comment-editor-code-block:focus-within .comment-editor-code-toolbar,
+.comment-editor-code-toolbar[data-open='true'] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.comment-editor-code-language-combobox {
+  min-width: 9rem;
+  border-color: transparent;
+  background: rgb(var(--rgb-canvas));
+  color: rgb(var(--rgb-ink-700));
+  font-family: var(--font-sans);
+}
+
+.comment-editor-code-language-combobox:hover,
+.comment-editor-code-language-combobox[data-open] {
+  background: rgb(var(--rgb-canvas-hover));
+  color: rgb(var(--rgb-ink-900));
+}
+
+.comment-editor-code-language-combobox input {
+  width: 7rem;
+}
+
+.comment-editor-code-language-combobox-content {
+  z-index: 100;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor-suggestion {
+  margin: 0.5rem 0;
+  overflow: hidden;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.5rem;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor-suggestion-header {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.375rem;
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  background: rgb(var(--rgb-canvas));
+  color: rgb(var(--rgb-ink-700));
+  font-size: 0.75rem;
+  line-height: 1rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.comment-editor-suggestion-header strong {
+  color: rgb(var(--rgb-ink-900));
+  font-weight: 700;
+}
+
+.comment-editor-suggestion-header-spacer {
+  flex: 1;
+}
+
+.comment-editor-suggestion-range-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.comment-editor-suggestion-range-control button {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.comment-editor-suggestion-range-input {
+  width: 2.5rem;
+  height: 1.5rem;
+  border: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0.375rem;
+  background: rgb(var(--rgb-surface));
+  color: rgb(var(--rgb-ink-900));
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  outline: none;
+  text-align: center;
+}
+
+.comment-editor-suggestion-original.comment-editor-code-block {
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: rgb(239 68 68 / 0.07);
+}
+
+.comment-editor-suggestion-original .cm-editor {
+  border-radius: 0;
+}
+
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-original .cm-content,
+.comment-editor-suggestion-original .cm-scroller {
+  background: rgb(239 68 68 / 0.07);
+}
+
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-replacement .cm-gutters {
+  border-right: 0;
+}
+
+.comment-editor-suggestion-replacement.comment-editor-code-block {
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: rgb(34 197 94 / 0.07);
+}
+
+.comment-editor-suggestion-replacement .cm-editor {
+  border-radius: 0;
+}
+
+.comment-editor-suggestion-replacement .cm-gutters {
+  background: rgb(34 197 94 / 0.07);
+}
+
+.comment-editor-suggestion-replacement .cm-content,
+.comment-editor-suggestion-replacement .cm-scroller {
+  background: rgb(34 197 94 / 0.07);
+}
+
+.comment-editor-suggestion-gutter {
+  min-width: 3.75rem;
+}
+
+.comment-editor-suggestion-gutter .cm-gutterElement {
+  min-width: 3.75rem;
+  padding: 0;
+}
+
+.comment-editor-suggestion-gutter-marker {
+  display: grid;
+  width: 3.75rem;
+  grid-template-columns: 1.35rem 1.35rem 0.85rem;
+  align-items: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}
+
+.comment-editor-suggestion-gutter-old,
+.comment-editor-suggestion-gutter-new,
+.comment-editor-suggestion-gutter-sign {
+  min-width: 0;
+  padding: 0 0.125rem;
+  text-align: right;
+}
+
+.comment-editor-suggestion-gutter-sign {
+  padding-left: 0;
+  text-align: center;
+}
+
+.comment-editor-suggestion-original .cm-line,
+.comment-editor-suggestion-replacement .cm-line {
+  padding-inline: 0.375rem 0.75rem;
+}
+
+.comment-editor-suggestion-original .comment-editor-suggestion-gutter-marker {
+  color: rgb(220 38 38);
+}
+
+.comment-editor-suggestion-replacement .comment-editor-suggestion-gutter-marker {
+  color: rgb(22 163 74);
+}
+
+.comment-editor-content pre,
+.comment-editor .cm-sourceView {
+  margin: 0;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor .cm-sourceView .cm-editor {
+  min-height: 96px;
+  background: rgb(var(--rgb-surface));
+}
+
+.comment-editor-code-block .cm-editor,
+.comment-editor [class*='_codeMirrorWrapper_'] .cm-editor {
+  min-height: 0;
+  background: rgb(var(--rgb-surface));
+  outline: none;
+}
+
+.comment-editor-code-block .cm-content,
+.comment-editor [class*='_codeMirrorWrapper_'] .cm-content {
+  min-height: 0 !important;
+}
+
+.comment-editor-code-block .cm-scroller,
+.comment-editor [class*='_codeMirrorWrapper_'] .cm-scroller {
+  overflow: visible;
+}
+
+.comment-editor-code-block .cm-focused,
+.comment-editor-code-block .cm-content:focus,
+.comment-editor [class*='_codeMirrorWrapper_'] .cm-focused,
+.comment-editor [class*='_codeMirrorWrapper_'] .cm-content:focus {
+  outline: none;
+}
+
+.comment-editor-suggestion-original .cm-editor,
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-original .cm-content,
+.comment-editor-suggestion-original .cm-scroller {
+  background: rgb(239 68 68 / 0.07);
+}
+
+.comment-editor-suggestion-replacement .cm-editor,
+.comment-editor-suggestion-replacement .cm-gutters,
+.comment-editor-suggestion-replacement .cm-content,
+.comment-editor-suggestion-replacement .cm-scroller {
+  background: rgb(34 197 94 / 0.07);
+}
+
+.comment-editor [class*='_codeMirrorToolbar_'] {
+  border-bottom-left-radius: 0.375rem;
+  border-left: 1px solid rgb(var(--rgb-ink-200));
+  border-bottom: 1px solid rgb(var(--rgb-ink-200));
+  background: rgb(var(--rgb-canvas));
+}
+
+.comment-editor .mdxeditor-select-content,
+.comment-editor [class*='_selectContainer_'],
+.comment-editor [class*='_toolbarButtonDropdownContainer_'],
+.comment-editor [class*='_toolbarCodeBlockLanguageSelectContent_'],
+.comment-editor [class*='_popoverContent_'] {
+  z-index: 100 !important;
+}
+
+.comment-editor .cm-sourceView .cm-scroller {
+  overflow: visible;
+  color: rgb(var(--rgb-ink-900));
+}
+
+.comment-editor .cm-sourceView .cm-gutters {
+  display: none;
+}
+
+.comment-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid rgb(var(--rgb-ink-200));
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: rgb(var(--rgb-canvas));
+  padding: 0.5rem;
+}

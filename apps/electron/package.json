@@ -1,0 +1,64 @@
+{
+  "name": "@code-review-app/electron",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browse GitHub and GitLab pull requests locally",
+  "homepage": "https://github.com/tarik02/code-review.app",
+  "author": {
+    "name": "Taras Fomin",
+    "email": "Taras.Fomin@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:tarik02/code-review.app.git"
+  },
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "dotenv -- electron-vite dev --watch",
+    "build": "electron-vite build",
+    "dist": "electron-builder",
+    "test": "pnpm --dir ../.. exec vp test --project electron --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@code-review-app/backend": "workspace:*",
+    "@code-review-app/frontend": "workspace:*",
+    "@code-review-app/shared": "workspace:*",
+    "@hadeeb/trpc-worker": "catalog:",
+    "@libsql/client": "catalog:",
+    "@neon-rs/load": "catalog:",
+    "@trpc/server": "catalog:",
+    "detect-libc": "catalog:",
+    "effect": "catalog:",
+    "electron-updater": "^6.8.3",
+    "libsql": "catalog:"
+  },
+  "devDependencies": {
+    "@rolldown/plugin-babel": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "dotenv-cli": "catalog:",
+    "electron": "catalog:",
+    "electron-builder": "catalog:",
+    "electron-vite": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "optionalDependencies": {
+    "@libsql/darwin-arm64": "catalog:",
+    "@libsql/darwin-x64": "catalog:",
+    "@libsql/linux-arm-gnueabihf": "catalog:",
+    "@libsql/linux-arm-musleabihf": "catalog:",
+    "@libsql/linux-arm64-gnu": "catalog:",
+    "@libsql/linux-arm64-musl": "catalog:",
+    "@libsql/linux-x64-gnu": "catalog:",
+    "@libsql/linux-x64-musl": "catalog:",
+    "@libsql/win32-x64-msvc": "catalog:"
+  }
+}

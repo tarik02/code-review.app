@@ -1,0 +1,35 @@
+name: version-pr
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: version-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-pr:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup mise
+        uses: jdx/mise-action@v3
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: create version pr
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version:release
+          commit: version packages
+          title: version packages
+          createGithubReleases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

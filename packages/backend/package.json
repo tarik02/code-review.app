@@ -1,0 +1,32 @@
+{
+  "name": "@code-review-app/backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./router": "./src/router.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "scripts": {
+    "test": "pnpm --dir ../.. exec vp test --project backend --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@code-review-app/shared": "workspace:*",
+    "@effect/platform": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@libsql/client": "catalog:",
+    "@pierre/diffs": "catalog:",
+    "@pierre/trees": "catalog:",
+    "@trpc/server": "catalog:",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "name": "@code-review-app/frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/main.tsx"
+  },
+  "scripts": {
+    "test": "pnpm --dir ../.. exec vp test --project frontend",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "catalog:",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "catalog:",
+    "@base-ui/react": "catalog:",
+    "@code-review-app/backend": "workspace:*",
+    "@code-review-app/shared": "workspace:*",
+    "@codemirror/commands": "catalog:",
+    "@codemirror/language-data": "catalog:",
+    "@codemirror/state": "catalog:",
+    "@codemirror/view": "catalog:",
+    "@floating-ui/react": "catalog:",
+    "@fontsource/geist-mono": "catalog:",
+    "@hadeeb/trpc-worker": "catalog:",
+    "@heroicons/react": "catalog:",
+    "@lexical/rich-text": "catalog:",
+    "@mdxeditor/editor": "catalog:",
+    "@mdxeditor/gurx": "catalog:",
+    "@pierre/diffs": "catalog:",
+    "@pierre/theme": "catalog:",
+    "@pierre/trees": "catalog:",
+    "@pierre/truncate": "catalog:",
+    "@shikijs/types": "catalog:",
+    "@tanstack/react-hotkeys": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/react-query": "catalog:",
+    "class-variance-authority": "catalog:",
+    "cm6-theme-basic-light": "catalog:",
+    "codemirror": "catalog:",
+    "fuse.js": "catalog:",
+    "lexical": "catalog:",
+    "lucide-react": "catalog:",
+    "markdown-to-jsx": "catalog:",
+    "prismjs": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shiki": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tw-animate-css": "catalog:",
+    "zustand": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/prismjs": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

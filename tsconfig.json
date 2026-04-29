@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./packages/frontend/src/*"]
+    },
+    "types": ["node"]
+  },
+  "include": [
+    "apps/electron/src",
+    "apps/electron/electron.vite.config.ts",
+    "packages/backend/src",
+    "packages/backend/drizzle.config.ts",
+    "packages/frontend/src",
+    "packages/shared/src",
+    "vite.config.ts"
+  ],
+  "exclude": ["packages/frontend/src/**/*.test.ts", "packages/frontend/src/**/*.test.tsx"]
+}

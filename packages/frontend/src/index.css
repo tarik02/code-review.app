@@ -1,0 +1,228 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant wco (&:is(.wco, .wco *));
+@custom-variant windows (&:is(.windows, .windows *));
+@custom-variant linux (&:is(.linux, .linux *));
+@custom-variant macos (&:is(.macos, .macos *));
+@custom-variant fullscreen (&:is(.window-fullscreen, .window-fullscreen *));
+@custom-variant not-fullscreen (&:is(:root:not(.window-fullscreen) *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-canvas: rgb(var(--rgb-canvas));
+  --color-surface: rgb(var(--rgb-surface));
+  --color-canvasDark: rgb(var(--rgb-canvas-hover));
+
+  --color-ink-50: rgb(var(--rgb-ink-50));
+  --color-ink-100: rgb(var(--rgb-ink-100));
+  --color-ink-200: rgb(var(--rgb-ink-200));
+  --color-ink-300: rgb(var(--rgb-ink-300));
+  --color-ink-400: rgb(var(--rgb-ink-400));
+  --color-ink-500: rgb(var(--rgb-ink-500));
+  --color-ink-600: rgb(var(--rgb-ink-600));
+  --color-ink-700: rgb(var(--rgb-ink-700));
+  --color-ink-800: rgb(var(--rgb-ink-800));
+  --color-ink-900: rgb(var(--rgb-ink-900));
+
+  --color-brand-500: #27272a;
+  --color-brand-600: #18181b;
+  --color-danger-600: #b91c1c;
+
+  --shadow-dialog: 0 24px 80px rgba(15, 23, 42, 0.24);
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer base {
+  :root {
+    --rgb-canvas: 242 241 237;
+    --rgb-canvas-hover: 230 228 221;
+    --rgb-surface: 247 247 243;
+    --rgb-ink-50: 250 250 250;
+    --rgb-ink-100: 244 244 245;
+    --rgb-ink-200: 228 228 231;
+    --rgb-ink-300: 212 212 216;
+    --rgb-ink-400: 161 161 170;
+    --rgb-ink-500: 113 113 122;
+    --rgb-ink-600: 82 82 91;
+    --rgb-ink-700: 63 63 70;
+    --rgb-ink-800: 39 39 42;
+    --rgb-ink-900: 24 24 27;
+    --radius: 0.5rem;
+    --background: rgb(var(--rgb-canvas));
+    --foreground: rgb(var(--rgb-ink-900));
+    --card: rgb(var(--rgb-surface));
+    --card-foreground: rgb(var(--rgb-ink-900));
+    --popover: rgb(var(--rgb-surface));
+    --popover-foreground: rgb(var(--rgb-ink-900));
+    --primary: #18181b;
+    --primary-foreground: white;
+    --secondary: rgb(var(--rgb-canvas-hover));
+    --secondary-foreground: rgb(var(--rgb-ink-900));
+    --muted: rgb(var(--rgb-canvas-hover));
+    --muted-foreground: rgb(var(--rgb-ink-500));
+    --accent: rgb(var(--rgb-canvas-hover));
+    --accent-foreground: rgb(var(--rgb-ink-900));
+    --destructive: #b91c1c;
+    --border: rgb(var(--rgb-ink-200));
+    --input: rgb(var(--rgb-ink-300));
+    --ring: rgb(var(--rgb-ink-400));
+  }
+
+  html.dark {
+    --rgb-canvas: 24 24 27;
+    --rgb-canvas-hover: 39 39 42;
+    --rgb-surface: 32 33 36;
+    --rgb-ink-50: 24 24 27;
+    --rgb-ink-100: 39 39 42;
+    --rgb-ink-200: 63 63 70;
+    --rgb-ink-300: 82 82 91;
+    --rgb-ink-400: 113 113 122;
+    --rgb-ink-500: 161 161 170;
+    --rgb-ink-600: 212 212 216;
+    --rgb-ink-700: 228 228 231;
+    --rgb-ink-800: 244 244 245;
+    --rgb-ink-900: 250 250 251;
+    --background: rgb(var(--rgb-canvas));
+    --foreground: rgb(var(--rgb-ink-900));
+    --card: rgb(var(--rgb-surface));
+    --card-foreground: rgb(var(--rgb-ink-900));
+    --popover: rgb(var(--rgb-surface));
+    --popover-foreground: rgb(var(--rgb-ink-900));
+    --primary: rgb(var(--rgb-ink-800));
+    --primary-foreground: rgb(var(--rgb-ink-50));
+    --secondary: rgb(var(--rgb-canvas-hover));
+    --secondary-foreground: rgb(var(--rgb-ink-900));
+    --muted: rgb(var(--rgb-canvas-hover));
+    --muted-foreground: rgb(var(--rgb-ink-500));
+    --accent: rgb(var(--rgb-canvas-hover));
+    --accent-foreground: rgb(var(--rgb-ink-900));
+    --destructive: #ef4444;
+    --border: rgb(var(--rgb-ink-200));
+    --input: rgb(var(--rgb-ink-300));
+    --ring: rgb(var(--rgb-ink-400));
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100vh;
+  }
+
+  html {
+    background-color: rgb(var(--rgb-canvas));
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: rgb(var(--rgb-canvas));
+    color: rgb(var(--rgb-ink-900));
+    line-height: 1.5;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
+  }
+
+  html.theme-view-transition-active body {
+    transition: none;
+  }
+
+  html.theme-reveal-transition::view-transition-old(root),
+  html.theme-reveal-transition::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-fade-transition::view-transition-old(root) {
+    animation: theme-fade-out 180ms ease both;
+    mix-blend-mode: normal;
+  }
+
+  html.theme-fade-transition::view-transition-new(root) {
+    animation: theme-fade-in 180ms ease both;
+    mix-blend-mode: normal;
+  }
+
+  @keyframes theme-fade-out {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes theme-fade-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+@utility app-region-* {
+  -webkit-app-region: --value('drag', 'no-drag');
+}
+
+@layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
