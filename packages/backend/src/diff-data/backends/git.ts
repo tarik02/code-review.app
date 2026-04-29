@@ -18,7 +18,7 @@ import {
 } from "../../git/errors.ts";
 import { providerFor } from "../../providers/registry.ts";
 import { AuthTokenStore } from "../../auth/token-store.ts";
-import type { PrFileContents } from "@rudu/shared";
+import type { PrFileContents } from "@code-review-app/shared";
 import type { GitRemoteSpec, PullRequestRefs } from "../../providers/types.ts";
 import { repoIdentityCacheKey, type RepoIdentity } from "../../repo-id.ts";
 import type {

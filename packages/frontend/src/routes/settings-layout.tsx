@@ -32,7 +32,7 @@ function SettingsLayout() {
 
         <div className="grow flex flex-col justify-between px-3 py-4">
           <div className="mb-6 px-2">
-            <p className="text-xs font-medium uppercase text-ink-500">rudu</p>
+            <p className="text-xs font-medium uppercase text-ink-500">code-review.app</p>
             <h1 className="mt-1 text-lg font-semibold text-ink-900">
               Settings
             </h1>

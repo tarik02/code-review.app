@@ -13,7 +13,7 @@ import type {
   PrPatch,
   RepoIdentity,
   PullRequestSummary,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type PullRequestServiceShape = {
   listCached(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;

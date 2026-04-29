@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@mdxeditor/editor/style.css";
+import Prism from "prismjs";
 import "@fontsource/geist-mono/400.css";
 import "@fontsource/geist-mono/500.css";
 import "@fontsource/geist-mono/600.css";
@@ -13,6 +14,11 @@ import PierreDiffsWorker from "@pierre/diffs/worker/worker-portable.js?worker";
 import { isElectron, syncDocumentPlatformClass } from "./lib/platform";
 import { syncDocumentWindowControlsOverlayClass } from "./lib/wco";
 import { syncDocumentWindowFullscreenClass } from "./lib/window-fullscreen";
+
+// Lexical's Prism integration expects a global Prism object at runtime.
+if (typeof window !== "undefined") {
+  (window as Window & { Prism?: typeof Prism }).Prism = Prism;
+}
 
 syncDocumentPlatformClass();
 

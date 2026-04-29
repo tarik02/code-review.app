@@ -19,7 +19,7 @@ import type {
   RepoIdentity,
   PullRequestSummary,
   RepoSummary,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;

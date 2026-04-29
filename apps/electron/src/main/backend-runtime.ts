@@ -1,6 +1,6 @@
 import { app } from "electron";
 import path from "node:path";
-import { createBackendRuntime } from "@rudu/backend";
+import { createBackendRuntime } from "@code-review-app/backend";
 import { ElectronSafeStorageEncryption } from "./electron-encryption";
 
 function resolveBackendMigrationsPath() {

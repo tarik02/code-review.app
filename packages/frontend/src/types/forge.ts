@@ -1,5 +1,5 @@
 import type { GitStatusEntry } from "@pierre/trees";
-import { PullRequestBadgeStatus } from "@rudu/shared";
+import { PullRequestBadgeStatus } from "@code-review-app/shared";
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -26,7 +26,7 @@ import type {
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type FileStatsEntry = {
   additions: number;

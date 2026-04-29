@@ -1,5 +1,5 @@
 import { parsePatchFiles, type FileDiffMetadata } from "@pierre/diffs";
-import type { DiffDataMode } from "@rudu/shared";
+import type { DiffDataMode } from "@code-review-app/shared";
 
 const GIT_PATCH_CONTEXT_SIZE = 3;
 

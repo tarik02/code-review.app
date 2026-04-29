@@ -1,29 +1,19 @@
 {
-  "name": "rudu",
+  "name": "code-review.app",
   "private": true,
   "version": "0.1.5",
   "type": "module",
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "pnpm --filter @rudu/electron dev",
-    "build": "pnpm --filter @rudu/electron build",
-    "dist": "pnpm --filter @rudu/electron dist",
-    "preview": "pnpm --filter @rudu/electron preview",
-    "test": "pnpm --filter @rudu/frontend test"
+    "dev": "pnpm --filter @code-review-app/electron dev",
+    "build": "pnpm --filter @code-review-app/electron build",
+    "dist": "pnpm --filter @code-review-app/electron dist",
+    "preview": "pnpm --filter @code-review-app/electron preview",
+    "test": "pnpm --filter @code-review-app/frontend test"
   },
   "devDependencies": {
-    "@types/node": "^22.19.17",
-    "typescript": "~5.8.3",
-    "vite": "^8.0.10"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@parcel/watcher",
-      "electron",
-      "electron-winstaller",
-      "esbuild",
-      "libsql",
-      "msgpackr-extract"
-    ]
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

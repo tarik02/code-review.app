@@ -1,5 +1,5 @@
 import { ValidationError } from "./errors.ts";
-import type { ForgeProviderKind } from "@rudu/shared";
+import type { ForgeProviderKind } from "@code-review-app/shared";
 
 type RepoIdentity = {
   provider: ForgeProviderKind;

@@ -10,7 +10,7 @@ import {
   DEFAULT_GITLAB_CLIENT_ID,
   DEFAULT_OAUTH_REDIRECT_URI,
 } from "./constants.ts";
-import type { ForgeProviderKind } from "@rudu/shared";
+import type { ForgeProviderKind } from "@code-review-app/shared";
 import type { StoredAuthToken } from "./token-store.ts";
 
 type OAuthProviderConfig = {
@@ -183,7 +183,7 @@ function oauthFormJson<A>(
   return Effect.gen(function* () {
     const request = HttpClientRequest.post(url).pipe(
       HttpClientRequest.accept("application/json"),
-      HttpClientRequest.setHeader("User-Agent", "rudu"),
+      HttpClientRequest.setHeader("User-Agent", "code-review.app"),
       HttpClientRequest.bodyText(
         body.toString(),
         "application/x-www-form-urlencoded",

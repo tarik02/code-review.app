@@ -1,5 +1,5 @@
 {
-  "name": "@rudu/shared",
+  "name": "@code-review-app/shared",
   "private": true,
   "version": "0.1.5",
   "type": "module",
@@ -9,10 +9,10 @@
     "./types": "./src/types.ts"
   },
   "dependencies": {
-    "@pierre/diffs": "^1.1.17",
-    "zod": "^4.3.6"
+    "@pierre/diffs": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "typescript": "~5.8.3"
+    "typescript": "catalog:"
   }
 }

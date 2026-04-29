@@ -15,7 +15,7 @@ import type {
   PrFileContents,
   PrPatch,
   RepoIdentity,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 const DIFF_DATA_LOG_PREFIX = "[diff-data]";
 

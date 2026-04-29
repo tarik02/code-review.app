@@ -7,7 +7,7 @@ import type { DurationInput } from "effect/Duration";
 import { BackendConfig } from "../config.ts";
 import type { GitRemoteSpec } from "../providers/types.ts";
 import { repoIdentityCacheKey, type RepoIdentity } from "../repo-id.ts";
-import type { PrChangedFile, PrFileChangeType } from "@rudu/shared";
+import type { PrChangedFile, PrFileChangeType } from "@code-review-app/shared";
 import {
   GitAuthenticationFailed,
   GitAuthorizationFailed,
@@ -155,7 +155,7 @@ function authEnv(
 
   return Effect.gen(function* () {
     const directory = yield* fileSystem.makeTempDirectoryScoped({
-      prefix: "rudu-git-askpass-",
+      prefix: "code-review-app-git-askpass-",
     });
     const askPassPath = path.join(
       directory,

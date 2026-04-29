@@ -3,7 +3,7 @@ import type {
   PrChangedFile,
   PrFileChangeType,
   PrFileContents,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 import type { RepoIdentity } from "../../repo-id.ts";
 
 type DiffBackendInput = {

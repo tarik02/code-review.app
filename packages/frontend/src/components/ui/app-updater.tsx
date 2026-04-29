@@ -12,7 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./alert-dialog";
-import type { AvailableUpdate, UpdateEvent } from "@rudu/shared";
+import type { AvailableUpdate, UpdateEvent } from "@code-review-app/shared";
 
 type DownloadProgress = {
   downloaded: number;
@@ -136,7 +136,7 @@ function AppUpdater({
 
     try {
       await trpc.updates.install.mutate();
-      setFeedback("Update installed. Relaunching Rudu...");
+      setFeedback("Update installed. Relaunching code-review.app...");
     } catch (error) {
       setFeedback(`Update install failed: ${getErrorMessage(error)}`);
     } finally {
@@ -184,8 +184,8 @@ function AppUpdater({
             <AlertDialogTitle>Install update</AlertDialogTitle>
             <AlertDialogDescription>
               {currentVersion
-                ? `Rudu ${currentVersion} can be updated to ${availableUpdate?.version ?? "a newer version"}.`
-                : `A newer version of Rudu is available: ${availableUpdate?.version ?? "unknown"}.`}
+                ? `code-review.app ${currentVersion} can be updated to ${availableUpdate?.version ?? "a newer version"}.`
+                : `A newer version of code-review.app is available: ${availableUpdate?.version ?? "unknown"}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
 

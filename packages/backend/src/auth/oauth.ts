@@ -9,7 +9,7 @@ import {
   requestDeviceOAuthCode,
 } from "./provider-auth.ts";
 import type { AuthTokenStore } from "./token-store.ts";
-import type { ForgeProviderKind } from "@rudu/shared";
+import type { ForgeProviderKind } from "@code-review-app/shared";
 
 type OAuthSession = {
   accountId: string;

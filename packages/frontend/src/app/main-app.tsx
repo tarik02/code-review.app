@@ -109,7 +109,7 @@ function parseForgePullRequestUrl(value: string): ParsedForgePullRequestUrl | nu
   return null;
 }
 
-function parseRuduOpenUrl(value: string) {
+function parseAppOpenUrl(value: string) {
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== "code-review.app:" || parsed.hostname !== "open") {
@@ -651,7 +651,7 @@ function MainApp() {
 
   useEffect(() => {
     async function openForgePullRequestLink(deepLinkUrl: string) {
-      const targetUrl = parseRuduOpenUrl(deepLinkUrl);
+      const targetUrl = parseAppOpenUrl(deepLinkUrl);
       if (!targetUrl) {
         throw new Error("Deep link is missing a target URL.");
       }

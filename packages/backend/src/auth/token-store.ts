@@ -4,7 +4,7 @@ import { EncryptionService } from "./encryption.ts";
 import { DatabaseService } from "../db/client.ts";
 import { authTokens } from "../db/schema.ts";
 import { normalizeHost } from "../repo-id.ts";
-import type { ForgeProviderKind, ProviderAccount } from "@rudu/shared";
+import type { ForgeProviderKind, ProviderAccount } from "@code-review-app/shared";
 
 type StoredAuthToken = {
   id: string;

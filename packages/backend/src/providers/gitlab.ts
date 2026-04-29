@@ -19,7 +19,7 @@ import type {
   RepoSummary,
   ReviewComment,
   ReviewThread,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 import type { ForgeProvider, PullRequestRefs, ReviewThreadInput } from "./types.ts";
 import type { RepoIdentity } from "../repo-id.ts";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
@@ -314,7 +314,7 @@ function requestFor(url: string, token: string, options: GitLabRequestOptions = 
   const authorizedRequest = request.pipe(
     HttpClientRequest.accept(options.accept ?? "application/json"),
     HttpClientRequest.bearerToken(token),
-    HttpClientRequest.setHeader("User-Agent", "rudu"),
+    HttpClientRequest.setHeader("User-Agent", "code-review.app"),
   );
 
   return options.body

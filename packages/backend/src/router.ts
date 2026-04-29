@@ -26,11 +26,11 @@ import {
   repoSummarySchema,
   reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 import { z } from "zod";
 import { completeOAuth, pollDeviceOAuth, startOAuth } from "./auth/oauth.ts";
 import { AuthTokenStore } from "./auth/token-store.ts";
-import type { AvailableUpdate, ProviderProfile, UpdateEvent } from "@rudu/shared";
+import type { AvailableUpdate, ProviderProfile, UpdateEvent } from "@code-review-app/shared";
 import type { BackendRuntime } from "./runtime.ts";
 
 type BackendRouterPlatform = {

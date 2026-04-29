@@ -8,7 +8,7 @@ import type {
   ProviderAccount,
   ProviderAuthStatus,
   RepoSummary,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type RepoServiceShape = {
   listProviderAccounts(): Effect.Effect<ProviderAccount[], Error>;

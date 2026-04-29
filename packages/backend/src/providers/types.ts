@@ -10,7 +10,7 @@ import type {
   PrChangedFile,
   RepoSummary,
   ReviewThread,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type ReviewThreadInput = {
   body: string;

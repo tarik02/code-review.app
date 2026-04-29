@@ -27,22 +27,21 @@ function currentWindow() {
   return BrowserWindow.getAllWindows()[0] ?? null;
 }
 
-function handlePotentialRuduUrl(url: string) {
+function handlePotentialAppUrl(url: string) {
   const window = currentWindow();
   return emitOAuthCallback(url, window) || emitDeepLink(url, window);
 }
 
 app.on("open-url", (event, url) => {
-  console.log(url);
   if (isOAuthCallbackUrl(url) || isDeepLinkUrl(url)) {
     event.preventDefault();
-    handlePotentialRuduUrl(url);
+    handlePotentialAppUrl(url);
   }
 });
 
 app.on("second-instance", (_event, argv) => {
   for (const item of argv) {
-    if (handlePotentialRuduUrl(item)) {
+    if (handlePotentialAppUrl(item)) {
       return;
     }
   }
@@ -56,7 +55,7 @@ app.on("second-instance", (_event, argv) => {
 
 function handleStartupProtocolUrls() {
   for (const item of process.argv) {
-    handlePotentialRuduUrl(item);
+    handlePotentialAppUrl(item);
   }
 }
 

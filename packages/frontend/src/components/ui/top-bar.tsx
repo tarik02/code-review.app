@@ -20,8 +20,8 @@ export function TopBar(props: Props) {
       className={cx(
         "macos:h-[40px] macos:not-fullscreen:data-[position=left]:pl-[calc(72px+1em)]",
         "wco:h-[calc(env(titlebar-area-y)+env(titlebar-area-height))]",
-        "wco:data-[position=left]-pl-[env(titlebar-area-x)]",
-        "wco:data-[position=right]-pr-[calc(env(titlebar-area-width)-env(titlebar-area-x))]",
+        "wco:data-[position=left]:pl-[env(titlebar-area-x)]",
+        "wco:data-[position=right]:pr-[100vw-calc(env(titlebar-area-width)-env(titlebar-area-x))]",
         className,
       )}
       data-position={position}

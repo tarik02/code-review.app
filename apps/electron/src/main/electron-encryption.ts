@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import {
   EncryptionService,
   type EncryptionServiceShape,
-} from "@rudu/backend";
+} from "@code-review-app/backend";
 
 function toError(error: unknown) {
   return error instanceof Error ? error : new Error(String(error));

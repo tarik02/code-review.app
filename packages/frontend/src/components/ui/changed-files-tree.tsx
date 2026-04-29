@@ -155,22 +155,24 @@ function ChangedFilesTree({
           : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       }
     >
-      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500 flex items-center justify-between cursor-grab app-region-drag">
-        <p className="text-sm text-ink-900">
-          Changed files{" "}
-          <span className="ml-2 text-ink-500">{files.length}</span>
-        </p>
-        <div className="flex items-center gap-2 font-mono font-bold">
-          {totals ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="text-emerald-600 dark:text-emerald-300">
-                +{formatCount(totals.additions)}
+      <TopBar position="right" className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface text-xs text-ink-500 cursor-grab app-region-drag flex">
+        <div className="grow flex items-center justify-between px-3 py-2">
+          <p className="text-sm text-ink-900">
+            Changed files{" "}
+            <span className="ml-2 text-ink-500">{files.length}</span>
+          </p>
+          <div className="flex items-center gap-2 font-mono font-bold">
+            {totals ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-emerald-600 dark:text-emerald-300">
+                  +{formatCount(totals.additions)}
+                </span>
+                <span className="text-red-500 dark:text-red-300">
+                  −{formatCount(totals.deletions)}
+                </span>
               </span>
-              <span className="text-red-500 dark:text-red-300">
-                −{formatCount(totals.deletions)}
-              </span>
-            </span>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </TopBar>
 

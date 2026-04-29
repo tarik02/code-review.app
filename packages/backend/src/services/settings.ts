@@ -11,7 +11,7 @@ import type {
   AppearanceBackgroundSettings,
   DiffDataSettings,
   ReviewEditorSettings,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type SettingsServiceShape = {
   getAccountVisibility(): Effect.Effect<AccountVisibilitySettings, Error>;

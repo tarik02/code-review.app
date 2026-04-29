@@ -5,7 +5,7 @@ import { ValidationError } from "../errors.ts";
 import { createRepoIdentityFromParts } from "../repo-id.ts";
 import { providerFor } from "../providers/registry.ts";
 import { AuthTokenStore } from "../auth/token-store.ts";
-import type { PullRequestSummary, RepoIdentity } from "@rudu/shared";
+import type { PullRequestSummary, RepoIdentity } from "@code-review-app/shared";
 
 type TrackedPullRequestServiceShape = {
   list(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;

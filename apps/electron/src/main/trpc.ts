@@ -2,7 +2,7 @@ import { app, dialog, ipcMain } from "electron";
 import type { BrowserWindow, OpenDialogOptions } from "electron";
 import { applyWSSHandler } from "@trpc/server/adapters/ws";
 import { createElectronServer } from "@hadeeb/trpc-worker/adapter";
-import { createAppRouter, type BackendRouterPlatform } from "@rudu/backend";
+import { createAppRouter, type BackendRouterPlatform } from "@code-review-app/backend";
 import { backendRuntime } from "./backend-runtime";
 import {
   checkForUpdate,

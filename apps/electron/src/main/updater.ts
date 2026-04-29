@@ -1,7 +1,7 @@
 import electronUpdater from "electron-updater";
 import { EventEmitter } from "node:events";
 import { app } from "electron";
-import type { AvailableUpdate, UpdateEvent } from "@rudu/shared";
+import type { AvailableUpdate, UpdateEvent } from "@code-review-app/shared";
 
 const updateEvents = new EventEmitter();
 let availableUpdate: AvailableUpdate | null = null;
@@ -28,8 +28,13 @@ function emitUpdateEvent(event: UpdateEvent) {
   updateEvents.emit("event", event);
 }
 
+function isUpdaterEnabled() {
+  return app.isPackaged && process.env.CODE_REVIEW_APP_DISABLE_UPDATER !== "1";
+}
+
 function configureUpdater() {
   if (isConfigured) return;
+  if (!isUpdaterEnabled()) return;
   isConfigured = true;
   const autoUpdater = getAutoUpdater();
   autoUpdater.autoDownload = false;
@@ -65,10 +70,10 @@ function configureUpdater() {
 }
 
 async function checkForUpdate() {
-  configureUpdater();
-  if (!app.isPackaged) {
+  if (!isUpdaterEnabled()) {
     return null;
   }
+  configureUpdater();
   const autoUpdater = getAutoUpdater();
   const result = await autoUpdater.checkForUpdates();
   if (!result?.isUpdateAvailable || !result.updateInfo) return null;
@@ -77,6 +82,9 @@ async function checkForUpdate() {
 }
 
 async function installUpdate() {
+  if (!isUpdaterEnabled()) {
+    return;
+  }
   configureUpdater();
   if (!availableUpdate) {
     await checkForUpdate();

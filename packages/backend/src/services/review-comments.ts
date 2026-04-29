@@ -10,7 +10,7 @@ import type {
   ReviewThread,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
-} from "@rudu/shared";
+} from "@code-review-app/shared";
 
 type ReviewCommentServiceShape = {
   getViewerLogin(accountId: string): Effect.Effect<ViewerLogin, Error>;

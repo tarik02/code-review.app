@@ -4,7 +4,7 @@ import { ProviderError, ValidationError } from "../../errors.ts";
 import { providerFor } from "../../providers/registry.ts";
 import { AuthTokenStore } from "../../auth/token-store.ts";
 import { repoIdentityCacheKey } from "../../repo-id.ts";
-import type { PrChangedFile, PrFileContents } from "@rudu/shared";
+import type { PrChangedFile, PrFileContents } from "@code-review-app/shared";
 import type { DiffDataBackend } from "./types.ts";
 
 type ProvideProviderDeps = <A, E>(

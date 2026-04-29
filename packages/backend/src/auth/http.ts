@@ -69,7 +69,7 @@ function providerFetch(
     let request = baseRequest.pipe(
       HttpClientRequest.accept(options.accept ?? "application/json"),
       HttpClientRequest.bearerToken(token),
-      HttpClientRequest.setHeader("User-Agent", "rudu"),
+      HttpClientRequest.setHeader("User-Agent", "code-review.app"),
     );
     for (const [key, value] of Object.entries(options.headers ?? {})) {
       request = request.pipe(HttpClientRequest.setHeader(key, value));

@@ -4,12 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 const repoRoot = resolve("../..");
+
 const workspaceAliases = {
-  "@rudu/backend/router": resolve(repoRoot, "packages/backend/src/router.ts"),
-  "@rudu/backend": resolve(repoRoot, "packages/backend/src/index.ts"),
-  "@rudu/shared": resolve(repoRoot, "packages/shared/src/index.ts"),
+  "@code-review-app/backend/router": resolve(repoRoot, "packages/backend/src/router.ts"),
+  "@code-review-app/backend": resolve(repoRoot, "packages/backend/src/index.ts"),
+  "@code-review-app/shared": resolve(repoRoot, "packages/shared/src/index.ts"),
 };
-const workspacePackages = ["@rudu/backend", "@rudu/shared"];
+const workspacePackages = ["@code-review-app/backend", "@code-review-app/shared"];
 const nativeExternalPackages = [
   "@libsql/client",
   "@libsql/client/sqlite3",
