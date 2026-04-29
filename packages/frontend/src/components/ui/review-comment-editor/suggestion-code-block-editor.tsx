@@ -119,7 +119,7 @@ function SuggestionCodeBlockEditorInner({
       (edge === "from" ? value >= Math.min(range.to, anchorLine) : value >= maxLine);
 
     return (
-      <div className="rudu-comment-editor-suggestion-range-control">
+      <div className="comment-editor-suggestion-range-control">
         {canAdjustRange ? (
           <Button
             aria-label={`Decrease ${edge} line`}
@@ -136,7 +136,7 @@ function SuggestionCodeBlockEditorInner({
           aria-label={`${edge} line`}
           readOnly
           value={value}
-          className="rudu-comment-editor-suggestion-range-input"
+          className="comment-editor-suggestion-range-input"
         />
         {canAdjustRange ? (
           <Button
@@ -155,10 +155,10 @@ function SuggestionCodeBlockEditorInner({
   }
 
   return (
-    <div className="rudu-comment-editor-suggestion">
-      <div className="rudu-comment-editor-suggestion-header">
+    <div className="comment-editor-suggestion">
+      <div className="comment-editor-suggestion-header">
         <strong>Suggested change</strong>
-        <span className="rudu-comment-editor-suggestion-header-spacer" />
+        <span className="comment-editor-suggestion-header-spacer" />
         <span>From line</span>
         {renderRangeControl("from")}
         <span>to</span>
@@ -166,7 +166,7 @@ function SuggestionCodeBlockEditorInner({
       </div>
       <CommentCodeMirrorEditor
         {...props}
-        className="rudu-comment-editor-suggestion-original"
+        className="comment-editor-suggestion-original"
         codeOverride={selectedSourceText}
         disableExpandControls
         forceReadOnly
@@ -176,7 +176,7 @@ function SuggestionCodeBlockEditorInner({
       />
       <CommentCodeMirrorEditor
         {...props}
-        className="rudu-comment-editor-suggestion-replacement"
+        className="comment-editor-suggestion-replacement"
         disableExpandControls
         hideLanguageToolbar
         highlightLanguage={highlightLanguage}

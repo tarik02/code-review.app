@@ -99,13 +99,13 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
     >
       <SelectTrigger
         aria-label={t("toolbar.blockTypeSelect.selectBlockTypeTooltip", "Select block type")}
-        className="rudu-comment-editor-block-select"
+        className="comment-editor-block-select"
         disabled={isUnsupportedBlockType}
         size="sm"
       >
         <SelectValue placeholder={t("toolbar.blockTypeSelect.placeholder", "Block type")} />
       </SelectTrigger>
-      <SelectContent align="start" className="rudu-comment-editor-block-select-content">
+      <SelectContent align="start" className="comment-editor-block-select-content">
         {blockTypeOptions.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}

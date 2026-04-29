@@ -1,10 +1,10 @@
-.rudu-comment-editor-shell {
+.comment-editor-shell {
   border: 1px solid rgb(var(--rgb-ink-200));
   border-radius: 0.5rem;
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor {
+.comment-editor {
   --basePageBg: rgb(var(--rgb-surface));
   --baseBase: rgb(var(--rgb-surface));
   --baseBgSubtle: rgb(var(--rgb-canvas));
@@ -35,15 +35,15 @@
   cursor: text;
 }
 
-.rudu-comment-editor [class*="_editorWrapper_"] {
+.comment-editor [class*="_editorWrapper_"] {
   min-height: 0;
 }
 
-.rudu-comment-editor [class*="_rootContentEditableWrapper_"] {
+.comment-editor [class*="_rootContentEditableWrapper_"] {
   min-height: 0;
 }
 
-.rudu-comment-editor-toolbar {
+.comment-editor-toolbar {
   position: relative;
   z-index: 20;
   display: flex;
@@ -57,44 +57,44 @@
   padding: 0.25rem;
 }
 
-.rudu-comment-editor-toolbar-actions,
-.rudu-comment-editor-toolbar-modes {
+.comment-editor-toolbar-actions,
+.comment-editor-toolbar-modes {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 0.125rem;
 }
 
-.rudu-comment-editor-toolbar-actions {
+.comment-editor-toolbar-actions {
   flex: 1;
 }
 
-.rudu-comment-editor-toolbar-modes {
+.comment-editor-toolbar-modes {
   flex-shrink: 0;
 }
 
-.rudu-comment-editor-toolbar-button {
+.comment-editor-toolbar-button {
   color: rgb(var(--rgb-ink-700));
 }
 
-.rudu-comment-editor-toolbar-button:hover:not(:disabled),
-.rudu-comment-editor-toolbar-button[data-active="true"] {
+.comment-editor-toolbar-button:hover:not(:disabled),
+.comment-editor-toolbar-button[data-active="true"] {
   background: rgb(var(--rgb-canvas-hover));
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-editor-toolbar-button[data-active="true"] {
+.comment-editor-toolbar-button[data-active="true"] {
   border-color: rgb(var(--rgb-ink-200));
 }
 
-.rudu-comment-editor-toolbar-separator {
+.comment-editor-toolbar-separator {
   width: 1px;
   height: 1.25rem;
   margin: 0 0.25rem;
   background: rgb(var(--rgb-ink-200));
 }
 
-.rudu-comment-editor-link-popover {
+.comment-editor-link-popover {
   position: absolute;
   z-index: 1000;
   display: flex;
@@ -109,25 +109,25 @@
   box-shadow: 0 8px 20px rgb(var(--rgb-ink-900) / 0.12);
 }
 
-.rudu-comment-editor-block-select {
+.comment-editor-block-select {
   min-width: 7rem;
   border-color: transparent;
   background: transparent;
   color: rgb(var(--rgb-ink-700));
 }
 
-.rudu-comment-editor-block-select:hover,
-.rudu-comment-editor-block-select[data-popup-open] {
+.comment-editor-block-select:hover,
+.comment-editor-block-select[data-popup-open] {
   background: rgb(var(--rgb-canvas-hover));
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-editor-block-select-content {
+.comment-editor-block-select-content {
   z-index: 100;
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor-content {
+.comment-editor-content {
   display: block;
   width: 100%;
   min-height: 4.5rem;
@@ -141,41 +141,41 @@
   line-height: 1.5rem;
 }
 
-.rudu-comment-editor-content::selection,
-.rudu-comment-editor-content *::selection,
-.rudu-comment-editor .cm-content::selection,
-.rudu-comment-editor .cm-content ::selection {
+.comment-editor-content::selection,
+.comment-editor-content *::selection,
+.comment-editor .cm-content::selection,
+.comment-editor .cm-content ::selection {
   background: rgb(59 130 246 / 0.45);
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-editor .cm-selectionBackground,
-.rudu-comment-editor .cm-focused .cm-selectionBackground {
+.comment-editor .cm-selectionBackground,
+.comment-editor .cm-focused .cm-selectionBackground {
   background: rgb(59 130 246 / 0.45) !important;
 }
 
-.rudu-comment-editor-content:empty::before {
+.comment-editor-content:empty::before {
   content: "\200b";
 }
 
-.rudu-comment-editor:focus-within [class*="_placeholder_"] {
+.comment-editor:focus-within [class*="_placeholder_"] {
   display: none;
 }
 
-.rudu-comment-editor [class*="_placeholder_"] {
+.comment-editor [class*="_placeholder_"] {
   padding: 0.5rem 0.75rem;
   color: rgb(var(--rgb-ink-500));
 }
 
-.rudu-comment-editor-content code {
+.comment-editor-content code {
   border-radius: 0.25rem;
   background: rgb(var(--rgb-canvas));
   padding: 0.125rem 0.25rem;
   font-family: var(--font-mono);
 }
 
-.rudu-comment-editor-code-block,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] {
+.comment-editor-code-block,
+.comment-editor [class*="_codeMirrorWrapper_"] {
   position: relative;
   margin: 0.5rem 0;
   overflow: visible;
@@ -184,23 +184,23 @@
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor-code-block .cm-editor {
+.comment-editor-code-block .cm-editor {
   overflow: hidden;
   border-radius: calc(0.5rem - 1px);
 }
 
-.rudu-comment-editor .cm-gutters,
-.rudu-comment-editor-code-block .cm-gutters {
+.comment-editor .cm-gutters,
+.comment-editor-code-block .cm-gutters {
   font-size: 13px;
   line-height: 20px;
 }
 
-.rudu-comment-editor .cm-gutterElement,
-.rudu-comment-editor-code-block .cm-gutterElement {
+.comment-editor .cm-gutterElement,
+.comment-editor-code-block .cm-gutterElement {
   line-height: 20px;
 }
 
-.rudu-comment-editor-code-toolbar {
+.comment-editor-code-toolbar {
   z-index: 30;
   display: flex;
   align-items: center;
@@ -221,8 +221,8 @@
     visibility 0s linear 150ms;
 }
 
-.rudu-comment-editor-code-block:focus-within .rudu-comment-editor-code-toolbar,
-.rudu-comment-editor-code-toolbar[data-open="true"] {
+.comment-editor-code-block:focus-within .comment-editor-code-toolbar,
+.comment-editor-code-toolbar[data-open="true"] {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -230,7 +230,7 @@
   transition-delay: 0s;
 }
 
-.rudu-comment-editor-code-language-combobox {
+.comment-editor-code-language-combobox {
   min-width: 9rem;
   border-color: transparent;
   background: rgb(var(--rgb-canvas));
@@ -238,22 +238,22 @@
   font-family: var(--font-sans);
 }
 
-.rudu-comment-editor-code-language-combobox:hover,
-.rudu-comment-editor-code-language-combobox[data-open] {
+.comment-editor-code-language-combobox:hover,
+.comment-editor-code-language-combobox[data-open] {
   background: rgb(var(--rgb-canvas-hover));
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-editor-code-language-combobox input {
+.comment-editor-code-language-combobox input {
   width: 7rem;
 }
 
-.rudu-comment-editor-code-language-combobox-content {
+.comment-editor-code-language-combobox-content {
   z-index: 100;
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor-suggestion {
+.comment-editor-suggestion {
   margin: 0.5rem 0;
   overflow: hidden;
   border: 1px solid rgb(var(--rgb-ink-200));
@@ -261,7 +261,7 @@
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor-suggestion-header {
+.comment-editor-suggestion-header {
   display: flex;
   min-height: 2rem;
   align-items: center;
@@ -274,29 +274,29 @@
   padding: 0.25rem 0.5rem;
 }
 
-.rudu-comment-editor-suggestion-header strong {
+.comment-editor-suggestion-header strong {
   color: rgb(var(--rgb-ink-900));
   font-weight: 700;
 }
 
-.rudu-comment-editor-suggestion-header-spacer {
+.comment-editor-suggestion-header-spacer {
   flex: 1;
 }
 
-.rudu-comment-editor-suggestion-range-control {
+.comment-editor-suggestion-range-control {
   display: inline-flex;
   align-items: center;
   gap: 0.125rem;
 }
 
-.rudu-comment-editor-suggestion-range-control button {
+.comment-editor-suggestion-range-control button {
   width: 1.25rem;
   height: 1.25rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
 
-.rudu-comment-editor-suggestion-range-input {
+.comment-editor-suggestion-range-input {
   width: 2.5rem;
   height: 1.5rem;
   border: 1px solid rgb(var(--rgb-ink-200));
@@ -310,7 +310,7 @@
   text-align: center;
 }
 
-.rudu-comment-editor-suggestion-original.rudu-comment-editor-code-block {
+.comment-editor-suggestion-original.comment-editor-code-block {
   margin: 0;
   overflow: hidden;
   border: 0;
@@ -318,22 +318,22 @@
   background: rgb(239 68 68 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-original .cm-editor {
+.comment-editor-suggestion-original .cm-editor {
   border-radius: 0;
 }
 
-.rudu-comment-editor-suggestion-original .cm-gutters,
-.rudu-comment-editor-suggestion-original .cm-content,
-.rudu-comment-editor-suggestion-original .cm-scroller {
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-original .cm-content,
+.comment-editor-suggestion-original .cm-scroller {
   background: rgb(239 68 68 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-original .cm-gutters,
-.rudu-comment-editor-suggestion-replacement .cm-gutters {
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-replacement .cm-gutters {
   border-right: 0;
 }
 
-.rudu-comment-editor-suggestion-replacement.rudu-comment-editor-code-block {
+.comment-editor-suggestion-replacement.comment-editor-code-block {
   margin: 0;
   overflow: hidden;
   border: 0;
@@ -341,29 +341,29 @@
   background: rgb(34 197 94 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-replacement .cm-editor {
+.comment-editor-suggestion-replacement .cm-editor {
   border-radius: 0;
 }
 
-.rudu-comment-editor-suggestion-replacement .cm-gutters {
+.comment-editor-suggestion-replacement .cm-gutters {
   background: rgb(34 197 94 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-replacement .cm-content,
-.rudu-comment-editor-suggestion-replacement .cm-scroller {
+.comment-editor-suggestion-replacement .cm-content,
+.comment-editor-suggestion-replacement .cm-scroller {
   background: rgb(34 197 94 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-gutter {
+.comment-editor-suggestion-gutter {
   min-width: 3.75rem;
 }
 
-.rudu-comment-editor-suggestion-gutter .cm-gutterElement {
+.comment-editor-suggestion-gutter .cm-gutterElement {
   min-width: 3.75rem;
   padding: 0;
 }
 
-.rudu-comment-editor-suggestion-gutter-marker {
+.comment-editor-suggestion-gutter-marker {
   display: grid;
   width: 3.75rem;
   grid-template-columns: 1.35rem 1.35rem 0.85rem;
@@ -373,106 +373,106 @@
   line-height: 20px;
 }
 
-.rudu-comment-editor-suggestion-gutter-old,
-.rudu-comment-editor-suggestion-gutter-new,
-.rudu-comment-editor-suggestion-gutter-sign {
+.comment-editor-suggestion-gutter-old,
+.comment-editor-suggestion-gutter-new,
+.comment-editor-suggestion-gutter-sign {
   min-width: 0;
   padding: 0 0.125rem;
   text-align: right;
 }
 
-.rudu-comment-editor-suggestion-gutter-sign {
+.comment-editor-suggestion-gutter-sign {
   padding-left: 0;
   text-align: center;
 }
 
-.rudu-comment-editor-suggestion-original .cm-line,
-.rudu-comment-editor-suggestion-replacement .cm-line {
+.comment-editor-suggestion-original .cm-line,
+.comment-editor-suggestion-replacement .cm-line {
   padding-inline: 0.375rem 0.75rem;
 }
 
-.rudu-comment-editor-suggestion-original .rudu-comment-editor-suggestion-gutter-marker {
+.comment-editor-suggestion-original .comment-editor-suggestion-gutter-marker {
   color: rgb(220 38 38);
 }
 
-.rudu-comment-editor-suggestion-replacement .rudu-comment-editor-suggestion-gutter-marker {
+.comment-editor-suggestion-replacement .comment-editor-suggestion-gutter-marker {
   color: rgb(22 163 74);
 }
 
-.rudu-comment-editor-content pre,
-.rudu-comment-editor .cm-sourceView {
+.comment-editor-content pre,
+.comment-editor .cm-sourceView {
   margin: 0;
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor .cm-sourceView .cm-editor {
+.comment-editor .cm-sourceView .cm-editor {
   min-height: 96px;
   background: rgb(var(--rgb-surface));
 }
 
-.rudu-comment-editor-code-block .cm-editor,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-editor {
+.comment-editor-code-block .cm-editor,
+.comment-editor [class*="_codeMirrorWrapper_"] .cm-editor {
   min-height: 0;
   background: rgb(var(--rgb-surface));
   outline: none;
 }
 
-.rudu-comment-editor-code-block .cm-content,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-content {
+.comment-editor-code-block .cm-content,
+.comment-editor [class*="_codeMirrorWrapper_"] .cm-content {
   min-height: 0 !important;
 }
 
-.rudu-comment-editor-code-block .cm-scroller,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-scroller {
+.comment-editor-code-block .cm-scroller,
+.comment-editor [class*="_codeMirrorWrapper_"] .cm-scroller {
   overflow: visible;
 }
 
-.rudu-comment-editor-code-block .cm-focused,
-.rudu-comment-editor-code-block .cm-content:focus,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-focused,
-.rudu-comment-editor [class*="_codeMirrorWrapper_"] .cm-content:focus {
+.comment-editor-code-block .cm-focused,
+.comment-editor-code-block .cm-content:focus,
+.comment-editor [class*="_codeMirrorWrapper_"] .cm-focused,
+.comment-editor [class*="_codeMirrorWrapper_"] .cm-content:focus {
   outline: none;
 }
 
-.rudu-comment-editor-suggestion-original .cm-editor,
-.rudu-comment-editor-suggestion-original .cm-gutters,
-.rudu-comment-editor-suggestion-original .cm-content,
-.rudu-comment-editor-suggestion-original .cm-scroller {
+.comment-editor-suggestion-original .cm-editor,
+.comment-editor-suggestion-original .cm-gutters,
+.comment-editor-suggestion-original .cm-content,
+.comment-editor-suggestion-original .cm-scroller {
   background: rgb(239 68 68 / 0.07);
 }
 
-.rudu-comment-editor-suggestion-replacement .cm-editor,
-.rudu-comment-editor-suggestion-replacement .cm-gutters,
-.rudu-comment-editor-suggestion-replacement .cm-content,
-.rudu-comment-editor-suggestion-replacement .cm-scroller {
+.comment-editor-suggestion-replacement .cm-editor,
+.comment-editor-suggestion-replacement .cm-gutters,
+.comment-editor-suggestion-replacement .cm-content,
+.comment-editor-suggestion-replacement .cm-scroller {
   background: rgb(34 197 94 / 0.07);
 }
 
-.rudu-comment-editor [class*="_codeMirrorToolbar_"] {
+.comment-editor [class*="_codeMirrorToolbar_"] {
   border-bottom-left-radius: 0.375rem;
   border-left: 1px solid rgb(var(--rgb-ink-200));
   border-bottom: 1px solid rgb(var(--rgb-ink-200));
   background: rgb(var(--rgb-canvas));
 }
 
-.rudu-comment-editor .mdxeditor-select-content,
-.rudu-comment-editor [class*="_selectContainer_"],
-.rudu-comment-editor [class*="_toolbarButtonDropdownContainer_"],
-.rudu-comment-editor [class*="_toolbarCodeBlockLanguageSelectContent_"],
-.rudu-comment-editor [class*="_popoverContent_"] {
+.comment-editor .mdxeditor-select-content,
+.comment-editor [class*="_selectContainer_"],
+.comment-editor [class*="_toolbarButtonDropdownContainer_"],
+.comment-editor [class*="_toolbarCodeBlockLanguageSelectContent_"],
+.comment-editor [class*="_popoverContent_"] {
   z-index: 100 !important;
 }
 
-.rudu-comment-editor .cm-sourceView .cm-scroller {
+.comment-editor .cm-sourceView .cm-scroller {
   overflow: visible;
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-editor .cm-sourceView .cm-gutters {
+.comment-editor .cm-sourceView .cm-gutters {
   display: none;
 }
 
-.rudu-comment-editor-footer {
+.comment-editor-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;

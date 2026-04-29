@@ -14,6 +14,7 @@ files:
       - "**/*"
 
 mac:
+  artifactName: code-review.app-${version}-${arch}.${ext}
   target:
     - dmg
     - zip
@@ -21,6 +22,7 @@ mac:
   entitlements: build/entitlements.mac.plist
 
 linux:
+  artifactName: code-review.app-${version}-${arch}.${ext}
   target:
     - AppImage
     - deb
@@ -44,18 +46,16 @@ linux:
       StartupWMClass: code-review.app
 
 deb:
-  artifactName: code-review.app-${version}-${arch}.${ext}
   packageName: code-review.app
 
 rpm:
-  artifactName: code-review.app-${version}-${arch}.${ext}
   packageName: code-review.app
 
 pacman:
-  artifactName: code-review.app-${version}-${arch}.${ext}
   packageName: code-review.app
 
 win:
+  artifactName: code-review.app-${version}-${arch}.${ext}
   target:
     - nsis
   icon: build/icons/icon.ico
@@ -70,4 +70,5 @@ publish:
     owner: tarik02
     repo: code-review.app
 
+electronUpdaterCompatibility: ">=2.16"
 generateUpdatesFilesForAllChannels: false

@@ -38,7 +38,7 @@ import "./styles.css";
 type SerializedCursorPosition = NonNullable<ReviewCommentEditorProps["cursorPosition"]>;
 
 function getEditorContentElement(host: HTMLDivElement | null) {
-  return host?.querySelector<HTMLElement>(".rudu-comment-editor-content") ?? null;
+  return host?.querySelector<HTMLElement>(".comment-editor-content") ?? null;
 }
 
 function getNodePath(root: Node, node: Node) {
@@ -341,7 +341,7 @@ function ReviewCommentEditorInner({
         ],
       }),
       toolbarPlugin({
-        toolbarClassName: "rudu-comment-editor-toolbar",
+        toolbarClassName: "comment-editor-toolbar",
         toolbarContents: () => (
           <ReviewCommentToolbar
             canInsertSuggestion={canInsertSuggestion}
@@ -387,7 +387,7 @@ function ReviewCommentEditorInner({
     <div className="font-sans">
       <div
         ref={editorHostRef}
-        className="rudu-comment-editor-shell"
+        className="comment-editor-shell"
         onBlurCapture={captureCursorPosition}
         onKeyUpCapture={scheduleCursorPositionCapture}
         onMouseUpCapture={scheduleCursorPositionCapture}
@@ -397,8 +397,8 @@ function ReviewCommentEditorInner({
           <MDXEditor
             ref={editorRef}
             autoFocus={autoFocus ? { defaultSelection: "rootEnd", preventScroll: true } : false}
-            className="rudu-comment-editor"
-            contentEditableClassName="rudu-comment-editor-content rudu-comment-markdown"
+            className="comment-editor"
+            contentEditableClassName="comment-editor-content comment-markdown"
             markdown={value ?? initialValue}
             onChange={handleChange}
             placeholder={placeholder}

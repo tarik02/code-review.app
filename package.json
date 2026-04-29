@@ -1,20 +1,25 @@
 {
   "name": "code-review.app",
-  "version": "0.1.5",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "changeset": "changeset",
     "dev": "pnpm --filter @code-review-app/electron dev",
     "build": "pnpm --filter @code-review-app/electron build",
     "dist": "pnpm --filter @code-review-app/electron dist",
     "preview": "pnpm --filter @code-review-app/electron preview",
+    "release:merge-metadata": "pnpm --filter @code-review-app/scripts run merge-update-metadata",
     "test": "pnpm --filter @code-review-app/frontend test",
     "typecheck": "tsc -p tsconfig.json",
     "typecheck:all": "pnpm run typecheck && pnpm --filter @code-review-app/shared typecheck && pnpm --filter @code-review-app/backend typecheck && pnpm --filter @code-review-app/frontend typecheck && pnpm --filter @code-review-app/electron typecheck && pnpm --filter @code-review-app/scripts typecheck",
     "lint": "vp lint",
-    "fmt": "vp fmt"
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
+    "version:release": "changeset version"
   },
   "devDependencies": {
+    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "typescript": "catalog:",

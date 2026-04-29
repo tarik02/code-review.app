@@ -1,137 +1,137 @@
-.rudu-comment-markdown p {
+.comment-markdown p {
   margin: 0.35rem 0;
   color: rgb(var(--rgb-ink-800));
   line-height: 1.5rem;
 }
 
-.rudu-comment-markdown p:first-child {
+.comment-markdown p:first-child {
   margin-top: 0;
 }
 
-.rudu-comment-markdown p:last-child {
+.comment-markdown p:last-child {
   margin-bottom: 0;
 }
 
-.rudu-comment-markdown h1,
-.rudu-comment-markdown h2,
-.rudu-comment-markdown h3,
-.rudu-comment-markdown h4,
-.rudu-comment-markdown h5,
-.rudu-comment-markdown h6 {
+.comment-markdown h1,
+.comment-markdown h2,
+.comment-markdown h3,
+.comment-markdown h4,
+.comment-markdown h5,
+.comment-markdown h6 {
   margin: 0.75rem 0 0.35rem;
   color: rgb(var(--rgb-ink-900));
   font-weight: 600;
 }
 
-.rudu-comment-markdown h1:first-child,
-.rudu-comment-markdown h2:first-child,
-.rudu-comment-markdown h3:first-child,
-.rudu-comment-markdown h4:first-child,
-.rudu-comment-markdown h5:first-child,
-.rudu-comment-markdown h6:first-child {
+.comment-markdown h1:first-child,
+.comment-markdown h2:first-child,
+.comment-markdown h3:first-child,
+.comment-markdown h4:first-child,
+.comment-markdown h5:first-child,
+.comment-markdown h6:first-child {
   margin-top: 0;
 }
 
-.rudu-comment-markdown h1 {
+.comment-markdown h1 {
   font-size: 1.25rem;
   line-height: 1.75rem;
 }
 
-.rudu-comment-markdown h2 {
+.comment-markdown h2 {
   font-size: 1.125rem;
   line-height: 1.625rem;
 }
 
-.rudu-comment-markdown h3 {
+.comment-markdown h3 {
   font-size: 1rem;
   line-height: 1.5rem;
 }
 
-.rudu-comment-markdown h4,
-.rudu-comment-markdown h5,
-.rudu-comment-markdown h6 {
+.comment-markdown h4,
+.comment-markdown h5,
+.comment-markdown h6 {
   font-size: 0.9375rem;
   line-height: 1.5rem;
 }
 
-.rudu-comment-markdown blockquote {
+.comment-markdown blockquote {
   margin: 0.5rem 0;
   border-left: 2px solid rgb(var(--rgb-ink-200));
   padding-left: 0.75rem;
   color: rgb(var(--rgb-ink-600));
 }
 
-.rudu-comment-markdown blockquote p {
+.comment-markdown blockquote p {
   color: inherit;
 }
 
-.rudu-comment-markdown ul,
-.rudu-comment-markdown ol {
+.comment-markdown ul,
+.comment-markdown ol {
   margin: 0.5rem 0;
   padding-left: 1.25rem;
 }
 
-.rudu-comment-markdown ul {
+.comment-markdown ul {
   list-style: disc;
 }
 
-.rudu-comment-markdown ol {
+.comment-markdown ol {
   list-style: decimal;
 }
 
-.rudu-comment-markdown ul ul,
-.rudu-comment-markdown ul ol,
-.rudu-comment-markdown ol ul,
-.rudu-comment-markdown ol ol {
+.comment-markdown ul ul,
+.comment-markdown ul ol,
+.comment-markdown ol ul,
+.comment-markdown ol ol {
   margin: 0.25rem 0;
 }
 
-.rudu-comment-markdown li {
+.comment-markdown li {
   color: rgb(var(--rgb-ink-800));
 }
 
-.rudu-comment-markdown li:not([class*="_listItemChecked_"]):not([class*="_listItemUnchecked_"]) {
+.comment-markdown li:not([class*="_listItemChecked_"]):not([class*="_listItemUnchecked_"]) {
   margin: 0.25rem 0;
   line-height: 1.5rem;
 }
 
-.rudu-comment-markdown li > p {
+.comment-markdown li > p {
   margin: 0.25rem 0;
 }
 
-.rudu-comment-markdown li:has(> input[type="checkbox"]),
-.rudu-comment-markdown li[class*="_listItemChecked_"],
-.rudu-comment-markdown li[class*="_listItemUnchecked_"] {
+.comment-markdown li:has(> input[type="checkbox"]),
+.comment-markdown li[class*="_listItemChecked_"],
+.comment-markdown li[class*="_listItemUnchecked_"] {
   list-style: none;
 }
 
-.rudu-comment-markdown li > input[type="checkbox"] {
+.comment-markdown li > input[type="checkbox"] {
   width: 0.875rem;
   height: 0.875rem;
   margin: 0 0.5rem 0 0;
   vertical-align: middle;
 }
 
-.rudu-comment-markdown li[class*="_listItemChecked_"]:before,
-.rudu-comment-markdown li[class*="_listItemUnchecked_"]:before {
+.comment-markdown li[class*="_listItemChecked_"]:before,
+.comment-markdown li[class*="_listItemUnchecked_"]:before {
   top: 0.25rem;
 }
 
-.rudu-comment-markdown li[class*="_listItemChecked_"]:after {
+.comment-markdown li[class*="_listItemChecked_"]:after {
   top: 0.375rem;
 }
 
-.rudu-comment-markdown a {
+.comment-markdown a {
   color: rgb(var(--rgb-ink-700));
   text-decoration-line: underline;
   text-underline-offset: 2px;
 }
 
-.rudu-comment-markdown a:hover {
+.comment-markdown a:hover {
   color: rgb(var(--rgb-ink-900));
 }
 
-.rudu-comment-markdown a:focus-visible {
+.comment-markdown a:focus-visible {
   border-radius: 0.125rem;
   outline: 2px solid transparent;
   box-shadow: 0 0 0 3px rgb(var(--rgb-ink-400) / 0.5);

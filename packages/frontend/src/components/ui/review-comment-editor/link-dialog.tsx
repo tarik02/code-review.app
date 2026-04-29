@@ -279,7 +279,7 @@ function ReviewCommentLinkDialog() {
           formRef.current = node;
           refs.setFloating(node);
         }}
-        className="rudu-comment-editor-link-popover"
+        className="comment-editor-link-popover"
         style={popoverStyle}
         onSubmit={(event) => {
           event.preventDefault();

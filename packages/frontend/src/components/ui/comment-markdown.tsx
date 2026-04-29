@@ -138,7 +138,7 @@ function MarkdownCodeBlock({
 
 function CommentMarkdown({ body, filePath }: { body: string; filePath?: string }) {
   return (
-    <div className="rudu-comment-markdown font-sans whitespace-normal break-words">
+    <div className="comment-markdown font-sans whitespace-normal break-words">
       <Markdown
         options={{
           disableParsingRawHTML: true,

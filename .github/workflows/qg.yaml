@@ -1,0 +1,79 @@
+name: qg
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: qg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup mise
+        uses: jdx/mise-action@v3
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: run lint
+        run: pnpm run lint -- --format github
+
+  format:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup mise
+        uses: jdx/mise-action@v3
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: run format check
+        run: pnpm run fmt:check
+
+  typecheck:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup mise
+        uses: jdx/mise-action@v3
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: register tsc problem matcher
+        run: echo "::add-matcher::.github/matchers/tsc.json"
+
+      - name: run typecheck
+        run: pnpm run typecheck:all -- --pretty false
+
+  test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup mise
+        uses: jdx/mise-action@v3
+
+      - name: install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: run tests
+        run: pnpm run test

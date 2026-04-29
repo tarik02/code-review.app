@@ -403,18 +403,18 @@ function CommentCodeMirrorEditor({
   }
 
   return (
-    <div ref={setCodeBlockReference} className={cn("rudu-comment-editor-code-block", className)}>
+    <div ref={setCodeBlockReference} className={cn("comment-editor-code-block", className)}>
       {hideLanguageToolbar ? null : (
         <div
           ref={setLanguageToolbar}
-          className="rudu-comment-editor-code-toolbar"
+          className="comment-editor-code-toolbar"
           data-open={isLanguageComboboxOpen ? "true" : undefined}
           style={floatingStyles}
         >
           <Combobox
             aria-label={t("codeBlock.selectLanguage", "Select code block language")}
-            className="rudu-comment-editor-code-language-combobox"
-            contentClassName="rudu-comment-editor-code-language-combobox-content"
+            className="comment-editor-code-language-combobox"
+            contentClassName="comment-editor-code-language-combobox-content"
             disabled={readOnly}
             options={languageOptions}
             placeholder={t("codeBlock.inlineLanguage", "Language")}

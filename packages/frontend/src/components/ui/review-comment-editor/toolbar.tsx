@@ -69,7 +69,7 @@ function ToolbarButton({
         render={
           <Button
             aria-label={title}
-            className="rudu-comment-editor-toolbar-button"
+            className="comment-editor-toolbar-button"
             data-active={active ? "true" : undefined}
             disabled={disabled}
             onClick={onClick}
@@ -87,7 +87,7 @@ function ToolbarButton({
 }
 
 function ToolbarSeparator() {
-  return <div aria-hidden className="rudu-comment-editor-toolbar-separator" />;
+  return <div aria-hidden className="comment-editor-toolbar-separator" />;
 }
 
 function ReviewCommentToolbar({
@@ -173,7 +173,7 @@ function ReviewCommentToolbar({
 
   return (
     <TooltipProvider delay={500} closeDelay={0}>
-      <div className="rudu-comment-editor-toolbar-actions">
+      <div className="comment-editor-toolbar-actions">
         <CommentBlockTypeSelect disabled={isSourceMode} />
         <ToolbarButton
           active={!isSourceMode && (currentFormat & IS_BOLD) !== 0}
@@ -236,7 +236,7 @@ function ReviewCommentToolbar({
           <Pencil className="size-4" />
         </ToolbarButton>
       </div>
-      <div className="rudu-comment-editor-toolbar-modes">
+      <div className="comment-editor-toolbar-modes">
         <ToolbarButton
           active={viewMode === "rich-text"}
           title={t("toolbar.richText", "Rich text")}
