@@ -1497,15 +1497,16 @@ function PatchFileDiffItem({
         ref={(node) => registerFileCommentsSection(normalizedFilePath, node)}
       >
         {fileDraftEditors.map((editor) => (
-          <ReviewCommentEditor
+          <FloatingLineDraftEditor
             key={editor.id}
             cursorPosition={editor.cursorPosition}
             defaultMode={defaultReviewEditorMode}
             error={editor.error}
             isPending={editor.isSubmitting}
+            portalRootId={lineDraftPortalRootId}
             provider={selectedProvider}
-            secondarySubmitLabel="Add comment now"
-            submitLabel="Add review comment"
+            selectedText=""
+            suggestionContext={null}
             target={editor.target}
             value={editor.body}
             onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
@@ -1513,8 +1514,8 @@ function PatchFileDiffItem({
             onCursorPositionChange={(cursorPosition) =>
               setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
             }
-            onSecondarySubmit={(body) => handleSubmitDraftCommentNow(editor.id, body)}
             onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
+            onSubmitNow={(body) => handleSubmitDraftCommentNow(editor.id, body)}
           />
         ))}
         {fileQualityFindings.fileFindings.length > 0 ? (
@@ -1556,6 +1557,7 @@ function PatchFileDiffItem({
             onDeletePendingComment={handleDeletePendingComment}
             onReplyToThread={handleReplyToThread}
             onReplyToThreadNow={handleReplyToThreadNow}
+            editorPortalRootId={lineDraftPortalRootId}
             reviewEditorSessionKey={reviewEditorSessionKey}
             thread={thread}
             viewerLogin={viewerLogin}
@@ -1583,6 +1585,7 @@ function PatchFileDiffItem({
                     onDeletePendingComment={handleDeletePendingComment}
                     onReplyToThread={handleReplyToThread}
                     onReplyToThreadNow={handleReplyToThreadNow}
+                    editorPortalRootId={lineDraftPortalRootId}
                     reviewEditorSessionKey={reviewEditorSessionKey}
                     thread={thread}
                     viewerLogin={viewerLogin}
