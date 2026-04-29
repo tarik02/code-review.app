@@ -5,7 +5,6 @@
 ### Minor Changes
 
 - 60b0760: Prepare the first tagged release.
-
   - switch tests to Vite+ test projects
   - make qg typecheck forwarding safe in CI
 
