@@ -3,6 +3,16 @@
   "version": "0.1.5",
   "private": true,
   "type": "module",
+  "description": "Browse GitHub and GitLab pull requests locally",
+  "homepage": "https://github.com/tarik02/code-review.app",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:tarik02/code-review.app.git"
+  },
+  "author": {
+    "name": "Taras Fomin",
+    "email": "Taras.Fomin@gmail.com"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "dotenv -- electron-vite dev --watch",
@@ -12,14 +22,28 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@neon-rs/load": "catalog:",
     "@code-review-app/backend": "workspace:*",
     "@code-review-app/frontend": "workspace:*",
     "@code-review-app/shared": "workspace:*",
     "@hadeeb/trpc-worker": "catalog:",
     "@libsql/client": "catalog:",
     "@trpc/server": "catalog:",
+    "detect-libc": "catalog:",
     "effect": "catalog:",
-    "electron-updater": "catalog:"
+    "electron-updater": "^6.8.3",
+    "libsql": "catalog:"
+  },
+  "optionalDependencies": {
+    "@libsql/darwin-arm64": "catalog:",
+    "@libsql/darwin-x64": "catalog:",
+    "@libsql/linux-arm-gnueabihf": "catalog:",
+    "@libsql/linux-arm-musleabihf": "catalog:",
+    "@libsql/linux-arm64-gnu": "catalog:",
+    "@libsql/linux-arm64-musl": "catalog:",
+    "@libsql/linux-x64-gnu": "catalog:",
+    "@libsql/linux-x64-musl": "catalog:",
+    "@libsql/win32-x64-msvc": "catalog:"
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "catalog:",
@@ -35,74 +59,5 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
-  },
-  "build": {
-    "appId": "app.code-review",
-    "productName": "code-review.app",
-    "directories": {
-      "output": "../../release"
-    },
-    "files": [
-      "out/**/*",
-      "node_modules/**/*",
-      "package.json",
-      {
-        "from": "../../packages/backend/drizzle",
-        "to": "drizzle",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "icon": "build/icons/icon.icns",
-      "entitlements": "build/entitlements.mac.plist"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "icon": "build/icons",
-      "desktop": {
-        "entry": {
-          "Type": "Application",
-          "Name": "code-review.app",
-          "Comment": "Browse GitHub and GitLab pull requests locally",
-          "Exec": "code-review.app %U",
-          "Icon": "code-review.app",
-          "Terminal": "false",
-          "Categories": "Development;Utility;",
-          "MimeType": "x-scheme-handler/code-review.app;",
-          "StartupWMClass": "code-review.app"
-        }
-      }
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icons/icon.ico"
-    },
-    "protocols": [
-      {
-        "name": "code-review.app",
-        "schemes": [
-          "code-review.app"
-        ]
-      }
-    ],
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "tarik02",
-        "repo": "code-review.app"
-      }
-    ],
-    "generateUpdatesFilesForAllChannels": false
   }
 }

@@ -25,7 +25,7 @@ function AppearanceBackground({
   const src =
     background?.kind === "customFile" && background.dataUrl
       ? background.dataUrl
-      : "/outerworld.jpg";
+      : "./outerworld.jpg";
 
   return (
     <img alt="" aria-hidden="true" className={`${className} ${imageClassName}`.trim()} src={src} />

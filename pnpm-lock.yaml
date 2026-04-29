@@ -51,12 +51,42 @@ catalogs:
     '@libsql/client':
       specifier: 0.17.3
       version: 0.17.3
+    '@libsql/darwin-arm64':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/darwin-x64':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-arm-gnueabihf':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-arm-musleabihf':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-arm64-gnu':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-arm64-musl':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-x64-gnu':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/linux-x64-musl':
+      specifier: ^0.5.29
+      version: 0.5.29
+    '@libsql/win32-x64-msvc':
+      specifier: ^0.5.29
+      version: 0.5.29
     '@mdxeditor/editor':
       specifier: ^3.55.0
       version: 3.55.0
     '@mdxeditor/gurx':
       specifier: 1.2.4
       version: 1.2.4
+    '@neon-rs/load':
+      specifier: ^0.0.4
+      version: 0.0.4
     '@pierre/diffs':
       specifier: ^1.1.17
       version: 1.1.19
@@ -126,6 +156,9 @@ catalogs:
     codemirror:
       specifier: 6.0.2
       version: 6.0.2
+    detect-libc:
+      specifier: 2.0.2
+      version: 2.0.2
     dotenv-cli:
       specifier: ^11.0.0
       version: 11.0.0
@@ -144,9 +177,6 @@ catalogs:
     electron-builder:
       specifier: ^26.8.1
       version: 26.8.1
-    electron-updater:
-      specifier: ^6.8.3
-      version: 6.8.3
     electron-vite:
       specifier: 6.0.0-beta.1
       version: 6.0.0-beta.1
@@ -159,6 +189,9 @@ catalogs:
     lexical:
       specifier: 0.35.0
       version: 0.35.0
+    libsql:
+      specifier: ^0.5.29
+      version: 0.5.29
     lucide-react:
       specifier: ^1.11.0
       version: 1.11.0
@@ -242,15 +275,24 @@ importers:
       '@libsql/client':
         specifier: 'catalog:'
         version: 0.17.3
+      '@neon-rs/load':
+        specifier: 'catalog:'
+        version: 0.0.4
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.16.0(typescript@5.8.3)
+      detect-libc:
+        specifier: 'catalog:'
+        version: 2.0.2
       effect:
         specifier: 'catalog:'
         version: 3.21.2
       electron-updater:
-        specifier: 'catalog:'
+        specifier: ^6.8.3
         version: 6.8.3
+      libsql:
+        specifier: 'catalog:'
+        version: 0.5.29
     devDependencies:
       '@rolldown/plugin-babel':
         specifier: 'catalog:'
@@ -291,6 +333,34 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)
+    optionalDependencies:
+      '@libsql/darwin-arm64':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/darwin-x64':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-arm-gnueabihf':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-arm-musleabihf':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-arm64-gnu':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-arm64-musl':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-x64-gnu':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/linux-x64-musl':
+        specifier: 'catalog:'
+        version: 0.5.29
+      '@libsql/win32-x64-msvc':
+        specifier: 'catalog:'
+        version: 0.5.29
 
   packages/backend:
     dependencies:

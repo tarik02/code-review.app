@@ -12,7 +12,8 @@ const workspaceAliases = {
   "@code-review-app/shared": resolve(repoRoot, "packages/shared/src/index.ts"),
 };
 const workspacePackages = ["@code-review-app/backend", "@code-review-app/shared"];
-const nativeExternalPackages = ["@libsql/client", "@libsql/client/sqlite3", "libsql"];
+const bundledMainPackages = [...workspacePackages, "effect", "@libsql/client"];
+const nativeExternalPackages = ["libsql"];
 const reactCompilerBabelPlugin = await babel({
   presets: [reactCompilerPreset()],
 });
@@ -23,14 +24,12 @@ export default defineConfig({
       alias: workspaceAliases,
     },
     ssr: {
-      noExternal: workspacePackages,
+      noExternal: bundledMainPackages,
     },
     build: {
-      externalizeDeps: {
-        exclude: workspacePackages,
-      },
+      externalizeDeps: false,
       rolldownOptions: {
-        external: [...nativeExternalPackages, /^@libsql\/.+/],
+        external: nativeExternalPackages,
         input: resolve("src/main/index.ts"),
       },
     },

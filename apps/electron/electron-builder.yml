@@ -1,0 +1,73 @@
+appId: app.code-review
+productName: code-review.app
+
+directories:
+  output: ../../release
+
+files:
+  - out/**/*
+  - node_modules/**/*
+  - package.json
+  - from: ../../packages/backend/drizzle
+    to: drizzle
+    filter:
+      - "**/*"
+
+mac:
+  target:
+    - dmg
+    - zip
+  icon: build/icons/icon.icns
+  entitlements: build/entitlements.mac.plist
+
+linux:
+  target:
+    - AppImage
+    - deb
+    - rpm
+    - pacman
+  category: Development
+  maintainer: Taras Fomin <Taras.Fomin@gmail.com>
+  executableName: code-review.app
+  executableArgs:
+    - "%U"
+  icon: build/icons
+  desktop:
+    entry:
+      Type: Application
+      Name: code-review.app
+      Comment: Browse GitHub and GitLab pull requests locally
+      Icon: code-review.app
+      Terminal: "false"
+      Categories: Development;Utility;
+      MimeType: x-scheme-handler/code-review.app;
+      StartupWMClass: code-review.app
+
+deb:
+  artifactName: code-review.app-${version}-${arch}.${ext}
+  packageName: code-review.app
+
+rpm:
+  artifactName: code-review.app-${version}-${arch}.${ext}
+  packageName: code-review.app
+
+pacman:
+  artifactName: code-review.app-${version}-${arch}.${ext}
+  packageName: code-review.app
+
+win:
+  target:
+    - nsis
+  icon: build/icons/icon.ico
+
+protocols:
+  - name: code-review.app
+    schemes:
+      - code-review.app
+
+publish:
+  - provider: github
+    owner: tarik02
+    repo: code-review.app
+
+generateUpdatesFilesForAllChannels: false
