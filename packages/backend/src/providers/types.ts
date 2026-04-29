@@ -6,6 +6,7 @@ import type { AuthTokenStore } from "../auth/token-store.ts";
 import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
+  PullRequestApprovalState,
   PullRequestQualityReport,
   ProviderAuthStatus,
   PrChangedFile,
@@ -83,6 +84,19 @@ type ForgeProvider = {
     repo: RepoIdentity,
     number: number,
   ): Effect.Effect<PullRequestSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  getPullRequestApprovalState(
+    repo: RepoIdentity,
+    number: number,
+  ): Effect.Effect<PullRequestApprovalState, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  approvePullRequest(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  removePullRequestApproval(
+    repo: RepoIdentity,
+    number: number,
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchPatch(
     repo: RepoIdentity,
     number: number,

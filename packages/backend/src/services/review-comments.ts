@@ -5,6 +5,7 @@ import { providerFor } from "../providers/registry.ts";
 import { AuthTokenStore } from "../auth/token-store.ts";
 import type {
   CreatePullRequestReviewCommentInput,
+  PullRequestApprovalState,
   ReplyToPullRequestReviewCommentInput,
   RepoIdentity,
   ReviewThread,
@@ -14,6 +15,12 @@ import type {
 
 type ReviewCommentServiceShape = {
   getViewerLogin(accountId: string): Effect.Effect<ViewerLogin, Error>;
+  getApprovalState(
+    repo: RepoIdentity,
+    number: number,
+  ): Effect.Effect<PullRequestApprovalState, Error>;
+  approve(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<void, Error>;
+  removeApproval(repo: RepoIdentity, number: number): Effect.Effect<void, Error>;
   listThreads(repo: RepoIdentity, number: number): Effect.Effect<ReviewThread[], Error>;
   create(input: CreatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
   reply(input: ReplyToPullRequestReviewCommentInput): Effect.Effect<void, Error>;
@@ -51,6 +58,29 @@ const makeReviewCommentService = Effect.gen(function* () {
   )(function* (repoInput, number) {
     const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
     return yield* provideProviderDeps(providerFor(repo.provider).listReviewThreads(repo, number));
+  });
+
+  const getApprovalState: ReviewCommentServiceShape["getApprovalState"] = Effect.fn(
+    "ReviewCommentService.getApprovalState",
+  )(function* (repoInput, number) {
+    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
+    return yield* provideProviderDeps(
+      providerFor(repo.provider).getPullRequestApprovalState(repo, number),
+    );
+  });
+
+  const approve: ReviewCommentServiceShape["approve"] = Effect.fn("ReviewCommentService.approve")(
+    function* (repoInput, number, headSha) {
+      const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
+      yield* provideProviderDeps(providerFor(repo.provider).approvePullRequest(repo, number, headSha));
+    },
+  );
+
+  const removeApproval: ReviewCommentServiceShape["removeApproval"] = Effect.fn(
+    "ReviewCommentService.removeApproval",
+  )(function* (repoInput, number) {
+    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
+    yield* provideProviderDeps(providerFor(repo.provider).removePullRequestApproval(repo, number));
   });
 
   const create: ReviewCommentServiceShape["create"] = Effect.fn("ReviewCommentService.create")(
@@ -104,6 +134,9 @@ const makeReviewCommentService = Effect.gen(function* () {
 
   return {
     getViewerLogin,
+    getApprovalState,
+    approve,
+    removeApproval,
     listThreads,
     create,
     reply,

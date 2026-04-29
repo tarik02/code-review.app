@@ -30,11 +30,15 @@ import { FileDiff, VirtualizerContext } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
 import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
+import { PullRequestApprovalSummary } from "./pull-request-approval-summary";
 import { PullRequestQualitySummary } from "./pull-request-quality-summary";
 import { ReviewCommentEditor, type CommentEditorMode } from "./review-comment-editor";
 import { ReviewThreadCard } from "./review-thread-card";
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
-import { usePullRequestReviewCommentMutations } from "../../hooks/use-forge-queries";
+import {
+  usePullRequestApprovalMutations,
+  usePullRequestReviewCommentMutations,
+} from "../../hooks/use-forge-queries";
 import { useDiffNavigator } from "../../hooks/use-diff-navigator";
 import { cx } from "../../lib/cx";
 import {
@@ -64,10 +68,12 @@ import type {
   ForgeProviderKind,
   PrFileChangeType,
   PrFileContents,
+  PullRequestApprovalState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
   RepoIdentity,
   ReviewCommentSide,
+  SelectedPullRequest,
 } from "../../types/forge";
 import { providerFromProviderId, repoIdentityKey } from "../../lib/repo-identity";
 import { getPatchViewerSessionState, usePatchViewerStore } from "../../stores/patch-viewer-store";
@@ -141,11 +147,15 @@ type PatchLineAnnotation =
 
 type PatchViewerMainProps = {
   selectedPrKey: string | null;
+  selectedPr: SelectedPullRequest | null;
   selectedPatch: SelectedPatch | null;
   selectedBaseSha: string | null;
   isGitDiffMode: boolean;
   isPatchLoading: boolean;
   patchError: string;
+  approvalState: PullRequestApprovalState | null;
+  isApprovalStateLoading: boolean;
+  approvalStateError: string;
   changedFiles: string[];
   isChangedFilesLoading: boolean;
   changedFilesError: string;
@@ -1712,12 +1722,16 @@ function PatchFileDiffItem({
 
 function PatchViewerMain({
   selectedPrKey,
+  selectedPr,
   selectedPatch,
   selectedBaseSha,
   isGitDiffMode,
   isPatchLoading,
   isDark,
   patchError,
+  approvalState,
+  isApprovalStateLoading,
+  approvalStateError,
   changedFiles,
   isChangedFilesLoading,
   changedFilesError,
@@ -1797,6 +1811,7 @@ function PatchViewerMain({
           }
         : null,
     );
+  const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
   const selectedProvider = selectedPatch
     ? providerFromProviderId(selectedPatch.providerId)
     : "github";
@@ -2322,6 +2337,30 @@ function PatchViewerMain({
                 <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
                   {patchError}
                 </div>
+              ) : null}
+
+              {hasSelection ? (
+                <PullRequestApprovalSummary
+                  approvalState={approvalState}
+                  error={approvalStateError}
+                  isApprovePending={approveMutation.isPending}
+                  isLoading={isApprovalStateLoading}
+                  isRemovePending={removeApprovalMutation.isPending}
+                  onApprove={async () => {
+                    if (!selectedPr) {
+                      return;
+                    }
+
+                    await approveMutation.mutateAsync(selectedPr);
+                  }}
+                  onRemoveApproval={async () => {
+                    if (!selectedPr) {
+                      return;
+                    }
+
+                    await removeApprovalMutation.mutateAsync(selectedPr);
+                  }}
+                />
               ) : null}
 
               {hasSelection && !isPatchLoading ? (

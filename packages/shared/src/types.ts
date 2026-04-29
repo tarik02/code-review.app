@@ -152,6 +152,25 @@ type ProviderAccount = {
 
 type ReviewCommentSide = "LEFT" | "RIGHT";
 
+type PullRequestApprovalRemoveStrategy = "dismiss" | "unapprove";
+
+type PullRequestApprovalActor = {
+  login: string;
+  name: string;
+  avatarUrl: string | null;
+  url: string | null;
+  approvedAt: string | null;
+};
+
+type PullRequestApprovalState = {
+  provider: ForgeProviderKind;
+  approvedBy: PullRequestApprovalActor[];
+  viewerApproved: boolean;
+  viewerRemoveStrategy: PullRequestApprovalRemoveStrategy;
+  approvalsRequired: number | null;
+  approvalsLeft: number | null;
+};
+
 type ReviewComment = {
   id: string;
   databaseId: number | null;
@@ -288,6 +307,9 @@ export type {
   DiffDataSettings,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PullRequestApprovalActor,
+  PullRequestApprovalRemoveStrategy,
+  PullRequestApprovalState,
   PrChangedFile,
   PrFileChangeType,
   PrFileContents,

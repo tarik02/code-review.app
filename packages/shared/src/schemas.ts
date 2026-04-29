@@ -5,6 +5,7 @@ const diffDataModeSchema = z.enum(["provider-api", "git"]);
 const themePreferenceSchema = z.enum(["auto", "light", "dark"]);
 const reviewEditorModeSchema = z.enum(["rich-text", "source"]);
 const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
+const pullRequestApprovalRemoveStrategySchema = z.enum(["dismiss", "unapprove"]);
 const pullRequestQualityReportStatusSchema = z.enum([
   "ok",
   "warning",
@@ -120,6 +121,23 @@ const pullRequestVersionedInputSchema = pullRequestInputSchema.extend({
   headSha: z.string().min(1),
 });
 
+const pullRequestApprovalActorSchema = z.object({
+  login: z.string(),
+  name: z.string(),
+  avatarUrl: z.string().nullable(),
+  url: z.string().nullable(),
+  approvedAt: z.string().nullable(),
+});
+
+const pullRequestApprovalStateSchema = z.object({
+  provider: forgeProviderKindSchema,
+  approvedBy: z.array(pullRequestApprovalActorSchema),
+  viewerApproved: z.boolean(),
+  viewerRemoveStrategy: pullRequestApprovalRemoveStrategySchema,
+  approvalsRequired: z.number().int().nonnegative().nullable(),
+  approvalsLeft: z.number().int().nonnegative().nullable(),
+});
+
 const pullRequestQualitySummarySchema = z.object({
   totalFindings: z.number().int().nonnegative(),
   inlineFindings: z.number().int().nonnegative(),
@@ -211,6 +229,9 @@ export {
   overviewPullRequestSummarySchema,
   providerAccountSchema,
   providerProfileSchema,
+  pullRequestApprovalActorSchema,
+  pullRequestApprovalRemoveStrategySchema,
+  pullRequestApprovalStateSchema,
   providerHostSchema,
   pullRequestInputSchema,
   pullRequestFileContentsInputSchema,

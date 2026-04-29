@@ -10,6 +10,7 @@ import { createRepoIdentity, normalizeHost, normalizePath } from "../repo-id.ts"
 import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts";
 import type {
   OverviewPullRequestSummary,
+  PullRequestApprovalState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
@@ -130,6 +131,25 @@ const GitLabMrVersionSchema = Schema.Struct({
   base_commit_sha: Schema.String,
   head_commit_sha: Schema.String,
   start_commit_sha: Schema.String,
+});
+
+const GitLabApprovalActorSchema = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  username: Schema.String,
+  avatar_url: OptionalNullableString,
+  web_url: OptionalNullableString,
+});
+
+const GitLabApprovedByEntrySchema = Schema.Struct({
+  user: GitLabApprovalActorSchema,
+  approved_at: OptionalNullableString,
+});
+
+const GitLabMergeRequestApprovalsSchema = Schema.Struct({
+  approvals_required: OptionalNullableNumber,
+  approvals_left: OptionalNullableNumber,
+  approved_by: Schema.optional(Schema.NullOr(Schema.Array(GitLabApprovedByEntrySchema))),
 });
 
 const GitLabErrorBodySchema = Schema.Struct({
@@ -605,6 +625,17 @@ function gitlabForm(
   return gitlabResponse(accountId, host, endpoint, { method, form: forms }).pipe(Effect.asVoid);
 }
 
+function gitlabViewerLogin(
+  accountId: string,
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    const token = yield* requireStoredToken(accountId);
+    const user = yield* gitlabJson(accountId, token.host, "user", GitLabUserSchema);
+    yield* saveViewerLogin(accountId, user.username);
+    return user.username;
+  });
+}
+
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
   const trimmed = input.trim();
   if (!trimmed) throw new ProviderError("Repo is required");
@@ -693,6 +724,16 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     headSha: mr.sha ?? diffRefs?.head_sha ?? "",
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
   };
+}
+
+function toApprovalActor(approval: typeof GitLabApprovedByEntrySchema.Type) {
+  return {
+    login: approval.user.username,
+    name: approval.user.name,
+    avatarUrl: approval.user.avatar_url ?? null,
+    url: approval.user.web_url ?? null,
+    approvedAt: approval.approved_at ?? null,
+  } satisfies PullRequestApprovalState["approvedBy"][number];
 }
 
 function gitlabQualitySeverity(
@@ -952,12 +993,7 @@ class GitLabProvider implements ForgeProvider {
   }
 
   viewerLogin(accountId: string) {
-    return Effect.gen(function* () {
-      const token = yield* requireStoredToken(accountId);
-      const user = yield* gitlabJson(accountId, token.host, "user", GitLabUserSchema);
-      yield* saveViewerLogin(accountId, user.username);
-      return user.username;
-    });
+    return gitlabViewerLogin(accountId);
   }
 
   listInitialRepos(accountId: string, limit: number) {
@@ -1151,6 +1187,69 @@ class GitLabProvider implements ForgeProvider {
         GitLabMergeRequestSchema,
       );
       return toPullRequestSummary(mergeRequest);
+    });
+  }
+
+  getPullRequestApprovalState(
+    repo: RepoIdentity,
+    number: number,
+  ): ReturnType<ForgeProvider["getPullRequestApprovalState"]> {
+    return Effect.gen(function* () {
+      const approvalState = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/approvals`),
+        GitLabMergeRequestApprovalsSchema,
+      );
+      const viewerLogin = yield* gitlabViewerLogin(repo.accountId);
+      const approvedBy = (approvalState.approved_by ?? [])
+        .map(toApprovalActor)
+        .sort((left, right) => Date.parse(right.approvedAt ?? "") - Date.parse(left.approvedAt ?? ""));
+
+      return {
+        provider: "gitlab",
+        approvedBy,
+        viewerApproved: approvedBy.some((approval) => approval.login === viewerLogin),
+        viewerRemoveStrategy: "unapprove",
+        approvalsRequired: approvalState.approvals_required ?? null,
+        approvalsLeft: approvalState.approvals_left ?? null,
+      } satisfies PullRequestApprovalState;
+    });
+  }
+
+  approvePullRequest(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): ReturnType<ForgeProvider["approvePullRequest"]> {
+    return Effect.gen(function* () {
+      const trimmedHeadSha = headSha.trim();
+      if (!trimmedHeadSha) {
+        return yield* Effect.fail(new ProviderError("Head SHA is required"));
+      }
+
+      yield* gitlabForm(
+        repo.host,
+        repo.accountId,
+        "POST",
+        projectEndpoint(repo, `merge_requests/${number}/approve`),
+        [["sha", trimmedHeadSha]],
+      );
+    });
+  }
+
+  removePullRequestApproval(
+    repo: RepoIdentity,
+    number: number,
+  ): ReturnType<ForgeProvider["removePullRequestApproval"]> {
+    return Effect.gen(function* () {
+      yield* gitlabForm(
+        repo.host,
+        repo.accountId,
+        "POST",
+        projectEndpoint(repo, `merge_requests/${number}/unapprove`),
+        [],
+      );
     });
   }
 

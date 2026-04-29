@@ -9,12 +9,14 @@ import {
 import type { ReviewComment, ReviewThread } from "../lib/review-threads";
 import { trpc } from "../lib/trpc";
 import {
+  approvePullRequest,
   createPullRequestReviewComment,
   forgeKeys,
   initialReposQueryOptions,
   pullRequestCachedListQueryOptions,
   pullRequestListQueryOptions,
   pullRequestOverviewQueryOptions,
+  removePullRequestApproval,
   replyToPullRequestReviewComment,
   savedReposQueryOptions,
   searchReposQueryOptions,
@@ -27,6 +29,7 @@ import type {
   DiffDataMode,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PullRequestApprovalState,
   PrPatch,
   ProviderAccount,
   PullRequestQualityReport,
@@ -558,10 +561,30 @@ function useSelectedPullRequestData(
     gcTime: 15 * 60 * 1000,
   });
 
+  const approvalStateQuery = useQuery({
+    queryKey: selectedPr
+      ? forgeKeys.pullRequestApprovalState(selectedPr)
+      : forgeKeys.pullRequestApprovalStateIdle(),
+    queryFn: async () => {
+      if (!selectedPr) {
+        throw new Error("No pull request selected");
+      }
+
+      return trpc.reviewComments.getApprovalState.query({
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
+        number: selectedPr.number,
+        headSha: selectedPr.headSha,
+      });
+    },
+    enabled: selectedPr !== null,
+  });
+
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
   const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
   const qualityReport = (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
+  const approvalState = (approvalStateQuery.data as PullRequestApprovalState | undefined) ?? null;
 
   const isPatchLoading =
     selectedPr !== null &&
@@ -575,10 +598,16 @@ function useSelectedPullRequestData(
   const isQualityReportLoading =
     selectedPr !== null &&
     (qualityReportQuery.isPending || (qualityReportQuery.isFetching && !qualityReportQuery.data));
+  const isApprovalStateLoading =
+    selectedPr !== null &&
+    (approvalStateQuery.isPending || (approvalStateQuery.isFetching && !approvalStateQuery.data));
 
   return {
+    approvalState,
+    approvalStateError: getErrorMessage(approvalStateQuery.error),
     changedFiles,
     changedFilesError: getErrorMessage(changedFilesQuery.error),
+    isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,
     isQualityReportLoading,
@@ -589,6 +618,50 @@ function useSelectedPullRequestData(
     reviewThreads,
     reviewThreadsError: getErrorMessage(reviewThreadsQuery.error),
     selectedPatch,
+  };
+}
+
+function usePullRequestApprovalMutations(selectedPr: SelectedPullRequest | null) {
+  const queryClient = useQueryClient();
+  const approvalStateQueryKey = selectedPr ? forgeKeys.pullRequestApprovalState(selectedPr) : null;
+  const reviewThreadsQueryKey = selectedPr ? forgeKeys.pullRequestReviewThreads(selectedPr) : null;
+
+  const invalidateApprovalState = useCallback(async () => {
+    if (!approvalStateQueryKey) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: approvalStateQueryKey,
+    });
+  }, [approvalStateQueryKey, queryClient]);
+
+  const invalidateReviewThreads = useCallback(async () => {
+    if (!reviewThreadsQueryKey) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: reviewThreadsQueryKey,
+    });
+  }, [queryClient, reviewThreadsQueryKey]);
+
+  const approveMutation = useMutation({
+    mutationFn: (input: SelectedPullRequest) => approvePullRequest(input),
+    onSuccess: invalidateApprovalState,
+  });
+
+  const removeApprovalMutation = useMutation({
+    mutationFn: (input: SelectedPullRequest) => removePullRequestApproval(input),
+    onSuccess: async () => {
+      await invalidateApprovalState();
+      await invalidateReviewThreads();
+    },
+  });
+
+  return {
+    approveMutation,
+    removeApprovalMutation,
   };
 }
 
@@ -741,6 +814,7 @@ export {
   getErrorMessage,
   useAccountOverviewPullRequests,
   useInitialReposForAccounts,
+  usePullRequestApprovalMutations,
   useOverviewPullRequests,
   usePullRequestReviewCommentMutations,
   useRepoPickerReposForAccounts,

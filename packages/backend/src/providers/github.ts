@@ -12,6 +12,7 @@ import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts
 import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
+  PullRequestApprovalState,
   ProviderAuthStatus,
   PrChangedFile,
   PullRequestSummary,
@@ -24,7 +25,7 @@ import type { RepoIdentity } from "../repo-id.ts";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
 
 type GitHubRequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   accept?: string;
   body?: unknown;
 };
@@ -52,6 +53,8 @@ const GhActorSchema = Schema.Struct({
   login: Schema.String,
   avatarUrl: OptionalNullableString,
   avatar_url: OptionalNullableString,
+  url: OptionalNullableString,
+  html_url: OptionalNullableString,
 });
 
 const GhSearchRepoSchema = Schema.Struct({
@@ -91,6 +94,14 @@ const GhChangedFileSchema = Schema.Struct({
   previous_filename: OptionalNullableString,
   status: Schema.String,
   changes: OptionalNullableNumber,
+});
+
+const GhPullRequestReviewSchema = Schema.Struct({
+  id: Schema.Number,
+  state: Schema.String,
+  submitted_at: OptionalNullableString,
+  html_url: OptionalNullableString,
+  user: Schema.optional(Schema.NullOr(GhActorSchema)),
 });
 
 const GhCheckRunOutputSchema = Schema.Struct({
@@ -135,6 +146,7 @@ const GhCheckRunAnnotationSchema = Schema.Struct({
 type GhChangedFile = typeof GhChangedFileSchema.Type;
 type GhCheckRun = typeof GhCheckRunSchema.Type;
 type GhCheckRunAnnotation = typeof GhCheckRunAnnotationSchema.Type;
+type GhPullRequestReview = typeof GhPullRequestReviewSchema.Type;
 
 function toChangedFile(item: GhChangedFile): PrChangedFile {
   const filename = item.filename.trim();
@@ -461,7 +473,11 @@ function githubApiUrl(host: string, pathOrUrl: string) {
 
 function requestFor(url: string, token: string, options: GitHubRequestOptions = {}) {
   const request =
-    options.method === "POST" ? HttpClientRequest.post(url) : HttpClientRequest.get(url);
+    options.method === "POST"
+      ? HttpClientRequest.post(url)
+      : options.method === "PUT"
+        ? HttpClientRequest.put(url)
+        : HttpClientRequest.get(url);
 
   return request.pipe(
     HttpClientRequest.accept(options.accept ?? "application/json"),
@@ -584,6 +600,20 @@ function ensureUserContext(
     yield* saveViewerLogin(accountId, user.login);
     userContext = { accountId, login: user.login, owners, fetchedAt: Date.now() };
     return owners;
+  });
+}
+
+function githubViewerLogin(
+  accountId: string,
+): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    const token = yield* requireStoredToken(accountId);
+    yield* ensureUserContext(accountId, token.host);
+    const login = userContext?.login;
+    if (!login) {
+      return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
+    }
+    return login;
   });
 }
 
@@ -724,6 +754,41 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
   };
 }
 
+function toApprovalActor(review: GhPullRequestReview) {
+  return {
+    login: review.user?.login ?? "unknown",
+    name: review.user?.login ?? "unknown",
+    avatarUrl: review.user?.avatarUrl ?? review.user?.avatar_url ?? null,
+    url: review.user?.html_url ?? review.user?.url ?? null,
+    approvedAt: review.submitted_at ?? null,
+  } satisfies PullRequestApprovalState["approvedBy"][number];
+}
+
+function latestReviewsByLogin(reviews: GhPullRequestReview[]) {
+  const latestByLogin = new Map<string, GhPullRequestReview>();
+
+  for (const review of reviews) {
+    const login = review.user?.login?.trim();
+    const submittedAt = review.submitted_at;
+    if (!login || !submittedAt) {
+      continue;
+    }
+
+    const previous = latestByLogin.get(login);
+    if (!previous) {
+      latestByLogin.set(login, review);
+      continue;
+    }
+
+    const previousSubmittedAt = previous.submitted_at;
+    if (!previousSubmittedAt || Date.parse(submittedAt) >= Date.parse(previousSubmittedAt)) {
+      latestByLogin.set(login, review);
+    }
+  }
+
+  return latestByLogin;
+}
+
 function githubQualitySeverity(level: string): PullRequestQualityFinding["severity"] {
   switch (level.toLowerCase()) {
     case "failure":
@@ -839,15 +904,7 @@ class GitHubProvider implements ForgeProvider {
   }
 
   viewerLogin(accountId: string) {
-    return Effect.gen(function* () {
-      const token = yield* requireStoredToken(accountId);
-      yield* ensureUserContext(accountId, token.host);
-      const login = userContext?.login;
-      if (!login) {
-        return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
-      }
-      return login;
-    });
+    return githubViewerLogin(accountId);
   }
   listInitialRepos(accountId: string, limit: number) {
     return Effect.gen(function* () {
@@ -1057,6 +1114,136 @@ query($owner: String!, $name: String!, $number: Int!) {
       }
       return toPullRequestSummary(pullRequest);
     });
+  }
+
+  getPullRequestApprovalState(
+    repo: RepoIdentity,
+    number: number,
+  ): ReturnType<ForgeProvider["getPullRequestApprovalState"]> {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      const viewerLogin = yield* githubViewerLogin(repo.accountId);
+      const reviews: GhPullRequestReview[] = [];
+      let page = 1;
+
+      while (true) {
+        const pageReviews = yield* githubJson(
+          repo.accountId,
+          repo.host,
+          `/repos/${owner}/${name}/pulls/${number}/reviews?per_page=100&page=${page}`,
+          Schema.Array(GhPullRequestReviewSchema),
+        );
+
+        if (pageReviews.length === 0) {
+          break;
+        }
+
+        reviews.push(...pageReviews);
+        if (pageReviews.length < 100) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      const latestByLogin = latestReviewsByLogin(reviews);
+      const approvedBy = [...latestByLogin.values()]
+        .filter((review) => review.state.toUpperCase() === "APPROVED")
+        .sort((left, right) => {
+          const leftApprovedAt = left.submitted_at ?? "";
+          const rightApprovedAt = right.submitted_at ?? "";
+          return Date.parse(rightApprovedAt) - Date.parse(leftApprovedAt);
+        })
+        .map(toApprovalActor);
+
+      return {
+        provider: "github",
+        approvedBy,
+        viewerApproved: approvedBy.some((approval) => approval.login === viewerLogin),
+        viewerRemoveStrategy: "dismiss",
+        approvalsRequired: null,
+        approvalsLeft: null,
+      } satisfies PullRequestApprovalState;
+    });
+  }
+
+  approvePullRequest(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): ReturnType<ForgeProvider["approvePullRequest"]> {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      const trimmedHeadSha = headSha.trim();
+      if (!trimmedHeadSha) {
+        return yield* Effect.fail(new ProviderError("Head SHA is required"));
+      }
+
+      yield* githubJson(
+        repo.accountId,
+        repo.host,
+        `/repos/${owner}/${name}/pulls/${number}/reviews`,
+        Schema.Unknown,
+        {
+          method: "POST",
+          body: {
+            commit_id: trimmedHeadSha,
+            event: "APPROVE",
+          },
+        },
+      );
+    }).pipe(Effect.asVoid);
+  }
+
+  removePullRequestApproval(
+    repo: RepoIdentity,
+    number: number,
+  ): ReturnType<ForgeProvider["removePullRequestApproval"]> {
+    return Effect.gen(function* () {
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      const viewerLogin = yield* githubViewerLogin(repo.accountId);
+      const reviews: GhPullRequestReview[] = [];
+      let page = 1;
+
+      while (true) {
+        const pageReviews = yield* githubJson(
+          repo.accountId,
+          repo.host,
+          `/repos/${owner}/${name}/pulls/${number}/reviews?per_page=100&page=${page}`,
+          Schema.Array(GhPullRequestReviewSchema),
+        );
+
+        if (pageReviews.length === 0) {
+          break;
+        }
+
+        reviews.push(...pageReviews);
+        if (pageReviews.length < 100) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      const latestViewerReview = latestReviewsByLogin(reviews).get(viewerLogin);
+      if (!latestViewerReview || latestViewerReview.state.toUpperCase() !== "APPROVED") {
+        return yield* Effect.fail(new ProviderError("No viewer approval to remove."));
+      }
+
+      yield* githubJson(
+        repo.accountId,
+        repo.host,
+        `/repos/${owner}/${name}/pulls/${number}/reviews/${latestViewerReview.id}/dismissals`,
+        Schema.Unknown,
+        {
+          method: "PUT",
+          body: {
+            event: "DISMISS",
+            message: "Approval removed from desktop review app.",
+          },
+        },
+      );
+    }).pipe(Effect.asVoid);
   }
 
   fetchChangedFiles(repo: RepoIdentity, number: number) {

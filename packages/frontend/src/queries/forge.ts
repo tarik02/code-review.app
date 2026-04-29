@@ -10,6 +10,7 @@ import type {
   DiffDataSettings,
   PrFileChangeType,
   ProviderProfile,
+  PullRequestApprovalState,
   PullRequestQualityReport,
   ReplyToPullRequestReviewCommentInput,
   ReviewEditorMode,
@@ -113,12 +114,23 @@ const forgeKeys = {
       pr.number,
       pr.headSha,
     ] as const,
+  pullRequestApprovalState: (pr: SelectedPullRequest) =>
+    [
+      ...forgeKeys.pullRequests(),
+      "approval-state",
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), "patch", "idle"] as const,
   pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), "files", "idle"] as const,
   pullRequestReviewThreadsIdle: () =>
     [...forgeKeys.pullRequests(), "review-threads", "idle"] as const,
   pullRequestQualityReportIdle: () =>
     [...forgeKeys.pullRequests(), "quality-report", "idle"] as const,
+  pullRequestApprovalStateIdle: () =>
+    [...forgeKeys.pullRequests(), "approval-state", "idle"] as const,
 };
 
 function savedReposQueryOptions() {
@@ -411,6 +423,19 @@ function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
   });
 }
 
+function pullRequestApprovalStateQueryOptions(pr: SelectedPullRequest) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestApprovalState(pr),
+    queryFn: (): Promise<PullRequestApprovalState> =>
+      trpc.reviewComments.getApprovalState.query({
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
+        number: pr.number,
+        headSha: pr.headSha,
+      }),
+  });
+}
+
 async function createPullRequestReviewComment(input: CreatePullRequestReviewCommentInput) {
   await trpc.reviewComments.create.mutate({
     providerId: input.providerId,
@@ -450,6 +475,24 @@ async function updatePullRequestReviewComment(input: UpdatePullRequestReviewComm
   });
 }
 
+async function approvePullRequest(input: SelectedPullRequest) {
+  await trpc.reviewComments.approve.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    headSha: input.headSha,
+  });
+}
+
+async function removePullRequestApproval(input: SelectedPullRequest) {
+  await trpc.reviewComments.removeApproval.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    headSha: input.headSha,
+  });
+}
+
 export {
   accountVisibilityQueryOptions,
   appearanceBackgroundQueryOptions,
@@ -466,8 +509,11 @@ export {
   pullRequestListQueryOptions,
   pullRequestOverviewQueryOptions,
   pullRequestPatchQueryOptions,
+  pullRequestApprovalStateQueryOptions,
   pullRequestQualityReportQueryOptions,
   pullRequestReviewThreadsQueryOptions,
+  approvePullRequest,
+  removePullRequestApproval,
   trackedPullRequestListQueryOptions,
   trackedReposQueryOptions,
   replyToPullRequestReviewComment,

@@ -167,8 +167,8 @@ function TrackedPullRequestListItem({
           setCustomNativeDragPreview({
             nativeSetDragImage,
             getOffset: pointerOutsideOfPreview({
-              x: 12,
-              y: 8,
+              x: "12px",
+              y: "8px",
             }),
             render({ container }) {
               setDraggableState({

@@ -273,8 +273,11 @@ function MainApp() {
   const diffDataSettingsQuery = useQuery(diffDataSettingsQueryOptions());
   const diffDataMode: DiffDataMode = diffDataSettingsQuery.data?.mode ?? "provider-api";
   const {
+    approvalState,
+    approvalStateError,
     changedFiles,
     changedFilesError,
+    isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,
     isQualityReportLoading,
@@ -846,11 +849,15 @@ function MainApp() {
         <div className="min-h-0 min-w-[30%] flex-1">
           <PatchViewerMain
             selectedPrKey={selectedPrKey}
+            selectedPr={selectedPr}
             selectedPatch={selectedPatch}
             selectedBaseSha={selectedPr?.baseSha ?? null}
             isGitDiffMode={diffDataMode === "git"}
             isPatchLoading={isPatchPreparing}
             isDark={isDark}
+            approvalState={approvalState}
+            isApprovalStateLoading={isApprovalStateLoading}
+            approvalStateError={approvalStateError}
             patchError={patchError}
             changedFiles={changedFiles}
             isChangedFilesLoading={isChangedFilesLoading}

@@ -18,6 +18,7 @@ import {
   providerAccountSchema,
   providerHostSchema,
   providerProfileSchema,
+  pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
   pullRequestQualityReportSchema,
   pullRequestInputSchema,
@@ -487,6 +488,34 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.getViewerLogin(input.accountId);
           }),
+        ),
+      ),
+      getApprovalState: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            const approvalState = yield* service.getApprovalState(input, input.number);
+            return pullRequestApprovalStateSchema.parse(approvalState);
+          }),
+          "reviewComments.getApprovalState",
+        ),
+      ),
+      approve: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.approve(input, input.number, input.headSha);
+          }),
+          "reviewComments.approve",
+        ),
+      ),
+      removeApproval: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.removeApproval(input, input.number);
+          }),
+          "reviewComments.removeApproval",
         ),
       ),
       listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
