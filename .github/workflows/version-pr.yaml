@@ -16,16 +16,16 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
 
       - name: setup mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4.0.1
 
       - name: install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: create version pr
-        uses: changesets/action@v1
+        uses: changesets/action@v1.7.0
         with:
           version: pnpm run version:release
           commit: version packages
