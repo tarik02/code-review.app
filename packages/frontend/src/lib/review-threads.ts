@@ -25,7 +25,7 @@ type ReviewThread = {
   startLine: number | null;
   side: "LEFT" | "RIGHT" | null;
   startSide: "LEFT" | "RIGHT" | null;
-  subjectType: "line" | "file" | null;
+  subjectType: "line" | "file" | "global" | null;
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
@@ -36,17 +36,21 @@ type ReviewThreadAnnotation = {
 };
 
 type FileReviewThreads = {
-  fileThreads: ReviewThread[];
-  lineAnnotations: DiffLineAnnotation<ReviewThreadAnnotation>[];
+  activeFileThreads: ReviewThread[];
+  activeLineAnnotations: DiffLineAnnotation<ReviewThreadAnnotation>[];
+  inactiveFileThreads: ReviewThread[];
   totalCount: number;
   unresolvedCount: number;
+  fileThreadCount: number;
 };
 
 const EMPTY_FILE_REVIEW_THREADS: FileReviewThreads = {
-  fileThreads: [],
-  lineAnnotations: [],
+  activeFileThreads: [],
+  activeLineAnnotations: [],
+  inactiveFileThreads: [],
   totalCount: 0,
   unresolvedCount: 0,
+  fileThreadCount: 0,
 };
 
 function normalizePath(path: string) {
@@ -73,12 +77,29 @@ function isActiveReviewThread(thread: ReviewThread) {
   return !thread.isResolved && !thread.isOutdated;
 }
 
+function isGlobalReviewThread(thread: ReviewThread) {
+  return thread.subjectType === "global";
+}
+
+function isFileReviewThread(thread: ReviewThread) {
+  if (isGlobalReviewThread(thread)) {
+    return false;
+  }
+
+  return (
+    thread.subjectType === "file" ||
+    thread.line === null ||
+    getAnnotationSide(thread.side) === null
+  );
+}
+
 function createFileReviewThreads(fileThreads: ReviewThread[]): FileReviewThreads {
-  const activeThreads = fileThreads.filter(isActiveReviewThread);
-  const sortedThreads = [...activeThreads].sort(compareThreads);
-  const lineAnnotations = sortedThreads.flatMap((thread) => {
+  const sortedThreads = [...fileThreads].sort(compareThreads);
+  const activeThreads = sortedThreads.filter(isActiveReviewThread);
+  const inactiveThreads = sortedThreads.filter((thread) => !isActiveReviewThread(thread));
+  const activeLineAnnotations = activeThreads.flatMap((thread) => {
     const annotationSide = getAnnotationSide(thread.side);
-    if (thread.subjectType === "file" || thread.line === null || !annotationSide) {
+    if (isFileReviewThread(thread) || thread.line === null || !annotationSide) {
       return [];
     }
 
@@ -90,18 +111,15 @@ function createFileReviewThreads(fileThreads: ReviewThread[]): FileReviewThreads
       },
     ];
   });
-
-  const fileLevelThreads = sortedThreads.filter(
-    (thread) =>
-      thread.subjectType === "file" ||
-      thread.line === null ||
-      getAnnotationSide(thread.side) === null,
-  );
+  const activeFileThreads = activeThreads.filter(isFileReviewThread);
+  const inactiveFileThreads = inactiveThreads.filter(isFileReviewThread);
   return {
-    fileThreads: fileLevelThreads,
-    lineAnnotations,
+    activeFileThreads,
+    activeLineAnnotations,
+    inactiveFileThreads,
     totalCount: sortedThreads.length,
-    unresolvedCount: sortedThreads.length,
+    unresolvedCount: activeThreads.length,
+    fileThreadCount: activeFileThreads.length + inactiveFileThreads.length,
   };
 }
 
@@ -111,6 +129,10 @@ function buildReviewThreadsByFile(
   const groupedThreads = new Map<string, ReviewThread[]>();
 
   for (const thread of reviewThreads) {
+    if (isGlobalReviewThread(thread)) {
+      continue;
+    }
+
     const normalizedPath = normalizePath(thread.path);
     const existingGroup = groupedThreads.get(normalizedPath);
 
@@ -131,6 +153,37 @@ function buildReviewThreadsByFile(
   return reviewThreadsByFile;
 }
 
+function getThreadRootComment(thread: ReviewThread) {
+  return (
+    thread.comments.find((comment) => comment.replyToId === null) ??
+    thread.comments[0] ??
+    null
+  );
+}
+
+function getGlobalReviewThreads(reviewThreads: ReviewThread[]): ReviewThread[] {
+  return [...reviewThreads]
+    .filter(isGlobalReviewThread)
+    .sort((left, right) => {
+      const leftCreatedAt = Date.parse(getThreadRootComment(left)?.createdAt ?? "");
+      const rightCreatedAt = Date.parse(
+        getThreadRootComment(right)?.createdAt ?? "",
+      );
+
+      if (Number.isNaN(leftCreatedAt) && Number.isNaN(rightCreatedAt)) {
+        return 0;
+      }
+      if (Number.isNaN(leftCreatedAt)) {
+        return 1;
+      }
+      if (Number.isNaN(rightCreatedAt)) {
+        return -1;
+      }
+
+      return leftCreatedAt - rightCreatedAt;
+    });
+}
+
 function getFileReviewThreadsForPath(
   reviewThreadsByFile: Map<string, FileReviewThreads>,
   filePath: string,
@@ -142,7 +195,10 @@ export {
   buildReviewThreadsByFile,
   EMPTY_FILE_REVIEW_THREADS,
   getFileReviewThreadsForPath,
+  getGlobalReviewThreads,
   isActiveReviewThread,
+  isFileReviewThread,
+  isGlobalReviewThread,
   normalizePath,
 };
 export type { FileReviewThreads, ReviewComment, ReviewThread, ReviewThreadAnnotation };

@@ -33,8 +33,8 @@ class CliExecutionError extends BackendError {
 }
 
 class ProviderError extends BackendError {
-  constructor(message: string) {
-    super("ProviderError", message);
+  constructor(message: string, options?: ErrorOptions) {
+    super("ProviderError", message, options);
   }
 }
 

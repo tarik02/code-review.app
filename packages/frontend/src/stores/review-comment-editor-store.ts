@@ -1,11 +1,17 @@
 import { create } from "zustand";
 import { normalizePath } from "../lib/review-threads";
-import type { ReviewCommentSide } from "../types/forge";
+import type { PrFileChangeType, ReviewCommentSide } from "../types/forge";
 
 type DraftReviewCommentTarget =
   | {
+      type: "global";
+    }
+  | {
       type: "file";
       path: string;
+      oldPath: string;
+      newPath: string;
+      changeType: PrFileChangeType;
     }
   | {
       type: "line";
@@ -87,6 +93,10 @@ const emptyReviewCommentEditorSessionState: ReviewCommentEditorSessionState = {
 };
 
 function getNewEditorId(target: DraftReviewCommentTarget) {
+  if (target.type === "global") {
+    return "new:global";
+  }
+
   const normalizedPath = normalizePath(target.path);
 
   if (target.type === "file") {

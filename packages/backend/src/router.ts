@@ -71,11 +71,38 @@ function mapError(error: unknown): TRPCError {
   });
 }
 
+function summarizeRouterError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause ? summarizeRouterError(error.cause) : undefined,
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    return {
+      ...Object.fromEntries(
+        Object.entries(error).map(([key, value]) => [key, summarizeRouterError(value)]),
+      ),
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
 function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
-  async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>) {
+  async function runEffect<A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+    label = "effect",
+  ) {
     try {
       return await runtime.runPromise(effect as Effect.Effect<A, E, never>);
     } catch (error) {
+      console.error(`[trpc] ${label} failed`, summarizeRouterError(error));
       throw mapError(error);
     }
   }
@@ -459,6 +486,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           const service = yield* ReviewCommentService;
           return yield* service.listThreads(input, input.number);
         }),
+        "reviewComments.listThreads",
       ),
     ),
     create: t.procedure
@@ -469,6 +497,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.create(input);
           }),
+          "reviewComments.create",
         ),
       ),
     reply: t.procedure
@@ -479,6 +508,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.reply(input);
           }),
+          "reviewComments.reply",
         ),
       ),
     update: t.procedure
@@ -489,6 +519,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.update(input);
           }),
+          "reviewComments.update",
         ),
       ),
   }),

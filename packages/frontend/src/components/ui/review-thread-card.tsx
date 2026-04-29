@@ -7,7 +7,11 @@ import {
 } from "@floating-ui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReviewComment, ReviewThread } from "../../lib/review-threads";
+import {
+  isGlobalReviewThread,
+  type ReviewComment,
+  type ReviewThread,
+} from "../../lib/review-threads";
 import { reviewEditorSettingsQueryOptions } from "../../queries/forge";
 import {
   getReviewCommentEditorSessionState,
@@ -50,6 +54,10 @@ function formatTimestamp(value: string) {
 }
 
 function formatThreadLineLabel(thread: ReviewThread) {
+  if (isGlobalReviewThread(thread)) {
+    return "Global comment";
+  }
+
   if (thread.line === null && thread.startLine === null) {
     return "File comment";
   }
@@ -97,6 +105,12 @@ function getCommentPreviewText(body: string) {
 }
 
 function getThreadEditorTarget(thread: ReviewThread): CommentEditorTarget {
+  if (isGlobalReviewThread(thread)) {
+    return {
+      type: "global",
+    };
+  }
+
   if (thread.line === null || thread.side === null) {
     return {
       type: "file",
@@ -280,7 +294,9 @@ function ReviewThreadCard({
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
     const locationLabel =
-      threadLine === null
+      isGlobalReviewThread(thread)
+        ? "Global comment"
+        : threadLine === null
         ? `${thread.path} - File comment`
         : `${thread.path}:${threadLine}`;
     const summaryBody = getCommentPreviewText(rootComment?.body ?? "");
@@ -493,7 +509,7 @@ function ReviewThreadCard({
                   ) : (
                     <CommentMarkdown
                       body={comment.body}
-                      filePath={thread.path}
+                      filePath={thread.path || undefined}
                     />
                   )}
                 </div>

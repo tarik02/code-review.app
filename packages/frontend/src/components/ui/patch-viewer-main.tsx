@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 import type { CSSProperties, UIEvent } from "react";
+import { createPortal } from "react-dom";
 import type {
   DiffLineAnnotation,
   AnnotationSide,
@@ -48,8 +49,11 @@ import {
   reviewEditorSettingsQueryOptions,
 } from "../../queries/forge";
 import {
+  getGlobalReviewThreads,
   getFileReviewThreadsForPath,
   isActiveReviewThread,
+  isFileReviewThread,
+  isGlobalReviewThread,
   normalizePath,
   type FileReviewThreads,
   type ReviewComment,
@@ -145,6 +149,7 @@ type PatchViewerMainProps = {
   changedFiles: string[];
   isChangedFilesLoading: boolean;
   changedFilesError: string;
+  globalReviewThreads: ReviewThread[];
   reviewThreadsByFile: Map<string, FileReviewThreads>;
   reviewThreads: ReviewThread[];
   isReviewThreadsLoading: boolean;
@@ -161,16 +166,26 @@ type PatchViewerMainProps = {
 type PatchFileDiffItemContextValue = {
   defaultReviewEditorMode: CommentEditorMode;
   diffNavigator: ReturnType<typeof useDiffNavigator>["diff"];
+  isInactiveFileCommentsExpanded: (filePath: string) => boolean;
   parsedFileDiffs: FileDiffMetadata[];
+  registerFileCommentsSection: (
+    filePath: string,
+    node: HTMLDivElement | null,
+  ) => void;
   registerThreadAnchor: (
     thread: ReviewThread,
     node: HTMLDivElement | null,
   ) => void;
   reviewEditorSessionKey: string | null;
   reviewThreadsByFile: Map<string, FileReviewThreads>;
+  scrollToFileCommentsSection: (filePath: string) => void;
   selectedBaseSha: string | null;
   selectedPatch: SelectedPatch;
   selectedProvider: ForgeProviderKind;
+  setInactiveFileCommentsExpanded: (
+    filePath: string,
+    expanded: boolean,
+  ) => void;
   viewerLogin: string | null;
   handleEditComment: (comment: ReviewComment, body: string) => Promise<void>;
   handleFileDiffPostRender: (
@@ -203,6 +218,52 @@ function toSelectionSide(
   side: ReviewCommentSide | null | undefined,
 ): AnnotationSide {
   return side === "LEFT" ? "deletions" : "additions";
+}
+
+function createFileDraftTarget(
+  fileDiff: FileDiffMetadata,
+): Extract<DraftReviewCommentTarget, { type: "file" }> {
+  const changeType = fileDiff.type as PrFileChangeType;
+
+  if (changeType === "new") {
+    return {
+      type: "file",
+      path: fileDiff.name,
+      oldPath: "",
+      newPath: fileDiff.name,
+      changeType,
+    };
+  }
+
+  if (changeType === "deleted") {
+    return {
+      type: "file",
+      path: fileDiff.name,
+      oldPath: fileDiff.prevName ?? fileDiff.name,
+      newPath: "",
+      changeType,
+    };
+  }
+
+  return {
+    type: "file",
+    path: fileDiff.name,
+    oldPath: fileDiff.prevName ?? fileDiff.name,
+    newPath: fileDiff.name,
+    changeType,
+  };
+}
+
+function getFileDiffLineCounts(fileDiff: FileDiffMetadata) {
+  let additions = 0;
+  let deletions = 0;
+
+  for (const hunk of fileDiff.hunks) {
+    additions += hunk.additionLines;
+    deletions += hunk.deletionLines;
+  }
+
+  return { additions, deletions };
 }
 
 function scheduleNextFrame(callback: () => void) {
@@ -784,6 +845,143 @@ function getThreadRefKey(thread: ReviewThread) {
   return `fallback:${normalizePath(thread.path)}:${thread.startLine ?? thread.line ?? "file"}:${thread.comments[0]?.id ?? "unknown"}`;
 }
 
+type GlobalCommentsSectionProps = {
+  threads: ReviewThread[];
+  isLoading: boolean;
+  defaultReviewEditorMode: CommentEditorMode;
+  provider: ForgeProviderKind;
+  reviewEditorSessionKey: string | null;
+  viewerLogin: string | null;
+  registerSection: (node: HTMLDivElement | null) => void;
+  registerThreadAnchor: (
+    thread: ReviewThread,
+    node: HTMLDivElement | null,
+  ) => void;
+  onEditComment: (comment: ReviewComment, body: string) => Promise<void>;
+  onOpenNewComment: () => void;
+  onReplyToThread: (thread: ReviewThread, body: string) => Promise<void>;
+  onSubmitDraftComment: (editorId: string, body: string) => Promise<void>;
+};
+
+function GlobalCommentsSection({
+  threads,
+  isLoading,
+  defaultReviewEditorMode,
+  provider,
+  reviewEditorSessionKey,
+  viewerLogin,
+  registerSection,
+  registerThreadAnchor,
+  onEditComment,
+  onOpenNewComment,
+  onReplyToThread,
+  onSubmitDraftComment,
+}: GlobalCommentsSectionProps) {
+  const reviewEditorSession = useReviewCommentEditorStore((state) =>
+    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
+  );
+  const setEditorBody = useReviewCommentEditorStore(
+    (state) => state.setEditorBody,
+  );
+  const setEditorCursorPosition = useReviewCommentEditorStore(
+    (state) => state.setEditorCursorPosition,
+  );
+  const closeEditor = useReviewCommentEditorStore(
+    (state) => state.closeEditor,
+  );
+  const globalDraftEditors = useMemo(
+    () =>
+      reviewEditorSession.editorOrder
+        .map((editorId) => reviewEditorSession.editorsById[editorId])
+        .filter(
+          (
+            editor,
+          ): editor is ReviewCommentEditorState & {
+            target: Extract<DraftReviewCommentTarget, { type: "global" }>;
+          } =>
+            editor != null &&
+            editor.kind === "new" &&
+            editor.target?.type === "global",
+        ),
+    [reviewEditorSession],
+  );
+  const hasComments = threads.length > 0;
+  const hasOpenDraft = globalDraftEditors.length > 0;
+
+  return (
+    <div
+      className="border-b border-ink-200 bg-white px-4 py-4 dark:bg-surface"
+      ref={registerSection}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-medium text-ink-900">Global comments</h2>
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-xs text-ink-700">
+            {threads.length}
+          </span>
+        </div>
+        <button
+          className="text-sm font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+          onClick={onOpenNewComment}
+          type="button"
+        >
+          Comment
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3">
+        {globalDraftEditors.map((editor) => (
+          <ReviewCommentEditor
+            key={editor.id}
+            cursorPosition={editor.cursorPosition}
+            defaultMode={defaultReviewEditorMode}
+            error={editor.error}
+            isPending={editor.isSubmitting}
+            provider={provider}
+            submitLabel="Comment"
+            target={editor.target}
+            value={editor.body}
+            onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
+            onChange={(body) =>
+              setEditorBody(reviewEditorSessionKey, editor.id, body)
+            }
+            onCursorPositionChange={(cursorPosition) =>
+              setEditorCursorPosition(
+                reviewEditorSessionKey,
+                editor.id,
+                cursorPosition ?? null,
+              )
+            }
+            onSubmit={(body) => onSubmitDraftComment(editor.id, body)}
+          />
+        ))}
+
+        {isLoading && !hasComments && !hasOpenDraft ? (
+          <div className="text-sm text-ink-500">Loading global comments...</div>
+        ) : null}
+
+        {!isLoading && !hasComments && !hasOpenDraft ? (
+          <div className="rounded-lg border border-dashed border-ink-200 bg-canvas px-4 py-5 text-sm text-ink-500">
+            No global comments yet. Start the conversation before the diff.
+          </div>
+        ) : null}
+
+        {threads.map((thread) => (
+          <ReviewThreadCard
+            key={getThreadRefKey(thread)}
+            containerRef={(node) => registerThreadAnchor(thread, node)}
+            onEditComment={onEditComment}
+            onReplyToThread={onReplyToThread}
+            reviewEditorSessionKey={reviewEditorSessionKey}
+            thread={thread}
+            viewerLogin={viewerLogin}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ReviewThreadsPanel({
   threads,
   isLoading,
@@ -791,8 +989,12 @@ function ReviewThreadsPanel({
   hasSelection,
   onSelectThread,
 }: ReviewThreadsPanelProps) {
-  const activeThreads = threads.filter(isActiveReviewThread);
-  const resolvedThreads = threads.filter((t) => t.isResolved || t.isOutdated);
+  const globalThreads = getGlobalReviewThreads(threads);
+  const nonGlobalThreads = threads.filter((thread) => !isGlobalReviewThread(thread));
+  const activeThreads = nonGlobalThreads.filter(isActiveReviewThread);
+  const resolvedThreads = nonGlobalThreads.filter(
+    (thread) => thread.isResolved || thread.isOutdated,
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -829,9 +1031,29 @@ function ReviewThreadsPanel({
         !isLoading &&
         !error &&
         threads.length > 0 &&
-        activeThreads.length === 0 ? (
+        activeThreads.length === 0 &&
+        globalThreads.length === 0 ? (
           <div className="mb-3 rounded-lg px-3  text-sm text-emerald-800  dark:text-emerald-300">
             No active comments. You&apos;re in the clear!
+          </div>
+        ) : null}
+
+        {globalThreads.length > 0 ? (
+          <div className="mb-3">
+            <div className="sticky top-0 z-10 mb-2 bg-surface px-1 py-1 text-xs font-medium tracking-wide text-ink-500">
+              Global
+              <span className="ml-2 text-ink-400">{globalThreads.length}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {globalThreads.map((thread) => (
+                <ReviewThreadCard
+                  key={getThreadRefKey(thread)}
+                  slim
+                  thread={thread}
+                  onClick={() => onSelectThread(thread)}
+                />
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -889,13 +1111,17 @@ function PatchFileDiffItem({
   const {
     defaultReviewEditorMode,
     diffNavigator,
+    isInactiveFileCommentsExpanded,
     parsedFileDiffs,
+    registerFileCommentsSection,
     registerThreadAnchor,
     reviewEditorSessionKey,
     reviewThreadsByFile,
+    scrollToFileCommentsSection,
     selectedBaseSha,
     selectedPatch,
     selectedProvider,
+    setInactiveFileCommentsExpanded,
     viewerLogin,
     handleEditComment,
     handleFileDiffPostRender,
@@ -932,9 +1158,15 @@ function PatchFileDiffItem({
     fileDiff.name,
   );
   const normalizedFilePath = normalizePath(fileDiff.name);
+  const inactiveFileCommentsExpanded =
+    isInactiveFileCommentsExpanded(normalizedFilePath);
   const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
+  const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
+  const [fileCommentsPortalHost, setFileCommentsPortalHost] =
+    useState<HTMLDivElement | null>(null);
+  const fileCommentsPortalHostRef = useRef<HTMLDivElement | null>(null);
   const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
-    fileReviewThreads.lineAnnotations.map((annotation) => ({
+    fileReviewThreads.activeLineAnnotations.map((annotation) => ({
       ...annotation,
       metadata: {
         ...annotation.metadata,
@@ -994,6 +1226,14 @@ function PatchFileDiffItem({
       return `${annotation.side}:${annotation.lineNumber}:thread:${getThreadRefKey(annotation.metadata.thread)}`;
     })
     .join("|");
+  const shouldRenderFileCommentsInHeader =
+    fileReviewThreads.fileThreadCount > 0 || fileDraftEditors.length > 0;
+  const { additions, deletions } = getFileDiffLineCounts(fileDiff);
+
+  function openFileCommentDraft() {
+    openNewEditor(reviewEditorSessionKey, createFileDraftTarget(fileDiff));
+    scrollToFileCommentsSection(normalizedFilePath);
+  }
 
   function openLineCommentDraft(range: SelectedLineRange) {
     const startSide = range.side ?? range.endSide;
@@ -1026,7 +1266,7 @@ function PatchFileDiffItem({
     );
 
     return (
-      <div className="flex items-center gap-2 text-xs text-ink-500">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
         {fileReviewThreads.totalCount > 0 ? (
           <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
             {fileReviewThreads.totalCount} threads
@@ -1051,13 +1291,202 @@ function PatchFileDiffItem({
             Draft open
           </span>
         ) : null}
-        {fileReviewThreads.fileThreads.length > 0 ? (
+        {fileReviewThreads.fileThreadCount > 0 ? (
           <span className="text-ink-500">
-            {fileReviewThreads.fileThreads.length} file-level
+            {fileReviewThreads.fileThreadCount} file comments
           </span>
+        ) : null}
+        <button
+          className="font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+          onClick={openFileCommentDraft}
+          type="button"
+        >
+          File comment
+        </button>
+      </div>
+    );
+  }
+
+  function renderFileCommentsContent() {
+    if (!shouldRenderFileCommentsInHeader) {
+      return null;
+    }
+
+    return (
+      <div
+        className="mt-3 flex flex-col gap-3 border-t border-ink-200 pt-3"
+        ref={(node) => registerFileCommentsSection(normalizedFilePath, node)}
+      >
+        {fileDraftEditors.map((editor) => (
+          <ReviewCommentEditor
+            key={editor.id}
+            cursorPosition={editor.cursorPosition}
+            defaultMode={defaultReviewEditorMode}
+            error={editor.error}
+            isPending={editor.isSubmitting}
+            provider={selectedProvider}
+            submitLabel="Comment"
+            target={editor.target}
+            value={editor.body}
+            onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
+            onChange={(body) =>
+              setEditorBody(reviewEditorSessionKey, editor.id, body)
+            }
+            onCursorPositionChange={(cursorPosition) =>
+              setEditorCursorPosition(
+                reviewEditorSessionKey,
+                editor.id,
+                cursorPosition ?? null,
+              )
+            }
+            onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
+          />
+        ))}
+        {fileReviewThreads.activeFileThreads.map((thread) => (
+          <ReviewThreadCard
+            key={getThreadRefKey(thread)}
+            containerRef={(node) => registerThreadAnchor(thread, node)}
+            onEditComment={handleEditComment}
+            onReplyToThread={handleReplyToThread}
+            reviewEditorSessionKey={reviewEditorSessionKey}
+            thread={thread}
+            viewerLogin={viewerLogin}
+          />
+        ))}
+        {fileReviewThreads.inactiveFileThreads.length > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-ink-200 pt-3">
+            <button
+              className="self-start text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+              onClick={() =>
+                setInactiveFileCommentsExpanded(
+                  normalizedFilePath,
+                  !inactiveFileCommentsExpanded,
+                )
+              }
+              type="button"
+            >
+              {inactiveFileCommentsExpanded
+                ? "Hide inactive comments"
+                : "Show inactive comments"}{" "}
+              ({fileReviewThreads.inactiveFileThreads.length})
+            </button>
+            {inactiveFileCommentsExpanded ? (
+              <div className="flex flex-col gap-3">
+                {fileReviewThreads.inactiveFileThreads.map((thread) => (
+                  <ReviewThreadCard
+                    key={getThreadRefKey(thread)}
+                    containerRef={(node) => registerThreadAnchor(thread, node)}
+                    onEditComment={handleEditComment}
+                    onReplyToThread={handleReplyToThread}
+                    reviewEditorSessionKey={reviewEditorSessionKey}
+                    thread={thread}
+                    viewerLogin={viewerLogin}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );
+  }
+
+  function renderCustomFileHeader() {
+    return (
+      <div className="w-full">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2 text-sm text-ink-900">
+            {fileDiff.prevName ? (
+              <>
+                <span className="truncate text-ink-500">{fileDiff.prevName}</span>
+                <span aria-hidden className="text-ink-400">
+                  →
+                </span>
+              </>
+            ) : null}
+            <span className="truncate font-medium">{fileDiff.name}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            {deletions > 0 || additions === 0 ? (
+              <span className="font-mono text-red-600 dark:text-red-400">
+                -{deletions}
+              </span>
+            ) : null}
+            {additions > 0 || deletions === 0 ? (
+              <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                +{additions}
+              </span>
+            ) : null}
+            {renderReviewThreadSummary()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function syncFileCommentsPortalHost(node: HTMLElement) {
+    const shadowRoot = node.shadowRoot;
+    if (!shadowRoot) {
+      if (fileCommentsPortalHostRef.current) {
+        fileCommentsPortalHostRef.current = null;
+        setFileCommentsPortalHost(null);
+      }
+      return;
+    }
+
+    const currentPortalHost = fileCommentsPortalHostRef.current;
+    if (!shouldRenderFileCommentsInHeader) {
+      shadowRoot
+        .querySelector(`[data-file-comments-slot-container="${fileCommentsSlotName}"]`)
+        ?.remove();
+      currentPortalHost?.remove();
+      if (currentPortalHost) {
+        fileCommentsPortalHostRef.current = null;
+        setFileCommentsPortalHost(null);
+      }
+      return;
+    }
+
+    const headerElement = shadowRoot.querySelector("[data-diffs-header]");
+    if (!(headerElement instanceof HTMLElement)) {
+      return;
+    }
+
+    let slotContainer = shadowRoot.querySelector(
+      `[data-file-comments-slot-container="${fileCommentsSlotName}"]`,
+    );
+    if (!(slotContainer instanceof HTMLDivElement)) {
+      slotContainer = document.createElement("div");
+      slotContainer.dataset.fileCommentsSlotContainer = fileCommentsSlotName;
+
+      const slotElement = document.createElement("slot");
+      slotElement.name = fileCommentsSlotName;
+      slotContainer.appendChild(slotElement);
+
+      const preElement = shadowRoot.querySelector("pre");
+      if (preElement?.parentNode === shadowRoot) {
+        shadowRoot.insertBefore(slotContainer, preElement);
+      } else {
+        headerElement.insertAdjacentElement("afterend", slotContainer);
+      }
+    }
+
+    let portalHost = Array.from(node.children).find(
+      (child): child is HTMLDivElement =>
+        child instanceof HTMLDivElement &&
+        child.dataset.fileCommentsSlotHost === fileCommentsSlotName,
+    );
+    if (!portalHost) {
+      portalHost = document.createElement("div");
+      portalHost.dataset.fileCommentsSlotHost = fileCommentsSlotName;
+      portalHost.slot = fileCommentsSlotName;
+      node.appendChild(portalHost);
+    }
+
+    if (portalHost !== fileCommentsPortalHostRef.current) {
+      fileCommentsPortalHostRef.current = portalHost;
+      setFileCommentsPortalHost(portalHost);
+    }
   }
 
   function renderReviewThreadAnnotations(
@@ -1165,18 +1594,27 @@ function PatchFileDiffItem({
             background-color: transparent !important;
           }
 
-          [data-diffs-header='default'] {
+          [data-diffs-header='default'],
+          [data-diffs-header='custom'] {
             position: sticky;
             top: 0;
             z-index: 5;
+            background-color: var(--diffs-bg);
             box-shadow: inset 0 -1px 0 var(--diffs-bg-context);
           }
 
-          :host-context(.macos) [data-diffs-header='default'] {
+          [data-file-comments-slot-container] {
+            display: block;
+            background-color: var(--diffs-bg);
+          }
+
+          :host-context(.macos) [data-diffs-header='default'],
+          :host-context(.macos) [data-diffs-header='custom'] {
             min-height: ${TOP_BAR_MACOS_HEIGHT};
           }
 
-          :host-context(.wco) [data-diffs-header='default'] {
+          :host-context(.wco) [data-diffs-header='default'],
+          :host-context(.wco) [data-diffs-header='custom'] {
             min-height: ${TOP_BAR_WCO_HEIGHT};
           }
 
@@ -1188,15 +1626,18 @@ function PatchFileDiffItem({
         `,
         enableGutterUtility: true,
         onGutterUtilityClick: openLineCommentDraft,
-        onPostRender: (node, instance) =>
+        onPostRender: (node, instance) => {
+          syncFileCommentsPortalHost(node);
           handleFileDiffPostRender(
             node,
             instance,
             fileDiff,
             normalizedFilePath,
-          ),
+          );
+        },
       }}
       renderAnnotation={renderReviewThreadAnnotations}
+      renderCustomHeader={renderCustomFileHeader}
       renderHeaderMetadata={renderReviewThreadSummary}
     />
   );
@@ -1214,54 +1655,18 @@ function PatchFileDiffItem({
       ) : (
         fileDiffElement
       )}
+      {fileCommentsPortalHost
+        ? createPortal(
+            <div className="bg-white px-4 pb-3 dark:bg-surface">
+              {renderFileCommentsContent()}
+            </div>,
+            fileCommentsPortalHost,
+          )
+        : null}
       <div
         id={lineDraftPortalRootId}
         className="pointer-events-none absolute inset-0 z-[4]"
       />
-      {fileReviewThreads.fileThreads.length > 0 ||
-      fileDraftEditors.length > 0 ? (
-        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-ink-200 bg-surface p-3">
-          <div className="text-xs font-medium uppercase tracking-wide text-ink-500">
-            File threads
-          </div>
-          {fileDraftEditors.map((editor) => (
-            <ReviewCommentEditor
-              key={editor.id}
-              cursorPosition={editor.cursorPosition}
-              defaultMode={defaultReviewEditorMode}
-              error={editor.error}
-              isPending={editor.isSubmitting}
-              provider={selectedProvider}
-              submitLabel="Comment"
-              target={editor.target}
-              value={editor.body}
-              onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
-              onChange={(body) =>
-                setEditorBody(reviewEditorSessionKey, editor.id, body)
-              }
-              onCursorPositionChange={(cursorPosition) =>
-                setEditorCursorPosition(
-                  reviewEditorSessionKey,
-                  editor.id,
-                  cursorPosition ?? null,
-                )
-              }
-              onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
-            />
-          ))}
-          {fileReviewThreads.fileThreads.map((thread) => (
-            <ReviewThreadCard
-              key={getThreadRefKey(thread)}
-              containerRef={(node) => registerThreadAnchor(thread, node)}
-              onEditComment={handleEditComment}
-              onReplyToThread={handleReplyToThread}
-              reviewEditorSessionKey={reviewEditorSessionKey}
-              thread={thread}
-              viewerLogin={viewerLogin}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -1277,6 +1682,7 @@ function PatchViewerMain({
   changedFiles,
   isChangedFilesLoading,
   changedFilesError,
+  globalReviewThreads,
   reviewThreadsByFile,
   reviewThreads,
   isReviewThreadsLoading,
@@ -1310,12 +1716,17 @@ function PatchViewerMain({
   const closeEditor = useReviewCommentEditorStore(
     (state) => state.closeEditor,
   );
+  const [expandedInactiveFileCommentsByPath, setExpandedInactiveFileCommentsByPath] =
+    useState<Record<string, boolean>>({});
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
   const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
+  const cancelFileCommentsSectionScrollRef = useRef<(() => void) | null>(null);
   const cancelThreadScrollRef = useRef<(() => void) | null>(null);
   const previousSessionKeyRef = useRef<string | null>(patchViewerSessionKey);
   const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
+  const fileCommentsSectionNodesRef = useRef<Map<string, HTMLElement>>(new Map());
+  const globalCommentsSectionNodeRef = useRef<HTMLDivElement | null>(null);
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const hasSelection = selectedPrKey !== null;
   const isDiffReady =
@@ -1367,6 +1778,96 @@ function PatchViewerMain({
     [patchViewerSessionKey, setScrollTop],
   );
 
+  const isInactiveFileCommentsExpanded = useCallback(
+    (filePath: string) => Boolean(expandedInactiveFileCommentsByPath[filePath]),
+    [expandedInactiveFileCommentsByPath],
+  );
+
+  const setInactiveFileCommentsExpanded = useCallback(
+    (filePath: string, expanded: boolean) => {
+      setExpandedInactiveFileCommentsByPath((current) => {
+        if (Boolean(current[filePath]) === expanded) {
+          return current;
+        }
+
+        if (expanded) {
+          return {
+            ...current,
+            [filePath]: true,
+          };
+        }
+
+        const next = { ...current };
+        delete next[filePath];
+        return next;
+      });
+    },
+    [],
+  );
+
+  const registerFileCommentsSection = useCallback(
+    (filePath: string, node: HTMLDivElement | null) => {
+      if (node) {
+        fileCommentsSectionNodesRef.current.set(filePath, node);
+        return;
+      }
+
+      fileCommentsSectionNodesRef.current.delete(filePath);
+    },
+    [],
+  );
+
+  const registerGlobalCommentsSection = useCallback(
+    (node: HTMLDivElement | null) => {
+      globalCommentsSectionNodeRef.current = node;
+    },
+    [],
+  );
+
+  const scrollToFileCommentsSection = useCallback((filePath: string) => {
+    cancelFileCommentsSectionScrollRef.current?.();
+    cancelFileCommentsSectionScrollRef.current = null;
+
+    let attempts = 0;
+    let cancelFrame: (() => void) | null = null;
+    let cancelled = false;
+
+    const stop = () => {
+      cancelled = true;
+      cancelFrame?.();
+      cancelFrame = null;
+      cancelFileCommentsSectionScrollRef.current = null;
+    };
+
+    const scrollToSection = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const node = fileCommentsSectionNodesRef.current.get(filePath);
+      if (node?.isConnected) {
+        node.scrollIntoView({
+          behavior: "auto",
+          block: "center",
+          inline: "nearest",
+        });
+        stop();
+        return;
+      }
+
+      attempts += 1;
+      if (attempts >= SCROLL_RESTORE_MAX_ATTEMPTS) {
+        stop();
+        return;
+      }
+
+      cancelFrame = scheduleNextFrame(scrollToSection);
+    };
+
+    cancelFileCommentsSectionScrollRef.current = stop;
+    scrollToSection();
+  }, []);
+
   const registerThreadAnchor = useCallback(
     (thread: ReviewThread, node: HTMLDivElement | null) => {
       const threadKey = getThreadRefKey(thread);
@@ -1386,7 +1887,20 @@ function PatchViewerMain({
       cancelThreadScrollRef.current?.();
       cancelThreadScrollRef.current = null;
 
-      navigator.tree.onSelectFile(thread.path);
+      if (isGlobalReviewThread(thread)) {
+        globalCommentsSectionNodeRef.current?.scrollIntoView({
+          behavior: "auto",
+          block: "start",
+          inline: "nearest",
+        });
+      } else {
+        navigator.tree.onSelectFile(thread.path);
+        const normalizedFilePath = normalizePath(thread.path);
+
+        if (isFileReviewThread(thread) && !isActiveReviewThread(thread)) {
+          setInactiveFileCommentsExpanded(normalizedFilePath, true);
+        }
+      }
 
       const threadKey = getThreadRefKey(thread);
       let attempts = 0;
@@ -1426,9 +1940,14 @@ function PatchViewerMain({
       };
 
       cancelThreadScrollRef.current = stop;
+      if (isGlobalReviewThread(thread)) {
+        cancelFrame = scheduleNextFrame(scrollToThread);
+        return;
+      }
+
       scrollToThread();
     },
-    [navigator.tree],
+    [navigator.tree, setInactiveFileCommentsExpanded],
   );
 
   const handleFileDiffPostRender = useCallback(
@@ -1547,8 +2066,13 @@ function PatchViewerMain({
   }, [setScrollTop]);
 
   useEffect(() => {
+    cancelFileCommentsSectionScrollRef.current?.();
+    cancelFileCommentsSectionScrollRef.current = null;
     cancelThreadScrollRef.current?.();
     cancelThreadScrollRef.current = null;
+    fileCommentsSectionNodesRef.current.clear();
+    globalCommentsSectionNodeRef.current = null;
+    setExpandedInactiveFileCommentsByPath({});
   }, [
     patchViewerSessionKey,
     selectedPatch?.headSha,
@@ -1559,8 +2083,12 @@ function PatchViewerMain({
 
   useEffect(() => {
     return () => {
+      cancelFileCommentsSectionScrollRef.current?.();
+      cancelFileCommentsSectionScrollRef.current = null;
       cancelThreadScrollRef.current?.();
       cancelThreadScrollRef.current = null;
+      fileCommentsSectionNodesRef.current.clear();
+      globalCommentsSectionNodeRef.current = null;
       threadAnchorNodesRef.current.clear();
     };
   }, []);
@@ -1629,14 +2157,24 @@ function PatchViewerMain({
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
         body,
-        path: target.path,
-        oldPath: target.path,
-        newPath: target.path,
+        path: target.type === "global" ? "" : target.path,
+        oldPath:
+          target.type === "global"
+            ? ""
+            : target.type === "file"
+              ? target.oldPath
+              : target.path,
+        newPath:
+          target.type === "global"
+            ? ""
+            : target.type === "file"
+              ? target.newPath
+              : target.path,
         line: target.type === "line" ? target.line : null,
         side: target.type === "line" ? target.side : null,
         startLine: target.type === "line" ? target.startLine : null,
         startSide: target.type === "line" ? target.startSide : null,
-        subjectType: target.type === "file" ? "file" : "line",
+        subjectType: target.type,
       });
       closeEditor(reviewEditorSessionKey, editorId);
     } catch (error) {
@@ -1659,6 +2197,24 @@ function PatchViewerMain({
 
   async function handleReplyToThread(thread: ReviewThread, body: string) {
     if (!selectedPatch) {
+      return;
+    }
+
+    if (isGlobalReviewThread(thread)) {
+      await createCommentMutation.mutateAsync({
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        body,
+        path: "",
+        oldPath: "",
+        newPath: "",
+        line: null,
+        side: null,
+        startLine: null,
+        startSide: null,
+        subjectType: "global",
+      });
       return;
     }
 
@@ -1693,6 +2249,11 @@ function PatchViewerMain({
       threadId: parentThread.id,
       commentId: comment.id,
       body,
+      subjectType: isGlobalReviewThread(parentThread)
+        ? "global"
+        : isFileReviewThread(parentThread)
+          ? "file"
+          : "line",
     });
   }
 
@@ -1756,44 +2317,74 @@ function PatchViewerMain({
 
               {!isPatchLoading && !patchError && selectedPatch ? (
                 <div className="flex min-h-[50vh] flex-col md:min-h-full h-full">
-                  {parsedPatch.parseError ? (
-                    <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
-                      {parsedPatch.parseError}
-                    </div>
-                  ) : parsedPatch.fileDiffs.length === 0 ? (
-                    <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
-                      No diff content.
-                    </div>
-                  ) : (
-                    <PatchFileDiffItemContext.Provider
-                      value={{
-                        defaultReviewEditorMode,
-                        diffNavigator: navigator.diff,
-                        parsedFileDiffs: parsedPatch.fileDiffs,
-                        registerThreadAnchor,
-                        reviewEditorSessionKey,
-                        reviewThreadsByFile,
-                        selectedBaseSha,
-                        selectedPatch,
-                        selectedProvider,
-                        viewerLogin,
-                        handleEditComment,
-                        handleFileDiffPostRender,
-                        handleReplyToThread,
-                        handleSubmitDraftComment,
-                      }}
-                    >
-                      <div className="flex flex-col bg-white dark:bg-surface">
-                        {parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
+                  <PatchFileDiffItemContext.Provider
+                    value={{
+                      defaultReviewEditorMode,
+                      diffNavigator: navigator.diff,
+                      isInactiveFileCommentsExpanded,
+                      parsedFileDiffs: parsedPatch.fileDiffs,
+                      registerFileCommentsSection,
+                      registerThreadAnchor,
+                      reviewEditorSessionKey,
+                      reviewThreadsByFile,
+                      scrollToFileCommentsSection,
+                      selectedBaseSha,
+                      selectedPatch,
+                      selectedProvider,
+                      setInactiveFileCommentsExpanded,
+                      viewerLogin,
+                      handleEditComment,
+                      handleFileDiffPostRender,
+                      handleReplyToThread,
+                      handleSubmitDraftComment,
+                    }}
+                  >
+                    <div className="flex flex-col bg-white dark:bg-surface">
+                      <GlobalCommentsSection
+                        defaultReviewEditorMode={defaultReviewEditorMode}
+                        isLoading={isReviewThreadsLoading}
+                        onEditComment={handleEditComment}
+                        onOpenNewComment={() => {
+                          useReviewCommentEditorStore
+                            .getState()
+                            .openNewEditor(reviewEditorSessionKey, {
+                              type: "global",
+                            });
+                          globalCommentsSectionNodeRef.current?.scrollIntoView({
+                            behavior: "auto",
+                            block: "start",
+                            inline: "nearest",
+                          });
+                        }}
+                        onReplyToThread={handleReplyToThread}
+                        onSubmitDraftComment={handleSubmitDraftComment}
+                        provider={selectedProvider}
+                        registerSection={registerGlobalCommentsSection}
+                        registerThreadAnchor={registerThreadAnchor}
+                        reviewEditorSessionKey={reviewEditorSessionKey}
+                        threads={globalReviewThreads}
+                        viewerLogin={viewerLogin}
+                      />
+
+                      {parsedPatch.parseError ? (
+                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
+                          {parsedPatch.parseError}
+                        </div>
+                      ) : parsedPatch.fileDiffs.length === 0 ? (
+                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
+                          No diff content.
+                        </div>
+                      ) : (
+                        parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
                           <PatchFileDiffItem
                             fileDiff={fileDiff}
                             fileIndex={fileIndex}
                             key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
                           />
-                        ))}
-                      </div>
-                    </PatchFileDiffItemContext.Provider>
-                  )}
+                        ))
+                      )}
+                    </div>
+                  </PatchFileDiffItemContext.Provider>
                 </div>
               ) : null}
             </PatchScrollVirtualizer>

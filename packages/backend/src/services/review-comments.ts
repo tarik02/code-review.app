@@ -101,6 +101,7 @@ const makeReviewCommentService = Effect.gen(function* () {
         input.threadId,
         input.commentId,
         input.body,
+        input.subjectType,
       ),
     );
   });

@@ -20,7 +20,10 @@ import {
 import { useTheme } from "../hooks/use-theme";
 import { useAuthSession } from "./auth-session";
 import { sortByFileTreePathOrder } from "../lib/file-tree-order";
-import { buildReviewThreadsByFile } from "../lib/review-threads";
+import {
+  buildReviewThreadsByFile,
+  getGlobalReviewThreads,
+} from "../lib/review-threads";
 import {
   repoIdentity,
   repoIdentityKey,
@@ -371,6 +374,10 @@ function MainApp() {
   } = useSelectedPullRequestData(selectedPr, diffDataMode);
   const reviewThreadsByFile = useMemo(
     () => buildReviewThreadsByFile(reviewThreads),
+    [reviewThreads],
+  );
+  const globalReviewThreads = useMemo(
+    () => getGlobalReviewThreads(reviewThreads),
     [reviewThreads],
   );
   const parsedPatch = useMemo(
@@ -813,6 +820,7 @@ function MainApp() {
             changedFiles={changedFiles}
             isChangedFilesLoading={isChangedFilesLoading}
             changedFilesError={changedFilesError}
+            globalReviewThreads={globalReviewThreads}
             reviewThreadsByFile={reviewThreadsByFile}
             reviewThreads={reviewThreads}
             isReviewThreadsLoading={isReviewThreadsLoading}

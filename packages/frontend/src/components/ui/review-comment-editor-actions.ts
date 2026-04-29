@@ -11,6 +11,7 @@ type MarkdownTransform = {
 };
 
 type CommentEditorTarget =
+  | { type: "global" }
   | { type: "file"; path: string }
   | {
       type: "line";

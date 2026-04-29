@@ -194,6 +194,17 @@ const GraphQlReviewCommentSchema = Schema.Struct({
   ),
 });
 
+const GraphQlConversationCommentSchema = Schema.Struct({
+  id: Schema.String,
+  databaseId: OptionalNullableNumber,
+  body: Schema.String,
+  createdAt: Schema.String,
+  updatedAt: Schema.String,
+  url: Schema.String,
+  authorAssociation: OptionalNullableString,
+  author: Schema.optional(Schema.NullOr(GhActorSchema)),
+});
+
 const GraphQlReviewThreadSchema = Schema.Struct({
   id: Schema.String,
   path: Schema.String,
@@ -220,6 +231,9 @@ const ReviewThreadsQueryDataSchema = Schema.Struct({
             Schema.Struct({
               reviewThreads: Schema.Struct({
                 nodes: Schema.Array(GraphQlReviewThreadSchema),
+              }),
+              comments: Schema.Struct({
+                nodes: Schema.Array(GraphQlConversationCommentSchema),
               }),
             }),
           ),
@@ -381,10 +395,13 @@ function mapHttpError(error: unknown) {
   if (error instanceof ProviderError) return Effect.succeed(error);
   if (error instanceof ParseResult.ParseError) return parseErrorMessage(error);
   if (error instanceof HttpClientError.ResponseError) {
-    return Effect.map(responseErrorMessage(error), (message) => new ProviderError(message));
+    return Effect.map(
+      responseErrorMessage(error),
+      (message) => new ProviderError(message, { cause: error }),
+    );
   }
   if (HttpClientError.isHttpClientError(error)) {
-    return Effect.succeed(new ProviderError(error.message));
+    return Effect.succeed(new ProviderError(error.message, { cause: error }));
   }
   return Effect.succeed(toProviderError(error));
 }
@@ -573,6 +590,25 @@ query($owner: String!, $name: String!, $number: Int!) {
     }
     return id;
   });
+}
+
+function toGitHubReviewComment(
+  comment:
+    | typeof GraphQlReviewCommentSchema.Type
+    | typeof GraphQlConversationCommentSchema.Type,
+): ReviewComment {
+  return {
+    id: comment.id,
+    databaseId: comment.databaseId ?? null,
+    authorLogin: comment.author?.login ?? "unknown",
+    authorAvatarUrl: comment.author?.avatarUrl ?? comment.author?.avatar_url ?? null,
+    authorAssociation: comment.authorAssociation ?? null,
+    body: comment.body,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+    url: comment.url,
+    replyToId: "replyTo" in comment ? comment.replyTo?.id ?? null : null,
+  };
 }
 
 function repoSummaryFromSearch(accountId: string, host: string, label: string, repo: GhSearchRepo): RepoSummary {
@@ -1053,6 +1089,21 @@ query($owner: String!, $name: String!, $number: Int!) {
           }
         }
       }
+      comments(first: 100) {
+        nodes {
+          id
+          databaseId
+          body
+          createdAt
+          updatedAt
+          url
+          authorAssociation
+          author {
+            login
+            avatarUrl(size: 64)
+          }
+        }
+      }
     }
   }
 }
@@ -1069,56 +1120,94 @@ query($owner: String!, $name: String!, $number: Int!) {
         ReviewThreadsQueryDataSchema,
       );
 
-      return (
-        response.data?.repository?.pullRequest?.reviewThreads.nodes ?? []
-      ).flatMap((thread): ReviewThread[] => {
-        if (thread.comments.nodes.length === 0) return [];
-        const comments: ReviewComment[] = thread.comments.nodes.map((comment) => ({
+      const pullRequest = response.data?.repository?.pullRequest;
+      const reviewThreads = (pullRequest?.reviewThreads.nodes ?? []).flatMap(
+        (thread): ReviewThread[] => {
+          if (thread.comments.nodes.length === 0) return [];
+          const comments: ReviewComment[] = thread.comments.nodes.map(
+            toGitHubReviewComment,
+          );
+          return [
+            {
+              id: thread.id,
+              provider: "github",
+              path: thread.path,
+              isResolved: thread.isResolved,
+              isOutdated: thread.isOutdated,
+              line: thread.line ?? thread.originalLine ?? null,
+              startLine: thread.startLine ?? thread.originalStartLine ?? null,
+              side: thread.diffSide === "LEFT" ? "LEFT" : "RIGHT",
+              startSide:
+                thread.startDiffSide === "LEFT" ||
+                thread.startDiffSide === "RIGHT"
+                  ? thread.startDiffSide
+                  : null,
+              subjectType:
+                thread.subjectType.toLowerCase() === "file" ? "file" : "line",
+              comments,
+            },
+          ];
+        },
+      );
+      const globalThreads = (pullRequest?.comments.nodes ?? []).map(
+        (comment): ReviewThread => ({
           id: comment.id,
-          databaseId: comment.databaseId ?? null,
-          authorLogin: comment.author?.login ?? "unknown",
-          authorAvatarUrl: comment.author?.avatarUrl ?? null,
-          authorAssociation: comment.authorAssociation ?? null,
-          body: comment.body,
-          createdAt: comment.createdAt,
-          updatedAt: comment.updatedAt,
-          url: comment.url,
-          replyToId: comment.replyTo?.id ?? null,
-        }));
-        return [
-          {
-            id: thread.id,
-            provider: "github",
-            path: thread.path,
-            isResolved: thread.isResolved,
-            isOutdated: thread.isOutdated,
-            line: thread.line ?? thread.originalLine ?? null,
-            startLine: thread.startLine ?? thread.originalStartLine ?? null,
-            side: thread.diffSide === "LEFT" ? "LEFT" : "RIGHT",
-            startSide:
-              thread.startDiffSide === "LEFT" || thread.startDiffSide === "RIGHT"
-                ? thread.startDiffSide
-                : null,
-            subjectType:
-              thread.subjectType.toLowerCase() === "file" ? "file" : "line",
-            comments,
-          },
-        ];
-      });
+          provider: "github",
+          path: "",
+          isResolved: false,
+          isOutdated: false,
+          line: null,
+          startLine: null,
+          side: null,
+          startSide: null,
+          subjectType: "global",
+          comments: [toGitHubReviewComment(comment)],
+        }),
+      );
+
+      return [...reviewThreads, ...globalThreads];
     });
   }
 
   createReviewThread(repo: RepoIdentity, number: number, input: ReviewThreadInput) {
     return Effect.gen(function* () {
       const body = input.body.trim();
-      const targetPath = input.path.trim();
       if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
-      if (!targetPath) return yield* Effect.fail(new ProviderError("File path is required"));
+      const targetPath = input.path.trim();
+      if (input.subjectType !== "global" && !targetPath) {
+        return yield* Effect.fail(new ProviderError("File path is required"));
+      }
       if (input.subjectType === "line" && input.line == null) {
         return yield* Effect.fail(new ProviderError("Line comments require a target line"));
       }
 
       const pullRequestId = yield* getPullRequestNodeId(repo, number);
+      if (input.subjectType === "global") {
+        const query = `
+mutation($pullRequestId: ID!, $body: String!) {
+  addComment(input: { subjectId: $pullRequestId, body: $body }) {
+    commentEdge {
+      node {
+        id
+      }
+    }
+  }
+}
+`;
+
+        yield* githubGraphql(
+          repo.accountId,
+          repo.host,
+          query,
+          {
+            pullRequestId,
+            body,
+          },
+          Schema.Unknown,
+        );
+        return;
+      }
+
       const query = `
 mutation(
   $pullRequestId: ID!,
@@ -1205,12 +1294,37 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
     threadId: string,
     commentId: string,
     body: string,
+    subjectType: ReviewThreadInput["subjectType"],
   ) {
     return Effect.gen(function* () {
       const trimmedBody = body.trim();
-      if (!threadId.trim()) return yield* Effect.fail(new ProviderError("Thread id is required"));
       if (!commentId.trim()) return yield* Effect.fail(new ProviderError("Comment id is required"));
       if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      if (subjectType !== "global" && !threadId.trim()) {
+        return yield* Effect.fail(new ProviderError("Thread id is required"));
+      }
+
+      if (subjectType === "global") {
+        const query = `
+mutation($id: ID!, $body: String!) {
+  updateIssueComment(input: { id: $id, body: $body }) {
+    issueComment { id }
+  }
+}
+`;
+        yield* githubGraphql(
+          repo.accountId,
+          repo.host,
+          query,
+          {
+            id: commentId.trim(),
+            body: trimmedBody,
+          },
+          Schema.Unknown,
+        );
+        return;
+      }
+
       const query = `
 mutation($id: ID!, $body: String!) {
   updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) {

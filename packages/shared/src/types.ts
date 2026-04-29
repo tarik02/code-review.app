@@ -183,7 +183,7 @@ type ReviewThread = {
   startLine: number | null;
   side: ReviewCommentSide | null;
   startSide: ReviewCommentSide | null;
-  subjectType: "file" | "line" | null;
+  subjectType: "file" | "line" | "global" | null;
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
@@ -199,7 +199,7 @@ type CreatePullRequestReviewCommentInput = RepoIdentity & {
   side: ReviewCommentSide | null;
   startLine: number | null;
   startSide: ReviewCommentSide | null;
-  subjectType: "file" | "line";
+  subjectType: "file" | "line" | "global";
 };
 
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
@@ -213,6 +213,7 @@ type UpdatePullRequestReviewCommentInput = RepoIdentity & {
   threadId: string;
   commentId: string;
   body: string;
+  subjectType: "file" | "line" | "global";
 };
 
 type AvailableUpdate = {

@@ -27,7 +27,7 @@ import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
 type GitLabRequestOptions = {
   method?: "GET" | "POST" | "PUT";
   accept?: string;
-  body?: FormData;
+  form?: Array<[string, string]>;
 };
 
 const API_REQUEST_TIMEOUT = "30 seconds";
@@ -106,6 +106,7 @@ const GitLabNoteSchema = Schema.Struct({
   id: Schema.Number,
   type: OptionalNullableString,
   body: Schema.String,
+  system: OptionalNullableBoolean,
   author: Schema.optional(Schema.NullOr(GitLabUserSchema)),
   created_at: Schema.String,
   updated_at: Schema.String,
@@ -295,12 +296,77 @@ function mapHttpError(error: unknown) {
   if (error instanceof ProviderError) return Effect.succeed(error);
   if (error instanceof ParseResult.ParseError) return parseErrorMessage(error);
   if (error instanceof HttpClientError.ResponseError) {
-    return Effect.map(responseErrorMessage(error), (message) => new ProviderError(message));
+    return Effect.map(
+      responseErrorMessage(error),
+      (message) => new ProviderError(message, { cause: error }),
+    );
   }
   if (HttpClientError.isHttpClientError(error)) {
-    return Effect.succeed(new ProviderError(error.message));
+    return Effect.succeed(new ProviderError(error.message, { cause: error }));
   }
   return Effect.succeed(toProviderError(error));
+}
+
+function summarizeGitLabFormData(form: Array<[string, string]> | undefined) {
+  if (!form) {
+    return null;
+  }
+
+  const summary: Record<string, string> = {};
+  for (const [key, stringValue] of form) {
+    summary[key] =
+      key === "body" && stringValue.length > 500
+        ? `${stringValue.slice(0, 500)}…`
+        : stringValue;
+  }
+
+  return summary;
+}
+
+function summarizeGitLabError(error: unknown) {
+  if (error instanceof HttpClientError.ResponseError) {
+    return {
+      type: error._tag,
+      message: error.message,
+      reason: error.reason,
+      description: error.description,
+      methodAndUrl: error.methodAndUrl,
+      status: error.response.status,
+      request: {
+        method: error.request.method,
+        url: error.request.url,
+      },
+      cause: summarizeGitLabError(error.cause),
+    };
+  }
+
+  if (HttpClientError.isHttpClientError(error)) {
+    return {
+      type: error._tag,
+      message: error.message,
+      reason: error.reason,
+      description: error.description,
+      methodAndUrl: error.methodAndUrl,
+      request: {
+        method: error.request.method,
+        url: error.request.url,
+      },
+      cause: summarizeGitLabError(error.cause),
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      type: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    type: typeof error,
+    message: String(error),
+  };
 }
 
 function requestFor(url: string, token: string, options: GitLabRequestOptions = {}) {
@@ -317,8 +383,8 @@ function requestFor(url: string, token: string, options: GitLabRequestOptions = 
     HttpClientRequest.setHeader("User-Agent", "code-review.app"),
   );
 
-  return options.body
-    ? authorizedRequest.pipe(HttpClientRequest.bodyFormData(options.body))
+  return options.form
+    ? authorizedRequest.pipe(HttpClientRequest.bodyUrlParams(options.form))
     : authorizedRequest;
 }
 
@@ -329,6 +395,7 @@ function gitlabResponse(
   options?: GitLabRequestOptions,
 ) {
   const url = gitlabApiUrl(host, endpoint);
+  const method = options?.method ?? "GET";
   return Effect.gen(function* () {
     const token = yield* validAccessToken(accountId);
     const client = yield* HttpClient.HttpClient;
@@ -341,7 +408,24 @@ function gitlabResponse(
     );
   }).pipe(
     Effect.catchAll((error) =>
-      Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
+      Effect.flatMap(mapHttpError(error), (providerError) =>
+        Effect.gen(function* () {
+          yield* Effect.sync(() => {
+            console.error("[gitlab] request failed", {
+              accountId,
+              host,
+              endpoint,
+              method,
+              url,
+              accept: options?.accept ?? "application/json",
+              formData: summarizeGitLabFormData(options?.form),
+              providerError: providerError.message,
+              rawError: summarizeGitLabError(error),
+            });
+          });
+          return yield* Effect.fail(providerError);
+        }),
+      ),
     ),
   );
 }
@@ -385,11 +469,7 @@ function gitlabForm(
   endpoint: string,
   forms: Array<[string, string]>,
 ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
-  const body = new FormData();
-  for (const [key, value] of forms) {
-    body.set(key, value);
-  }
-  return gitlabResponse(accountId, host, endpoint, { method, body }).pipe(
+  return gitlabResponse(accountId, host, endpoint, { method, form: forms }).pipe(
     Effect.asVoid,
   );
 }
@@ -608,6 +688,35 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
     startSide: position ? startSideFromPosition(position) : null,
     subjectType,
     comments,
+  };
+}
+
+function noteToGlobalReviewThread(note: typeof GitLabNoteSchema.Type): ReviewThread {
+  return {
+    id: String(note.id),
+    provider: "gitlab",
+    path: "",
+    isResolved: false,
+    isOutdated: false,
+    line: null,
+    startLine: null,
+    side: null,
+    startSide: null,
+    subjectType: "global",
+    comments: [
+      {
+        id: String(note.id),
+        databaseId: note.id,
+        authorLogin: note.author?.username ?? "unknown",
+        authorAvatarUrl: note.author?.avatar_url ?? null,
+        authorAssociation: null,
+        body: note.body,
+        createdAt: note.created_at,
+        updatedAt: note.updated_at,
+        url: note.web_url ?? "",
+        replyToId: null,
+      },
+    ],
   };
 }
 
@@ -958,29 +1067,55 @@ class GitLabProvider implements ForgeProvider {
   listReviewThreads(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const threads: ReviewThread[] = [];
-      let page = 1;
-      let shouldContinue = true;
-      while (shouldContinue) {
+      const discussionNoteIds = new Set<number>();
+      let discussionsPage = 1;
+      while (true) {
         const discussions = yield* gitlabJson(
+          repo.accountId,
+          repo.host,
+          projectEndpoint(repo, `merge_requests/${number}/discussions?per_page=100&page=${discussionsPage}`),
+          Schema.Array(GitLabDiscussionSchema),
+        );
+        if (discussions.length === 0) {
+          break;
+        }
+
+        for (const discussion of discussions) {
+          if (discussion.individual_note) continue;
+          for (const note of discussion.notes ?? []) {
+            discussionNoteIds.add(note.id);
+          }
+          const thread = discussionToReviewThread(discussion);
+          if (thread) threads.push(thread);
+        }
+        discussionsPage += 1;
+      }
+
+      let notesPage = 1;
+      while (true) {
+        const notes = yield* gitlabJson(
           repo.accountId,
           repo.host,
           projectEndpoint(
             repo,
-            `merge_requests/${number}/discussions?per_page=100&page=${page}`,
+            `merge_requests/${number}/notes?order_by=created_at&sort=asc&per_page=100&page=${notesPage}`,
           ),
-          Schema.Array(GitLabDiscussionSchema),
+          Schema.Array(GitLabNoteSchema),
         );
-        if (discussions.length === 0) {
-          shouldContinue = false;
-        } else {
-          for (const discussion of discussions) {
-            if (discussion.individual_note) continue;
-            const thread = discussionToReviewThread(discussion);
-            if (thread) threads.push(thread);
-          }
-          page += 1;
+        if (notes.length === 0) {
+          break;
         }
+
+        for (const note of notes) {
+          if (note.system) continue;
+          if (discussionNoteIds.has(note.id)) continue;
+          if (note.position != null) continue;
+          if (note.type === "DiffNote") continue;
+          threads.push(noteToGlobalReviewThread(note));
+        }
+        notesPage += 1;
       }
+
       return threads;
     });
   }
@@ -989,6 +1124,16 @@ class GitLabProvider implements ForgeProvider {
     return Effect.gen(function* () {
       const body = input.body.trim();
       if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      if (input.subjectType === "global") {
+        yield* gitlabForm(
+          repo.host,
+          repo.accountId,
+          "POST",
+          projectEndpoint(repo, `merge_requests/${number}/notes`),
+          [["body", body]],
+        );
+        return;
+      }
 
       const versions = yield* gitlabJson(
         repo.accountId,
@@ -1061,14 +1206,29 @@ class GitLabProvider implements ForgeProvider {
     threadId: string,
     commentId: string,
     body: string,
+    subjectType: ReviewThreadInput["subjectType"],
   ) {
     return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedCommentId = commentId.trim();
       const trimmedBody = body.trim();
-      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError("Thread id is required"));
       if (!trimmedCommentId) return yield* Effect.fail(new ProviderError("Comment id is required"));
       if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      if (subjectType !== "global" && !trimmedThreadId) {
+        return yield* Effect.fail(new ProviderError("Thread id is required"));
+      }
+
+      if (subjectType === "global") {
+        yield* gitlabForm(
+          repo.host,
+          repo.accountId,
+          "PUT",
+          projectEndpoint(repo, `merge_requests/${number}/notes/${trimmedCommentId}`),
+          [["body", trimmedBody]],
+        );
+        return;
+      }
+
       yield* gitlabForm(
         repo.host,
         repo.accountId,

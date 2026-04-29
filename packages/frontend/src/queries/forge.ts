@@ -373,6 +373,7 @@ async function updatePullRequestReviewComment(
     threadId: input.threadId,
     commentId: input.commentId,
     body: input.body,
+    subjectType: input.subjectType,
   });
 }
 

@@ -126,7 +126,7 @@ const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
   side: reviewCommentSideSchema.nullable(),
   startLine: z.number().int().nonnegative().nullable(),
   startSide: reviewCommentSideSchema.nullable(),
-  subjectType: z.enum(["file", "line"]),
+  subjectType: z.enum(["file", "line", "global"]),
 });
 
 const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
@@ -137,6 +137,7 @@ const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend
 const updatePullRequestReviewCommentInputSchema =
   replyToPullRequestReviewCommentInputSchema.extend({
     commentId: z.string(),
+    subjectType: z.enum(["file", "line", "global"]),
   });
 
 export {

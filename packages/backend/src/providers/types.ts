@@ -21,7 +21,7 @@ type ReviewThreadInput = {
   side: string | null;
   startLine: number | null;
   startSide: string | null;
-  subjectType: "file" | "line";
+  subjectType: "file" | "line" | "global";
 };
 
 type PullRequestRefs = {
@@ -109,6 +109,7 @@ type ForgeProvider = {
     threadId: string,
     commentId: string,
     body: string,
+    subjectType: ReviewThreadInput["subjectType"],
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };
 
