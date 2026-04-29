@@ -5,10 +5,16 @@ import {
   useRef,
   useState,
 } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { flushSync } from "react-dom";
+import {
+  setThemePreference as persistThemePreference,
+  themePreferenceQueryOptions,
+} from "../queries/forge";
+import type { ThemePreference as AppThemePreference } from "../types/forge";
 
-type Theme = "light" | "dark";
-type ThemePreference = Theme | "auto";
+type Theme = Exclude<AppThemePreference, "auto">;
+type ThemePreference = AppThemePreference;
 type ThemeTransitionKind = "reveal" | "fade" | "none";
 type ThemeTransitionOptions = {
   kind?: ThemeTransitionKind;
@@ -73,6 +79,9 @@ function shouldReduceMotion() {
 }
 
 function useTheme() {
+  const queryClient = useQueryClient();
+  const themePreferenceQuery = useQuery(themePreferenceQueryOptions());
+  const themePreferenceQueryKey = themePreferenceQueryOptions().queryKey;
   const [preference, setPreferenceState] = useState<ThemePreference>(() =>
     getStoredPreference(),
   );
@@ -80,11 +89,19 @@ function useTheme() {
     getSystemTheme(),
   );
   const isTransitionActiveRef = useRef(false);
+  const initialStoredPreferenceRef = useRef(preference);
   const preferenceRef = useRef(preference);
   const systemThemeRef = useRef(systemTheme);
 
   const theme = resolveTheme(preference, systemTheme);
   const isDark = theme === "dark";
+
+  const themePreferenceMutation = useMutation({
+    mutationFn: persistThemePreference,
+    onSuccess: (settings) => {
+      queryClient.setQueryData(themePreferenceQueryKey, settings);
+    },
+  });
 
   useLayoutEffect(() => {
     applyDocumentTheme(theme);
@@ -97,6 +114,39 @@ function useTheme() {
   useEffect(() => {
     systemThemeRef.current = systemTheme;
   }, [systemTheme]);
+
+  useEffect(() => {
+    const persistedPreference = themePreferenceQuery.data?.preference;
+    if (!persistedPreference) {
+      return;
+    }
+
+    if (
+      persistedPreference === "auto" &&
+      initialStoredPreferenceRef.current !== "auto"
+    ) {
+      const legacyPreference = initialStoredPreferenceRef.current;
+      initialStoredPreferenceRef.current = "auto";
+      queryClient.setQueryData(themePreferenceQueryKey, {
+        preference: legacyPreference,
+      });
+      themePreferenceMutation.mutate(legacyPreference);
+      return;
+    }
+
+    if (persistedPreference === preferenceRef.current) {
+      return;
+    }
+
+    preferenceRef.current = persistedPreference;
+    applyDocumentTheme(resolveTheme(persistedPreference, systemThemeRef.current));
+    setPreferenceState(persistedPreference);
+  }, [
+    queryClient,
+    themePreferenceMutation,
+    themePreferenceQuery.data?.preference,
+    themePreferenceQueryKey,
+  ]);
 
   useEffect(() => {
     try {
@@ -210,11 +260,16 @@ function useTheme() {
       const currentSystemTheme = systemThemeRef.current;
       const currentTheme = resolveTheme(currentPreference, currentSystemTheme);
       const nextTheme = resolveTheme(nextPreference, currentSystemTheme);
+      const previousPreference = currentPreference;
       const update = () => {
         preferenceRef.current = nextPreference;
         applyDocumentTheme(nextTheme);
         setPreferenceState(nextPreference);
       };
+
+      queryClient.setQueryData(themePreferenceQueryKey, {
+        preference: nextPreference,
+      });
 
       runThemeTransition({
         kind:
@@ -222,8 +277,21 @@ function useTheme() {
         trigger: options.trigger,
         update,
       });
+
+      themePreferenceMutation.mutate(nextPreference, {
+        onError: () => {
+          queryClient.setQueryData(themePreferenceQueryKey, {
+            preference: previousPreference,
+          });
+          preferenceRef.current = previousPreference;
+          applyDocumentTheme(
+            resolveTheme(previousPreference, systemThemeRef.current),
+          );
+          setPreferenceState(previousPreference);
+        },
+      });
     },
-    [runThemeTransition],
+    [queryClient, runThemeTransition, themePreferenceMutation, themePreferenceQueryKey],
   );
 
   useEffect(() => {

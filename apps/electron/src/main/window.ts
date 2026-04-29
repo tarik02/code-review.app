@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme, shell } from "electron";
+import type { ThemePreference } from "@code-review-app/shared";
 import { registerTrpc } from "./trpc";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,11 @@ function getWindowTitleBarOptions(): WindowTitleBarOptions {
 
 function getInitialWindowBackgroundColor(): string {
   return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
+}
+
+function applyNativeThemePreference(preference: ThemePreference): void {
+  nativeTheme.themeSource = preference === "auto" ? "system" : preference;
+  syncAllWindowAppearance();
 }
 
 function syncWindowAppearance(window: BrowserWindow): void {
@@ -130,4 +136,4 @@ async function createMainWindow() {
   return window;
 }
 
-export { createMainWindow };
+export { applyNativeThemePreference, createMainWindow };

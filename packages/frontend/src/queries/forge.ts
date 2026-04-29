@@ -14,6 +14,7 @@ import type {
   ReviewEditorSettings,
   RepoIdentity,
   SelectedPullRequest,
+  ThemePreferenceSettings,
   UpdatePullRequestReviewCommentInput,
 } from "../types/forge";
 
@@ -33,6 +34,7 @@ const forgeKeys = {
   appearanceBackground: () =>
     [...forgeKeys.settings(), "appearance-background"] as const,
   diffDataSettings: () => [...forgeKeys.settings(), "diff-data"] as const,
+  themePreference: () => [...forgeKeys.settings(), "theme-preference"] as const,
   reviewEditorSettings: () =>
     [...forgeKeys.settings(), "review-editor"] as const,
   savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
@@ -150,6 +152,16 @@ function diffDataSettingsQueryOptions() {
   });
 }
 
+function themePreferenceQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.themePreference(),
+    queryFn: async (): Promise<ThemePreferenceSettings> => {
+      return trpc.settings.getThemePreference.query();
+    },
+    staleTime: 0,
+  });
+}
+
 function reviewEditorSettingsQueryOptions() {
   return queryOptions({
     queryKey: forgeKeys.reviewEditorSettings(),
@@ -170,6 +182,10 @@ async function setAppearanceBackground(input: AppearanceBackgroundInput) {
 
 async function setDiffDataMode(mode: DiffDataMode) {
   return trpc.settings.setDiffDataSettings.mutate({ mode });
+}
+
+async function setThemePreference(preference: ThemePreferenceSettings["preference"]) {
+  return trpc.settings.setThemePreference.mutate({ preference });
 }
 
 async function setReviewEditorDefaultMode(mode: ReviewEditorMode) {
@@ -385,8 +401,10 @@ export {
   setAccountVisibility,
   setAppearanceBackground,
   setDiffDataMode,
+  setThemePreference,
   setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
+  themePreferenceQueryOptions,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 };

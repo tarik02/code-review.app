@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from "electron";
-import { createMainWindow } from "./window";
+import { Effect } from "effect";
+import { SettingsService } from "@code-review-app/backend";
+import { applyNativeThemePreference, createMainWindow } from "./window";
 import { configureUpdater } from "./updater";
 import { backendRuntime } from "./backend-runtime";
 import {
@@ -59,7 +61,22 @@ function handleStartupProtocolUrls() {
   }
 }
 
+async function syncNativeThemeFromSettings() {
+  try {
+    const preference = await backendRuntime.runPromise(
+      Effect.gen(function* () {
+        const settings = yield* SettingsService;
+        return (yield* settings.getThemePreference()).preference;
+      }),
+    );
+    applyNativeThemePreference(preference);
+  } catch (error) {
+    console.error("Failed to sync native theme from settings.", error);
+  }
+}
+
 app.whenReady().then(async () => {
+  await syncNativeThemeFromSettings();
   configureUpdater();
   await createMainWindow();
   handleStartupProtocolUrls();

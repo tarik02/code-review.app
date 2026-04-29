@@ -24,6 +24,8 @@ import type {
   ReviewEditorMode,
   ReviewEditorSettings,
   SelectedPullRequest,
+  ThemePreference,
+  ThemePreferenceSettings,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
 } from "@code-review-app/shared";
@@ -60,6 +62,8 @@ export type {
   ReviewEditorMode,
   ReviewEditorSettings,
   SelectedPullRequest,
+  ThemePreference,
+  ThemePreferenceSettings,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
 };

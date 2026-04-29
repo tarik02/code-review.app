@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const forgeProviderKindSchema = z.enum(["github", "gitlab"]);
 const diffDataModeSchema = z.enum(["provider-api", "git"]);
+const themePreferenceSchema = z.enum(["auto", "light", "dark"]);
 const reviewEditorModeSchema = z.enum(["rich-text", "source"]);
 const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
 
@@ -63,6 +64,10 @@ const accountVisibilitySettingsSchema = z.object({
 
 const diffDataSettingsSchema = z.object({
   mode: diffDataModeSchema,
+});
+
+const themePreferenceSettingsSchema = z.object({
+  preference: themePreferenceSchema,
 });
 
 const reviewEditorSettingsSchema = z.object({
@@ -155,5 +160,7 @@ export {
   reviewEditorSettingsSchema,
   repoIdentitySchema,
   repoSummarySchema,
+  themePreferenceSchema,
+  themePreferenceSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
 };

@@ -102,8 +102,9 @@ function RepoSidebar({
       <div className="sticky top-0 z-10 flex flex-col">
         <TopBar
           position="left"
-          className="cursor-grab app-region-drag flex items-center justify-between gap-2.5 px-3"
+          className="cursor-grab app-region-drag flex"
         >
+          <div className="grow flex items-center justify-between gap-2.5 px-3">
           <div>code-review.app</div>
 
           <div className="flex items-center gap-2.5">
@@ -115,6 +116,7 @@ function RepoSidebar({
             >
               <Cog6ToothIcon className="size-5 shrink-0" />
             </Link>
+          </div>
           </div>
         </TopBar>
 

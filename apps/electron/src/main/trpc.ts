@@ -14,6 +14,7 @@ import {
   subscribeToDeepLinks,
   subscribeToOAuthCallbacks,
 } from "./oauth-callback";
+import { applyNativeThemePreference } from "./window";
 
 type ElectronTrpcServer = ReturnType<typeof createElectronServer>;
 type ConnectionListener = (client: any, request: any) => void;
@@ -101,6 +102,7 @@ function createElectronRouterPlatform(window: BrowserWindow): BackendRouterPlatf
         window.off("leave-full-screen", emitStatus);
       };
     },
+    setNativeTheme: applyNativeThemePreference,
     toggleMaximize: () => {
       if (window.isDestroyed()) return;
       if (window.isMaximized()) window.unmaximize();

@@ -11,6 +11,8 @@ import type {
   AppearanceBackgroundSettings,
   DiffDataSettings,
   ReviewEditorSettings,
+  ThemePreference,
+  ThemePreferenceSettings,
 } from "@code-review-app/shared";
 
 type SettingsServiceShape = {
@@ -22,6 +24,10 @@ type SettingsServiceShape = {
   setDiffDataSettings(
     settings: DiffDataSettings,
   ): Effect.Effect<DiffDataSettings, Error>;
+  getThemePreference(): Effect.Effect<ThemePreferenceSettings, Error>;
+  setThemePreference(
+    settings: ThemePreferenceSettings,
+  ): Effect.Effect<ThemePreferenceSettings, Error>;
   getReviewEditorSettings(): Effect.Effect<ReviewEditorSettings, Error>;
   setReviewEditorSettings(
     settings: ReviewEditorSettings,
@@ -60,6 +66,7 @@ function toVisibilitySettings(
 }
 
 const APPEARANCE_BACKGROUND_KEY = "appearance.background";
+const THEME_PREFERENCE_KEY = "theme_preference";
 const DIFF_DATA_SETTINGS_KEY = "diff_data_settings";
 const REVIEW_EDITOR_SETTINGS_KEY = "review_editor_settings";
 const MAX_BACKGROUND_FILE_SIZE = 15 * 1024 * 1024;
@@ -152,6 +159,33 @@ function parseDiffDataSettings(value: unknown): DiffDataSettings {
   }
 
   return { mode: "provider-api" };
+}
+
+function isThemePreference(value: unknown): value is ThemePreference {
+  return value === "auto" || value === "light" || value === "dark";
+}
+
+function parseThemePreferenceSettings(value: unknown): ThemePreferenceSettings {
+  if (
+    value &&
+    typeof value === "object" &&
+    "preference" in value &&
+    isThemePreference(value.preference)
+  ) {
+    return { preference: value.preference };
+  }
+
+  return { preference: "auto" };
+}
+
+function validateThemePreferenceSettings(
+  settings: ThemePreferenceSettings,
+): ThemePreferenceSettings {
+  if (!isThemePreference(settings.preference)) {
+    throw new Error("Unsupported theme preference.");
+  }
+
+  return { preference: settings.preference };
 }
 
 function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings {
@@ -272,6 +306,23 @@ const makeSettingsService = Effect.gen(function* () {
         return validated;
   });
 
+  const getThemePreference: SettingsServiceShape["getThemePreference"] = Effect.fn(
+    "SettingsService.getThemePreference",
+  )(function* () {
+        const persisted = yield* appSettings
+          .read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+        return parseThemePreferenceSettings(persisted);
+  });
+
+  const setThemePreference: SettingsServiceShape["setThemePreference"] = Effect.fn(
+    "SettingsService.setThemePreference",
+  )(function* (settings) {
+        const validated = validateThemePreferenceSettings(settings);
+        yield* appSettings.write(THEME_PREFERENCE_KEY, validated);
+        return validated;
+  });
+
   const getReviewEditorSettings: SettingsServiceShape["getReviewEditorSettings"] = Effect.fn(
     "SettingsService.getReviewEditorSettings",
   )(function* () {
@@ -362,6 +413,8 @@ const makeSettingsService = Effect.gen(function* () {
     setAccountVisibility,
     getDiffDataSettings,
     setDiffDataSettings,
+    getThemePreference,
+    setThemePreference,
     getReviewEditorSettings,
     setReviewEditorSettings,
     getAppearanceBackground,

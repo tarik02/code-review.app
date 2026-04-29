@@ -24,13 +24,19 @@ import {
   replyToPullRequestReviewCommentInputSchema,
   repoIdentitySchema,
   repoSummarySchema,
+  themePreferenceSettingsSchema,
   reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
 } from "@code-review-app/shared";
 import { z } from "zod";
 import { completeOAuth, pollDeviceOAuth, startOAuth } from "./auth/oauth.ts";
 import { AuthTokenStore } from "./auth/token-store.ts";
-import type { AvailableUpdate, ProviderProfile, UpdateEvent } from "@code-review-app/shared";
+import type {
+  AvailableUpdate,
+  ProviderProfile,
+  ThemePreference,
+  UpdateEvent,
+} from "@code-review-app/shared";
 import type { BackendRuntime } from "./runtime.ts";
 
 type BackendRouterPlatform = {
@@ -40,6 +46,7 @@ type BackendRouterPlatform = {
   subscribeToOAuthCallbacks(listener: (url: string) => void): () => void;
   subscribeToDeepLinks(listener: (url: string) => void): () => void;
   subscribeToFullScreenStatus(listener: (value: boolean) => void): () => void;
+  setNativeTheme(preference: ThemePreference): void;
   toggleMaximize(): void;
   checkForUpdate(): Promise<AvailableUpdate | null>;
   installUpdate(): Promise<void>;
@@ -188,6 +195,26 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
+    getThemePreference: t.procedure.query(() =>
+      runEffect(
+        Effect.gen(function* () {
+          const service = yield* SettingsService;
+          return yield* service.getThemePreference();
+        }),
+      ),
+    ),
+    setThemePreference: t.procedure
+      .input(themePreferenceSettingsSchema)
+      .mutation(async ({ input }) => {
+        const settings = await runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setThemePreference(input);
+          }),
+        );
+        platform.setNativeTheme(settings.preference);
+        return settings;
+      }),
     getReviewEditorSettings: t.procedure.query(() =>
       runEffect(
         Effect.gen(function* () {

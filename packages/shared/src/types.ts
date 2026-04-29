@@ -8,6 +8,12 @@ type DiffDataSettings = {
   mode: DiffDataMode;
 };
 
+type ThemePreference = "auto" | "light" | "dark";
+
+type ThemePreferenceSettings = {
+  preference: ThemePreference;
+};
+
 type ReviewEditorMode = "rich-text" | "source";
 
 type ReviewEditorSettings = {
@@ -250,6 +256,8 @@ export type {
   ReviewCommentSide,
   ReviewThread,
   SelectedPullRequest,
+  ThemePreference,
+  ThemePreferenceSettings,
   UpdateEvent,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
