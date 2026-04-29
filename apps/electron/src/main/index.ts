@@ -13,6 +13,11 @@ import {
 
 app.setName("code-review.app");
 
+if (process.platform === "linux" && process.env.APPIMAGE) {
+  app.commandLine.appendSwitch("no-sandbox");
+  app.commandLine.appendSwitch("disable-setuid-sandbox");
+}
+
 if (process.defaultApp && process.argv.length >= 2) {
   app.setAsDefaultProtocolClient("code-review.app", process.execPath, [process.argv[1]]);
 } else {
