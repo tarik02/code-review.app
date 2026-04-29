@@ -202,6 +202,47 @@ type ReviewThread = {
   isOptimistic?: boolean;
 };
 
+type PendingReviewCommentKind = 'thread' | 'reply' | 'global';
+
+type PendingReviewCommentSubjectType = 'file' | 'line' | 'global';
+type PendingReviewSubmitAction = 'comment' | 'approve' | 'request_changes';
+
+type PendingReviewSession = RepoIdentity & {
+  id: number;
+  number: number;
+  headSha: string;
+  providerReviewId: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type PendingReviewComment = RepoIdentity & {
+  id: number;
+  sessionId: number;
+  number: number;
+  headSha: string;
+  kind: PendingReviewCommentKind;
+  providerCommentId: string | null;
+  providerThreadId: string | null;
+  replyToThreadId: string | null;
+  body: string;
+  path: string;
+  oldPath: string;
+  newPath: string;
+  line: number | null;
+  side: ReviewCommentSide | null;
+  startLine: number | null;
+  startSide: ReviewCommentSide | null;
+  subjectType: PendingReviewCommentSubjectType;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type PendingReviewState = {
+  session: PendingReviewSession | null;
+  comments: PendingReviewComment[];
+};
+
 type PullRequestQualityReportStatus = 'ok' | 'warning' | 'failed' | 'pending' | 'unavailable';
 
 type PullRequestQualityFindingSeverity =
@@ -270,6 +311,54 @@ type CreatePullRequestReviewCommentInput = RepoIdentity & {
   subjectType: 'file' | 'line' | 'global';
 };
 
+type CreatePendingReviewThreadInput = RepoIdentity & {
+  number: number;
+  headSha: string;
+  body: string;
+  path: string;
+  oldPath: string;
+  newPath: string;
+  line: number | null;
+  side: ReviewCommentSide | null;
+  startLine: number | null;
+  startSide: ReviewCommentSide | null;
+  subjectType: 'file' | 'line';
+};
+
+type CreatePendingReviewReplyInput = RepoIdentity & {
+  number: number;
+  headSha: string;
+  threadId: string;
+  body: string;
+};
+
+type CreatePendingReviewGlobalInput = RepoIdentity & {
+  number: number;
+  headSha: string;
+  body: string;
+};
+
+type UpdatePendingReviewCommentInput = RepoIdentity & {
+  number: number;
+  pendingCommentId: number;
+  body: string;
+};
+
+type DeletePendingReviewCommentInput = RepoIdentity & {
+  number: number;
+  pendingCommentId: number;
+};
+
+type PublishPendingReviewInput = RepoIdentity & {
+  number: number;
+  action?: PendingReviewSubmitAction;
+  summary?: string;
+};
+
+type DiscardPendingReviewInput = RepoIdentity & {
+  number: number;
+};
+
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   threadId: string;
@@ -302,11 +391,23 @@ export type {
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
   AvailableUpdate,
+  CreatePendingReviewGlobalInput,
+  CreatePendingReviewReplyInput,
+  CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePendingReviewCommentInput,
   DiffDataMode,
   DiffDataSettings,
+  DiscardPendingReviewInput,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PendingReviewComment,
+  PendingReviewCommentKind,
+  PendingReviewCommentSubjectType,
+  PendingReviewSubmitAction,
+  PendingReviewSession,
+  PendingReviewState,
+  PublishPendingReviewInput,
   PullRequestApprovalActor,
   PullRequestApprovalRemoveStrategy,
   PullRequestApprovalState,
@@ -339,6 +440,7 @@ export type {
   ThemePreference,
   ThemePreferenceSettings,
   TrackedPullRequestOrderEntry,
+  UpdatePendingReviewCommentInput,
   UpdateEvent,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,

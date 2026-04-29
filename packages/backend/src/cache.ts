@@ -2,6 +2,8 @@ import { and, asc, desc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
 import { Effect, Layer } from 'effect';
 import { DatabaseService, type Database, type DatabaseTransaction } from './db/client.ts';
 import {
+  pendingReviewComments,
+  pendingReviewSessions,
   prChangedFilesCache,
   prPatchCache,
   providerProfiles,
@@ -12,11 +14,30 @@ import { CacheError } from './errors.ts';
 import { createRepoIdentityFromParts } from './repo-id.ts';
 import type {
   ForgeProviderKind,
+  PendingReviewComment,
+  PendingReviewSession,
   ProviderProfile,
   RepoIdentity,
   PullRequestSummary,
   RepoSummary,
 } from '@code-review-app/shared';
+
+type PendingReviewCommentWrite = {
+  headSha: string;
+  kind: PendingReviewComment['kind'];
+  providerCommentId: string | null;
+  providerThreadId: string | null;
+  replyToThreadId: string | null;
+  body: string;
+  path: string;
+  oldPath: string;
+  newPath: string;
+  line: number | null;
+  side: PendingReviewComment['side'];
+  startLine: number | null;
+  startSide: PendingReviewComment['startSide'];
+  subjectType: PendingReviewComment['subjectType'];
+};
 
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;
@@ -66,6 +87,38 @@ type CacheServiceShape = {
   ): Effect.Effect<void, CacheError>;
   readProviderProfile(accountId: string): Effect.Effect<ProviderProfile | null, CacheError>;
   writeProviderProfile(profile: ProviderProfile): Effect.Effect<void, CacheError>;
+  getPendingReviewSession(
+    repo: RepoIdentity,
+    number: number,
+  ): Effect.Effect<PendingReviewSession | null, CacheError>;
+  ensurePendingReviewSession(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+    providerReviewId: string | null,
+  ): Effect.Effect<PendingReviewSession, CacheError>;
+  listPendingReviewComments(
+    repo: RepoIdentity,
+    number: number,
+  ): Effect.Effect<PendingReviewComment[], CacheError>;
+  insertPendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    comment: PendingReviewCommentWrite,
+  ): Effect.Effect<PendingReviewComment, CacheError>;
+  updatePendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    pendingCommentId: number,
+    body: string,
+    providerCommentId?: string | null,
+  ): Effect.Effect<PendingReviewComment | null, CacheError>;
+  deletePendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    pendingCommentId: number,
+  ): Effect.Effect<PendingReviewComment | null, CacheError>;
+  clearPendingReview(repo: RepoIdentity, number: number): Effect.Effect<void, CacheError>;
 };
 
 class CacheService extends Effect.Tag('CacheService')<CacheService, CacheServiceShape>() {}
@@ -153,6 +206,47 @@ async function findRepoRowId(database: Database | DatabaseTransaction, repo: Rep
   return row?.id ?? null;
 }
 
+async function ensureRepoRowId(database: DatabaseTransaction, repo: RepoIdentity) {
+  const existingRepoRowId = await findRepoRowId(database, repo);
+  if (existingRepoRowId !== null) return existingRepoRowId;
+
+  const timestamp = nowUnixTimestamp();
+  const identity = createRepoIdentityFromParts(repo.providerId, repo.repoKey);
+  const providerProfileId = await getProviderProfileRowId(database, identity.accountId, timestamp);
+
+  await database
+    .insert(repos)
+    .values({
+      providerId: identity.providerId,
+      repoKey: identity.repoKey,
+      provider: identity.provider,
+      host: identity.host,
+      providerProfileId,
+      name: repoNameFromKey(identity.repoKey),
+      nameWithOwner: identity.repoKey,
+      description: null,
+      isPrivate: null,
+      avatarUrl: null,
+      addedAt: 0,
+      lastOpenedAt: timestamp,
+    })
+    .onConflictDoUpdate({
+      target: [repos.providerId, repos.repoKey],
+      set: {
+        provider: identity.provider,
+        host: identity.host,
+        providerProfileId,
+        lastOpenedAt: timestamp,
+      },
+    });
+
+  const repoRowId = await findRepoRowId(database, repo);
+  if (repoRowId === null) {
+    throw new Error('Repo was not saved in the cache.');
+  }
+  return repoRowId;
+}
+
 function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
   return {
     number: row.prNumber,
@@ -169,6 +263,52 @@ function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
     url: row.url,
     headSha: row.headSha,
     baseSha: row.baseSha,
+  };
+}
+
+function rowToPendingReviewSession(
+  repo: RepoIdentity,
+  row: typeof pendingReviewSessions.$inferSelect,
+): PendingReviewSession {
+  return {
+    providerId: repo.providerId,
+    repoKey: repo.repoKey,
+    id: row.id,
+    number: row.prNumber,
+    headSha: row.headSha,
+    providerReviewId: row.providerReviewId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function rowToPendingReviewComment(
+  repo: RepoIdentity,
+  session: typeof pendingReviewSessions.$inferSelect,
+  row: typeof pendingReviewComments.$inferSelect,
+): PendingReviewComment {
+  return {
+    providerId: repo.providerId,
+    repoKey: repo.repoKey,
+    id: row.id,
+    sessionId: row.sessionId,
+    number: session.prNumber,
+    headSha: session.headSha,
+    kind: row.kind as PendingReviewComment['kind'],
+    providerCommentId: row.providerCommentId,
+    providerThreadId: row.providerThreadId,
+    replyToThreadId: row.replyToThreadId,
+    body: row.body,
+    path: row.path,
+    oldPath: row.oldPath,
+    newPath: row.newPath,
+    line: row.line,
+    side: row.side as PendingReviewComment['side'],
+    startLine: row.startLine,
+    startSide: row.startSide as PendingReviewComment['startSide'],
+    subjectType: row.subjectType as PendingReviewComment['subjectType'],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -678,6 +818,257 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
+  const getPendingReviewSession: CacheServiceShape['getPendingReviewSession'] = Effect.fn(
+    'CacheService.getPendingReviewSession',
+  )((repo, number) =>
+    database.query(async (db) => {
+      const repoRowId = await findRepoRowId(db, repo);
+      if (repoRowId === null) return null;
+
+      const [row] = await db
+        .select()
+        .from(pendingReviewSessions)
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+          ),
+        )
+        .limit(1);
+
+      return row ? rowToPendingReviewSession(repo, row) : null;
+    }),
+  );
+
+  const ensurePendingReviewSession: CacheServiceShape['ensurePendingReviewSession'] = Effect.fn(
+    'CacheService.ensurePendingReviewSession',
+  )((repo, number, headSha, providerReviewId) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await ensureRepoRowId(tx, repo);
+      const timestamp = nowUnixTimestamp();
+
+      await tx
+        .insert(pendingReviewSessions)
+        .values({
+          repoRowId,
+          prNumber: number,
+          headSha,
+          providerReviewId,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [pendingReviewSessions.repoRowId, pendingReviewSessions.prNumber],
+          set: {
+            headSha,
+            providerReviewId,
+            updatedAt: timestamp,
+          },
+        });
+
+      const [row] = await tx
+        .select()
+        .from(pendingReviewSessions)
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+          ),
+        )
+        .limit(1);
+
+      if (!row) {
+        throw new Error('Pending review session was not saved in the cache.');
+      }
+      return rowToPendingReviewSession(repo, row);
+    }),
+  );
+
+  const listPendingReviewComments: CacheServiceShape['listPendingReviewComments'] = Effect.fn(
+    'CacheService.listPendingReviewComments',
+  )((repo, number) =>
+    database.query(async (db) => {
+      const repoRowId = await findRepoRowId(db, repo);
+      if (repoRowId === null) return [];
+
+      const rows = await db
+        .select({
+          session: pendingReviewSessions,
+          comment: pendingReviewComments,
+        })
+        .from(pendingReviewComments)
+        .innerJoin(
+          pendingReviewSessions,
+          eq(pendingReviewSessions.id, pendingReviewComments.sessionId),
+        )
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+          ),
+        )
+        .orderBy(asc(pendingReviewComments.createdAt), asc(pendingReviewComments.id));
+
+      return rows.map((row) => rowToPendingReviewComment(repo, row.session, row.comment));
+    }),
+  );
+
+  const insertPendingReviewComment: CacheServiceShape['insertPendingReviewComment'] = Effect.fn(
+    'CacheService.insertPendingReviewComment',
+  )((repo, number, comment) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await ensureRepoRowId(tx, repo);
+      const [session] = await tx
+        .select()
+        .from(pendingReviewSessions)
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+          ),
+        )
+        .limit(1);
+
+      if (!session) {
+        throw new Error('Pending review session is required before inserting comments.');
+      }
+
+      const timestamp = nowUnixTimestamp();
+      const [inserted] = await tx
+        .insert(pendingReviewComments)
+        .values({
+          sessionId: session.id,
+          kind: comment.kind,
+          providerCommentId: comment.providerCommentId,
+          providerThreadId: comment.providerThreadId,
+          replyToThreadId: comment.replyToThreadId,
+          body: comment.body,
+          path: comment.path,
+          oldPath: comment.oldPath,
+          newPath: comment.newPath,
+          line: comment.line,
+          side: comment.side,
+          startLine: comment.startLine,
+          startSide: comment.startSide,
+          subjectType: comment.subjectType,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning();
+
+      if (!inserted) {
+        throw new Error('Pending review comment was not saved in the cache.');
+      }
+      return rowToPendingReviewComment(repo, session, inserted);
+    }),
+  );
+
+  const updatePendingReviewComment: CacheServiceShape['updatePendingReviewComment'] = Effect.fn(
+    'CacheService.updatePendingReviewComment',
+  )((repo, number, pendingCommentId, body, providerCommentId) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return null;
+
+      const [existing] = await tx
+        .select({
+          session: pendingReviewSessions,
+          comment: pendingReviewComments,
+        })
+        .from(pendingReviewComments)
+        .innerJoin(
+          pendingReviewSessions,
+          eq(pendingReviewSessions.id, pendingReviewComments.sessionId),
+        )
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+            eq(pendingReviewComments.id, pendingCommentId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) return null;
+
+      const setValues: Partial<typeof pendingReviewComments.$inferInsert> = {
+        body,
+        updatedAt: nowUnixTimestamp(),
+      };
+      if (providerCommentId !== undefined) {
+        setValues.providerCommentId = providerCommentId;
+      }
+
+      const [updated] = await tx
+        .update(pendingReviewComments)
+        .set(setValues)
+        .where(eq(pendingReviewComments.id, pendingCommentId))
+        .returning();
+
+      return updated ? rowToPendingReviewComment(repo, existing.session, updated) : null;
+    }),
+  );
+
+  const deletePendingReviewComment: CacheServiceShape['deletePendingReviewComment'] = Effect.fn(
+    'CacheService.deletePendingReviewComment',
+  )((repo, number, pendingCommentId) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return null;
+
+      const [existing] = await tx
+        .select({
+          session: pendingReviewSessions,
+          comment: pendingReviewComments,
+        })
+        .from(pendingReviewComments)
+        .innerJoin(
+          pendingReviewSessions,
+          eq(pendingReviewSessions.id, pendingReviewComments.sessionId),
+        )
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+            eq(pendingReviewComments.id, pendingCommentId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) return null;
+
+      await tx.delete(pendingReviewComments).where(eq(pendingReviewComments.id, pendingCommentId));
+      return rowToPendingReviewComment(repo, existing.session, existing.comment);
+    }),
+  );
+
+  const clearPendingReview: CacheServiceShape['clearPendingReview'] = Effect.fn(
+    'CacheService.clearPendingReview',
+  )((repo, number) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      const [session] = await tx
+        .select()
+        .from(pendingReviewSessions)
+        .where(
+          and(
+            eq(pendingReviewSessions.repoRowId, repoRowId),
+            eq(pendingReviewSessions.prNumber, number),
+          ),
+        )
+        .limit(1);
+
+      if (!session) return;
+
+      await tx
+        .delete(pendingReviewComments)
+        .where(eq(pendingReviewComments.sessionId, session.id));
+      await tx.delete(pendingReviewSessions).where(eq(pendingReviewSessions.id, session.id));
+    }),
+  );
+
   return {
     listSavedRepos,
     listTrackedRepos,
@@ -697,6 +1088,13 @@ const makeCacheService = Effect.gen(function* () {
     setProviderAccountVisibility,
     readProviderProfile,
     writeProviderProfile,
+    getPendingReviewSession,
+    ensurePendingReviewSession,
+    listPendingReviewComments,
+    insertPendingReviewComment,
+    updatePendingReviewComment,
+    deletePendingReviewComment,
+    clearPendingReview,
   } satisfies CacheServiceShape;
 });
 

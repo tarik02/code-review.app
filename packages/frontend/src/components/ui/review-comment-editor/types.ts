@@ -47,6 +47,7 @@ type ReviewCommentEditorProps = {
   target?: CommentEditorTarget | null;
   selectedText?: string;
   submitLabel: string;
+  secondarySubmitLabel?: string;
   cancelLabel?: string;
   isPending?: boolean;
   error?: string;
@@ -55,6 +56,7 @@ type ReviewCommentEditorProps = {
   onCursorPositionChange?: (cursorPosition: ReviewCommentEditorCursorPosition | null) => void;
   onCancel?: () => void;
   onSubmit: (body: string) => Promise<void> | void;
+  onSecondarySubmit?: (body: string) => Promise<void> | void;
 };
 
 export type {

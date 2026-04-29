@@ -30,7 +30,7 @@ import type { RepoIdentity } from '../repo-id.ts';
 import { AuthTokenStore, type StoredAuthToken } from '../auth/token-store.ts';
 
 type GitLabRequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   accept?: string;
   form?: Array<[string, string]>;
   body?: unknown;
@@ -119,6 +119,11 @@ const GitLabNoteSchema = Schema.Struct({
   web_url: OptionalNullableString,
   resolved: OptionalNullableBoolean,
   position: Schema.optional(Schema.NullOr(GitLabPositionSchema)),
+});
+
+const GitLabDraftNoteSchema = Schema.Struct({
+  id: Schema.Number,
+  discussion_id: OptionalNullableString,
 });
 
 const GitLabDiscussionSchema = Schema.Struct({
@@ -460,7 +465,9 @@ function requestFor(url: string, token: string, options: GitLabRequestOptions = 
       ? HttpClientRequest.post(url)
       : options.method === 'PUT'
         ? HttpClientRequest.put(url)
-        : HttpClientRequest.get(url);
+        : options.method === 'DELETE'
+          ? HttpClientRequest.del(url)
+          : HttpClientRequest.get(url);
 
   const authorizedRequest = request.pipe(
     HttpClientRequest.accept(options.accept ?? 'application/json'),
@@ -618,11 +625,14 @@ function gitlabGraphql<A, I, R>(
 function gitlabForm(
   host: string,
   accountId: string,
-  method: 'POST' | 'PUT',
+  method: 'POST' | 'PUT' | 'DELETE',
   endpoint: string,
   forms: Array<[string, string]>,
 ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
-  return gitlabResponse(accountId, host, endpoint, { method, form: forms }).pipe(Effect.asVoid);
+  return gitlabResponse(accountId, host, endpoint, {
+    method,
+    ...(forms.length > 0 ? { form: forms } : {}),
+  }).pipe(Effect.asVoid);
 }
 
 function gitlabViewerLogin(
@@ -1665,6 +1675,219 @@ query($fullPath: ID!, $iid: String!) {
         forms,
       );
     });
+  }
+
+  ensurePendingReview(_repo: RepoIdentity, _number: number, _headSha: string) {
+    return Effect.succeed({ providerReviewId: null });
+  }
+
+  createPendingReviewThread(
+    repo: RepoIdentity,
+    number: number,
+    _session: Parameters<ForgeProvider['createPendingReviewThread']>[2],
+    input: ReviewThreadInput,
+  ) {
+    return Effect.gen(function* () {
+      const note = input.body.trim();
+      if (!note) return yield* Effect.fail(new ProviderError('Comment body is required'));
+      if (input.subjectType === 'global') {
+        return yield* Effect.fail(new ProviderError('Use global draft note creation'));
+      }
+
+      const versions = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/versions`),
+        Schema.Array(GitLabMrVersionSchema),
+      );
+      const version = versions[0];
+      if (!version) {
+        return yield* Effect.fail(new ProviderError('GitLab merge request has no diff versions'));
+      }
+
+      const oldPath = input.oldPath.trim() || input.path.trim();
+      const newPath = input.newPath.trim() || input.path.trim();
+      const forms: Array<[string, string]> = [
+        ['note', note],
+        ['position[base_sha]', version.base_commit_sha],
+        ['position[head_sha]', version.head_commit_sha],
+        ['position[start_sha]', version.start_commit_sha],
+        ['position[old_path]', oldPath],
+        ['position[new_path]', newPath],
+      ];
+
+      if (input.subjectType === 'file') {
+        forms.push(['position[position_type]', 'file']);
+      } else {
+        if (input.line == null) {
+          return yield* Effect.fail(new ProviderError('Line comments require a target line'));
+        }
+        forms.push(['position[position_type]', 'text']);
+        if (input.side === 'LEFT') {
+          forms.push(['position[old_line]', String(input.line)]);
+        } else {
+          forms.push(['position[new_line]', String(input.line)]);
+        }
+      }
+
+      const draftNote = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/draft_notes`),
+        GitLabDraftNoteSchema,
+        { method: 'POST', form: forms },
+      );
+      return {
+        providerCommentId: String(draftNote.id),
+        providerThreadId: draftNote.discussion_id ?? null,
+      };
+    });
+  }
+
+  createPendingReviewReply(
+    repo: RepoIdentity,
+    number: number,
+    _session: Parameters<ForgeProvider['createPendingReviewReply']>[2],
+    threadId: string,
+    body: string,
+  ) {
+    return Effect.gen(function* () {
+      const trimmedThreadId = threadId.trim();
+      const note = body.trim();
+      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError('Thread id is required'));
+      if (!note) return yield* Effect.fail(new ProviderError('Reply body is required'));
+
+      const draftNote = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/draft_notes`),
+        GitLabDraftNoteSchema,
+        {
+          method: 'POST',
+          form: [
+            ['note', note],
+            ['in_reply_to_discussion_id', trimmedThreadId],
+          ],
+        },
+      );
+      return {
+        providerCommentId: String(draftNote.id),
+        providerThreadId: draftNote.discussion_id ?? trimmedThreadId,
+      };
+    });
+  }
+
+  createPendingGlobalComment(
+    repo: RepoIdentity,
+    number: number,
+    _session: Parameters<ForgeProvider['createPendingGlobalComment']>[2],
+    body: string,
+  ) {
+    return Effect.gen(function* () {
+      const note = body.trim();
+      if (!note) return yield* Effect.fail(new ProviderError('Comment body is required'));
+
+      const draftNote = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/draft_notes`),
+        GitLabDraftNoteSchema,
+        {
+          method: 'POST',
+          form: [['note', note]],
+        },
+      );
+      return {
+        providerCommentId: String(draftNote.id),
+        providerThreadId: draftNote.discussion_id ?? null,
+      };
+    });
+  }
+
+  updatePendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    providerCommentId: string,
+    body: string,
+  ) {
+    return Effect.gen(function* () {
+      const trimmedProviderCommentId = providerCommentId.trim();
+      const note = body.trim();
+      if (!trimmedProviderCommentId) {
+        return yield* Effect.fail(new ProviderError('Pending comment id is required'));
+      }
+      if (!note) return yield* Effect.fail(new ProviderError('Comment body is required'));
+
+      const draftNote = yield* gitlabJson(
+        repo.accountId,
+        repo.host,
+        projectEndpoint(repo, `merge_requests/${number}/draft_notes/${trimmedProviderCommentId}`),
+        GitLabDraftNoteSchema,
+        {
+          method: 'PUT',
+          form: [['note', note]],
+        },
+      );
+      return {
+        providerCommentId: String(draftNote.id),
+        providerThreadId: draftNote.discussion_id ?? null,
+      };
+    });
+  }
+
+  deletePendingReviewComment(repo: RepoIdentity, number: number, providerCommentId: string) {
+    return Effect.gen(function* () {
+      const trimmedProviderCommentId = providerCommentId.trim();
+      if (!trimmedProviderCommentId) {
+        return yield* Effect.fail(new ProviderError('Pending comment id is required'));
+      }
+
+      yield* gitlabForm(
+        repo.host,
+        repo.accountId,
+        'DELETE',
+        projectEndpoint(repo, `merge_requests/${number}/draft_notes/${trimmedProviderCommentId}`),
+        [],
+      );
+    });
+  }
+
+  publishPendingReview(
+    repo: RepoIdentity,
+    number: number,
+    _session: Parameters<ForgeProvider['publishPendingReview']>[2],
+    input: Parameters<ForgeProvider['publishPendingReview']>[3],
+  ) {
+    const action =
+      input.action === 'approve'
+        ? 'approve'
+        : input.action === 'request_changes'
+          ? 'requested_changes'
+          : 'reviewed';
+    const summary = input.summary?.trim() ?? '';
+    const body = [summary, `/submit_review ${action}`].filter(Boolean).join('\n\n');
+
+    return gitlabForm(
+      repo.host,
+      repo.accountId,
+      'POST',
+      projectEndpoint(repo, `merge_requests/${number}/notes`),
+      [['body', body]],
+    );
+  }
+
+  discardPendingReview(
+    repo: RepoIdentity,
+    number: number,
+    _session: Parameters<ForgeProvider['discardPendingReview']>[2],
+    comments: Parameters<ForgeProvider['discardPendingReview']>[3],
+  ) {
+    return Effect.forEach(
+      comments.filter((comment) => comment.providerCommentId != null),
+      (comment) =>
+        this.deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
+      { discard: true },
+    );
   }
 
   replyToReviewThread(repo: RepoIdentity, number: number, threadId: string, body: string) {

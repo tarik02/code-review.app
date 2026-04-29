@@ -29,7 +29,9 @@ type ReviewThreadCardProps = {
   editorPortalRootId?: string;
   reviewEditorSessionKey?: string | null;
   onReplyToThread?: (thread: ReviewThread, body: string) => Promise<void>;
+  onReplyToThreadNow?: (thread: ReviewThread, body: string) => Promise<void>;
   onEditComment?: (comment: ReviewComment, body: string) => Promise<void>;
+  onDeletePendingComment?: (comment: ReviewComment) => Promise<void>;
   onClick?: () => void;
   containerRef?: (node: HTMLDivElement | null) => void;
 };
@@ -232,7 +234,9 @@ function ReviewThreadCard({
   editorPortalRootId,
   reviewEditorSessionKey = null,
   onReplyToThread,
+  onReplyToThreadNow,
   onEditComment,
+  onDeletePendingComment,
   onClick,
   containerRef,
 }: ReviewThreadCardProps) {
@@ -313,7 +317,11 @@ function ReviewThreadCard({
     );
   }
 
-  async function handleReplySubmit(editorId: string, body: string) {
+  async function handleReplySubmit(
+    editorId: string,
+    body: string,
+    submit: (thread: ReviewThread, body: string) => Promise<void>,
+  ) {
     if (!rootComment || !onReplyToThread) {
       return;
     }
@@ -322,7 +330,7 @@ function ReviewThreadCard({
     setEditorError(reviewEditorSessionKey, editorId, '');
 
     try {
-      await onReplyToThread(thread, body);
+      await submit(thread, body);
       closeEditor(reviewEditorSessionKey, editorId);
     } catch (error) {
       setEditorError(
@@ -388,6 +396,11 @@ function ReviewThreadCard({
             Outdated
           </span>
         ) : null}
+        {thread.isPending ? (
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+            Pending
+          </span>
+        ) : null}
         <span className="font-sans">{thread.comments.length} comments</span>
       </div>
 
@@ -397,12 +410,13 @@ function ReviewThreadCard({
             (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
           const canEdit =
-            viewerLogin != null &&
-            viewerLogin === comment.authorLogin &&
+            (comment.isPending ||
+              (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
             comment.id.length > 0 &&
             thread.id.length > 0 &&
             reviewEditorSessionKey != null &&
             onEditComment != null;
+          const canDeletePending = comment.isPending && onDeletePendingComment != null;
 
           return (
             <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3" key={comment.id}>
@@ -430,6 +444,19 @@ function ReviewThreadCard({
                       type="button"
                     >
                       Edit
+                    </button>
+                  ) : null}
+                  {canDeletePending ? (
+                    <button
+                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                      onClick={() => {
+                        if (onDeletePendingComment) {
+                          void onDeletePendingComment(comment).catch(console.error);
+                        }
+                      }}
+                      type="button"
+                    >
+                      Discard
                     </button>
                   ) : null}
                 </div>
@@ -469,7 +496,11 @@ function ReviewThreadCard({
         })}
       </div>
 
-      {rootComment && onReplyToThread && thread.id.length > 0 && reviewEditorSessionKey != null ? (
+      {rootComment &&
+      onReplyToThread &&
+      !thread.isPending &&
+      thread.id.length > 0 &&
+      reviewEditorSessionKey != null ? (
         <div className="mt-3 border-t border-ink-200 pt-3">
           {replyEditor ? (
             <FloatingReviewCommentEditor
@@ -479,6 +510,7 @@ function ReviewThreadCard({
               error={replyEditor.error}
               isPending={replyEditor.isSubmitting}
               provider={thread.provider}
+              secondarySubmitLabel={onReplyToThreadNow ? 'Add comment now' : undefined}
               submitLabel="Reply"
               target={editorTarget}
               value={replyEditor.body}
@@ -491,7 +523,12 @@ function ReviewThreadCard({
                   cursorPosition ?? null,
                 )
               }
-              onSubmit={(body) => handleReplySubmit(replyEditor.id, body)}
+              onSecondarySubmit={
+                onReplyToThreadNow
+                  ? (body) => handleReplySubmit(replyEditor.id, body, onReplyToThreadNow)
+                  : undefined
+              }
+              onSubmit={(body) => handleReplySubmit(replyEditor.id, body, onReplyToThread)}
               placeholder="Reply to this thread"
             />
           ) : (

@@ -5,11 +5,18 @@ import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
+  CreatePendingReviewGlobalInput,
+  CreatePendingReviewReplyInput,
+  CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePendingReviewCommentInput,
   DiffDataMode,
   DiffDataSettings,
+  DiscardPendingReviewInput,
+  PendingReviewState,
   PrFileChangeType,
   ProviderProfile,
+  PublishPendingReviewInput,
   PullRequestApprovalState,
   PullRequestQualityReport,
   ReplyToPullRequestReviewCommentInput,
@@ -19,6 +26,7 @@ import type {
   SelectedPullRequest,
   ThemePreferenceSettings,
   TrackedPullRequestOrderEntry,
+  UpdatePendingReviewCommentInput,
   UpdatePullRequestReviewCommentInput,
 } from '../types/forge';
 
@@ -114,6 +122,15 @@ const forgeKeys = {
       pr.number,
       pr.headSha,
     ] as const,
+  pullRequestPendingReview: (pr: SelectedPullRequest) =>
+    [
+      ...forgeKeys.pullRequests(),
+      'pending-review',
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestApprovalState: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
@@ -127,6 +144,8 @@ const forgeKeys = {
   pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), 'files', 'idle'] as const,
   pullRequestReviewThreadsIdle: () =>
     [...forgeKeys.pullRequests(), 'review-threads', 'idle'] as const,
+  pullRequestPendingReviewIdle: () =>
+    [...forgeKeys.pullRequests(), 'pending-review', 'idle'] as const,
   pullRequestQualityReportIdle: () =>
     [...forgeKeys.pullRequests(), 'quality-report', 'idle'] as const,
   pullRequestApprovalStateIdle: () =>
@@ -274,24 +293,31 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
       );
       const normalizedHost = normalizeHostInput(host);
 
-      if (parsedUrl?.number !== null) {
-        return [];
-      }
-
-      if (parsedUrl && parsedUrl.host === normalizedHost) {
-        const repo = await trpc.repos.validate.query({
+      if (parsedUrl && parsedUrl.provider === provider && parsedUrl.host === normalizedHost) {
+        const repo = await trpc.repos.tryValidate.query({
           accountId,
           repo: parsedUrl.repoPath,
         });
-        return [repo];
+        return repo ? [repo] : [];
       }
 
-      if (provider === 'gitlab' && trimmedQuery.includes('/')) {
-        const repo = await trpc.repos.validate.query({
+      if (parsedUrl) {
+        return [];
+      }
+
+      const pathQuery = trimmedQuery.replace(/\.git$/, '');
+      const pathSegmentCount = pathQuery.split('/').filter(Boolean).length;
+      if (
+        ((provider === 'github' && pathSegmentCount === 2) ||
+          (provider === 'gitlab' && pathSegmentCount >= 2)) &&
+        !pathQuery.startsWith('/') &&
+        !pathQuery.endsWith('/')
+      ) {
+        const repo = await trpc.repos.tryValidate.query({
           accountId,
-          repo: trimmedQuery,
+          repo: pathQuery,
         });
-        return [repo];
+        return repo ? [repo] : [];
       }
 
       return trpc.repos.search.query({
@@ -301,6 +327,7 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
       });
     },
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 }
 
@@ -426,6 +453,18 @@ function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
   });
 }
 
+function pullRequestPendingReviewQueryOptions(pr: SelectedPullRequest) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestPendingReview(pr),
+    queryFn: (): Promise<PendingReviewState> =>
+      trpc.reviewComments.listPending.query({
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
+        number: pr.number,
+      }),
+  });
+}
+
 function pullRequestApprovalStateQueryOptions(pr: SelectedPullRequest) {
   return queryOptions({
     queryKey: forgeKeys.pullRequestApprovalState(pr),
@@ -436,6 +475,82 @@ function pullRequestApprovalStateQueryOptions(pr: SelectedPullRequest) {
         number: pr.number,
         headSha: pr.headSha,
       }),
+  });
+}
+
+async function createPendingReviewThread(input: CreatePendingReviewThreadInput) {
+  await trpc.reviewComments.createPendingThread.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    headSha: input.headSha,
+    body: input.body,
+    path: input.path,
+    oldPath: input.oldPath,
+    newPath: input.newPath,
+    line: input.line,
+    side: input.side,
+    startLine: input.startLine,
+    startSide: input.startSide,
+    subjectType: input.subjectType,
+  });
+}
+
+async function createPendingReviewReply(input: CreatePendingReviewReplyInput) {
+  await trpc.reviewComments.createPendingReply.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    headSha: input.headSha,
+    threadId: input.threadId,
+    body: input.body,
+  });
+}
+
+async function createPendingReviewGlobal(input: CreatePendingReviewGlobalInput) {
+  await trpc.reviewComments.createPendingGlobal.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    headSha: input.headSha,
+    body: input.body,
+  });
+}
+
+async function updatePendingReviewComment(input: UpdatePendingReviewCommentInput) {
+  await trpc.reviewComments.updatePending.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    pendingCommentId: input.pendingCommentId,
+    body: input.body,
+  });
+}
+
+async function deletePendingReviewComment(input: DeletePendingReviewCommentInput) {
+  await trpc.reviewComments.deletePending.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    pendingCommentId: input.pendingCommentId,
+  });
+}
+
+async function publishPendingReview(input: PublishPendingReviewInput) {
+  await trpc.reviewComments.publishPendingReview.mutate({
+    action: input.action,
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    summary: input.summary,
+  });
+}
+
+async function discardPendingReview(input: DiscardPendingReviewInput) {
+  await trpc.reviewComments.discardPendingReview.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
   });
 }
 
@@ -499,8 +614,13 @@ async function removePullRequestApproval(input: SelectedPullRequest) {
 export {
   accountVisibilityQueryOptions,
   appearanceBackgroundQueryOptions,
+  createPendingReviewGlobal,
+  createPendingReviewReply,
+  createPendingReviewThread,
   createPullRequestReviewComment,
+  deletePendingReviewComment,
   diffDataSettingsQueryOptions,
+  discardPendingReview,
   forgeKeys,
   initialReposQueryOptions,
   providerProfileQueryOptions,
@@ -513,8 +633,10 @@ export {
   pullRequestOverviewQueryOptions,
   pullRequestPatchQueryOptions,
   pullRequestApprovalStateQueryOptions,
+  pullRequestPendingReviewQueryOptions,
   pullRequestQualityReportQueryOptions,
   pullRequestReviewThreadsQueryOptions,
+  publishPendingReview,
   approvePullRequest,
   removePullRequestApproval,
   trackedPullRequestListQueryOptions,
@@ -532,6 +654,7 @@ export {
   selectCustomBackgroundFile,
   themePreferenceQueryOptions,
   trackedPullRequestOrderQueryOptions,
+  updatePendingReviewComment,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 };

@@ -8,6 +8,13 @@
       "when": 1777439629089,
       "tag": "0000_absurd_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777494103131,
+      "tag": "0001_short_killmonger",
+      "breakpoints": true
     }
   ]
 }

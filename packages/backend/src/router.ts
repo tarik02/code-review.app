@@ -12,12 +12,19 @@ import {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
   completeOAuthSchema,
+  createPendingReviewGlobalInputSchema,
+  createPendingReviewReplyInputSchema,
+  createPendingReviewThreadInputSchema,
   createPullRequestReviewCommentInputSchema,
+  deletePendingReviewCommentInputSchema,
   diffDataSettingsSchema,
+  discardPendingReviewInputSchema,
   overviewPullRequestSummarySchema,
+  pendingReviewStateSchema,
   providerAccountSchema,
   providerHostSchema,
   providerProfileSchema,
+  publishPendingReviewInputSchema,
   pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
   pullRequestQualityReportSchema,
@@ -29,6 +36,7 @@ import {
   repoSummarySchema,
   themePreferenceSettingsSchema,
   reviewEditorSettingsSchema,
+  updatePendingReviewCommentInputSchema,
   updatePullRequestReviewCommentInputSchema,
   trackedPullRequestOrderEntrySchema,
 } from '@code-review-app/shared';
@@ -330,6 +338,18 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             }),
           ),
         ),
+      tryValidate: t.procedure
+        .input(providerAccountSchema.extend({ repo: z.string() }))
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.validateRepo(input.accountId, input.repo).pipe(
+                Effect.catchAll(() => Effect.succeed(null)),
+              );
+            }),
+          ),
+        ),
       listSaved: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
@@ -380,6 +400,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           Effect.gen(function* () {
             const service = yield* PullRequestService;
             return yield* service.get(input, input.number);
+          }),
+        ),
+      ),
+      tryGet: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.get(input, input.number).pipe(
+              Effect.catchAll(() => Effect.succeed(null)),
+            );
           }),
         ),
       ),
@@ -527,6 +557,93 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           'reviewComments.listThreads',
         ),
       ),
+      listPending: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            const pendingState = yield* service.listPending(input, input.number);
+            return pendingReviewStateSchema.parse(pendingState);
+          }),
+          'reviewComments.listPending',
+        ),
+      ),
+      createPendingThread: t.procedure
+        .input(createPendingReviewThreadInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingThread(input);
+            }),
+            'reviewComments.createPendingThread',
+          ),
+        ),
+      createPendingReply: t.procedure
+        .input(createPendingReviewReplyInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingReply(input);
+            }),
+            'reviewComments.createPendingReply',
+          ),
+        ),
+      createPendingGlobal: t.procedure
+        .input(createPendingReviewGlobalInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingGlobal(input);
+            }),
+            'reviewComments.createPendingGlobal',
+          ),
+        ),
+      updatePending: t.procedure
+        .input(updatePendingReviewCommentInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.updatePending(input);
+            }),
+            'reviewComments.updatePending',
+          ),
+        ),
+      deletePending: t.procedure
+        .input(deletePendingReviewCommentInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.deletePending(input);
+            }),
+            'reviewComments.deletePending',
+          ),
+        ),
+      publishPendingReview: t.procedure
+        .input(publishPendingReviewInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.publishPendingReview(input);
+            }),
+            'reviewComments.publishPendingReview',
+          ),
+        ),
+      discardPendingReview: t.procedure
+        .input(discardPendingReviewInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.discardPendingReview(input);
+            }),
+            'reviewComments.discardPendingReview',
+          ),
+        ),
       create: t.procedure.input(createPullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {

@@ -106,23 +106,42 @@ function RepoSelectionStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5">
-      <p className="px-4 font-sans text-xs text-neutral-500">
-        {showDirectLinkOption ? 'Pull requests' : 'Repositories'}
-      </p>
+      {showDirectLinkOption ? (
+        <>
+          <p className="px-4 font-sans text-xs text-neutral-500">Pull requests</p>
 
-      {showDirectLinkOption && isLoadingDirectLinkPullRequest ? (
-        <div className="px-4 py-3 text-sm text-ink-500">Loading pull request...</div>
+          {isLoadingDirectLinkPullRequest ? (
+            <div className="px-4 py-3 text-sm text-ink-500">Loading pull request...</div>
+          ) : null}
+
+          {directLinkPullRequestError ? (
+            <div className="px-4 py-3 text-sm text-danger-600">{directLinkPullRequestError}</div>
+          ) : null}
+
+          {directLinkPullRequestOption ? (
+            <div className="flex max-h-[180px] flex-col gap-1 overflow-y-auto px-2">
+              <PullRequestOptionButton
+                pullRequest={directLinkPullRequestOption.pullRequest}
+                repo={directLinkPullRequestOption.repo}
+                onPick={() =>
+                  onPickDirectLinkPullRequest(
+                    directLinkPullRequestOption.repo,
+                    directLinkPullRequestOption.pullRequest,
+                  )
+                }
+              />
+            </div>
+          ) : null}
+        </>
       ) : null}
 
-      {!showDirectLinkOption && isLoadingRepos ? (
+      <p className="px-4 font-sans text-xs text-neutral-500">Repositories</p>
+
+      {isLoadingRepos ? (
         <div className="px-4 py-3 text-sm text-ink-500">Loading repositories...</div>
       ) : null}
 
-      {showDirectLinkOption && directLinkPullRequestError ? (
-        <div className="px-4 py-3 text-sm text-danger-600">{directLinkPullRequestError}</div>
-      ) : null}
-
-      {!showDirectLinkOption && availableReposError ? (
+      {availableReposError ? (
         <div className="px-4 py-3 text-sm text-danger-600">
           {availableReposError instanceof Error
             ? availableReposError.message
@@ -130,22 +149,7 @@ function RepoSelectionStep({
         </div>
       ) : null}
 
-      {showDirectLinkOption && directLinkPullRequestOption ? (
-        <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
-          <PullRequestOptionButton
-            pullRequest={directLinkPullRequestOption.pullRequest}
-            repo={directLinkPullRequestOption.repo}
-            onPick={() =>
-              onPickDirectLinkPullRequest(
-                directLinkPullRequestOption.repo,
-                directLinkPullRequestOption.pullRequest,
-              )
-            }
-          />
-        </div>
-      ) : null}
-
-      {!showDirectLinkOption && !isLoadingRepos && !availableReposError ? (
+      {(!isLoadingRepos || repos.length > 0) && !availableReposError ? (
         <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
           {repos.length === 0 ? (
             <div className="px-0 py-2 text-sm text-ink-500">

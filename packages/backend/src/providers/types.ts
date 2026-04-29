@@ -11,7 +11,10 @@ import type {
   ProviderAuthStatus,
   PrChangedFile,
   RepoSummary,
+  PendingReviewComment,
+  PendingReviewSession,
   ReviewThread,
+  PublishPendingReviewInput,
 } from '@code-review-app/shared';
 
 type ReviewThreadInput = {
@@ -35,6 +38,15 @@ type PullRequestQualityReportInput = {
   repo: RepoIdentity;
   number: number;
   headSha: string;
+};
+
+type PendingReviewSessionResult = {
+  providerReviewId: string | null;
+};
+
+type PendingReviewCommentResult = {
+  providerCommentId: string;
+  providerThreadId: string | null;
 };
 
 type GitRemoteAuth = {
@@ -129,6 +141,53 @@ type ForgeProvider = {
     number: number,
     input: ReviewThreadInput,
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ensurePendingReview(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<PendingReviewSessionResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  createPendingReviewThread(
+    repo: RepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    input: ReviewThreadInput,
+  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  createPendingReviewReply(
+    repo: RepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    threadId: string,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  createPendingGlobalComment(
+    repo: RepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  updatePendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    providerCommentId: string,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  deletePendingReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    providerCommentId: string,
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  publishPendingReview(
+    repo: RepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    input: PublishPendingReviewInput,
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  discardPendingReview(
+    repo: RepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    comments: PendingReviewComment[],
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   replyToReviewThread(
     repo: RepoIdentity,
     number: number,
@@ -150,6 +209,8 @@ export type {
   GitRemoteAuth,
   GitRemoteSpec,
   PullRequestQualityReportInput,
+  PendingReviewCommentResult,
+  PendingReviewSessionResult,
   PullRequestRefs,
   ReviewThreadInput,
 };

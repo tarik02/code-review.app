@@ -5,6 +5,9 @@ const diffDataModeSchema = z.enum(['provider-api', 'git']);
 const themePreferenceSchema = z.enum(['auto', 'light', 'dark']);
 const reviewEditorModeSchema = z.enum(['rich-text', 'source']);
 const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
+const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
+const pendingReviewCommentSubjectTypeSchema = z.enum(['file', 'line', 'global']);
+const pendingReviewSubmitActionSchema = z.enum(['comment', 'approve', 'request_changes']);
 const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
   'ok',
@@ -206,6 +209,77 @@ const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
   subjectType: z.enum(['file', 'line', 'global']),
 });
 
+const createPendingReviewThreadInputSchema = pullRequestVersionedInputSchema.extend({
+  body: z.string(),
+  path: z.string(),
+  oldPath: z.string(),
+  newPath: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: z.enum(['file', 'line']),
+});
+
+const createPendingReviewReplyInputSchema = pullRequestVersionedInputSchema.extend({
+  threadId: z.string(),
+  body: z.string(),
+});
+
+const createPendingReviewGlobalInputSchema = pullRequestVersionedInputSchema.extend({
+  body: z.string(),
+});
+
+const updatePendingReviewCommentInputSchema = pullRequestInputSchema.extend({
+  pendingCommentId: z.number().int().positive(),
+  body: z.string(),
+});
+
+const deletePendingReviewCommentInputSchema = pullRequestInputSchema.extend({
+  pendingCommentId: z.number().int().positive(),
+});
+
+const publishPendingReviewInputSchema = pullRequestInputSchema.extend({
+  action: pendingReviewSubmitActionSchema.optional(),
+  summary: z.string().optional(),
+});
+
+const discardPendingReviewInputSchema = pullRequestInputSchema;
+
+const pendingReviewSessionSchema = pullRequestInputSchema.extend({
+  id: z.number().int().positive(),
+  headSha: z.string(),
+  providerReviewId: z.string().nullable(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+});
+
+const pendingReviewCommentSchema = pullRequestInputSchema.extend({
+  id: z.number().int().positive(),
+  sessionId: z.number().int().positive(),
+  headSha: z.string(),
+  kind: pendingReviewCommentKindSchema,
+  providerCommentId: z.string().nullable(),
+  providerThreadId: z.string().nullable(),
+  replyToThreadId: z.string().nullable(),
+  body: z.string(),
+  path: z.string(),
+  oldPath: z.string(),
+  newPath: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: pendingReviewCommentSubjectTypeSchema,
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+});
+
+const pendingReviewStateSchema = z.object({
+  session: pendingReviewSessionSchema.nullable(),
+  comments: z.array(pendingReviewCommentSchema),
+});
+
 const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
   threadId: z.string(),
   body: z.string(),
@@ -222,13 +296,25 @@ export {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
   completeOAuthSchema,
+  createPendingReviewGlobalInputSchema,
+  createPendingReviewReplyInputSchema,
+  createPendingReviewThreadInputSchema,
   createPullRequestReviewCommentInputSchema,
+  deletePendingReviewCommentInputSchema,
   diffDataModeSchema,
   diffDataSettingsSchema,
+  discardPendingReviewInputSchema,
   forgeProviderKindSchema,
   overviewPullRequestSummarySchema,
+  pendingReviewCommentKindSchema,
+  pendingReviewCommentSchema,
+  pendingReviewCommentSubjectTypeSchema,
+  pendingReviewSubmitActionSchema,
+  pendingReviewSessionSchema,
+  pendingReviewStateSchema,
   providerAccountSchema,
   providerProfileSchema,
+  publishPendingReviewInputSchema,
   pullRequestApprovalActorSchema,
   pullRequestApprovalRemoveStrategySchema,
   pullRequestApprovalStateSchema,
@@ -253,5 +339,6 @@ export {
   themePreferenceSchema,
   themePreferenceSettingsSchema,
   trackedPullRequestOrderEntrySchema,
+  updatePendingReviewCommentInputSchema,
   updatePullRequestReviewCommentInputSchema,
 };

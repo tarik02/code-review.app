@@ -136,6 +136,7 @@ function ReviewCommentEditorInner({
   target = null,
   selectedText = '',
   submitLabel,
+  secondarySubmitLabel,
   cancelLabel = 'Cancel',
   isPending = false,
   error = '',
@@ -144,6 +145,7 @@ function ReviewCommentEditorInner({
   onCursorPositionChange,
   onCancel,
   onSubmit,
+  onSecondarySubmit,
 }: ReviewCommentEditorProps) {
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<MDXEditorMethods | null>(null);
@@ -364,14 +366,14 @@ function ReviewCommentEditorInner({
     ],
   );
 
-  async function handleSubmit() {
+  async function handleSubmit(submit: (body: string) => Promise<void> | void) {
     const latestBody = editorRef.current?.getMarkdown() ?? currentBody;
     const trimmedBody = latestBody.trim();
     if (!trimmedBody) {
       return;
     }
 
-    await onSubmit(trimmedBody);
+    await submit(trimmedBody);
   }
 
   function handleChange(markdown: string) {
@@ -412,9 +414,13 @@ function ReviewCommentEditorInner({
           canSubmit={!isPending && currentBody.trim().length > 0}
           cancelLabel={cancelLabel}
           isPending={isPending}
+          secondarySubmitLabel={secondarySubmitLabel}
           submitLabel={submitLabel}
           onCancel={onCancel}
-          onSubmit={() => void handleSubmit()}
+          onSecondarySubmit={
+            onSecondarySubmit ? () => void handleSubmit(onSecondarySubmit) : undefined
+          }
+          onSubmit={() => void handleSubmit(onSubmit)}
         />
       </div>
       {error || suggestionError ? (

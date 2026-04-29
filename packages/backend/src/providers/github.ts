@@ -6,8 +6,7 @@ import {
 } from '@effect/platform';
 import { Effect, ParseResult, Schema } from 'effect';
 import { ProviderError } from '../errors.ts';
-import { parseOwnerRepo } from '../repo-id.ts';
-import { createRepoIdentity } from '../repo-id.ts';
+import { createRepoIdentity, normalizeHost, normalizePath, parseOwnerRepo } from '../repo-id.ts';
 import { getValidAccessToken, updateViewerLogin } from '../auth/provider-auth.ts';
 import type {
   PullRequestQualityFinding,
@@ -295,6 +294,65 @@ const ReviewThreadsQueryDataSchema = Schema.Struct({
   ),
 });
 
+const AddPullRequestReviewDataSchema = Schema.Struct({
+  addPullRequestReview: Schema.NullOr(
+    Schema.Struct({
+      pullRequestReview: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.String,
+        }),
+      ),
+    }),
+  ),
+});
+
+const AddPullRequestReviewThreadDataSchema = Schema.Struct({
+  addPullRequestReviewThread: Schema.NullOr(
+    Schema.Struct({
+      thread: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.String,
+          comments: Schema.Struct({
+            nodes: Schema.Array(
+              Schema.Struct({
+                id: Schema.String,
+              }),
+            ),
+          }),
+        }),
+      ),
+    }),
+  ),
+});
+
+const AddPullRequestReviewThreadReplyDataSchema = Schema.Struct({
+  addPullRequestReviewThreadReply: Schema.NullOr(
+    Schema.Struct({
+      comment: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.String,
+        }),
+      ),
+    }),
+  ),
+});
+
+const UpdatePullRequestReviewCommentDataSchema = Schema.Struct({
+  updatePullRequestReviewComment: Schema.NullOr(
+    Schema.Struct({
+      pullRequestReviewComment: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.String,
+        }),
+      ),
+    }),
+  ),
+});
+
+function firstGraphQlErrorMessage(response: GraphQlResponse<unknown>) {
+  return response.errors?.find((error) => error.message.trim())?.message.trim() ?? null;
+}
+
 const SearchPullRequestsQueryDataSchema = Schema.Struct({
   search: Schema.optional(
     Schema.NullOr(
@@ -393,6 +451,31 @@ function parseOwnerRepoEffect(value: string): Effect.Effect<[string, string], Pr
     try: () => parseOwnerRepo(value),
     catch: toProviderError,
   });
+}
+
+function parseGitHubRepoInput(host: string, input: string): [string, string] {
+  const trimmed = input.trim();
+  if (!trimmed) throw new ProviderError('Repo is required');
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === 'https:' || url.protocol === 'http:') {
+      const inputHost = normalizeHost(url.host);
+      const segments = url.pathname.split('/').filter(Boolean);
+      const owner = segments[0] ?? '';
+      const name = (segments[1] ?? '').replace(/\.git$/, '');
+      if (!owner || !name) throw new ProviderError('Enter a repo as owner/name');
+      return [inputHost, `${owner}/${name}`];
+    }
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+  }
+
+  const path = normalizePath(trimmed.replace(/\.git$/, ''));
+  if (path.split('/').length !== 2) {
+    throw new ProviderError('Enter a repo as owner/name');
+  }
+  return [normalizeHost(host), path];
 }
 
 function encodePath(path: string) {
@@ -956,9 +1039,11 @@ class GitHubProvider implements ForgeProvider {
     return Effect.gen(function* () {
       const token = yield* requireStoredToken(accountId);
       const label = labelForToken(token);
-      const repo = input.trim();
-      if (repo.split('/').length !== 2 || repo.startsWith('/') || repo.endsWith('/')) {
-        return yield* Effect.fail(new ProviderError('Enter a repo as owner/name'));
+      const [validatedHost, repo] = parseGitHubRepoInput(token.host, input);
+      if (validatedHost !== normalizeHost(token.host)) {
+        return yield* Effect.fail(
+          new ProviderError('Repo URL host must match the selected GitHub account.'),
+        );
       }
       const [owner, name] = yield* parseOwnerRepoEffect(repo);
       const details = yield* githubJson(
@@ -1456,12 +1541,11 @@ query($owner: String!, $name: String!, $number: Int!) {
       return {
         url: `https://${repo.host}/${owner}/${name}.git`,
         auth: {
-          envConfig: [
-            {
-              key: `http.https://${repo.host}/.extraHeader`,
-              value: `Authorization: Bearer ${token}`,
-            },
-          ],
+          envConfig: [],
+          askPass: {
+            username: 'x-access-token',
+            password: token,
+          },
         },
       };
     });
@@ -1664,6 +1748,329 @@ mutation(
           startLine: input.startLine,
           startSide: input.startSide,
           subjectType: input.subjectType.toUpperCase(),
+        },
+        Schema.Unknown,
+      );
+    });
+  }
+
+  ensurePendingReview(repo: RepoIdentity, number: number, headSha: string) {
+    return Effect.gen(function* () {
+      const trimmedHeadSha = headSha.trim();
+      if (!trimmedHeadSha) {
+        return yield* Effect.fail(new ProviderError('Head SHA is required'));
+      }
+
+      const pullRequestId = yield* getPullRequestNodeId(repo, number);
+      const query = `
+mutation($pullRequestId: ID!, $commitOID: GitObjectID!) {
+  addPullRequestReview(input: { pullRequestId: $pullRequestId, commitOID: $commitOID }) {
+    pullRequestReview { id }
+  }
+}
+`;
+
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestId,
+          commitOID: trimmedHeadSha,
+        },
+        AddPullRequestReviewDataSchema,
+      );
+      const providerReviewId =
+        response.data?.addPullRequestReview?.pullRequestReview?.id ?? null;
+      if (!providerReviewId) {
+        const message = firstGraphQlErrorMessage(response);
+        return yield* Effect.fail(
+          new ProviderError(message ?? 'GitHub pending review was not created'),
+        );
+      }
+      return { providerReviewId };
+    });
+  }
+
+  createPendingReviewThread(
+    repo: RepoIdentity,
+    _number: number,
+    session: Parameters<ForgeProvider['createPendingReviewThread']>[2],
+    input: ReviewThreadInput,
+  ) {
+    return Effect.gen(function* () {
+      const providerReviewId = session.providerReviewId?.trim();
+      const body = input.body.trim();
+      if (!providerReviewId) {
+        return yield* Effect.fail(new ProviderError('Pending review id is required'));
+      }
+      if (!body) return yield* Effect.fail(new ProviderError('Comment body is required'));
+      const targetPath = input.path.trim();
+      if (!targetPath) {
+        return yield* Effect.fail(new ProviderError('File path is required'));
+      }
+      if (input.subjectType === 'line' && input.line == null) {
+        return yield* Effect.fail(new ProviderError('Line comments require a target line'));
+      }
+      if (input.subjectType === 'global') {
+        return yield* Effect.fail(new ProviderError('GitHub global comments cannot be pending'));
+      }
+
+      const query = `
+mutation(
+  $pullRequestReviewId: ID!,
+  $body: String!,
+  $path: String!,
+  $line: Int,
+  $side: DiffSide,
+  $startLine: Int,
+  $startSide: DiffSide,
+  $subjectType: PullRequestReviewThreadSubjectType
+) {
+  addPullRequestReviewThread(
+    input: {
+      pullRequestReviewId: $pullRequestReviewId,
+      body: $body,
+      path: $path,
+      line: $line,
+      side: $side,
+      startLine: $startLine,
+      startSide: $startSide,
+      subjectType: $subjectType
+    }
+  ) {
+    thread {
+      id
+      comments(last: 1) { nodes { id } }
+    }
+  }
+}
+`;
+
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestReviewId: providerReviewId,
+          body,
+          path: targetPath,
+          line: input.line,
+          side: input.side,
+          startLine: input.startLine,
+          startSide: input.startSide,
+          subjectType: input.subjectType.toUpperCase(),
+        },
+        AddPullRequestReviewThreadDataSchema,
+      );
+      const thread = response.data?.addPullRequestReviewThread?.thread;
+      const providerCommentId = thread?.comments.nodes.at(-1)?.id ?? null;
+      if (!thread?.id || !providerCommentId) {
+        const message = firstGraphQlErrorMessage(response);
+        return yield* Effect.fail(
+          new ProviderError(message ?? 'GitHub pending comment was not created'),
+        );
+      }
+      return {
+        providerCommentId,
+        providerThreadId: thread.id,
+      };
+    });
+  }
+
+  createPendingReviewReply(
+    repo: RepoIdentity,
+    _number: number,
+    session: Parameters<ForgeProvider['createPendingReviewReply']>[2],
+    threadId: string,
+    body: string,
+  ) {
+    return Effect.gen(function* () {
+      const providerReviewId = session.providerReviewId?.trim();
+      const trimmedThreadId = threadId.trim();
+      const trimmedBody = body.trim();
+      if (!providerReviewId) {
+        return yield* Effect.fail(new ProviderError('Pending review id is required'));
+      }
+      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError('Thread id is required'));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Reply body is required'));
+
+      const query = `
+mutation($pullRequestReviewId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
+  addPullRequestReviewThreadReply(
+    input: {
+      pullRequestReviewId: $pullRequestReviewId,
+      pullRequestReviewThreadId: $pullRequestReviewThreadId,
+      body: $body
+    }
+  ) {
+    comment { id }
+  }
+}
+`;
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestReviewId: providerReviewId,
+          pullRequestReviewThreadId: trimmedThreadId,
+          body: trimmedBody,
+        },
+        AddPullRequestReviewThreadReplyDataSchema,
+      );
+      const providerCommentId =
+        response.data?.addPullRequestReviewThreadReply?.comment?.id ?? null;
+      if (!providerCommentId) {
+        const message = firstGraphQlErrorMessage(response);
+        return yield* Effect.fail(
+          new ProviderError(message ?? 'GitHub pending reply was not created'),
+        );
+      }
+      return {
+        providerCommentId,
+        providerThreadId: trimmedThreadId,
+      };
+    });
+  }
+
+  createPendingGlobalComment(
+    _repo: RepoIdentity,
+    _number: number,
+    _session: Parameters<ForgeProvider['createPendingGlobalComment']>[2],
+    _body: string,
+  ) {
+    return Effect.fail(new ProviderError('GitHub global comments cannot be pending'));
+  }
+
+  updatePendingReviewComment(
+    repo: RepoIdentity,
+    _number: number,
+    providerCommentId: string,
+    body: string,
+  ) {
+    return Effect.gen(function* () {
+      const trimmedProviderCommentId = providerCommentId.trim();
+      const trimmedBody = body.trim();
+      if (!trimmedProviderCommentId) {
+        return yield* Effect.fail(new ProviderError('Pending comment id is required'));
+      }
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Comment body is required'));
+
+      const query = `
+mutation($id: ID!, $body: String!) {
+  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) {
+    pullRequestReviewComment { id }
+  }
+}
+`;
+      const response = yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          id: trimmedProviderCommentId,
+          body: trimmedBody,
+        },
+        UpdatePullRequestReviewCommentDataSchema,
+      );
+      return {
+        providerCommentId:
+          response.data?.updatePullRequestReviewComment?.pullRequestReviewComment?.id ??
+          trimmedProviderCommentId,
+        providerThreadId: null,
+      };
+    });
+  }
+
+  deletePendingReviewComment(repo: RepoIdentity, _number: number, providerCommentId: string) {
+    return Effect.gen(function* () {
+      const trimmedProviderCommentId = providerCommentId.trim();
+      if (!trimmedProviderCommentId) {
+        return yield* Effect.fail(new ProviderError('Pending comment id is required'));
+      }
+
+      const query = `
+mutation($id: ID!) {
+  deletePullRequestReviewComment(input: { id: $id }) {
+    pullRequestReviewComment { id }
+  }
+}
+`;
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          id: trimmedProviderCommentId,
+        },
+        Schema.Unknown,
+      );
+    });
+  }
+
+  publishPendingReview(
+    repo: RepoIdentity,
+    _number: number,
+    session: Parameters<ForgeProvider['publishPendingReview']>[2],
+    input: Parameters<ForgeProvider['publishPendingReview']>[3],
+  ) {
+    return Effect.gen(function* () {
+      const providerReviewId = session.providerReviewId?.trim();
+      if (!providerReviewId) {
+        return yield* Effect.fail(new ProviderError('Pending review id is required'));
+      }
+      const event =
+        input.action === 'approve'
+          ? 'APPROVE'
+          : input.action === 'request_changes'
+            ? 'REQUEST_CHANGES'
+            : 'COMMENT';
+      const body = input.summary?.trim() ?? '';
+
+      const query = `
+mutation($pullRequestReviewId: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  submitPullRequestReview(input: { pullRequestReviewId: $pullRequestReviewId, event: $event, body: $body }) {
+    pullRequestReview { id }
+  }
+}
+`;
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          body: body.length > 0 ? body : null,
+          event,
+          pullRequestReviewId: providerReviewId,
+        },
+        Schema.Unknown,
+      );
+    });
+  }
+
+  discardPendingReview(
+    repo: RepoIdentity,
+    _number: number,
+    session: Parameters<ForgeProvider['discardPendingReview']>[2],
+  ) {
+    return Effect.gen(function* () {
+      const providerReviewId = session.providerReviewId?.trim();
+      if (!providerReviewId) return;
+
+      const query = `
+mutation($pullRequestReviewId: ID!) {
+  deletePullRequestReview(input: { pullRequestReviewId: $pullRequestReviewId }) {
+    pullRequestReview { id }
+  }
+}
+`;
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          pullRequestReviewId: providerReviewId,
         },
         Schema.Unknown,
       );

@@ -10,7 +10,12 @@ import type { ReviewComment, ReviewThread } from '../lib/review-threads';
 import { trpc } from '../lib/trpc';
 import {
   approvePullRequest,
+  createPendingReviewGlobal,
+  createPendingReviewReply,
+  createPendingReviewThread,
   createPullRequestReviewComment,
+  deletePendingReviewComment,
+  discardPendingReview,
   forgeKeys,
   initialReposQueryOptions,
   pullRequestCachedListQueryOptions,
@@ -18,17 +23,26 @@ import {
   pullRequestOverviewQueryOptions,
   removePullRequestApproval,
   replyToPullRequestReviewComment,
+  publishPendingReview,
   savedReposQueryOptions,
   searchReposQueryOptions,
   trackedPullRequestListQueryOptions,
+  updatePendingReviewComment,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 } from '../queries/forge';
 import type {
+  CreatePendingReviewGlobalInput,
+  CreatePendingReviewReplyInput,
+  CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePendingReviewCommentInput,
   DiffDataMode,
+  DiscardPendingReviewInput,
   ForgeProviderKind,
   OverviewPullRequestSummary,
+  PendingReviewState,
+  PublishPendingReviewInput,
   PullRequestApprovalState,
   PrPatch,
   ProviderAccount,
@@ -38,6 +52,7 @@ import type {
   RepoIdentity,
   RepoSummary,
   SelectedPullRequest,
+  UpdatePendingReviewCommentInput,
   UpdatePullRequestReviewCommentInput,
 } from '../types/forge';
 import {
@@ -46,6 +61,7 @@ import {
   repoIdentity,
   repoIdentityKey,
 } from '../lib/repo-identity';
+import { normalizeHostInput, parseForgeResourceUrl } from '../lib/forge-links';
 
 function getErrorMessage(error: unknown): string {
   if (!error) return '';
@@ -55,6 +71,107 @@ function getErrorMessage(error: unknown): string {
 
 function createTemporaryId(prefix: string) {
   return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function filterAccountsForRepoSearch(accounts: ProviderAccount[], query: string) {
+  const trimmedQuery = query.trim();
+  const parsedUrl = parseForgeResourceUrl(trimmedQuery);
+  if (!parsedUrl) {
+    const pathSegments = trimmedQuery.replace(/\.git$/, '').split('/').filter(Boolean);
+    const repoOwner = pathSegments.length >= 2 ? pathSegments[0]?.toLowerCase() : '';
+    if (!repoOwner) {
+      return accounts;
+    }
+
+    const ownerGithubAccounts = accounts.filter(
+      (account) =>
+        account.provider === 'github' && account.viewerLogin?.toLowerCase() === repoOwner,
+    );
+    if (ownerGithubAccounts.length === 0) {
+      return accounts;
+    }
+
+    return accounts.filter(
+      (account) =>
+        account.provider !== 'github' || account.viewerLogin?.toLowerCase() === repoOwner,
+    );
+  }
+
+  const matchingAccounts = accounts.filter(
+    (account) =>
+      account.provider === parsedUrl.provider &&
+      normalizeHostInput(account.host) === parsedUrl.host,
+  );
+
+  if (parsedUrl.provider !== 'github') {
+    return matchingAccounts;
+  }
+
+  const repoOwner = parsedUrl.repoPath.split('/')[0]?.toLowerCase() ?? '';
+  const ownerAccounts = matchingAccounts.filter(
+    (account) => account.viewerLogin?.toLowerCase() === repoOwner,
+  );
+  return ownerAccounts.length > 0 ? ownerAccounts : matchingAccounts;
+}
+
+function encodeProviderIdComponent(value: string) {
+  return value.replace(/%/g, '%25').replace(/:/g, '%3A');
+}
+
+function createProviderId(account: ProviderAccount, host: string) {
+  const normalizedHost = encodeProviderIdComponent(normalizeHostInput(host));
+  const accountId = encodeProviderIdComponent(account.id);
+  return `${account.provider}:${normalizedHost}:${accountId}`;
+}
+
+function repoNameFromPath(repoPath: string) {
+  const segments = repoPath.split('/').filter(Boolean);
+  return segments.at(-1) ?? repoPath;
+}
+
+function createSearchRepoFallback(account: ProviderAccount, repoPath: string, host: string) {
+  const normalizedRepoPath = repoPath.trim().replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
+  return {
+    providerId: createProviderId(account, host),
+    repoKey: normalizedRepoPath,
+    provider: account.provider,
+    host: normalizeHostInput(host),
+    providerAccountId: account.id,
+    providerAccountLabel: account.label,
+    name: repoNameFromPath(normalizedRepoPath),
+    nameWithOwner: normalizedRepoPath,
+    description: null,
+    isPrivate: null,
+    avatarUrl: null,
+  } satisfies RepoSummary;
+}
+
+function createRepoSearchFallbacks(accounts: ProviderAccount[], query: string) {
+  const trimmedQuery = query.trim();
+  const parsedUrl = parseForgeResourceUrl(trimmedQuery);
+  if (parsedUrl) {
+    return accounts
+      .filter(
+        (account) =>
+          account.provider === parsedUrl.provider &&
+          normalizeHostInput(account.host) === parsedUrl.host,
+      )
+      .map((account) => createSearchRepoFallback(account, parsedUrl.repoPath, parsedUrl.host));
+  }
+
+  const repoPath = trimmedQuery.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
+  const pathSegmentCount = repoPath.split('/').filter(Boolean).length;
+  if (pathSegmentCount < 2) {
+    return [];
+  }
+
+  return accounts
+    .filter(
+      (account) =>
+        (account.provider === 'github' && pathSegmentCount === 2) ||
+        (account.provider === 'gitlab' && pathSegmentCount >= 2),
+    )
+    .map((account) => createSearchRepoFallback(account, repoPath, account.host));
 }
 
 function createOptimisticComment(
@@ -189,8 +306,13 @@ function useRepoPickerReposForAccounts(
     () => accounts.filter((account) => enabledAccountIdSet.has(account.id)),
     [accounts, enabledAccountIdSet],
   );
-  const shouldQuery = enabled && activeAccounts.length > 0;
   const isSearching = trimmedQuery.length > 0;
+  const searchableAccounts = useMemo(
+    () =>
+      isSearching ? filterAccountsForRepoSearch(activeAccounts, trimmedQuery) : activeAccounts,
+    [activeAccounts, isSearching, trimmedQuery],
+  );
+  const shouldQuery = enabled && searchableAccounts.length > 0;
 
   const initialRepoQueries = useQueries({
     queries: activeAccounts.map((account) => ({
@@ -199,21 +321,21 @@ function useRepoPickerReposForAccounts(
     })),
   });
   const searchRepoQueries = useQueries({
-    queries: activeAccounts.map((account) => ({
+    queries: searchableAccounts.map((account) => ({
       ...searchReposQueryOptions(debouncedQuery, account.id, account.provider, account.host),
       enabled: shouldQuery && isSearching,
     })),
   });
 
   useEffect(() => {
-    if (!shouldQuery) {
+    if (!enabled || activeAccounts.length === 0) {
       return;
     }
 
     for (const account of activeAccounts) {
       void queryClient.prefetchQuery(initialReposQueryOptions(account.id));
     }
-  }, [activeAccounts, queryClient, shouldQuery]);
+  }, [activeAccounts, enabled, queryClient]);
 
   const activeQueries = isSearching ? searchRepoQueries : initialRepoQueries;
   const availableRepos = useMemo(() => {
@@ -223,8 +345,15 @@ function useRepoPickerReposForAccounts(
         byId.set(repoIdentityKey(repo), repo);
       }
     }
+    if (isSearching) {
+      for (const repo of createRepoSearchFallbacks(searchableAccounts, trimmedQuery)) {
+        if (!byId.has(repoIdentityKey(repo))) {
+          byId.set(repoIdentityKey(repo), repo);
+        }
+      }
+    }
     return [...byId.values()];
-  }, [activeQueries]);
+  }, [activeQueries, isSearching, searchableAccounts, trimmedQuery]);
   const isLoadingRepos =
     shouldQuery && activeQueries.some((query) => query.isPending || query.isFetching);
   const availableReposError = useMemo(() => {
@@ -239,7 +368,7 @@ function useRepoPickerReposForAccounts(
       return null;
     }
 
-    if (errors.length === activeQueries.length || availableRepos.length === 0) {
+    if (availableRepos.length === 0) {
       return errors.map(getErrorMessage).join('; ');
     }
 
@@ -540,6 +669,24 @@ function useSelectedPullRequestData(
     enabled: selectedPr !== null,
   });
 
+  const pendingReviewQuery = useQuery({
+    queryKey: selectedPr
+      ? forgeKeys.pullRequestPendingReview(selectedPr)
+      : forgeKeys.pullRequestPendingReviewIdle(),
+    queryFn: () => {
+      if (!selectedPr) {
+        throw new Error('No pull request selected');
+      }
+
+      return trpc.reviewComments.listPending.query({
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
+        number: selectedPr.number,
+      });
+    },
+    enabled: selectedPr !== null,
+  });
+
   const qualityReportQuery = useQuery({
     queryKey: selectedPr
       ? forgeKeys.pullRequestQualityReport(selectedPr)
@@ -583,6 +730,11 @@ function useSelectedPullRequestData(
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
   const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
+  const pendingReview =
+    (pendingReviewQuery.data as PendingReviewState | undefined) ?? {
+      session: null,
+      comments: [],
+    };
   const qualityReport = (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
   const approvalState = (approvalStateQuery.data as PullRequestApprovalState | undefined) ?? null;
 
@@ -595,6 +747,9 @@ function useSelectedPullRequestData(
   const isReviewThreadsLoading =
     selectedPr !== null &&
     (reviewThreadsQuery.isPending || (reviewThreadsQuery.isFetching && !reviewThreadsQuery.data));
+  const isPendingReviewLoading =
+    selectedPr !== null &&
+    (pendingReviewQuery.isPending || (pendingReviewQuery.isFetching && !pendingReviewQuery.data));
   const isQualityReportLoading =
     selectedPr !== null &&
     (qualityReportQuery.isPending || (qualityReportQuery.isFetching && !qualityReportQuery.data));
@@ -610,9 +765,12 @@ function useSelectedPullRequestData(
     isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,
+    isPendingReviewLoading,
     isQualityReportLoading,
     isReviewThreadsLoading,
     patchError: getErrorMessage(selectedPatchQuery.error),
+    pendingReview,
+    pendingReviewError: getErrorMessage(pendingReviewQuery.error),
     qualityReport,
     qualityReportError: getErrorMessage(qualityReportQuery.error),
     reviewThreads,
@@ -675,6 +833,8 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
   const viewerLogin = viewerLoginQuery.data?.login ?? 'You';
 
   const reviewThreadsQueryKey = selectedPr ? forgeKeys.pullRequestReviewThreads(selectedPr) : null;
+  const pendingReviewQueryKey = selectedPr ? forgeKeys.pullRequestPendingReview(selectedPr) : null;
+  const approvalStateQueryKey = selectedPr ? forgeKeys.pullRequestApprovalState(selectedPr) : null;
 
   const invalidateReviewThreads = useCallback(async () => {
     if (!reviewThreadsQueryKey) {
@@ -685,6 +845,31 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
       queryKey: reviewThreadsQueryKey,
     });
   }, [queryClient, reviewThreadsQueryKey]);
+
+  const invalidatePendingReview = useCallback(async () => {
+    if (!pendingReviewQueryKey) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: pendingReviewQueryKey,
+    });
+  }, [pendingReviewQueryKey, queryClient]);
+
+  const invalidateReviewData = useCallback(async () => {
+    await invalidateReviewThreads();
+    await invalidatePendingReview();
+  }, [invalidatePendingReview, invalidateReviewThreads]);
+
+  const invalidateApprovalState = useCallback(async () => {
+    if (!approvalStateQueryKey) {
+      return;
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: approvalStateQueryKey,
+    });
+  }, [approvalStateQueryKey, queryClient]);
 
   async function prepareOptimisticUpdate() {
     if (!reviewThreadsQueryKey) {
@@ -750,6 +935,18 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
     },
     onSettled: invalidateReviewThreads,
   });
+  const createPendingThreadMutation = useMutation({
+    mutationFn: (input: CreatePendingReviewThreadInput) => createPendingReviewThread(input),
+    onSettled: invalidateReviewData,
+  });
+  const createPendingReplyMutation = useMutation({
+    mutationFn: (input: CreatePendingReviewReplyInput) => createPendingReviewReply(input),
+    onSettled: invalidateReviewData,
+  });
+  const createPendingGlobalMutation = useMutation({
+    mutationFn: (input: CreatePendingReviewGlobalInput) => createPendingReviewGlobal(input),
+    onSettled: invalidateReviewData,
+  });
   const replyCommentMutation = useMutation({
     mutationFn: (input: ReplyToPullRequestReviewCommentInput) =>
       replyToPullRequestReviewComment(input),
@@ -801,10 +998,38 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
     },
     onSettled: invalidateReviewThreads,
   });
+  const updatePendingCommentMutation = useMutation({
+    mutationFn: (input: UpdatePendingReviewCommentInput) => updatePendingReviewComment(input),
+    onSettled: invalidateReviewData,
+  });
+  const deletePendingCommentMutation = useMutation({
+    mutationFn: (input: DeletePendingReviewCommentInput) => deletePendingReviewComment(input),
+    onSettled: invalidateReviewData,
+  });
+  const publishPendingReviewMutation = useMutation({
+    mutationFn: (input: PublishPendingReviewInput) => publishPendingReview(input),
+    onSettled: async (_data, _error, input) => {
+      await invalidateReviewData();
+      if (input.action === 'approve' || input.action === 'request_changes') {
+        await invalidateApprovalState();
+      }
+    },
+  });
+  const discardPendingReviewMutation = useMutation({
+    mutationFn: (input: DiscardPendingReviewInput) => discardPendingReview(input),
+    onSettled: invalidateReviewData,
+  });
 
   return {
     createCommentMutation,
+    createPendingGlobalMutation,
+    createPendingReplyMutation,
+    createPendingThreadMutation,
+    deletePendingCommentMutation,
+    discardPendingReviewMutation,
+    publishPendingReviewMutation,
     replyCommentMutation,
+    updatePendingCommentMutation,
     updateCommentMutation,
     viewerLogin: viewerLoginQuery.data?.login ?? null,
   };
