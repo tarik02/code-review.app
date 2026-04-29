@@ -1,4 +1,4 @@
-import type { DiffLineAnnotation } from "@pierre/diffs";
+import type { DiffLineAnnotation } from '@pierre/diffs';
 
 type ReviewComment = {
   id: string;
@@ -17,15 +17,15 @@ type ReviewComment = {
 
 type ReviewThread = {
   id: string;
-  provider: "github" | "gitlab";
+  provider: 'github' | 'gitlab';
   path: string;
   isResolved: boolean;
   isOutdated: boolean;
   line: number | null;
   startLine: number | null;
-  side: "LEFT" | "RIGHT" | null;
-  startSide: "LEFT" | "RIGHT" | null;
-  subjectType: "line" | "file" | "global" | null;
+  side: 'LEFT' | 'RIGHT' | null;
+  startSide: 'LEFT' | 'RIGHT' | null;
+  subjectType: 'line' | 'file' | 'global' | null;
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
@@ -54,14 +54,14 @@ const EMPTY_FILE_REVIEW_THREADS: FileReviewThreads = {
 };
 
 function normalizePath(path: string) {
-  return path.replace(/^[ab]\//, "");
+  return path.replace(/^[ab]\//, '');
 }
 
 function getAnnotationSide(
-  side: ReviewThread["side"],
-): DiffLineAnnotation<ReviewThreadAnnotation>["side"] | null {
-  if (side === "RIGHT") return "additions";
-  if (side === "LEFT") return "deletions";
+  side: ReviewThread['side'],
+): DiffLineAnnotation<ReviewThreadAnnotation>['side'] | null {
+  if (side === 'RIGHT') return 'additions';
+  if (side === 'LEFT') return 'deletions';
   return null;
 }
 
@@ -78,7 +78,7 @@ function isActiveReviewThread(thread: ReviewThread) {
 }
 
 function isGlobalReviewThread(thread: ReviewThread) {
-  return thread.subjectType === "global";
+  return thread.subjectType === 'global';
 }
 
 function isFileReviewThread(thread: ReviewThread) {
@@ -87,7 +87,7 @@ function isFileReviewThread(thread: ReviewThread) {
   }
 
   return (
-    thread.subjectType === "file" || thread.line === null || getAnnotationSide(thread.side) === null
+    thread.subjectType === 'file' || thread.line === null || getAnnotationSide(thread.side) === null
   );
 }
 
@@ -157,8 +157,8 @@ function getThreadRootComment(thread: ReviewThread) {
 
 function getGlobalReviewThreads(reviewThreads: ReviewThread[]): ReviewThread[] {
   return [...reviewThreads].filter(isGlobalReviewThread).sort((left, right) => {
-    const leftCreatedAt = Date.parse(getThreadRootComment(left)?.createdAt ?? "");
-    const rightCreatedAt = Date.parse(getThreadRootComment(right)?.createdAt ?? "");
+    const leftCreatedAt = Date.parse(getThreadRootComment(left)?.createdAt ?? '');
+    const rightCreatedAt = Date.parse(getThreadRootComment(right)?.createdAt ?? '');
 
     if (Number.isNaN(leftCreatedAt) && Number.isNaN(rightCreatedAt)) {
       return 0;

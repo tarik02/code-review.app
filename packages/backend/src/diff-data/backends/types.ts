@@ -1,6 +1,6 @@
-import type { Effect } from "effect";
-import type { PrChangedFile, PrFileChangeType, PrFileContents } from "@code-review-app/shared";
-import type { RepoIdentity } from "../../repo-id.ts";
+import type { Effect } from 'effect';
+import type { PrChangedFile, PrFileChangeType, PrFileContents } from '@code-review-app/shared';
+import type { RepoIdentity } from '../../repo-id.ts';
 
 type DiffBackendInput = {
   repo: RepoIdentity;

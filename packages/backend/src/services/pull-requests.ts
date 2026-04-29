@@ -1,11 +1,11 @@
-import { HttpClient } from "@effect/platform";
-import { Effect, Layer } from "effect";
-import { CacheService } from "../cache.ts";
-import { ValidationError } from "../errors.ts";
-import { createRepoIdentityFromParts } from "../repo-id.ts";
-import { providerFor } from "../providers/registry.ts";
-import { DiffDataService } from "./diff-data.ts";
-import { AuthTokenStore } from "../auth/token-store.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect, Layer } from 'effect';
+import { CacheService } from '../cache.ts';
+import { ValidationError } from '../errors.ts';
+import { createRepoIdentityFromParts } from '../repo-id.ts';
+import { providerFor } from '../providers/registry.ts';
+import { DiffDataService } from './diff-data.ts';
+import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   OverviewPullRequestSummary,
   PrFileChangeType,
@@ -13,7 +13,7 @@ import type {
   PrPatch,
   RepoIdentity,
   PullRequestSummary,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type PullRequestServiceShape = {
   listCached(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
@@ -38,14 +38,14 @@ type PullRequestServiceShape = {
   }): Effect.Effect<PrFileContents, Error>;
 };
 
-class PullRequestService extends Effect.Tag("PullRequestService")<
+class PullRequestService extends Effect.Tag('PullRequestService')<
   PullRequestService,
   PullRequestServiceShape
 >() {}
 
 function requireRepo(repo: RepoIdentity) {
   if (!repo.providerId.trim() || !repo.repoKey.trim()) {
-    throw new ValidationError("Repo is required");
+    throw new ValidationError('Repo is required');
   }
   return repo;
 }
@@ -64,19 +64,19 @@ const makePullRequestService = Effect.gen(function* () {
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
 
-  const listCached: PullRequestServiceShape["listCached"] = Effect.fn(
-    "PullRequestService.listCached",
+  const listCached: PullRequestServiceShape['listCached'] = Effect.fn(
+    'PullRequestService.listCached',
   )(function* (repo) {
     return yield* cache.readCachedPullRequests(requireRepo(repo));
   });
 
-  const listOverview: PullRequestServiceShape["listOverview"] = Effect.fn(
-    "PullRequestService.listOverview",
+  const listOverview: PullRequestServiceShape['listOverview'] = Effect.fn(
+    'PullRequestService.listOverview',
   )(function* (accountId) {
     const trimmedAccountId = accountId.trim();
-    if (!trimmedAccountId) throw new ValidationError("Account is required");
+    if (!trimmedAccountId) throw new ValidationError('Account is required');
     const account = yield* tokenStore.get(trimmedAccountId);
-    if (!account) throw new ValidationError("Provider account is not signed in.");
+    if (!account) throw new ValidationError('Provider account is not signed in.');
     console.info(
       `[pull-requests] loading overview for ${account.provider} account ${trimmedAccountId}`,
     );
@@ -85,7 +85,7 @@ const makePullRequestService = Effect.gen(function* () {
     );
   });
 
-  const list: PullRequestServiceShape["list"] = Effect.fn("PullRequestService.list")(
+  const list: PullRequestServiceShape['list'] = Effect.fn('PullRequestService.list')(
     function* (repoInput) {
       const repoIdentity = requireRepo(repoInput);
       const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
@@ -98,7 +98,7 @@ const makePullRequestService = Effect.gen(function* () {
     },
   );
 
-  const get: PullRequestServiceShape["get"] = Effect.fn("PullRequestService.get")(
+  const get: PullRequestServiceShape['get'] = Effect.fn('PullRequestService.get')(
     function* (repoInput, number) {
       const repoIdentity = requireRepo(repoInput);
       const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
@@ -106,20 +106,20 @@ const makePullRequestService = Effect.gen(function* () {
     },
   );
 
-  const getPatch: PullRequestServiceShape["getPatch"] = Effect.fn("PullRequestService.getPatch")(
+  const getPatch: PullRequestServiceShape['getPatch'] = Effect.fn('PullRequestService.getPatch')(
     function* (repo, number, headSha) {
       return yield* diffData.getPatch(requireRepo(repo), number, headSha);
     },
   );
 
-  const listChangedFiles: PullRequestServiceShape["listChangedFiles"] = Effect.fn(
-    "PullRequestService.listChangedFiles",
+  const listChangedFiles: PullRequestServiceShape['listChangedFiles'] = Effect.fn(
+    'PullRequestService.listChangedFiles',
   )(function* (repo, number, headSha) {
     return yield* diffData.getChangedFiles(requireRepo(repo), number, headSha);
   });
 
-  const getFileContents: PullRequestServiceShape["getFileContents"] = Effect.fn(
-    "PullRequestService.getFileContents",
+  const getFileContents: PullRequestServiceShape['getFileContents'] = Effect.fn(
+    'PullRequestService.getFileContents',
   )(function* (input) {
     return yield* diffData.getFileContents(input);
   });

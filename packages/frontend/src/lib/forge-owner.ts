@@ -1,7 +1,7 @@
-import type { ForgeProviderKind } from "../types/forge";
+import type { ForgeProviderKind } from '../types/forge';
 
 function getOwnerLogin(nameWithOwner: string) {
-  const [owner] = nameWithOwner.split("/");
+  const [owner] = nameWithOwner.split('/');
   return owner || nameWithOwner;
 }
 
@@ -11,16 +11,16 @@ function getOwnerInitials(nameWithOwner: string) {
 
 function getOwnerAvatarUrl(
   nameWithOwner: string,
-  provider: ForgeProviderKind = "github",
-  host = provider === "github" ? "github.com" : "gitlab.com",
+  provider: ForgeProviderKind = 'github',
+  host = provider === 'github' ? 'github.com' : 'gitlab.com',
   size = 40,
-) : string | null {
+): string | null {
   const ownerLogin = getOwnerLogin(nameWithOwner);
-  if (provider !== "github") {
+  if (provider !== 'github') {
     return null;
   }
 
-  const normalizedHost = host.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const normalizedHost = host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   const protocolHost = `https://${normalizedHost}`;
   return `${protocolHost}/${ownerLogin}.png?size=${size}`;
 }

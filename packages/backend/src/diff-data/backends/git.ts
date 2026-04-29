@@ -1,7 +1,7 @@
-import { HttpClient } from "@effect/platform";
-import { Effect } from "effect";
-import { ProviderError, ValidationError } from "../../errors.ts";
-import type { GitServiceShape } from "../../git/service.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect } from 'effect';
+import { ProviderError, ValidationError } from '../../errors.ts';
+import type { GitServiceShape } from '../../git/service.ts';
 import {
   GitAuthenticationFailed,
   GitAuthorizationFailed,
@@ -15,13 +15,13 @@ import {
   GitUnknownCommandError,
   firstLine,
   type GitError,
-} from "../../git/errors.ts";
-import { providerFor } from "../../providers/registry.ts";
-import { AuthTokenStore } from "../../auth/token-store.ts";
-import type { PrFileContents } from "@code-review-app/shared";
-import type { GitRemoteSpec, PullRequestRefs } from "../../providers/types.ts";
-import { repoIdentityCacheKey, type RepoIdentity } from "../../repo-id.ts";
-import type { DiffBackendFileContentsInput, DiffBackendInput, DiffDataBackend } from "./types.ts";
+} from '../../git/errors.ts';
+import { providerFor } from '../../providers/registry.ts';
+import { AuthTokenStore } from '../../auth/token-store.ts';
+import type { PrFileContents } from '@code-review-app/shared';
+import type { GitRemoteSpec, PullRequestRefs } from '../../providers/types.ts';
+import { repoIdentityCacheKey, type RepoIdentity } from '../../repo-id.ts';
+import type { DiffBackendFileContentsInput, DiffBackendInput, DiffDataBackend } from './types.ts';
 
 type ProvideProviderDeps = <A, E>(
   effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
@@ -30,49 +30,49 @@ type ProvideProviderDeps = <A, E>(
 type ResolvedRefs = {
   baseSha: string;
   headSha: string;
-  source: "input" | "provider";
+  source: 'input' | 'provider';
 };
 
 function gitErrorToProviderError(error: GitError) {
   if (error instanceof GitExecutableNotFound) {
-    return new ProviderError("Git mode requires git to be installed and available on PATH.");
+    return new ProviderError('Git mode requires git to be installed and available on PATH.');
   }
   if (error instanceof GitAuthenticationFailed) {
     return new ProviderError(
-      "Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.",
+      'Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.',
     );
   }
   if (error instanceof GitAuthorizationFailed) {
-    return new ProviderError("Your account cannot fetch this repository with git.");
+    return new ProviderError('Your account cannot fetch this repository with git.');
   }
   if (error instanceof GitRepositoryNotFound) {
-    return new ProviderError("Git could not find this repository.");
+    return new ProviderError('Git could not find this repository.');
   }
   if (error instanceof GitRefNotFound) {
-    return new ProviderError("Git could not fetch one of the PR refs.");
+    return new ProviderError('Git could not fetch one of the PR refs.');
   }
   if (error instanceof GitPathNotFound) {
-    return new ProviderError("Git could not find this file at the requested ref.");
+    return new ProviderError('Git could not find this file at the requested ref.');
   }
   if (error instanceof GitPartialCloneUnsupported) {
-    return new ProviderError("This git server does not support blobless partial clone.");
+    return new ProviderError('This git server does not support blobless partial clone.');
   }
   if (error instanceof GitCommandTimedOut) {
-    return new ProviderError("Git command timed out.");
+    return new ProviderError('Git command timed out.');
   }
   if (error instanceof GitCommandFailed) {
     return new ProviderError(
-      `Git command failed: ${firstLine(error.stderr) || "unknown git error"}`,
+      `Git command failed: ${firstLine(error.stderr) || 'unknown git error'}`,
     );
   }
   if (error instanceof GitUnknownCommandError) {
-    return new ProviderError("Git command failed unexpectedly.");
+    return new ProviderError('Git command failed unexpectedly.');
   }
-  return new ProviderError("Git command failed unexpectedly.");
+  return new ProviderError('Git command failed unexpectedly.');
 }
 
 function logGitError(context: string, error: GitError) {
-  console.debug("[diff-data]", context, {
+  console.debug('[diff-data]', context, {
     tag: error._tag,
     error: error instanceof GitUnknownCommandError ? { args: error.args } : error,
   });
@@ -87,17 +87,17 @@ function resolveRefs(
 ): Effect.Effect<ResolvedRefs, Error> {
   return Effect.gen(function* () {
     const trimmedHeadSha = headSha.trim();
-    if (!trimmedHeadSha) throw new ValidationError("Head SHA is required");
+    if (!trimmedHeadSha) throw new ValidationError('Head SHA is required');
     const trimmedBaseSha = baseSha?.trim() || null;
     if (trimmedBaseSha) {
       return {
         baseSha: trimmedBaseSha,
         headSha: trimmedHeadSha,
-        source: "input",
+        source: 'input',
       } satisfies ResolvedRefs;
     }
 
-    console.info("[diff-data] git base sha missing; fetching refs", {
+    console.info('[diff-data] git base sha missing; fetching refs', {
       repo: repoIdentityCacheKey(repo),
       number,
       provider: repo.provider,
@@ -106,12 +106,12 @@ function resolveRefs(
       providerFor(repo.provider).fetchPullRequestRefs(repo, number),
     );
     if (!refs.baseSha) {
-      throw new ValidationError("Base SHA is required");
+      throw new ValidationError('Base SHA is required');
     }
     return {
       baseSha: refs.baseSha,
-      headSha: trimmedHeadSha || refs.headSha || "",
-      source: "provider",
+      headSha: trimmedHeadSha || refs.headSha || '',
+      source: 'provider',
     } satisfies ResolvedRefs;
   });
 }
@@ -132,7 +132,7 @@ function prepareGitDiff(
       input.headSha,
       provideProviderDeps,
     );
-    console.info("[diff-data] git refs resolved", {
+    console.info('[diff-data] git refs resolved', {
       repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       source: refs.source,
@@ -144,16 +144,16 @@ function prepareGitDiff(
       providerFor(input.repo.provider).gitRemote(input.repo),
     );
     const handle = yield* git.ensureRepo(input.repo, remoteSpec).pipe(
-      Effect.tapError((error) => Effect.sync(() => logGitError("git ensure repo failed", error))),
+      Effect.tapError((error) => Effect.sync(() => logGitError('git ensure repo failed', error))),
       Effect.mapError(gitErrorToProviderError),
     );
 
     yield* git.fetchRefs(handle, refs.baseSha, refs.headSha, remoteSpec).pipe(
-      Effect.tapError((error) => Effect.sync(() => logGitError("git fetch refs failed", error))),
+      Effect.tapError((error) => Effect.sync(() => logGitError('git fetch refs failed', error))),
       Effect.mapError(gitErrorToProviderError),
     );
     const diffBaseSha = yield* git.mergeBase(handle, refs.baseSha, refs.headSha, remoteSpec).pipe(
-      Effect.tapError((error) => Effect.sync(() => logGitError("git merge-base failed", error))),
+      Effect.tapError((error) => Effect.sync(() => logGitError('git merge-base failed', error))),
       Effect.mapError(gitErrorToProviderError),
     );
 
@@ -170,7 +170,7 @@ function makeGitDiffBackend(
   git: GitServiceShape,
   provideProviderDeps: ProvideProviderDeps,
 ): DiffDataBackend {
-  const getPatch: DiffDataBackend["getPatch"] = Effect.fn("GitDiffBackend.getPatch")(
+  const getPatch: DiffDataBackend['getPatch'] = Effect.fn('GitDiffBackend.getPatch')(
     function* (input, options) {
       const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
       const handle = { repo: input.repo, path: prepared.cachePath };
@@ -184,11 +184,11 @@ function makeGitDiffBackend(
         )
         .pipe(
           Effect.tapError((error) =>
-            Effect.sync(() => logGitError("git diff patch failed", error)),
+            Effect.sync(() => logGitError('git diff patch failed', error)),
           ),
           Effect.mapError(gitErrorToProviderError),
         );
-      console.info("[diff-data] git patch generated", {
+      console.info('[diff-data] git patch generated', {
         repo: repoIdentityCacheKey(input.repo),
         number: input.number,
         headSha: prepared.headSha,
@@ -199,8 +199,8 @@ function makeGitDiffBackend(
     },
   );
 
-  const getChangedFiles: DiffDataBackend["getChangedFiles"] = Effect.fn(
-    "GitDiffBackend.getChangedFiles",
+  const getChangedFiles: DiffDataBackend['getChangedFiles'] = Effect.fn(
+    'GitDiffBackend.getChangedFiles',
   )(function* (input) {
     const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
     const handle = { repo: input.repo, path: prepared.cachePath };
@@ -208,11 +208,11 @@ function makeGitDiffBackend(
       .diffNameStatus(handle, prepared.diffBaseSha, prepared.headSha, prepared.remoteSpec)
       .pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => logGitError("git changed files failed", error)),
+          Effect.sync(() => logGitError('git changed files failed', error)),
         ),
         Effect.mapError(gitErrorToProviderError),
       );
-    console.info("[diff-data] git changed files generated", {
+    console.info('[diff-data] git changed files generated', {
       repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       headSha: prepared.headSha,
@@ -222,45 +222,45 @@ function makeGitDiffBackend(
     return files;
   });
 
-  const getFileContents: DiffDataBackend["getFileContents"] = Effect.fn(
-    "GitDiffBackend.getFileContents",
+  const getFileContents: DiffDataBackend['getFileContents'] = Effect.fn(
+    'GitDiffBackend.getFileContents',
   )(function* (input) {
     const oldPath = input.oldPath.trim();
     const newPath = input.newPath.trim();
 
-    if (!oldPath && input.changeType !== "new") {
-      throw new ValidationError("Old file path is required");
+    if (!oldPath && input.changeType !== 'new') {
+      throw new ValidationError('Old file path is required');
     }
-    if (!newPath && input.changeType !== "deleted") {
-      throw new ValidationError("New file path is required");
+    if (!newPath && input.changeType !== 'deleted') {
+      throw new ValidationError('New file path is required');
     }
 
     const prepared = yield* prepareGitDiff(input, git, provideProviderDeps);
     const handle = { repo: input.repo, path: prepared.cachePath };
-    let oldContent = "";
-    let newContent = "";
+    let oldContent = '';
+    let newContent = '';
 
-    if (input.changeType !== "new") {
+    if (input.changeType !== 'new') {
       oldContent = yield* git
         .showFile(handle, prepared.diffBaseSha, oldPath, prepared.remoteSpec)
         .pipe(
           Effect.tapError((error) =>
-            Effect.sync(() => logGitError("git show old file failed", error)),
+            Effect.sync(() => logGitError('git show old file failed', error)),
           ),
           Effect.mapError(gitErrorToProviderError),
         );
     }
 
-    if (input.changeType !== "deleted") {
+    if (input.changeType !== 'deleted') {
       newContent = yield* git.showFile(handle, prepared.headSha, newPath, prepared.remoteSpec).pipe(
         Effect.tapError((error) =>
-          Effect.sync(() => logGitError("git show new file failed", error)),
+          Effect.sync(() => logGitError('git show new file failed', error)),
         ),
         Effect.mapError(gitErrorToProviderError),
       );
     }
 
-    console.info("[diff-data] git file contents generated", {
+    console.info('[diff-data] git file contents generated', {
       repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       oldPath,

@@ -1,5 +1,5 @@
-import { GutterMarker, gutter } from "@codemirror/view";
-import type { SuggestionGutterColumns } from "./types";
+import { GutterMarker, gutter } from '@codemirror/view';
+import type { SuggestionGutterColumns } from './types';
 
 class SuggestionGutterMarker extends GutterMarker {
   constructor(private readonly columns: SuggestionGutterColumns) {
@@ -16,19 +16,19 @@ class SuggestionGutterMarker extends GutterMarker {
   }
 
   toDOM() {
-    const marker = document.createElement("span");
-    marker.className = "comment-editor-suggestion-gutter-marker";
+    const marker = document.createElement('span');
+    marker.className = 'comment-editor-suggestion-gutter-marker';
 
-    const oldLine = document.createElement("span");
-    oldLine.className = "comment-editor-suggestion-gutter-old";
-    oldLine.textContent = this.columns.oldLine?.toString() ?? "";
+    const oldLine = document.createElement('span');
+    oldLine.className = 'comment-editor-suggestion-gutter-old';
+    oldLine.textContent = this.columns.oldLine?.toString() ?? '';
 
-    const newLine = document.createElement("span");
-    newLine.className = "comment-editor-suggestion-gutter-new";
-    newLine.textContent = this.columns.newLine?.toString() ?? "";
+    const newLine = document.createElement('span');
+    newLine.className = 'comment-editor-suggestion-gutter-new';
+    newLine.textContent = this.columns.newLine?.toString() ?? '';
 
-    const sign = document.createElement("span");
-    sign.className = "comment-editor-suggestion-gutter-sign";
+    const sign = document.createElement('span');
+    sign.className = 'comment-editor-suggestion-gutter-sign';
     sign.textContent = this.columns.sign;
 
     marker.append(oldLine, newLine, sign);
@@ -40,13 +40,13 @@ function createSuggestionLineNumberGutter(
   lineNumberColumns: (lineNumber: number) => SuggestionGutterColumns,
 ) {
   return gutter({
-    class: "comment-editor-suggestion-gutter",
+    class: 'comment-editor-suggestion-gutter',
     renderEmptyElements: true,
     initialSpacer: () =>
       new SuggestionGutterMarker({
         oldLine: 999,
         newLine: 999,
-        sign: "+",
+        sign: '+',
       }),
     lineMarker(view, line) {
       const lineNumber = view.state.doc.lineAt(line.from).number;

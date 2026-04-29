@@ -1,9 +1,9 @@
-import { trpc } from "./trpc";
+import { trpc } from './trpc';
 
-const WINDOW_FULLSCREEN_CLASS_NAME = "window-fullscreen";
+const WINDOW_FULLSCREEN_CLASS_NAME = 'window-fullscreen';
 
 export function syncDocumentWindowFullscreenClass(): () => void {
-  if (typeof document === "undefined") {
+  if (typeof document === 'undefined') {
     return () => {};
   }
 

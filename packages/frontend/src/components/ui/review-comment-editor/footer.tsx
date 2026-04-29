@@ -1,5 +1,5 @@
-import { ArrowUpIcon } from "@heroicons/react/20/solid";
-import { Button } from "../button";
+import { ArrowUpIcon } from '@heroicons/react/20/solid';
+import { Button } from '../button';
 
 type ReviewCommentEditorFooterProps = {
   canSubmit: boolean;
@@ -27,7 +27,7 @@ function ReviewCommentEditorFooter({
       ) : null}
       <Button disabled={!canSubmit} onClick={onSubmit} type="button">
         <ArrowUpIcon className="size-4" data-icon="inline-start" />
-        {isPending ? "Saving..." : submitLabel}
+        {isPending ? 'Saving...' : submitLabel}
       </Button>
     </footer>
   );

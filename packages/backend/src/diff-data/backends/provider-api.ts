@@ -1,18 +1,18 @@
-import { HttpClient } from "@effect/platform";
-import { Effect } from "effect";
-import { ProviderError, ValidationError } from "../../errors.ts";
-import { providerFor } from "../../providers/registry.ts";
-import { AuthTokenStore } from "../../auth/token-store.ts";
-import { repoIdentityCacheKey } from "../../repo-id.ts";
-import type { PrChangedFile, PrFileContents } from "@code-review-app/shared";
-import type { DiffDataBackend } from "./types.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect } from 'effect';
+import { ProviderError, ValidationError } from '../../errors.ts';
+import { providerFor } from '../../providers/registry.ts';
+import { AuthTokenStore } from '../../auth/token-store.ts';
+import { repoIdentityCacheKey } from '../../repo-id.ts';
+import type { PrChangedFile, PrFileContents } from '@code-review-app/shared';
+import type { DiffDataBackend } from './types.ts';
 
 type ProvideProviderDeps = <A, E>(
   effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
 ) => Effect.Effect<A, E>;
 
 function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): DiffDataBackend {
-  const getPatch: DiffDataBackend["getPatch"] = Effect.fn("ProviderApiDiffBackend.getPatch")(
+  const getPatch: DiffDataBackend['getPatch'] = Effect.fn('ProviderApiDiffBackend.getPatch')(
     function* (input, _options) {
       return yield* provideProviderDeps(
         providerFor(input.repo.provider).fetchPatch(input.repo, input.number),
@@ -20,8 +20,8 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
     },
   );
 
-  const getChangedFiles: DiffDataBackend["getChangedFiles"] = Effect.fn(
-    "ProviderApiDiffBackend.getChangedFiles",
+  const getChangedFiles: DiffDataBackend['getChangedFiles'] = Effect.fn(
+    'ProviderApiDiffBackend.getChangedFiles',
   )(
     function* (input) {
       const files = yield* provideProviderDeps(
@@ -42,8 +42,8 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
     Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
   );
 
-  const getFileContents: DiffDataBackend["getFileContents"] = Effect.fn(
-    "ProviderApiDiffBackend.getFileContents",
+  const getFileContents: DiffDataBackend['getFileContents'] = Effect.fn(
+    'ProviderApiDiffBackend.getFileContents',
   )(
     function* (input) {
       const oldPath = input.oldPath.trim();
@@ -51,15 +51,15 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       let baseSha = input.baseSha?.trim() || null;
       const provider = providerFor(input.repo.provider);
 
-      if (!oldPath && input.changeType !== "new") {
-        throw new ValidationError("Old file path is required");
+      if (!oldPath && input.changeType !== 'new') {
+        throw new ValidationError('Old file path is required');
       }
-      if (!newPath && input.changeType !== "deleted") {
-        throw new ValidationError("New file path is required");
+      if (!newPath && input.changeType !== 'deleted') {
+        throw new ValidationError('New file path is required');
       }
 
-      if (!baseSha && input.changeType !== "new") {
-        console.info("[diff-data] provider api base sha missing; fetching refs", {
+      if (!baseSha && input.changeType !== 'new') {
+        console.info('[diff-data] provider api base sha missing; fetching refs', {
           repo: repoIdentityCacheKey(input.repo),
           number: input.number,
           provider: input.repo.provider,
@@ -68,27 +68,27 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
           provider.fetchPullRequestRefs(input.repo, input.number),
         );
         baseSha = refs.baseSha;
-        console.info("[diff-data] provider api resolved refs", {
+        console.info('[diff-data] provider api resolved refs', {
           repo: repoIdentityCacheKey(input.repo),
           number: input.number,
           baseSha,
           headSha: refs.headSha,
         });
       }
-      if (!baseSha && input.changeType !== "new") {
-        throw new ValidationError("Base SHA is required");
+      if (!baseSha && input.changeType !== 'new') {
+        throw new ValidationError('Base SHA is required');
       }
 
-      let oldContent = "";
-      let newContent = "";
+      let oldContent = '';
+      let newContent = '';
 
-      if (input.changeType !== "new") {
+      if (input.changeType !== 'new') {
         oldContent = yield* provideProviderDeps(
-          provider.fetchFileContent(input.repo, oldPath, baseSha ?? ""),
+          provider.fetchFileContent(input.repo, oldPath, baseSha ?? ''),
         );
       }
 
-      if (input.changeType !== "deleted") {
+      if (input.changeType !== 'deleted') {
         newContent = yield* provideProviderDeps(
           provider.fetchFileContent(input.repo, newPath, input.headSha),
         );

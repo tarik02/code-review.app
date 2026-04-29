@@ -1,30 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import ReactDOM from "react-dom";
-import { Bars3Icon } from "@heroicons/react/20/solid";
-import { ArchiveBoxXMarkIcon } from "@heroicons/react/24/outline";
+import { useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom';
+import { Bars3Icon } from '@heroicons/react/20/solid';
+import { ArchiveBoxXMarkIcon } from '@heroicons/react/24/outline';
 import {
   attachClosestEdge,
   extractClosestEdge,
   type Edge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import { getReorderDestinationIndex } from "@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+} from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
+import { getReorderDestinationIndex } from '@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index';
+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import {
   draggable,
   dropTargetForElements,
   monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { pointerOutsideOfPreview } from "@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview";
-import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { reorder } from "@atlaskit/pragmatic-drag-and-drop/reorder";
-import { cx } from "../../lib/cx";
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import { pointerOutsideOfPreview } from '@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview';
+import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview';
+import { reorder } from '@atlaskit/pragmatic-drag-and-drop/reorder';
+import { cx } from '../../lib/cx';
 import {
   toTrackedPullRequestOrderEntry,
   trackedPullRequestOrderEntryKey,
   type TrackedPullRequestListEntry,
-} from "../../lib/tracked-pull-request-order";
-import type { PullRequestSummary, RepoSummary } from "../../types/forge";
-import { PullRequestListCard, getRepoLabel } from "./pull-request-list-card";
+} from '../../lib/tracked-pull-request-order';
+import type { PullRequestSummary, RepoSummary } from '../../types/forge';
+import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
 
 type TrackedPullRequestListProps = {
   entries: TrackedPullRequestListEntry[];
@@ -36,7 +36,7 @@ type TrackedPullRequestListProps = {
   onReorder: (entries: TrackedPullRequestListEntry[]) => void | Promise<void>;
 };
 
-const trackedPullRequestListItemKey = Symbol("trackedPullRequestListItem");
+const trackedPullRequestListItemKey = Symbol('trackedPullRequestListItem');
 
 type TrackedPullRequestListItemData = {
   [trackedPullRequestListItemKey]: true;
@@ -68,8 +68,8 @@ function DropIndicator({ edge }: { edge: Edge }) {
   return (
     <div
       className={cx(
-        "pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full bg-ink-400",
-        edge === "top" ? "top-0" : "bottom-0",
+        'pointer-events-none absolute inset-x-2 z-10 h-0.5 rounded-full bg-ink-400',
+        edge === 'top' ? 'top-0' : 'bottom-0',
       )}
     />
   );
@@ -85,12 +85,12 @@ type TrackedPullRequestListItemProps = {
 };
 
 type DraggableState =
-  | { type: "idle" }
-  | { type: "preview"; container: HTMLElement; width: number }
-  | { type: "dragging" };
+  | { type: 'idle' }
+  | { type: 'preview'; container: HTMLElement; width: number }
+  | { type: 'dragging' };
 
-const idleDraggableState: DraggableState = { type: "idle" };
-const draggingDraggableState: DraggableState = { type: "dragging" };
+const idleDraggableState: DraggableState = { type: 'idle' };
+const draggingDraggableState: DraggableState = { type: 'dragging' };
 
 function TrackedPullRequestListItem({
   entry,
@@ -153,8 +153,8 @@ function TrackedPullRequestListItem({
       const isItemBeforeSource = index === sourceIndex - 1;
       const isItemAfterSource = index === sourceIndex + 1;
       const isDropIndicatorHidden =
-        (isItemBeforeSource && nextClosestEdge === "bottom") ||
-        (isItemAfterSource && nextClosestEdge === "top");
+        (isItemBeforeSource && nextClosestEdge === 'bottom') ||
+        (isItemAfterSource && nextClosestEdge === 'top');
 
       setClosestEdge(isDropIndicatorHidden ? null : nextClosestEdge);
     }
@@ -167,12 +167,12 @@ function TrackedPullRequestListItem({
           setCustomNativeDragPreview({
             nativeSetDragImage,
             getOffset: pointerOutsideOfPreview({
-              x: "12px",
-              y: "8px",
+              x: '12px',
+              y: '8px',
             }),
             render({ container }) {
               setDraggableState({
-                type: "preview",
+                type: 'preview',
                 container,
                 width: Math.max(element.clientWidth, 240),
               });
@@ -192,7 +192,7 @@ function TrackedPullRequestListItem({
           attachClosestEdge(data, {
             element,
             input,
-            allowedEdges: ["top", "bottom"],
+            allowedEdges: ['top', 'bottom'],
           }),
         onDragEnter: onChange,
         onDrag: onChange,
@@ -210,12 +210,12 @@ function TrackedPullRequestListItem({
         pullRequest={entry.pullRequest}
         selectedPrKey={selectedPrKey}
         repoLabel={getRepoLabel(entry.repo)}
-        isDimmed={draggableState.type === "dragging"}
+        isDimmed={draggableState.type === 'dragging'}
         onSelectPr={onSelectPr}
         leadingActions={dragHandle}
         trailingActions={removeAction}
       />
-      {draggableState.type === "preview"
+      {draggableState.type === 'preview'
         ? ReactDOM.createPortal(
             <div
               className="overflow-hidden rounded-md shadow-lg"
@@ -250,12 +250,12 @@ function TrackedPullRequestList({
   entries,
   repoErrors,
   selectedPrKey,
-  emptyState = "No tracked PRs or MRs yet. Add one with +.",
+  emptyState = 'No tracked PRs or MRs yet. Add one with +.',
   onSelectPr,
   onRemovePr,
   onReorder,
 }: TrackedPullRequestListProps) {
-  const [instanceId] = useState(() => Symbol("tracked-pull-request-list"));
+  const [instanceId] = useState(() => Symbol('tracked-pull-request-list'));
 
   useEffect(() => {
     return monitorForElements({
@@ -287,7 +287,7 @@ function TrackedPullRequestList({
           startIndex: source.data.index,
           indexOfTarget,
           closestEdgeOfTarget: extractClosestEdge(target.data),
-          axis: "vertical",
+          axis: 'vertical',
         });
 
         if (finishIndex === source.data.index) {

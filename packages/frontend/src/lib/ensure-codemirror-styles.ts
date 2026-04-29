@@ -1,4 +1,4 @@
-import { EditorView } from "@codemirror/view";
+import { EditorView } from '@codemirror/view';
 
 type CodeMirrorStyleRoot = Document | ShadowRoot;
 
@@ -6,7 +6,7 @@ const rootsWithCodeMirrorStyles = new WeakSet<CodeMirrorStyleRoot>();
 
 function isCodeMirrorStyleRoot(root: Node): root is CodeMirrorStyleRoot {
   return (
-    root instanceof Document || (typeof ShadowRoot !== "undefined" && root instanceof ShadowRoot)
+    root instanceof Document || (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
   );
 }
 
@@ -15,7 +15,7 @@ function getCodeMirrorStyleHost(root: CodeMirrorStyleRoot) {
 }
 
 function ensureCodeMirrorStyles(root?: Node | null) {
-  if (typeof document === "undefined") {
+  if (typeof document === 'undefined') {
     return;
   }
 
@@ -32,16 +32,16 @@ function ensureCodeMirrorStyles(root?: Node | null) {
 
   rootsWithCodeMirrorStyles.add(targetRoot);
 
-  const host = document.createElement("div");
-  host.setAttribute("aria-hidden", "true");
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
   host.style.cssText =
-    "position:fixed;left:-10000px;top:-10000px;width:0;height:0;overflow:hidden;pointer-events:none;";
+    'position:fixed;left:-10000px;top:-10000px;width:0;height:0;overflow:hidden;pointer-events:none;';
 
   styleHost.appendChild(host);
 
   const view = new EditorView({
     parent: host,
-    doc: "",
+    doc: '',
   });
 
   view.destroy();

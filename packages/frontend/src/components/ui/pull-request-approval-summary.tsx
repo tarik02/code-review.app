@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,10 +8,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "./alert-dialog";
-import { Button } from "./button";
-import { cx } from "../../lib/cx";
-import type { PullRequestApprovalActor, PullRequestApprovalState } from "../../types/forge";
+} from './alert-dialog';
+import { Button } from './button';
+import { cx } from '../../lib/cx';
+import type { PullRequestApprovalActor, PullRequestApprovalState } from '../../types/forge';
 
 type PullRequestApprovalSummaryProps = {
   approvalState: PullRequestApprovalState | null;
@@ -25,16 +25,22 @@ type PullRequestApprovalSummaryProps = {
 
 function getInitials(actor: PullRequestApprovalActor) {
   const source = actor.name.trim() || actor.login.trim();
-  return source.slice(0, 1).toUpperCase() || "?";
+  return source.slice(0, 1).toUpperCase() || '?';
 }
 
-function ApprovalAvatar({ actor, className }: { actor: PullRequestApprovalActor; className?: string }) {
+function ApprovalAvatar({
+  actor,
+  className,
+}: {
+  actor: PullRequestApprovalActor;
+  className?: string;
+}) {
   if (!actor.avatarUrl) {
     return (
       <div
         aria-label={actor.login}
         className={cx(
-          "flex size-7 shrink-0 items-center justify-center rounded-full border border-ink-200 bg-canvas text-[10px] font-semibold text-ink-700",
+          'flex size-7 shrink-0 items-center justify-center rounded-full border border-ink-200 bg-canvas text-[10px] font-semibold text-ink-700',
           className,
         )}
         title={actor.name || actor.login}
@@ -47,7 +53,7 @@ function ApprovalAvatar({ actor, className }: { actor: PullRequestApprovalActor;
   return (
     <img
       alt={actor.login}
-      className={cx("size-7 shrink-0 rounded-full border border-ink-200 object-cover", className)}
+      className={cx('size-7 shrink-0 rounded-full border border-ink-200 object-cover', className)}
       src={actor.avatarUrl}
       title={actor.name || actor.login}
     />
@@ -64,8 +70,14 @@ function PullRequestApprovalSummary({
   onRemoveApproval,
 }: PullRequestApprovalSummaryProps) {
   const [isDismissConfirmOpen, setIsDismissConfirmOpen] = useState(false);
-  const visibleApprovals = useMemo(() => approvalState?.approvedBy.slice(0, 4) ?? [], [approvalState]);
-  const overflowCount = Math.max((approvalState?.approvedBy.length ?? 0) - visibleApprovals.length, 0);
+  const visibleApprovals = useMemo(
+    () => approvalState?.approvedBy.slice(0, 4) ?? [],
+    [approvalState],
+  );
+  const overflowCount = Math.max(
+    (approvalState?.approvedBy.length ?? 0) - visibleApprovals.length,
+    0,
+  );
   const hasApprovalState = approvalState !== null;
   const approvalCount = approvalState?.approvedBy.length ?? 0;
   const approvalCountLabel = hasApprovalState ? `${approvalCount} approved` : null;
@@ -82,7 +94,9 @@ function PullRequestApprovalSummary({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-ink-900">Review approvals</span>
-              {isLoading ? <span className="text-xs text-ink-500">Loading approvals...</span> : null}
+              {isLoading ? (
+                <span className="text-xs text-ink-500">Loading approvals...</span>
+              ) : null}
               {!isLoading && approvalCountLabel ? (
                 <span className="text-xs text-ink-500">{approvalCountLabel}</span>
               ) : null}
@@ -98,7 +112,7 @@ function PullRequestApprovalSummary({
                     {visibleApprovals.map((actor, index) => (
                       <ApprovalAvatar
                         actor={actor}
-                        className={index === 0 ? "" : "-ml-2"}
+                        className={index === 0 ? '' : '-ml-2'}
                         key={`${actor.login}:${actor.approvedAt ?? index}`}
                       />
                     ))}
@@ -109,7 +123,7 @@ function PullRequestApprovalSummary({
                     ) : null}
                   </div>
                   <p className="min-w-0 text-xs text-ink-600">
-                    {approvalState.approvedBy.map((actor) => actor.login).join(", ")}
+                    {approvalState.approvedBy.map((actor) => actor.login).join(', ')}
                   </p>
                 </div>
               ) : (
@@ -121,19 +135,14 @@ function PullRequestApprovalSummary({
           {approvalState ? (
             <div className="flex shrink-0 items-center gap-2">
               {!approvalState.viewerApproved ? (
-                <Button
-                  disabled={isBusy}
-                  onClick={() => void onApprove()}
-                  size="sm"
-                  type="button"
-                >
-                  {isApprovePending ? "Approving..." : "Approve"}
+                <Button disabled={isBusy} onClick={() => void onApprove()} size="sm" type="button">
+                  {isApprovePending ? 'Approving...' : 'Approve'}
                 </Button>
               ) : (
                 <Button
                   disabled={isBusy}
                   onClick={() => {
-                    if (approvalState.viewerRemoveStrategy === "dismiss") {
+                    if (approvalState.viewerRemoveStrategy === 'dismiss') {
                       setIsDismissConfirmOpen(true);
                       return;
                     }
@@ -143,7 +152,7 @@ function PullRequestApprovalSummary({
                   type="button"
                   variant="outline"
                 >
-                  {isRemovePending ? "Removing..." : "Remove approval"}
+                  {isRemovePending ? 'Removing...' : 'Remove approval'}
                 </Button>
               )}
             </div>
@@ -158,8 +167,8 @@ function PullRequestApprovalSummary({
           <AlertDialogHeader className="px-5 pt-5">
             <AlertDialogTitle>Remove approval</AlertDialogTitle>
             <AlertDialogDescription>
-              Removing approval on GitHub dismisses your latest approved review and adds a
-              dismissal note to the pull request conversation.
+              Removing approval on GitHub dismisses your latest approved review and adds a dismissal
+              note to the pull request conversation.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="px-5 pb-5 pt-4">
@@ -174,7 +183,7 @@ function PullRequestApprovalSummary({
               }}
               type="button"
             >
-              {isRemovePending ? "Removing..." : "Remove approval"}
+              {isRemovePending ? 'Removing...' : 'Remove approval'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

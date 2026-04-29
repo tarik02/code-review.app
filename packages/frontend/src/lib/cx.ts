@@ -1,4 +1,4 @@
-import { twMerge } from "tailwind-merge";
+import { twMerge } from 'tailwind-merge';
 
 type CxValue =
   | string
@@ -16,11 +16,11 @@ function normalizeClassValue(value: CxValue): string[] {
     return [];
   }
 
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     return [value];
   }
 
-  if (typeof value === "number" || typeof value === "bigint") {
+  if (typeof value === 'number' || typeof value === 'bigint') {
     return [String(value)];
   }
 
@@ -28,7 +28,7 @@ function normalizeClassValue(value: CxValue): string[] {
     return value.flatMap(normalizeClassValue);
   }
 
-  if (typeof value === "function") {
+  if (typeof value === 'function') {
     return [];
   }
 
@@ -38,7 +38,7 @@ function normalizeClassValue(value: CxValue): string[] {
 }
 
 function cx(...values: CxValue[]) {
-  return twMerge(normalizeClassValue(values).join(" "));
+  return twMerge(normalizeClassValue(values).join(' '));
 }
 
 export { cx };

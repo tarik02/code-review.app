@@ -1,15 +1,15 @@
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { appearanceBackgroundQueryOptions } from "../../queries/forge";
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { appearanceBackgroundQueryOptions } from '../../queries/forge';
 import type {
   ForgeProviderKind,
   ProviderAccount,
   ProviderAuthStatus,
   ProviderAuthStatusKind,
-} from "../../types/forge";
-import { AppearanceBackground } from "./appearance-background";
-import { TopBar } from "./top-bar";
+} from '../../types/forge';
+import { AppearanceBackground } from './appearance-background';
+import { TopBar } from './top-bar';
 
 type AuthGateScreenProps = {
   status: ProviderAuthStatusKind;
@@ -30,15 +30,15 @@ type AuthGateScreenProps = {
 function normalizeHostInput(host: string) {
   return host
     .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "")
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '')
     .toLowerCase();
 }
 
 function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
   return (
-    (provider === "github" && host === "github.com") ||
-    (provider === "gitlab" && host === "gitlab.com")
+    (provider === 'github' && host === 'github.com') ||
+    (provider === 'gitlab' && host === 'gitlab.com')
   );
 }
 
@@ -52,12 +52,12 @@ function AuthGateScreen({
   onSignIn,
   onCheckAgain,
 }: AuthGateScreenProps) {
-  const [provider, setProvider] = useState<ForgeProviderKind>("github");
-  const [host, setHost] = useState("github.com");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
+  const [provider, setProvider] = useState<ForgeProviderKind>('github');
+  const [host, setHost] = useState('github.com');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
-  const defaultHost = provider === "github" ? "github.com" : "gitlab.com";
+  const defaultHost = provider === 'github' ? 'github.com' : 'gitlab.com';
 
   const normalizedHost = normalizeHostInput(host) || defaultHost;
   const canStartSignIn =
@@ -66,14 +66,14 @@ function AuthGateScreen({
     !isSigningIn;
   const title = isChecking ? (
     <>Checking provider auth...</>
-  ) : status === "not_authenticated" ? (
+  ) : status === 'not_authenticated' ? (
     <>Sign in to a provider</>
   ) : (
     <>Couldn't verify provider auth.</>
   );
   const description = isChecking ? (
     <>Hold on while we verify your provider sessions.</>
-  ) : status === "not_authenticated" ? (
+  ) : status === 'not_authenticated' ? (
     <>Connect GitHub or GitLab to load repositories and review threads.</>
   ) : (
     <>Try again after checking the provider configuration.</>
@@ -104,7 +104,7 @@ function AuthGateScreen({
                   onChange={(event) => {
                     const nextProvider = event.currentTarget.value as ForgeProviderKind;
                     setProvider(nextProvider);
-                    setHost(nextProvider === "github" ? "github.com" : "gitlab.com");
+                    setHost(nextProvider === 'github' ? 'github.com' : 'gitlab.com');
                   }}
                   value={provider}
                 >
@@ -125,8 +125,8 @@ function AuthGateScreen({
                 onChange={(event) => setClientId(event.currentTarget.value)}
                 placeholder={
                   hasDefaultClientId(provider, normalizedHost)
-                    ? "OAuth client ID (optional)"
-                    : "OAuth client ID"
+                    ? 'OAuth client ID (optional)'
+                    : 'OAuth client ID'
                 }
                 value={clientId}
               />
@@ -145,8 +145,8 @@ function AuthGateScreen({
                 type="button"
               >
                 {isSigningIn
-                  ? "Opening..."
-                  : `Sign in with ${provider === "github" ? "GitHub" : "GitLab"}`}
+                  ? 'Opening...'
+                  : `Sign in with ${provider === 'github' ? 'GitHub' : 'GitLab'}`}
               </button>
             </div>
 
@@ -162,10 +162,10 @@ function AuthGateScreen({
                         key={account.id}
                       >
                         <span className="min-w-0 truncate">
-                          {account.provider === "github" ? "GitHub" : "GitLab"} · {account.label}
+                          {account.provider === 'github' ? 'GitHub' : 'GitLab'} · {account.label}
                         </span>
                         <span className="shrink-0 text-white/55">
-                          {accountStatus?.status ?? "checking"}
+                          {accountStatus?.status ?? 'checking'}
                         </span>
                       </div>
                     );
@@ -183,7 +183,7 @@ function AuthGateScreen({
               type="button"
             >
               <ArrowPathIcon className="size-4" />
-              {isChecking ? "Checking..." : "Check again"}
+              {isChecking ? 'Checking...' : 'Check again'}
             </button>
           </div>
         </div>

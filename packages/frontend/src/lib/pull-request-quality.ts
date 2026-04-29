@@ -1,6 +1,6 @@
-import type { DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs";
-import type { PullRequestQualityFinding, PullRequestQualityReport } from "../types/forge";
-import { normalizePath } from "./review-threads";
+import type { DiffLineAnnotation, FileDiffMetadata } from '@pierre/diffs';
+import type { PullRequestQualityFinding, PullRequestQualityReport } from '../types/forge';
+import { normalizePath } from './review-threads';
 
 type QualityFindingAnnotation = {
   finding: PullRequestQualityFinding;
@@ -93,12 +93,12 @@ function buildPullRequestQualityView(
     const lineNumber = finding.line;
     const canInline =
       lineNumber !== null &&
-      finding.anchorState !== "unmapped" &&
+      finding.anchorState !== 'unmapped' &&
       fileContainsAdditionLine(fileDiff, lineNumber);
 
     if (canInline) {
       existing.inlineAnnotations.push({
-        side: "additions",
+        side: 'additions',
         lineNumber,
         metadata: { finding },
       });

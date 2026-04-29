@@ -1,15 +1,15 @@
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform";
-import { Effect } from "effect";
-import { ProviderError } from "../errors.ts";
-import { getValidAccessToken } from "./provider-auth.ts";
-import type { AuthTokenStore } from "./token-store.ts";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { Effect } from 'effect';
+import { ProviderError } from '../errors.ts';
+import { getValidAccessToken } from './provider-auth.ts';
+import type { AuthTokenStore } from './token-store.ts';
 
-type ApiRequestOptions = Omit<RequestInit, "headers"> & {
+type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
   headers?: Record<string, string>;
   accept?: string;
 };
 
-const API_REQUEST_TIMEOUT = "30 seconds";
+const API_REQUEST_TIMEOUT = '30 seconds';
 
 function toProviderError(error: unknown) {
   return error instanceof ProviderError
@@ -22,14 +22,14 @@ function readResponseBody(
 ): Effect.Effect<string, ProviderError> {
   return Effect.gen(function* () {
     const text = yield* response.text.pipe(Effect.mapError(toProviderError));
-    if (!text) return "";
+    if (!text) return '';
     try {
       const parsed = JSON.parse(text) as unknown;
       if (
         parsed &&
-        typeof parsed === "object" &&
-        "message" in parsed &&
-        typeof parsed.message === "string"
+        typeof parsed === 'object' &&
+        'message' in parsed &&
+        typeof parsed.message === 'string'
       ) {
         return parsed.message;
       }
@@ -51,26 +51,26 @@ function providerFetch(
 > {
   return Effect.gen(function* () {
     const token = yield* getValidAccessToken(accountId).pipe(Effect.mapError(toProviderError));
-    const method = options.method?.toUpperCase() ?? "GET";
+    const method = options.method?.toUpperCase() ?? 'GET';
     const baseRequest =
-      method === "POST"
+      method === 'POST'
         ? HttpClientRequest.post(url)
-        : method === "PUT"
+        : method === 'PUT'
           ? HttpClientRequest.put(url)
-          : method === "DELETE"
+          : method === 'DELETE'
             ? HttpClientRequest.del(url)
             : HttpClientRequest.get(url);
     let request = baseRequest.pipe(
-      HttpClientRequest.accept(options.accept ?? "application/json"),
+      HttpClientRequest.accept(options.accept ?? 'application/json'),
       HttpClientRequest.bearerToken(token),
-      HttpClientRequest.setHeader("User-Agent", "code-review.app"),
+      HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
     );
     for (const [key, value] of Object.entries(options.headers ?? {})) {
       request = request.pipe(HttpClientRequest.setHeader(key, value));
     }
-    if (typeof options.body === "string") {
+    if (typeof options.body === 'string') {
       const contentType =
-        options.headers?.["Content-Type"] ?? options.headers?.["content-type"] ?? "text/plain";
+        options.headers?.['Content-Type'] ?? options.headers?.['content-type'] ?? 'text/plain';
       request = request.pipe(HttpClientRequest.bodyText(options.body, contentType));
     }
 

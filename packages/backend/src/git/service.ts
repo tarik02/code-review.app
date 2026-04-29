@@ -1,13 +1,13 @@
-import { Command, FileSystem } from "@effect/platform";
-import { CommandExecutor } from "@effect/platform/CommandExecutor";
-import { Chunk, Duration, Effect, Fiber, Layer, Stream } from "effect";
-import { createHash } from "node:crypto";
-import path from "node:path";
-import type { DurationInput } from "effect/Duration";
-import { BackendConfig } from "../config.ts";
-import type { GitRemoteSpec } from "../providers/types.ts";
-import { repoIdentityCacheKey, type RepoIdentity } from "../repo-id.ts";
-import type { PrChangedFile, PrFileChangeType } from "@code-review-app/shared";
+import { Command, FileSystem } from '@effect/platform';
+import { CommandExecutor } from '@effect/platform/CommandExecutor';
+import { Chunk, Duration, Effect, Fiber, Layer, Stream } from 'effect';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
+import type { DurationInput } from 'effect/Duration';
+import { BackendConfig } from '../config.ts';
+import type { GitRemoteSpec } from '../providers/types.ts';
+import { repoIdentityCacheKey, type RepoIdentity } from '../repo-id.ts';
+import type { PrChangedFile, PrFileChangeType } from '@code-review-app/shared';
 import {
   GitAuthenticationFailed,
   GitAuthorizationFailed,
@@ -20,7 +20,7 @@ import {
   GitRepositoryNotFound,
   GitUnknownCommandError,
   type GitError,
-} from "./errors.ts";
+} from './errors.ts';
 
 type GitCommandInput = {
   args: string[];
@@ -87,15 +87,15 @@ type GitServiceShape = {
   ): Effect.Effect<string, GitError>;
 };
 
-class GitService extends Effect.Tag("GitService")<GitService, GitServiceShape>() {}
+class GitService extends Effect.Tag('GitService')<GitService, GitServiceShape>() {}
 
-const COMMAND_TIMEOUT = "45 seconds";
-const FULL_DIFF_CONTEXT_LINES = "1000000";
+const COMMAND_TIMEOUT = '45 seconds';
+const FULL_DIFF_CONTEXT_LINES = '1000000';
 const decoder = new TextDecoder();
 
 function gitCachePath(userDataPath: string, repo: RepoIdentity) {
-  const hash = createHash("sha256").update(repoIdentityCacheKey(repo)).digest("hex");
-  return path.join(userDataPath, "git-cache", `${hash}.git`);
+  const hash = createHash('sha256').update(repoIdentityCacheKey(repo)).digest('hex');
+  return path.join(userDataPath, 'git-cache', `${hash}.git`);
 }
 
 function shellSingleQuote(value: string) {
@@ -106,27 +106,27 @@ function askPassScriptContent(remoteSpec: GitRemoteSpec) {
   const askPass = remoteSpec.auth.askPass;
   if (!askPass) return null;
 
-  if (process.platform === "win32") {
+  if (process.platform === 'win32') {
     return [
-      "@echo off",
+      '@echo off',
       'echo %~1 | findstr /I "Username" >nul',
-      "if %errorlevel%==0 (",
+      'if %errorlevel%==0 (',
       `  echo ${askPass.username}`,
-      ") else (",
+      ') else (',
       `  echo ${askPass.password}`,
-      ")",
-      "",
-    ].join("\r\n");
+      ')',
+      '',
+    ].join('\r\n');
   }
 
   return [
-    "#!/bin/sh",
+    '#!/bin/sh',
     'case "$1" in',
     `  *Username*) printf '%s\\n' ${shellSingleQuote(askPass.username)} ;;`,
     `  *) printf '%s\\n' ${shellSingleQuote(askPass.password)} ;;`,
-    "esac",
-    "",
-  ].join("\n");
+    'esac',
+    '',
+  ].join('\n');
 }
 
 function authEnv(
@@ -135,9 +135,9 @@ function authEnv(
   remoteSpec: GitRemoteSpec,
 ) {
   const env: Record<string, string> = {
-    GIT_TERMINAL_PROMPT: "0",
-    GIT_CONFIG_GLOBAL: path.join(userDataPath, "git-cache", "empty-global-gitconfig"),
-    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_CONFIG_GLOBAL: path.join(userDataPath, 'git-cache', 'empty-global-gitconfig'),
+    GIT_CONFIG_NOSYSTEM: '1',
     GIT_CONFIG_COUNT: String(remoteSpec.auth.envConfig.length),
   };
 
@@ -151,18 +151,18 @@ function authEnv(
 
   return Effect.gen(function* () {
     const directory = yield* fileSystem.makeTempDirectoryScoped({
-      prefix: "code-review-app-git-askpass-",
+      prefix: 'code-review-app-git-askpass-',
     });
     const askPassPath = path.join(
       directory,
-      process.platform === "win32" ? "askpass.cmd" : "askpass.sh",
+      process.platform === 'win32' ? 'askpass.cmd' : 'askpass.sh',
     );
     yield* fileSystem
       .writeFileString(askPassPath, script)
       .pipe(
         Effect.mapError((error) => new GitUnknownCommandError({ args: [], originalError: error })),
       );
-    if (process.platform !== "win32") {
+    if (process.platform !== 'win32') {
       yield* fileSystem
         .chmod(askPassPath, 0o700)
         .pipe(
@@ -188,7 +188,7 @@ function redactValues(remoteSpec: GitRemoteSpec) {
 function sanitize(value: string, secrets: string[]) {
   return secrets.reduce((current, secret) => {
     if (!secret) return current;
-    return current.split(secret).join("[redacted]");
+    return current.split(secret).join('[redacted]');
   }, value);
 }
 
@@ -211,41 +211,41 @@ function isExecutableMissing(error: unknown) {
       : String((error as { message?: unknown })?.message ?? error);
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("enoent") ||
-    normalized.includes("not found") ||
-    normalized.includes("no such file or directory")
+    normalized.includes('enoent') ||
+    normalized.includes('not found') ||
+    normalized.includes('no such file or directory')
   );
 }
 
 function refFromArgs(args: string[], fallback?: string) {
-  const showArg = args.find((arg) => arg.includes(":"));
-  if (showArg) return showArg.slice(0, showArg.indexOf(":"));
+  const showArg = args.find((arg) => arg.includes(':'));
+  if (showArg) return showArg.slice(0, showArg.indexOf(':'));
   const refs = args.filter((arg) => /^[0-9a-f]{7,64}$/i.test(arg));
-  return fallback ?? refs.at(-1) ?? "";
+  return fallback ?? refs.at(-1) ?? '';
 }
 
 function pathFromShowArgs(args: string[], fallback?: string) {
-  const showArg = args.find((arg) => arg.includes(":"));
-  if (!showArg) return fallback ?? "";
-  return fallback ?? showArg.slice(showArg.indexOf(":") + 1);
+  const showArg = args.find((arg) => arg.includes(':'));
+  if (!showArg) return fallback ?? '';
+  return fallback ?? showArg.slice(showArg.indexOf(':') + 1);
 }
 
 function changeTypeFromGitStatus(status: string): PrFileChangeType {
-  if (status.startsWith("A")) return "new";
-  if (status.startsWith("D")) return "deleted";
-  if (status.startsWith("R")) return "rename-changed";
-  return "change";
+  if (status.startsWith('A')) return 'new';
+  if (status.startsWith('D')) return 'deleted';
+  if (status.startsWith('R')) return 'rename-changed';
+  return 'change';
 }
 
 function parseGitNameStatus(stdout: string): PrChangedFile[] {
-  const fields = stdout.split("\0").filter(Boolean);
+  const fields = stdout.split('\0').filter(Boolean);
   const files: PrChangedFile[] = [];
   for (let index = 0; index < fields.length; ) {
-    const status = fields[index++] ?? "";
+    const status = fields[index++] ?? '';
     const changeType = changeTypeFromGitStatus(status);
-    if (status.startsWith("R") || status.startsWith("C")) {
-      const oldPath = fields[index++]?.trim() ?? "";
-      const newPath = fields[index++]?.trim() ?? "";
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const oldPath = fields[index++]?.trim() ?? '';
+      const newPath = fields[index++]?.trim() ?? '';
       if (newPath || oldPath) {
         files.push({
           path: newPath || oldPath,
@@ -257,14 +257,14 @@ function parseGitNameStatus(stdout: string): PrChangedFile[] {
       continue;
     }
 
-    const path = fields[index++]?.trim() ?? "";
+    const path = fields[index++]?.trim() ?? '';
     if (!path) {
       continue;
     }
     files.push({
       path,
-      oldPath: changeType === "new" ? "" : path,
-      newPath: changeType === "deleted" ? "" : path,
+      oldPath: changeType === 'new' ? '' : path,
+      newPath: changeType === 'deleted' ? '' : path,
       changeType,
     });
   }
@@ -280,51 +280,51 @@ function classifyGitResult(
   const stderr = sanitize(output.stderr, input.redactValues);
   const stdout = sanitize(output.stdout, input.redactValues);
   const combined = `${stderr}\n${stdout}`.toLowerCase();
-  const remoteUrl = input.remoteUrl ?? "";
+  const remoteUrl = input.remoteUrl ?? '';
 
   if (
-    combined.includes("authentication failed") ||
-    combined.includes("could not read username") ||
-    combined.includes("terminal prompts disabled") ||
-    combined.includes("invalid username or password") ||
-    combined.includes("http basic: access denied") ||
+    combined.includes('authentication failed') ||
+    combined.includes('could not read username') ||
+    combined.includes('terminal prompts disabled') ||
+    combined.includes('invalid username or password') ||
+    combined.includes('http basic: access denied') ||
     /\b401\b/.test(combined)
   ) {
     return new GitAuthenticationFailed({ stderr, remoteUrl });
   }
 
   if (
-    combined.includes("the requested url returned error: 403") ||
-    combined.includes("403 forbidden") ||
-    combined.includes("not permitted") ||
-    (combined.includes("permission denied") && combined.includes("http"))
+    combined.includes('the requested url returned error: 403') ||
+    combined.includes('403 forbidden') ||
+    combined.includes('not permitted') ||
+    (combined.includes('permission denied') && combined.includes('http'))
   ) {
     return new GitAuthorizationFailed({ stderr, remoteUrl });
   }
 
   if (
-    combined.includes("repository not found") ||
-    combined.includes("project not found") ||
-    combined.includes("the requested url returned error: 404") ||
+    combined.includes('repository not found') ||
+    combined.includes('project not found') ||
+    combined.includes('the requested url returned error: 404') ||
     /repository .* not found/.test(combined)
   ) {
     return new GitRepositoryNotFound({ stderr, remoteUrl });
   }
 
   if (
-    combined.includes("filtering not recognized by server") ||
-    combined.includes("filter capability not advertised") ||
-    combined.includes("filter-spec")
+    combined.includes('filtering not recognized by server') ||
+    combined.includes('filter capability not advertised') ||
+    combined.includes('filter-spec')
   ) {
     return new GitPartialCloneUnsupported({ stderr, remoteUrl });
   }
 
   if (
-    input.args.includes("show") &&
-    (combined.includes("exists on disk, but not in") ||
-      combined.includes("does not exist in") ||
-      combined.includes("fatal: path") ||
-      combined.includes("invalid object name"))
+    input.args.includes('show') &&
+    (combined.includes('exists on disk, but not in') ||
+      combined.includes('does not exist in') ||
+      combined.includes('fatal: path') ||
+      combined.includes('invalid object name'))
   ) {
     return new GitPathNotFound({
       ref: refFromArgs(input.args, input.ref),
@@ -335,9 +335,9 @@ function classifyGitResult(
 
   if (
     combined.includes("couldn't find remote ref") ||
-    combined.includes("fatal: bad object") ||
-    combined.includes("fatal: not a valid object name") ||
-    combined.includes("unknown revision or path not in the working tree")
+    combined.includes('fatal: bad object') ||
+    combined.includes('fatal: not a valid object name') ||
+    combined.includes('unknown revision or path not in the working tree')
   ) {
     return new GitRefNotFound({
       ref: refFromArgs(input.args, input.ref),
@@ -370,7 +370,7 @@ function normalizeCommandError(input: GitCommandInput, error: unknown): GitError
   }
 
   if (isExecutableMissing(error)) {
-    return new GitExecutableNotFound({ command: "git", cause: error });
+    return new GitExecutableNotFound({ command: 'git', cause: error });
   }
 
   return new GitUnknownCommandError({ args: input.args, originalError: error });
@@ -403,9 +403,9 @@ const makeGitService = Effect.gen(function* () {
           ...input.env,
           ...inputAuthEnv,
         };
-        let gitCommand = Command.make("git", ...input.args).pipe(
-          Command.stdout("pipe"),
-          Command.stderr("pipe"),
+        let gitCommand = Command.make('git', ...input.args).pipe(
+          Command.stdout('pipe'),
+          Command.stderr('pipe'),
         );
         if (input.cwd) {
           gitCommand = gitCommand.pipe(Command.workingDirectory(input.cwd));
@@ -436,20 +436,20 @@ const makeGitService = Effect.gen(function* () {
           new GitCommandTimedOut({
             args: input.args,
             timeoutMs: Duration.toMillis(input.timeout),
-            stderr: "",
+            stderr: '',
           }),
       }),
       Effect.mapError((error) => normalizeCommandError(input, error)),
     );
   };
 
-  const ensureRepo: GitServiceShape["ensureRepo"] = Effect.fn("GitService.ensureRepo")(
+  const ensureRepo: GitServiceShape['ensureRepo'] = Effect.fn('GitService.ensureRepo')(
     function* (repo, remoteSpec) {
       const cachePath = gitCachePath(config.userDataPath, repo);
       const exists = yield* pathExists(fileSystem, cachePath);
       yield* ensureDirectory(fileSystem, path.dirname(cachePath));
 
-      console.info("[git] ensure repo", {
+      console.info('[git] ensure repo', {
         repo: repoIdentityCacheKey(repo),
         cachePath,
         exists,
@@ -457,38 +457,38 @@ const makeGitService = Effect.gen(function* () {
 
       if (!exists) {
         yield* runGit({
-          args: ["init", "--bare", cachePath],
+          args: ['init', '--bare', cachePath],
           timeout: COMMAND_TIMEOUT,
           redactValues: redactValues(remoteSpec),
           remoteUrl: remoteSpec.url,
         });
         yield* runGit({
-          args: ["-C", cachePath, "remote", "add", "origin", remoteSpec.url],
+          args: ['-C', cachePath, 'remote', 'add', 'origin', remoteSpec.url],
           timeout: COMMAND_TIMEOUT,
           redactValues: redactValues(remoteSpec),
           remoteUrl: remoteSpec.url,
         });
       } else {
         const currentUrl = yield* runGit({
-          args: ["-C", cachePath, "config", "--get", "remote.origin.url"],
+          args: ['-C', cachePath, 'config', '--get', 'remote.origin.url'],
           timeout: COMMAND_TIMEOUT,
           redactValues: redactValues(remoteSpec),
           remoteUrl: remoteSpec.url,
         }).pipe(
           Effect.map((output) => output.stdout.trim()),
-          Effect.catchTag("GitCommandFailed", () => Effect.succeed("")),
+          Effect.catchTag('GitCommandFailed', () => Effect.succeed('')),
         );
 
         if (!currentUrl) {
           yield* runGit({
-            args: ["-C", cachePath, "remote", "add", "origin", remoteSpec.url],
+            args: ['-C', cachePath, 'remote', 'add', 'origin', remoteSpec.url],
             timeout: COMMAND_TIMEOUT,
             redactValues: redactValues(remoteSpec),
             remoteUrl: remoteSpec.url,
           });
         } else if (currentUrl !== remoteSpec.url) {
           yield* runGit({
-            args: ["-C", cachePath, "remote", "set-url", "origin", remoteSpec.url],
+            args: ['-C', cachePath, 'remote', 'set-url', 'origin', remoteSpec.url],
             timeout: COMMAND_TIMEOUT,
             redactValues: redactValues(remoteSpec),
             remoteUrl: remoteSpec.url,
@@ -497,13 +497,13 @@ const makeGitService = Effect.gen(function* () {
       }
 
       yield* runGit({
-        args: ["-C", cachePath, "config", "remote.origin.promisor", "true"],
+        args: ['-C', cachePath, 'config', 'remote.origin.promisor', 'true'],
         timeout: COMMAND_TIMEOUT,
         redactValues: redactValues(remoteSpec),
         remoteUrl: remoteSpec.url,
       });
       yield* runGit({
-        args: ["-C", cachePath, "config", "remote.origin.partialclonefilter", "blob:none"],
+        args: ['-C', cachePath, 'config', 'remote.origin.partialclonefilter', 'blob:none'],
         timeout: COMMAND_TIMEOUT,
         redactValues: redactValues(remoteSpec),
         remoteUrl: remoteSpec.url,
@@ -513,9 +513,9 @@ const makeGitService = Effect.gen(function* () {
     },
   );
 
-  const fetchRefs: GitServiceShape["fetchRefs"] = Effect.fn("GitService.fetchRefs")(
+  const fetchRefs: GitServiceShape['fetchRefs'] = Effect.fn('GitService.fetchRefs')(
     function* (handle, baseSha, headSha, remoteSpec) {
-      console.info("[git] fetch refs start", {
+      console.info('[git] fetch refs start', {
         repo: repoIdentityCacheKey(handle.repo),
         cachePath: handle.path,
         baseSha,
@@ -523,12 +523,12 @@ const makeGitService = Effect.gen(function* () {
       });
       yield* runGit({
         args: [
-          "-C",
+          '-C',
           handle.path,
-          "fetch",
-          "--filter=blob:none",
-          "--no-tags",
-          "origin",
+          'fetch',
+          '--filter=blob:none',
+          '--no-tags',
+          'origin',
           baseSha,
           headSha,
         ],
@@ -538,7 +538,7 @@ const makeGitService = Effect.gen(function* () {
         remoteUrl: remoteSpec.url,
         ref: headSha,
       });
-      console.info("[git] fetch refs finished", {
+      console.info('[git] fetch refs finished', {
         repo: repoIdentityCacheKey(handle.repo),
         cachePath: handle.path,
         baseSha,
@@ -547,10 +547,10 @@ const makeGitService = Effect.gen(function* () {
     },
   );
 
-  const mergeBase: GitServiceShape["mergeBase"] = Effect.fn("GitService.mergeBase")(
+  const mergeBase: GitServiceShape['mergeBase'] = Effect.fn('GitService.mergeBase')(
     function* (handle, baseSha, headSha, remoteSpec) {
       const output = yield* runGit({
-        args: ["-C", handle.path, "merge-base", baseSha, headSha],
+        args: ['-C', handle.path, 'merge-base', baseSha, headSha],
         auth: remoteSpec,
         timeout: COMMAND_TIMEOUT,
         redactValues: redactValues(remoteSpec),
@@ -560,17 +560,17 @@ const makeGitService = Effect.gen(function* () {
       const resolved = output.stdout.trim();
       if (!resolved) {
         return yield* Effect.fail(
-          new GitRefNotFound({ ref: baseSha, stderr: "merge-base returned no output" }),
+          new GitRefNotFound({ ref: baseSha, stderr: 'merge-base returned no output' }),
         );
       }
       return resolved;
     },
   );
 
-  const diffNameOnly: GitServiceShape["diffNameOnly"] = Effect.fn("GitService.diffNameOnly")(
+  const diffNameOnly: GitServiceShape['diffNameOnly'] = Effect.fn('GitService.diffNameOnly')(
     function* (handle, baseSha, headSha, remoteSpec) {
       const output = yield* runGit({
-        args: ["-C", handle.path, "diff", "--name-only", "-z", "--find-renames", baseSha, headSha],
+        args: ['-C', handle.path, 'diff', '--name-only', '-z', '--find-renames', baseSha, headSha],
         auth: remoteSpec,
         timeout: COMMAND_TIMEOUT,
         redactValues: redactValues(remoteSpec),
@@ -578,23 +578,23 @@ const makeGitService = Effect.gen(function* () {
         ref: headSha,
       });
       return output.stdout
-        .split("\0")
+        .split('\0')
         .map((file) => file.trim())
         .filter(Boolean);
     },
   );
 
-  const diffPatch: GitServiceShape["diffPatch"] = Effect.fn("GitService.diffPatch")(
+  const diffPatch: GitServiceShape['diffPatch'] = Effect.fn('GitService.diffPatch')(
     function* (handle, baseSha, headSha, remoteSpec, contextLines) {
       const context = String(contextLines ?? FULL_DIFF_CONTEXT_LINES);
       const output = yield* runGit({
         args: [
-          "-C",
+          '-C',
           handle.path,
-          "diff",
-          "--no-color",
-          "--no-ext-diff",
-          "--find-renames",
+          'diff',
+          '--no-color',
+          '--no-ext-diff',
+          '--find-renames',
           `--unified=${context}`,
           `--inter-hunk-context=${context}`,
           baseSha,
@@ -610,16 +610,16 @@ const makeGitService = Effect.gen(function* () {
     },
   );
 
-  const diffNameStatus: GitServiceShape["diffNameStatus"] = Effect.fn("GitService.diffNameStatus")(
+  const diffNameStatus: GitServiceShape['diffNameStatus'] = Effect.fn('GitService.diffNameStatus')(
     function* (handle, baseSha, headSha, remoteSpec) {
       const output = yield* runGit({
         args: [
-          "-C",
+          '-C',
           handle.path,
-          "diff",
-          "--name-status",
-          "-z",
-          "--find-renames",
+          'diff',
+          '--name-status',
+          '-z',
+          '--find-renames',
           baseSha,
           headSha,
         ],
@@ -633,10 +633,10 @@ const makeGitService = Effect.gen(function* () {
     },
   );
 
-  const showFile: GitServiceShape["showFile"] = Effect.fn("GitService.showFile")(
+  const showFile: GitServiceShape['showFile'] = Effect.fn('GitService.showFile')(
     function* (handle, ref, filePath, remoteSpec) {
       const output = yield* runGit({
-        args: ["-C", handle.path, "show", `${ref}:${filePath}`],
+        args: ['-C', handle.path, 'show', `${ref}:${filePath}`],
         auth: remoteSpec,
         timeout: COMMAND_TIMEOUT,
         redactValues: redactValues(remoteSpec),

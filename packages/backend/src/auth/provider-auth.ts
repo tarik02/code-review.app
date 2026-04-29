@@ -1,14 +1,14 @@
-import { HttpClient, HttpClientRequest } from "@effect/platform";
-import { normalizeHost } from "../repo-id.ts";
-import { Effect } from "effect";
-import { AuthTokenStore } from "./token-store.ts";
+import { HttpClient, HttpClientRequest } from '@effect/platform';
+import { normalizeHost } from '../repo-id.ts';
+import { Effect } from 'effect';
+import { AuthTokenStore } from './token-store.ts';
 import {
   DEFAULT_GITHUB_CLIENT_ID,
   DEFAULT_GITLAB_CLIENT_ID,
   DEFAULT_OAUTH_REDIRECT_URI,
-} from "./constants.ts";
-import type { ForgeProviderKind } from "@code-review-app/shared";
-import type { StoredAuthToken } from "./token-store.ts";
+} from './constants.ts';
+import type { ForgeProviderKind } from '@code-review-app/shared';
+import type { StoredAuthToken } from './token-store.ts';
 
 type OAuthProviderConfig = {
   clientId: string;
@@ -43,8 +43,8 @@ type OAuthDeviceCodeResponse = {
 };
 
 type DeviceOAuthPollResult =
-  | { status: "pending"; intervalMs: number }
-  | { status: "complete"; token: StoredAuthToken };
+  | { status: 'pending'; intervalMs: number }
+  | { status: 'complete'; token: StoredAuthToken };
 
 const REFRESH_SKEW_MS = 60_000;
 
@@ -57,19 +57,19 @@ function redirectUri() {
 }
 
 function defaultClientId(provider: ForgeProviderKind, host: string) {
-  if (provider === "github" && host === "github.com") {
+  if (provider === 'github' && host === 'github.com') {
     return DEFAULT_GITHUB_CLIENT_ID;
   }
 
-  if (provider === "gitlab" && host === "gitlab.com") {
+  if (provider === 'gitlab' && host === 'gitlab.com') {
     return DEFAULT_GITLAB_CLIENT_ID;
   }
 
-  return "";
+  return '';
 }
 
 function defaultClientSecret() {
-  return "";
+  return '';
 }
 
 function resolveClientId(provider: ForgeProviderKind, host: string, clientId: string) {
@@ -79,43 +79,43 @@ function resolveClientId(provider: ForgeProviderKind, host: string, clientId: st
     return resolvedClientId;
   }
 
-  if (provider === "github" && normalizedHost === "github.com") {
-    throw new Error("Client ID is required. Set GITHUB_CLIENT_ID or enter one.");
+  if (provider === 'github' && normalizedHost === 'github.com') {
+    throw new Error('Client ID is required. Set GITHUB_CLIENT_ID or enter one.');
   }
 
-  if (provider === "gitlab" && normalizedHost === "gitlab.com") {
-    throw new Error("Client ID is required. Set GITLAB_CLIENT_ID or enter one.");
+  if (provider === 'gitlab' && normalizedHost === 'gitlab.com') {
+    throw new Error('Client ID is required. Set GITLAB_CLIENT_ID or enter one.');
   }
 
-  throw new Error("Client ID is required for custom provider instances.");
+  throw new Error('Client ID is required for custom provider instances.');
 }
 
 function oauthConfig(
   provider: ForgeProviderKind,
   host: string,
   clientId: string,
-  clientSecret = "",
+  clientSecret = '',
 ): OAuthProviderConfig {
   const normalizedHost = normalizeHost(host);
   const resolvedClientId = resolveClientId(provider, normalizedHost, clientId);
   const resolvedClientSecret = clientSecret.trim() || defaultClientSecret();
-  if (provider === "github") {
+  if (provider === 'github') {
     return {
       clientId: resolvedClientId,
       clientSecret: resolvedClientSecret || null,
       redirectUri: redirectUri(),
-      scopes: ["repo", "read:org"],
+      scopes: ['repo', 'read:org'],
       authorizeUrl:
-        normalizedHost === "github.com"
-          ? "https://github.com/login/oauth/authorize"
+        normalizedHost === 'github.com'
+          ? 'https://github.com/login/oauth/authorize'
           : `https://${normalizedHost}/login/oauth/authorize`,
       tokenUrl:
-        normalizedHost === "github.com"
-          ? "https://github.com/login/oauth/access_token"
+        normalizedHost === 'github.com'
+          ? 'https://github.com/login/oauth/access_token'
           : `https://${normalizedHost}/login/oauth/access_token`,
       deviceCodeUrl:
-        normalizedHost === "github.com"
-          ? "https://github.com/login/device/code"
+        normalizedHost === 'github.com'
+          ? 'https://github.com/login/device/code'
           : `https://${normalizedHost}/login/device/code`,
     };
   }
@@ -124,7 +124,7 @@ function oauthConfig(
     clientId: resolvedClientId,
     clientSecret: resolvedClientSecret || null,
     redirectUri: redirectUri(),
-    scopes: ["api"],
+    scopes: ['api'],
     authorizeUrl: `https://${normalizedHost}/oauth/authorize`,
     tokenUrl: `https://${normalizedHost}/oauth/token`,
     deviceCodeUrl: null,
@@ -140,7 +140,7 @@ function parseScopes(value: string | undefined, fallback: string[]) {
 }
 
 function expiresAt(expiresIn: number | undefined) {
-  return typeof expiresIn === "number" && Number.isFinite(expiresIn)
+  return typeof expiresIn === 'number' && Number.isFinite(expiresIn)
     ? Date.now() + expiresIn * 1000
     : null;
 }
@@ -158,7 +158,7 @@ function tokenFromPayload(
     provider,
     host: normalizeHost(host),
     clientId,
-    accessToken: payload.access_token ?? "",
+    accessToken: payload.access_token ?? '',
     refreshToken: payload.refresh_token ?? null,
     expiresAt: expiresAt(payload.expires_in),
     scopes: parseScopes(payload.scope, scopes),
@@ -173,9 +173,9 @@ function oauthFormJson<A>(
 ): Effect.Effect<A, Error, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const request = HttpClientRequest.post(url).pipe(
-      HttpClientRequest.accept("application/json"),
-      HttpClientRequest.setHeader("User-Agent", "code-review.app"),
-      HttpClientRequest.bodyText(body.toString(), "application/x-www-form-urlencoded"),
+      HttpClientRequest.accept('application/json'),
+      HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+      HttpClientRequest.bodyText(body.toString(), 'application/x-www-form-urlencoded'),
     );
     const client = yield* HttpClient.HttpClient;
     const response = yield* client.execute(request).pipe(Effect.mapError(toError));
@@ -208,18 +208,18 @@ function requestDeviceOAuthCode(
       catch: toError,
     });
     if (!config.deviceCodeUrl) {
-      return yield* Effect.fail(new Error("Device authorization is only supported for GitHub."));
+      return yield* Effect.fail(new Error('Device authorization is only supported for GitHub.'));
     }
 
     const body = new URLSearchParams({
       client_id: config.clientId,
-      scope: config.scopes.join(" "),
+      scope: config.scopes.join(' '),
     });
     const payload = yield* oauthFormJson<OAuthDeviceCodeResponse>(config.deviceCodeUrl, body);
     if (payload.error || !payload.device_code || !payload.user_code || !payload.verification_uri) {
       return yield* Effect.fail(
         new Error(
-          payload.error_description ?? payload.error ?? "OAuth device authorization failed.",
+          payload.error_description ?? payload.error ?? 'OAuth device authorization failed.',
         ),
       );
     }
@@ -253,18 +253,18 @@ function exchangeOAuthCode(
     const body = new URLSearchParams({
       client_id: config.clientId,
       code,
-      grant_type: "authorization_code",
+      grant_type: 'authorization_code',
       redirect_uri: config.redirectUri,
       code_verifier: codeVerifier,
     });
     if (config.clientSecret) {
-      body.set("client_secret", config.clientSecret);
+      body.set('client_secret', config.clientSecret);
     }
 
     const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
     if (payload.error || !payload.access_token) {
       return yield* Effect.fail(
-        new Error(payload.error_description ?? payload.error ?? "OAuth token exchange failed."),
+        new Error(payload.error_description ?? payload.error ?? 'OAuth token exchange failed.'),
       );
     }
 
@@ -297,26 +297,26 @@ function exchangeDeviceOAuthCode(
     const body = new URLSearchParams({
       client_id: config.clientId,
       device_code: deviceCode,
-      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
     });
     const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
 
-    if (payload.error === "authorization_pending") {
+    if (payload.error === 'authorization_pending') {
       return {
-        status: "pending",
+        status: 'pending',
         intervalMs: Math.max(1, payload.interval ?? 5) * 1000,
       } satisfies DeviceOAuthPollResult;
     }
-    if (payload.error === "slow_down") {
+    if (payload.error === 'slow_down') {
       return {
-        status: "pending",
+        status: 'pending',
         intervalMs: Math.max(1, payload.interval ?? 10) * 1000,
       } satisfies DeviceOAuthPollResult;
     }
     if (payload.error || !payload.access_token) {
       return yield* Effect.fail(
         new Error(
-          payload.error_description ?? payload.error ?? "OAuth device token exchange failed.",
+          payload.error_description ?? payload.error ?? 'OAuth device token exchange failed.',
         ),
       );
     }
@@ -330,7 +330,7 @@ function exchangeDeviceOAuthCode(
       payload,
     );
     yield* tokenStore.save(token);
-    return { status: "complete", token } satisfies DeviceOAuthPollResult;
+    return { status: 'complete', token } satisfies DeviceOAuthPollResult;
   });
 }
 
@@ -346,7 +346,7 @@ function refreshStoredAuthToken(
     });
     const body = new URLSearchParams({
       client_id: config.clientId,
-      grant_type: "refresh_token",
+      grant_type: 'refresh_token',
       redirect_uri: config.redirectUri,
       refresh_token: token.refreshToken,
     });
@@ -355,7 +355,7 @@ function refreshStoredAuthToken(
     if (payload.error || !payload.access_token) {
       yield* tokenStore.delete(token.id);
       return yield* Effect.fail(
-        new Error(payload.error_description ?? payload.error ?? "OAuth token refresh failed."),
+        new Error(payload.error_description ?? payload.error ?? 'OAuth token refresh failed.'),
       );
     }
 
@@ -378,7 +378,7 @@ function getValidAccessToken(
     const tokenStore = yield* AuthTokenStore;
     const token = yield* tokenStore.get(accountId);
     if (!token) {
-      return yield* Effect.fail(new Error("Provider account is not signed in."));
+      return yield* Effect.fail(new Error('Provider account is not signed in.'));
     }
 
     if (token.expiresAt !== null && token.expiresAt <= Date.now() + REFRESH_SKEW_MS) {

@@ -1,5 +1,5 @@
-import type { ForgeProviderKind } from "../../../types/forge";
-import type { SuggestionRange, SuggestionSourceLine } from "./types";
+import type { ForgeProviderKind } from '../../../types/forge';
+import type { SuggestionRange, SuggestionSourceLine } from './types';
 
 function parseGitlabSuggestionRange(
   language: string,
@@ -35,8 +35,8 @@ function getSuggestionLanguageForRange(
   anchorLine: number,
   range: SuggestionRange,
 ) {
-  if (provider !== "gitlab") {
-    return "suggestion";
+  if (provider !== 'gitlab') {
+    return 'suggestion';
   }
 
   return `suggestion:-${Math.max(anchorLine - range.from, 0)}+${Math.max(

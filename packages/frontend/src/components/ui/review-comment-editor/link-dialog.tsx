@@ -1,4 +1,4 @@
-"use no memo";
+'use no memo';
 
 import {
   autoUpdate,
@@ -8,7 +8,7 @@ import {
   shift,
   useFloating,
   type VirtualElement,
-} from "@floating-ui/react";
+} from '@floating-ui/react';
 import {
   activeEditor$,
   cancelLinkEdit$,
@@ -18,10 +18,10 @@ import {
   removeLink$,
   switchFromPreviewToLinkEdit$,
   updateLink$,
-} from "@mdxeditor/editor";
-import { useCellValues, usePublisher } from "@mdxeditor/gurx";
-import { Check, Copy, Link2Off } from "lucide-react";
-import { $createTextNode, $getNodeByKey, type LexicalNode } from "lexical";
+} from '@mdxeditor/editor';
+import { useCellValues, usePublisher } from '@mdxeditor/gurx';
+import { Check, Copy, Link2Off } from 'lucide-react';
+import { $createTextNode, $getNodeByKey, type LexicalNode } from 'lexical';
 import {
   useEffect,
   useId,
@@ -30,9 +30,9 @@ import {
   useState,
   type CSSProperties,
   type FocusEvent,
-} from "react";
-import { Button } from "../button";
-import { Input } from "../input";
+} from 'react';
+import { Button } from '../button';
+import { Input } from '../input';
 
 type LinkLikeNode = LexicalNode & {
   setTitle: (title: string) => void;
@@ -42,8 +42,8 @@ type LinkLikeNode = LexicalNode & {
 function isLinkLikeNode(node: LexicalNode | null | undefined): node is LinkLikeNode {
   return (
     Boolean(node) &&
-    typeof (node as Partial<LinkLikeNode>).setURL === "function" &&
-    typeof (node as Partial<LinkLikeNode>).setTitle === "function"
+    typeof (node as Partial<LinkLikeNode>).setURL === 'function' &&
+    typeof (node as Partial<LinkLikeNode>).setTitle === 'function'
   );
 }
 
@@ -59,27 +59,27 @@ function ReviewCommentLinkDialog() {
   const removeLink = usePublisher(removeLink$);
   const cancelLinkEdit = usePublisher(cancelLinkEdit$);
   const switchFromPreviewToLinkEdit = usePublisher(switchFromPreviewToLinkEdit$);
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const inputId = useId();
   const formRef = useRef<HTMLFormElement | null>(null);
   const blurCommitFrameRef = useRef<number | null>(null);
-  const previousStateKeyRef = useRef("");
+  const previousStateKeyRef = useRef('');
   const middleware = useMemo(() => [offset(6), flip({ padding: 12 }), shift({ padding: 12 })], []);
   const { floatingStyles, refs, update } = useFloating({
     middleware,
-    placement: "bottom-start",
-    strategy: "absolute",
+    placement: 'bottom-start',
+    strategy: 'absolute',
     whileElementsMounted: autoUpdate,
   });
 
   const stateKey =
-    linkDialogState.type === "inactive"
-      ? "inactive"
+    linkDialogState.type === 'inactive'
+      ? 'inactive'
       : `${linkDialogState.type}:${linkDialogState.linkNodeKey}:${linkDialogState.url}`;
 
   useEffect(() => {
-    if (linkDialogState.type === "inactive") {
+    if (linkDialogState.type === 'inactive') {
       return;
     }
 
@@ -103,7 +103,7 @@ function ReviewCommentLinkDialog() {
   }, [editorRootElementRef, linkDialogState, refs, update]);
 
   useEffect(() => {
-    if (linkDialogState.type === "inactive") {
+    if (linkDialogState.type === 'inactive') {
       previousStateKeyRef.current = stateKey;
       return;
     }
@@ -122,12 +122,12 @@ function ReviewCommentLinkDialog() {
       });
     };
 
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
 
     return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
     };
   }, [activeEditor, publishWindowChange]);
 
@@ -139,16 +139,16 @@ function ReviewCommentLinkDialog() {
     };
   }, []);
 
-  if (linkDialogState.type === "inactive") {
+  if (linkDialogState.type === 'inactive') {
     return <></>;
   }
 
-  const title = linkDialogState.title ?? "";
+  const title = linkDialogState.title ?? '';
   const canCopy = url.trim().length > 0;
-  const canUnlink = (linkDialogState.linkNodeKey ?? "").length > 0;
+  const canUnlink = (linkDialogState.linkNodeKey ?? '').length > 0;
   const popoverStyle = {
     ...floatingStyles,
-    pointerEvents: "auto",
+    pointerEvents: 'auto',
     zIndex: 2147483647,
   } satisfies CSSProperties;
 
@@ -170,13 +170,13 @@ function ReviewCommentLinkDialog() {
   }
 
   function closeLinkDialog() {
-    publishLinkDialogState({ type: "inactive" });
+    publishLinkDialogState({ type: 'inactive' });
   }
 
   function commitUrl(nextUrl = url, options: { closeDialog?: boolean } = {}) {
     const trimmedUrl = nextUrl.trim();
 
-    if (!trimmedUrl && linkDialogState.type === "edit") {
+    if (!trimmedUrl && linkDialogState.type === 'edit') {
       cancelLinkEdit();
       return;
     }
@@ -254,7 +254,7 @@ function ReviewCommentLinkDialog() {
 
     activeEditor?.update(
       () => {
-        const node = $getNodeByKey(linkDialogState.linkNodeKey ?? "");
+        const node = $getNodeByKey(linkDialogState.linkNodeKey ?? '');
 
         if (node) {
           node.replace($createTextNode(node.getTextContent()));
@@ -290,12 +290,12 @@ function ReviewCommentLinkDialog() {
         onReset={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (linkDialogState.type === "edit") {
+          if (linkDialogState.type === 'edit') {
             cancelLinkEdit();
           }
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && linkDialogState.type === "edit") {
+          if (event.key === 'Escape' && linkDialogState.type === 'edit') {
             event.stopPropagation();
             cancelLinkEdit();
           }
@@ -312,16 +312,16 @@ function ReviewCommentLinkDialog() {
           onBlur={scheduleBlurCommit}
           onChange={(event) => setUrl(event.target.value)}
           onFocus={() => {
-            if (linkDialogState.type === "preview") {
+            if (linkDialogState.type === 'preview') {
               switchFromPreviewToLinkEdit();
             }
           }}
         />
         <Button
-          aria-label={copied ? "Copied link target" : "Copy link target"}
+          aria-label={copied ? 'Copied link target' : 'Copy link target'}
           disabled={!canCopy}
           size="icon-sm"
-          title={copied ? "Copied" : "Copy link target"}
+          title={copied ? 'Copied' : 'Copy link target'}
           type="button"
           variant="ghost"
           onClick={handleCopy}

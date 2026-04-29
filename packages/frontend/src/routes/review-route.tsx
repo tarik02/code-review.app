@@ -1,24 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getErrorMessage } from "../hooks/use-forge-queries";
-import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from "../queries/forge";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '../hooks/use-forge-queries';
+import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from '../queries/forge';
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
   FieldTitle,
-} from "../components/ui/field";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import type { ReviewEditorMode } from "../types/forge";
+} from '../components/ui/field';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
+import type { ReviewEditorMode } from '../types/forge';
 
 const reviewEditorModeOptions: { value: ReviewEditorMode; label: string }[] = [
-  { value: "rich-text", label: "Rich text" },
-  { value: "source", label: "Source" },
+  { value: 'rich-text', label: 'Rich text' },
+  { value: 'source', label: 'Source' },
 ];
 
 const reviewEditorModeDescriptions: Record<ReviewEditorMode, string> = {
-  "rich-text": "Start with formatting controls visible.",
-  source: "Start in plain Markdown source.",
+  'rich-text': 'Start with formatting controls visible.',
+  source: 'Start in plain Markdown source.',
 };
 
 function ReviewRoute() {
@@ -37,7 +37,7 @@ function ReviewRoute() {
       queryClient.setQueryData(reviewEditorSettingsQueryKey, settings);
     },
   });
-  const defaultMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const defaultMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
   const error = reviewEditorModeMutation.error ?? reviewEditorSettingsQuery.error;
   const isSaving = reviewEditorModeMutation.isPending;
 
@@ -71,16 +71,16 @@ function ReviewRoute() {
               const id = `review-editor-${option.value}`;
               return (
                 <FieldLabel
-                  className={isSaving ? "cursor-not-allowed opacity-60" : ""}
+                  className={isSaving ? 'cursor-not-allowed opacity-60' : ''}
                   htmlFor={id}
                   key={option.value}
                 >
                   <Field
                     className={[
-                      "min-h-20",
-                      isSaving ? "" : "hover:bg-canvasDark",
-                      isSelected ? "border-ink-900 dark:border-ink-200" : "",
-                    ].join(" ")}
+                      'min-h-20',
+                      isSaving ? '' : 'hover:bg-canvasDark',
+                      isSelected ? 'border-ink-900 dark:border-ink-200' : '',
+                    ].join(' ')}
                     orientation="horizontal"
                   >
                     <FieldContent>

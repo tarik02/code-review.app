@@ -1,8 +1,8 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 
 const MAX_PATCH_VIEWER_SESSIONS = 20;
 
-type HunkExpansionDirection = "up" | "down" | "both";
+type HunkExpansionDirection = 'up' | 'down' | 'both';
 
 type HunkExpansionRegion = {
   fromStart: number;
@@ -48,7 +48,7 @@ function createPatchViewerSessionState(): PatchViewerSessionState {
 const emptyPatchViewerSessionState = createPatchViewerSessionState();
 
 function getPatchViewerSessionState(
-  state: Pick<PatchViewerStore, "sessionsByKey">,
+  state: Pick<PatchViewerStore, 'sessionsByKey'>,
   sessionKey: string | null,
 ) {
   if (!sessionKey) {
@@ -65,14 +65,14 @@ function touchSessionKey(sessionOrder: string[], sessionKey: string) {
   ];
 }
 
-function pruneSessions(sessionsByKey: PatchViewerStore["sessionsByKey"], sessionOrder: string[]) {
+function pruneSessions(sessionsByKey: PatchViewerStore['sessionsByKey'], sessionOrder: string[]) {
   if (sessionOrder.length <= MAX_PATCH_VIEWER_SESSIONS) {
     return { sessionsByKey, sessionOrder };
   }
 
   const nextSessionOrder = sessionOrder.slice(-MAX_PATCH_VIEWER_SESSIONS);
   const retainedSessionKeys = new Set(nextSessionOrder);
-  const nextSessionsByKey: PatchViewerStore["sessionsByKey"] = {};
+  const nextSessionsByKey: PatchViewerStore['sessionsByKey'] = {};
 
   for (const sessionKey of retainedSessionKeys) {
     nextSessionsByKey[sessionKey] = sessionsByKey[sessionKey];
@@ -162,11 +162,11 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
         };
         const nextRegion = { ...currentRegion };
 
-        if (direction === "up" || direction === "both") {
+        if (direction === 'up' || direction === 'both') {
           nextRegion.fromStart += lineCount;
         }
 
-        if (direction === "down" || direction === "both") {
+        if (direction === 'down' || direction === 'both') {
           nextRegion.fromEnd += lineCount;
         }
 

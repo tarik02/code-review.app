@@ -1,8 +1,8 @@
-import type { HttpClient } from "@effect/platform";
-import type { Effect } from "effect";
-import type { ProviderError } from "../errors.ts";
-import type { RepoIdentity } from "../repo-id.ts";
-import type { AuthTokenStore } from "../auth/token-store.ts";
+import type { HttpClient } from '@effect/platform';
+import type { Effect } from 'effect';
+import type { ProviderError } from '../errors.ts';
+import type { RepoIdentity } from '../repo-id.ts';
+import type { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
@@ -12,7 +12,7 @@ import type {
   PrChangedFile,
   RepoSummary,
   ReviewThread,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type ReviewThreadInput = {
   body: string;
@@ -23,7 +23,7 @@ type ReviewThreadInput = {
   side: string | null;
   startLine: number | null;
   startSide: string | null;
-  subjectType: "file" | "line" | "global";
+  subjectType: 'file' | 'line' | 'global';
 };
 
 type PullRequestRefs = {
@@ -141,7 +141,7 @@ type ForgeProvider = {
     threadId: string,
     commentId: string,
     body: string,
-    subjectType: ReviewThreadInput["subjectType"],
+    subjectType: ReviewThreadInput['subjectType'],
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };
 

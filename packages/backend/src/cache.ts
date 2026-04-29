@@ -1,22 +1,22 @@
-import { and, asc, desc, eq, gt, inArray, sql, type SQL } from "drizzle-orm";
-import { Effect, Layer } from "effect";
-import { DatabaseService, type Database, type DatabaseTransaction } from "./db/client.ts";
+import { and, asc, desc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm';
+import { Effect, Layer } from 'effect';
+import { DatabaseService, type Database, type DatabaseTransaction } from './db/client.ts';
 import {
   prChangedFilesCache,
   prPatchCache,
   providerProfiles,
   pullRequests,
   repos,
-} from "./db/schema.ts";
-import { CacheError } from "./errors.ts";
-import { createRepoIdentityFromParts } from "./repo-id.ts";
+} from './db/schema.ts';
+import { CacheError } from './errors.ts';
+import { createRepoIdentityFromParts } from './repo-id.ts';
 import type {
   ForgeProviderKind,
   ProviderProfile,
   RepoIdentity,
   PullRequestSummary,
   RepoSummary,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;
@@ -68,7 +68,7 @@ type CacheServiceShape = {
   writeProviderProfile(profile: ProviderProfile): Effect.Effect<void, CacheError>;
 };
 
-class CacheService extends Effect.Tag("CacheService")<CacheService, CacheServiceShape>() {}
+class CacheService extends Effect.Tag('CacheService')<CacheService, CacheServiceShape>() {}
 
 type PullRequestCacheRow = typeof pullRequests.$inferSelect;
 
@@ -85,7 +85,7 @@ function rowToRepo(
   profileAccountId: string | null,
   profileLogin: string | null,
 ): RepoSummary {
-  const providerAccountId = profileAccountId ?? "";
+  const providerAccountId = profileAccountId ?? '';
   return {
     providerId: row.providerId,
     repoKey: row.repoKey,
@@ -109,7 +109,7 @@ function repoIdentityFromSummary(repo: RepoSummary) {
 }
 
 function repoNameFromKey(repoKey: string) {
-  const segments = repoKey.split("/").filter(Boolean);
+  const segments = repoKey.split('/').filter(Boolean);
   return segments.at(-1) ?? repoKey;
 }
 
@@ -137,7 +137,7 @@ async function getProviderProfileRowId(
     .limit(1);
 
   if (!row) {
-    throw new Error("Provider profile was not saved in the cache.");
+    throw new Error('Provider profile was not saved in the cache.');
   }
 
   return row.id;
@@ -215,8 +215,8 @@ function pullRequestCacheUpdateValues(timestamp: number) {
 const makeCacheService = Effect.gen(function* () {
   const database = yield* DatabaseService;
 
-  const listSavedRepos: CacheServiceShape["listSavedRepos"] = Effect.fn(
-    "CacheService.listSavedRepos",
+  const listSavedRepos: CacheServiceShape['listSavedRepos'] = Effect.fn(
+    'CacheService.listSavedRepos',
   )(() =>
     database.query(async (db) => {
       const rows = await db
@@ -234,8 +234,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const listTrackedRepos: CacheServiceShape["listTrackedRepos"] = Effect.fn(
-    "CacheService.listTrackedRepos",
+  const listTrackedRepos: CacheServiceShape['listTrackedRepos'] = Effect.fn(
+    'CacheService.listTrackedRepos',
   )(() =>
     database.query(async (db) => {
       const trackedRepoRows = db
@@ -243,7 +243,7 @@ const makeCacheService = Effect.gen(function* () {
         .from(pullRequests)
         .where(eq(pullRequests.isTracked, true))
         .groupBy(pullRequests.repoRowId)
-        .as("tracked_repo_rows");
+        .as('tracked_repo_rows');
 
       const rows = await db
         .select({
@@ -260,7 +260,7 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const saveRepo: CacheServiceShape["saveRepo"] = Effect.fn("CacheService.saveRepo")((repo) =>
+  const saveRepo: CacheServiceShape['saveRepo'] = Effect.fn('CacheService.saveRepo')((repo) =>
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();
       const identity = repoIdentityFromSummary(repo);
@@ -304,7 +304,7 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const ensureRepo: CacheServiceShape["ensureRepo"] = Effect.fn("CacheService.ensureRepo")((repo) =>
+  const ensureRepo: CacheServiceShape['ensureRepo'] = Effect.fn('CacheService.ensureRepo')((repo) =>
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();
       const identity = createRepoIdentityFromParts(repo.providerId, repo.repoKey);
@@ -338,8 +338,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const readCachedPullRequests: CacheServiceShape["readCachedPullRequests"] = Effect.fn(
-    "CacheService.readCachedPullRequests",
+  const readCachedPullRequests: CacheServiceShape['readCachedPullRequests'] = Effect.fn(
+    'CacheService.readCachedPullRequests',
   )((repo) =>
     database.query(async (db) => {
       const repoRowId = await findRepoRowId(db, repo);
@@ -355,8 +355,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const writePullRequestsCache: CacheServiceShape["writePullRequestsCache"] = Effect.fn(
-    "CacheService.writePullRequestsCache",
+  const writePullRequestsCache: CacheServiceShape['writePullRequestsCache'] = Effect.fn(
+    'CacheService.writePullRequestsCache',
   )((repo, summaries) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -387,8 +387,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const readTrackedPullRequests: CacheServiceShape["readTrackedPullRequests"] = Effect.fn(
-    "CacheService.readTrackedPullRequests",
+  const readTrackedPullRequests: CacheServiceShape['readTrackedPullRequests'] = Effect.fn(
+    'CacheService.readTrackedPullRequests',
   )((repo) =>
     database.query(async (db) => {
       const repoRowId = await findRepoRowId(db, repo);
@@ -404,8 +404,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const trackPullRequest: CacheServiceShape["trackPullRequest"] = Effect.fn(
-    "CacheService.trackPullRequest",
+  const trackPullRequest: CacheServiceShape['trackPullRequest'] = Effect.fn(
+    'CacheService.trackPullRequest',
   )((repo, pullRequest) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -432,8 +432,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const removeTrackedPullRequest: CacheServiceShape["removeTrackedPullRequest"] = Effect.fn(
-    "CacheService.removeTrackedPullRequest",
+  const removeTrackedPullRequest: CacheServiceShape['removeTrackedPullRequest'] = Effect.fn(
+    'CacheService.removeTrackedPullRequest',
   )((repo, number) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -446,8 +446,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const getCachedPatch: CacheServiceShape["getCachedPatch"] = Effect.fn(
-    "CacheService.getCachedPatch",
+  const getCachedPatch: CacheServiceShape['getCachedPatch'] = Effect.fn(
+    'CacheService.getCachedPatch',
   )((repo, number, headSha) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -482,7 +482,7 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const storePatch: CacheServiceShape["storePatch"] = Effect.fn("CacheService.storePatch")(
+  const storePatch: CacheServiceShape['storePatch'] = Effect.fn('CacheService.storePatch')(
     (repo, number, headSha, patch) =>
       database.transaction(async (tx) => {
         const repoRowId = await findRepoRowId(tx, repo);
@@ -511,8 +511,8 @@ const makeCacheService = Effect.gen(function* () {
       }),
   );
 
-  const getCachedChangedFiles: CacheServiceShape["getCachedChangedFiles"] = Effect.fn(
-    "CacheService.getCachedChangedFiles",
+  const getCachedChangedFiles: CacheServiceShape['getCachedChangedFiles'] = Effect.fn(
+    'CacheService.getCachedChangedFiles',
   )((repo, number, headSha) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -547,8 +547,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const storeChangedFiles: CacheServiceShape["storeChangedFiles"] = Effect.fn(
-    "CacheService.storeChangedFiles",
+  const storeChangedFiles: CacheServiceShape['storeChangedFiles'] = Effect.fn(
+    'CacheService.storeChangedFiles',
   )((repo, number, headSha, files) =>
     database.transaction(async (tx) => {
       const repoRowId = await findRepoRowId(tx, repo);
@@ -582,8 +582,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const updateRepoAccessTimestamp: CacheServiceShape["updateRepoAccessTimestamp"] = Effect.fn(
-    "CacheService.updateRepoAccessTimestamp",
+  const updateRepoAccessTimestamp: CacheServiceShape['updateRepoAccessTimestamp'] = Effect.fn(
+    'CacheService.updateRepoAccessTimestamp',
   )((repo) =>
     database.transaction(async (tx) => {
       await tx
@@ -593,8 +593,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const readProviderAccountVisibility: CacheServiceShape["readProviderAccountVisibility"] =
-    Effect.fn("CacheService.readProviderAccountVisibility")((accountIds) =>
+  const readProviderAccountVisibility: CacheServiceShape['readProviderAccountVisibility'] =
+    Effect.fn('CacheService.readProviderAccountVisibility')((accountIds) =>
       accountIds.length === 0
         ? Effect.succeed({})
         : database.query(async (db) => {
@@ -610,8 +610,8 @@ const makeCacheService = Effect.gen(function* () {
           }),
     );
 
-  const setProviderAccountVisibility: CacheServiceShape["setProviderAccountVisibility"] = Effect.fn(
-    "CacheService.setProviderAccountVisibility",
+  const setProviderAccountVisibility: CacheServiceShape['setProviderAccountVisibility'] = Effect.fn(
+    'CacheService.setProviderAccountVisibility',
   )((accountIds, enabledAccountIds) =>
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();
@@ -637,8 +637,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const readProviderProfile: CacheServiceShape["readProviderProfile"] = Effect.fn(
-    "CacheService.readProviderProfile",
+  const readProviderProfile: CacheServiceShape['readProviderProfile'] = Effect.fn(
+    'CacheService.readProviderProfile',
   )((accountId) =>
     database.query(async (db) => {
       const [row] = await db
@@ -654,8 +654,8 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const writeProviderProfile: CacheServiceShape["writeProviderProfile"] = Effect.fn(
-    "CacheService.writeProviderProfile",
+  const writeProviderProfile: CacheServiceShape['writeProviderProfile'] = Effect.fn(
+    'CacheService.writeProviderProfile',
   )((profile) =>
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();

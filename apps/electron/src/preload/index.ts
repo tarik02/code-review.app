@@ -1,4 +1,4 @@
-import { ipcRenderer } from "electron";
-import { trpcElectronPreload } from "@hadeeb/trpc-worker/adapter";
+import { ipcRenderer } from 'electron';
+import { trpcElectronPreload } from '@hadeeb/trpc-worker/adapter';
 
 trpcElectronPreload({ ipcRenderer });

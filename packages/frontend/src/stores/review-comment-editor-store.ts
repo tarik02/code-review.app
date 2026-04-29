@@ -1,20 +1,20 @@
-import { create } from "zustand";
-import { normalizePath } from "../lib/review-threads";
-import type { PrFileChangeType, ReviewCommentSide } from "../types/forge";
+import { create } from 'zustand';
+import { normalizePath } from '../lib/review-threads';
+import type { PrFileChangeType, ReviewCommentSide } from '../types/forge';
 
 type DraftReviewCommentTarget =
   | {
-      type: "global";
+      type: 'global';
     }
   | {
-      type: "file";
+      type: 'file';
       path: string;
       oldPath: string;
       newPath: string;
       changeType: PrFileChangeType;
     }
   | {
-      type: "line";
+      type: 'line';
       path: string;
       line: number;
       side: ReviewCommentSide;
@@ -22,7 +22,7 @@ type DraftReviewCommentTarget =
       startSide: ReviewCommentSide | null;
     };
 
-type ReviewCommentEditorKind = "new" | "reply" | "edit";
+type ReviewCommentEditorKind = 'new' | 'reply' | 'edit';
 
 type ReviewCommentEditorCursorPosition = {
   anchorOffset: number;
@@ -78,17 +78,17 @@ const emptyReviewCommentEditorSessionState: ReviewCommentEditorSessionState = {
 };
 
 function getNewEditorId(target: DraftReviewCommentTarget) {
-  if (target.type === "global") {
-    return "new:global";
+  if (target.type === 'global') {
+    return 'new:global';
   }
 
   const normalizedPath = normalizePath(target.path);
 
-  if (target.type === "file") {
+  if (target.type === 'file') {
     return `new:file:${normalizedPath}`;
   }
 
-  return `new:line:${normalizedPath}:${target.side}:${target.line}:${target.startSide ?? ""}:${target.startLine ?? ""}`;
+  return `new:line:${normalizedPath}:${target.side}:${target.line}:${target.startSide ?? ''}:${target.startLine ?? ''}`;
 }
 
 function getReplyEditorId(threadId: string) {
@@ -100,7 +100,7 @@ function getEditEditorId(commentId: string) {
 }
 
 function getReviewCommentEditorSessionState(
-  state: Pick<ReviewCommentEditorStore, "sessionsByKey">,
+  state: Pick<ReviewCommentEditorStore, 'sessionsByKey'>,
   sessionKey: string | null,
 ) {
   if (!sessionKey) {
@@ -111,7 +111,7 @@ function getReviewCommentEditorSessionState(
 }
 
 function getSessionEditors(
-  state: Pick<ReviewCommentEditorStore, "sessionsByKey">,
+  state: Pick<ReviewCommentEditorStore, 'sessionsByKey'>,
   sessionKey: string | null,
 ) {
   const session = getReviewCommentEditorSessionState(state, sessionKey);
@@ -132,7 +132,7 @@ function touchEditorId(editorOrder: string[], editorId: string) {
 }
 
 function pruneSessions(
-  sessionsByKey: ReviewCommentEditorStore["sessionsByKey"],
+  sessionsByKey: ReviewCommentEditorStore['sessionsByKey'],
   sessionOrder: string[],
 ) {
   if (sessionOrder.length <= MAX_REVIEW_COMMENT_EDITOR_SESSIONS) {
@@ -141,7 +141,7 @@ function pruneSessions(
 
   const nextSessionOrder = sessionOrder.slice(-MAX_REVIEW_COMMENT_EDITOR_SESSIONS);
   const retainedSessionKeys = new Set(nextSessionOrder);
-  const nextSessionsByKey: ReviewCommentEditorStore["sessionsByKey"] = {};
+  const nextSessionsByKey: ReviewCommentEditorStore['sessionsByKey'] = {};
 
   for (const sessionKey of retainedSessionKeys) {
     nextSessionsByKey[sessionKey] = sessionsByKey[sessionKey];
@@ -242,9 +242,9 @@ const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => 
             ...session.editorsById,
             [id]: currentEditor ?? {
               id,
-              kind: "new",
-              body: "",
-              error: "",
+              kind: 'new',
+              body: '',
+              error: '',
               isSubmitting: false,
               target,
             },
@@ -265,9 +265,9 @@ const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => 
             ...session.editorsById,
             [id]: currentEditor ?? {
               id,
-              kind: "reply",
-              body: "",
-              error: "",
+              kind: 'reply',
+              body: '',
+              error: '',
               isSubmitting: false,
               threadId,
             },
@@ -288,9 +288,9 @@ const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => 
             ...session.editorsById,
             [id]: currentEditor ?? {
               id,
-              kind: "edit",
+              kind: 'edit',
               body: initialBody,
-              error: "",
+              error: '',
               isSubmitting: false,
               threadId,
               commentId,

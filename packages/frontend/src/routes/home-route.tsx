@@ -1,6 +1,6 @@
-import { Navigate } from "@tanstack/react-router";
-import { useAuthSession } from "../app/auth-session";
-import { MainApp } from "../app/main-app";
+import { Navigate } from '@tanstack/react-router';
+import { useAuthSession } from '../app/auth-session';
+import { MainApp } from '../app/main-app';
 
 function HomeRoute() {
   const { providerStatuses, isCheckingAuth, hasReadyProvider } = useAuthSession();

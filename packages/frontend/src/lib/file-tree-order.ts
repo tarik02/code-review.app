@@ -1,4 +1,4 @@
-import { prepareFileTreeInput } from "@pierre/trees";
+import { prepareFileTreeInput } from '@pierre/trees';
 
 function sortByFileTreePathOrder<T>(items: readonly T[], getPath: (item: T) => string): T[] {
   const decoratedItems = items.map((item, index) => ({

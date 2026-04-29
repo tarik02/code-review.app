@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useWorkerPool } from "@pierre/diffs/react";
-import type { GitStatusEntry } from "@pierre/trees";
-import { RepoSidebar, type SidebarPullRequestView } from "../components/ui/repo-sidebar";
-import { TrackPullRequestModal } from "../components/ui/track-pull-request-modal";
-import { PatchViewerMain } from "../components/ui/patch-viewer-main";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useWorkerPool } from '@pierre/diffs/react';
+import type { GitStatusEntry } from '@pierre/trees';
+import { RepoSidebar, type SidebarPullRequestView } from '../components/ui/repo-sidebar';
+import { TrackPullRequestModal } from '../components/ui/track-pull-request-modal';
+import { PatchViewerMain } from '../components/ui/patch-viewer-main';
 import {
   getErrorMessage,
   useAccountOverviewPullRequests,
@@ -13,22 +13,22 @@ import {
   useSavedRepos,
   useSelectedPullRequestData,
   useTrackedPullRequests,
-} from "../hooks/use-forge-queries";
-import { useTheme } from "../hooks/use-theme";
-import { useAuthSession } from "./auth-session";
-import { sortByFileTreePathOrder } from "../lib/file-tree-order";
-import { normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl } from "../lib/forge-links";
-import { buildReviewThreadsByFile, getGlobalReviewThreads } from "../lib/review-threads";
-import { buildPullRequestQualityView } from "../lib/pull-request-quality";
+} from '../hooks/use-forge-queries';
+import { useTheme } from '../hooks/use-theme';
+import { useAuthSession } from './auth-session';
+import { sortByFileTreePathOrder } from '../lib/file-tree-order';
+import { normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl } from '../lib/forge-links';
+import { buildReviewThreadsByFile, getGlobalReviewThreads } from '../lib/review-threads';
+import { buildPullRequestQualityView } from '../lib/pull-request-quality';
 import {
   mergeTrackedVisibleSubsetIntoOrder,
   prependTrackedPullRequestOrderEntry,
   removeTrackedPullRequestOrderEntry,
   sortTrackedPullRequestEntries,
   toTrackedPullRequestOrderEntry,
-} from "../lib/tracked-pull-request-order";
-import { repoIdentity, repoIdentityKey, sameRepoIdentity } from "../lib/repo-identity";
-import { trpc } from "../lib/trpc";
+} from '../lib/tracked-pull-request-order';
+import { repoIdentity, repoIdentityKey, sameRepoIdentity } from '../lib/repo-identity';
+import { trpc } from '../lib/trpc';
 import {
   accountVisibilityQueryOptions,
   diffDataSettingsQueryOptions,
@@ -38,7 +38,7 @@ import {
   setTrackedPullRequestOrder,
   trackedReposQueryOptions,
   trackedPullRequestOrderQueryOptions,
-} from "../queries/forge";
+} from '../queries/forge';
 import type {
   DiffDataMode,
   FileStatsEntry,
@@ -48,15 +48,15 @@ import type {
   RepoSummary,
   SelectedPullRequest,
   TrackedPullRequestOrderEntry,
-} from "../types/forge";
+} from '../types/forge';
 
-type PullRequestPickerMode = "repo-then-pr" | "pr-only" | "track-repo-then-pr";
-type PullRequestPickerStep = "repo" | "pull-request";
+type PullRequestPickerMode = 'repo-then-pr' | 'pr-only' | 'track-repo-then-pr';
+type PullRequestPickerStep = 'repo' | 'pull-request';
 
 function MainApp() {
   const { providerAccounts, providerStatuses } = useAuthSession();
-  const activeRouteSearch = useSearch({ from: "/" });
-  const navigate = useNavigate({ from: "/" });
+  const activeRouteSearch = useSearch({ from: '/' });
+  const navigate = useNavigate({ from: '/' });
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
   const workerPool = useWorkerPool();
@@ -74,15 +74,15 @@ function MainApp() {
   const activePullRequestNumber = activeRouteSearch.pr ?? null;
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const [pickerMode, setPickerMode] = useState<PullRequestPickerMode>("repo-then-pr");
-  const [pickerStep, setPickerStep] = useState<PullRequestPickerStep>("repo");
+  const [pickerMode, setPickerMode] = useState<PullRequestPickerMode>('repo-then-pr');
+  const [pickerStep, setPickerStep] = useState<PullRequestPickerStep>('repo');
   const [pickerRepo, setPickerRepo] = useState<RepoSummary | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSavingRepo, setIsSavingRepo] = useState(false);
   const [isTrackingPullRequest, setIsTrackingPullRequest] = useState(false);
   const [deepLinkMessage, setDeepLinkMessage] = useState<string | null>(null);
-  const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>("overview");
+  const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>('overview');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshedReposRef = useRef<Set<string>>(new Set());
 
@@ -98,7 +98,7 @@ function MainApp() {
   const trackedRepos = useQuery(trackedReposQueryOptions()).data ?? [];
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
   const readyProviderAccounts = useMemo(
-    () => providerAccounts.filter((account) => providerStatuses[account.id]?.status === "ready"),
+    () => providerAccounts.filter((account) => providerStatuses[account.id]?.status === 'ready'),
     [providerAccounts, providerStatuses],
   );
   const readyAccountIds = useMemo(
@@ -131,7 +131,7 @@ function MainApp() {
     () => trackedRepos.filter((repo) => readyAccountIds.has(repo.providerAccountId)),
     [readyAccountIds, trackedRepos],
   );
-  const canLoadPickerRepos = isPickerOpen && pickerStep === "repo";
+  const canLoadPickerRepos = isPickerOpen && pickerStep === 'repo';
   const { availableRepos, availableReposError, isLoadingRepos } = useRepoPickerReposForAccounts(
     pickerAccounts,
     enabledAccountIds,
@@ -146,14 +146,14 @@ function MainApp() {
   } = useAccountOverviewPullRequests(
     readyProviderAccounts,
     enabledAccountIds,
-    sidebarView === "overview",
+    sidebarView === 'overview',
   );
   const readyOverviewAccountCount = readyProviderAccounts.length;
   const overviewStatusMessage = useMemo(() => {
-    if (sidebarView !== "overview") return null;
-    if (readyOverviewAccountCount === 0) return "No ready provider accounts.";
+    if (sidebarView !== 'overview') return null;
+    if (readyOverviewAccountCount === 0) return 'No ready provider accounts.';
     if (overviewAccountIds.length === 0) {
-      return "Provider accounts are hidden in settings.";
+      return 'Provider accounts are hidden in settings.';
     }
     return null;
   }, [overviewAccountIds.length, readyOverviewAccountCount, sidebarView]);
@@ -213,7 +213,7 @@ function MainApp() {
     : null;
   const isSelectedRepoHidden =
     Boolean(selectedPr && selectedRepo) &&
-    !enabledAccountIdSet.has(selectedRepo?.providerAccountId ?? "");
+    !enabledAccountIdSet.has(selectedRepo?.providerAccountId ?? '');
   const sidebarRepos = useMemo(() => {
     const visibleSavedRepos = savedRepos.filter((repo) =>
       enabledAccountIdSet.has(repo.providerAccountId),
@@ -271,7 +271,7 @@ function MainApp() {
     ? `${repoIdentityKey(selectedPr)}#${selectedPr.number}@${selectedPr.headSha}`
     : null;
   const diffDataSettingsQuery = useQuery(diffDataSettingsQueryOptions());
-  const diffDataMode: DiffDataMode = diffDataSettingsQuery.data?.mode ?? "provider-api";
+  const diffDataMode: DiffDataMode = diffDataSettingsQuery.data?.mode ?? 'provider-api';
   const {
     approvalState,
     approvalStateError,
@@ -303,7 +303,7 @@ function MainApp() {
       fileDiffs: selectedPatch
         ? sortByFileTreePathOrder(selectedPatch.fileDiffs, (fd) => fd.name)
         : [],
-      parseError: "",
+      parseError: '',
     }),
     [selectedPatch],
   );
@@ -329,11 +329,11 @@ function MainApp() {
   const pickerDirectLinkPullRequestQuery = useQuery({
     queryKey: [
       ...forgeKeys.trackedPullRequests(),
-      "direct-link",
-      pickerDirectLinkAccount?.id ?? "__idle__",
-      parsedPickerDirectLink?.host ?? "__idle__",
-      parsedPickerDirectLink?.repoPath ?? "__idle__",
-      parsedPickerDirectLink?.number ?? "__idle__",
+      'direct-link',
+      pickerDirectLinkAccount?.id ?? '__idle__',
+      parsedPickerDirectLink?.host ?? '__idle__',
+      parsedPickerDirectLink?.repoPath ?? '__idle__',
+      parsedPickerDirectLink?.number ?? '__idle__',
     ],
     queryFn: async () => {
       if (
@@ -341,7 +341,7 @@ function MainApp() {
         !parsedPickerDirectLink ||
         parsedPickerDirectLink.number === null
       ) {
-        throw new Error("No direct link to resolve.");
+        throw new Error('No direct link to resolve.');
       }
 
       const repo = await trpc.repos.validate.query({
@@ -357,23 +357,25 @@ function MainApp() {
     },
     enabled:
       isPickerOpen &&
-      pickerStep === "repo" &&
+      pickerStep === 'repo' &&
       parsedPickerDirectLink !== null &&
       parsedPickerDirectLink.number !== null &&
       pickerDirectLinkAccount !== null,
   });
   const pickerDirectLinkPullRequestOption = pickerDirectLinkPullRequestQuery.data ?? null;
   const pickerDirectLinkPullRequestError =
-    parsedPickerDirectLink && parsedPickerDirectLink.number !== null && pickerDirectLinkAccount === null
-      ? `No signed-in ${parsedPickerDirectLink.provider === "github" ? "GitHub" : "GitLab"} account for ${parsedPickerDirectLink.host}.`
+    parsedPickerDirectLink &&
+    parsedPickerDirectLink.number !== null &&
+    pickerDirectLinkAccount === null
+      ? `No signed-in ${parsedPickerDirectLink.provider === 'github' ? 'GitHub' : 'GitLab'} account for ${parsedPickerDirectLink.host}.`
       : getErrorMessage(pickerDirectLinkPullRequestQuery.error);
   const pickerRepoIdentity = pickerRepo ? repoIdentity(pickerRepo) : null;
   const pickerRepoLookupKey = pickerRepo ? repoIdentityKey(pickerRepo) : null;
   const pickerOpenPullRequestsQuery = useQuery({
     ...pullRequestListQueryOptions(
-      pickerRepoIdentity ?? { providerId: "__idle__", repoKey: "__idle__" },
+      pickerRepoIdentity ?? { providerId: '__idle__', repoKey: '__idle__' },
     ),
-    enabled: isPickerOpen && pickerStep === "pull-request" && pickerRepoIdentity !== null,
+    enabled: isPickerOpen && pickerStep === 'pull-request' && pickerRepoIdentity !== null,
   });
   const pickerOpenPullRequests = useMemo(
     () => pickerOpenPullRequestsQuery.data ?? [],
@@ -397,7 +399,7 @@ function MainApp() {
     if (!workerPool) return;
 
     void workerPool.setRenderOptions({
-      theme: isDark ? "pierre-dark" : "pierre-light",
+      theme: isDark ? 'pierre-dark' : 'pierre-light',
     });
   }, [isDark, workerPool]);
 
@@ -419,8 +421,8 @@ function MainApp() {
     if (parsedPatch.fileDiffs.length === 0) return null;
     const map = new Map<string, FileStatsEntry>();
     for (const fd of parsedPatch.fileDiffs) {
-      const status: GitStatusEntry["status"] =
-        fd.type === "new" ? "added" : fd.type === "deleted" ? "deleted" : "modified";
+      const status: GitStatusEntry['status'] =
+        fd.type === 'new' ? 'added' : fd.type === 'deleted' ? 'deleted' : 'modified';
       map.set(fd.name, {
         additions: fd.additionLines.length,
         deletions: fd.deletionLines.length,
@@ -442,7 +444,7 @@ function MainApp() {
   const setActivePullRequest = useCallback(
     (repo: RepoIdentity, pullRequest: PullRequestSummary) => {
       void navigate({
-        to: "/",
+        to: '/',
         search: {
           providerId: repo.providerId,
           repoKey: repo.repoKey,
@@ -455,7 +457,7 @@ function MainApp() {
 
   const clearActivePullRequest = useCallback(() => {
     void navigate({
-      to: "/",
+      to: '/',
       search: {},
     });
   }, [navigate]);
@@ -463,7 +465,7 @@ function MainApp() {
   function handleSelectPr(repo: RepoIdentity, pullRequest: PullRequestSummary) {
     setActivePullRequest(repo, pullRequest);
 
-    if (sidebarView !== "tracked") {
+    if (sidebarView !== 'tracked') {
       return;
     }
 
@@ -475,54 +477,62 @@ function MainApp() {
   }
 
   function resetPickerState() {
-    setSearchQuery("");
-    setDebouncedQuery("");
-    setPickerStep(pickerMode === "pr-only" ? "pull-request" : "repo");
-    if (pickerMode !== "pr-only") {
+    setSearchQuery('');
+    setDebouncedQuery('');
+    setPickerStep(pickerMode === 'pr-only' ? 'pull-request' : 'repo');
+    if (pickerMode !== 'pr-only') {
       setPickerRepo(null);
     }
   }
 
   function openOverviewRepoPicker() {
-    setPickerMode("repo-then-pr");
-    setPickerStep("repo");
+    setPickerMode('repo-then-pr');
+    setPickerStep('repo');
     setPickerRepo(null);
     setIsPickerOpen(true);
   }
 
   function openTrackedPullRequestPicker() {
-    setPickerMode("track-repo-then-pr");
-    setPickerStep("repo");
+    setPickerMode('track-repo-then-pr');
+    setPickerStep('repo');
     setPickerRepo(null);
     setIsPickerOpen(true);
   }
 
-  const cacheSavedRepo = useCallback((savedRepo: RepoSummary) => {
-    queryClient.setQueryData<RepoSummary[]>(savedReposQueryOptions().queryKey, (current) => {
-      if (!current) return [savedRepo];
-      if (current.some((item) => sameRepoIdentity(item, savedRepo))) {
-        return current;
-      }
-      return [...current, savedRepo];
-    });
-  }, [queryClient]);
+  const cacheSavedRepo = useCallback(
+    (savedRepo: RepoSummary) => {
+      queryClient.setQueryData<RepoSummary[]>(savedReposQueryOptions().queryKey, (current) => {
+        if (!current) return [savedRepo];
+        if (current.some((item) => sameRepoIdentity(item, savedRepo))) {
+          return current;
+        }
+        return [...current, savedRepo];
+      });
+    },
+    [queryClient],
+  );
 
-  const cacheTrackedRepo = useCallback((trackedRepo: RepoSummary) => {
-    queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
-      if (!current) return [trackedRepo];
-      if (current.some((item) => sameRepoIdentity(item, trackedRepo))) {
-        return current;
-      }
-      return [...current, trackedRepo];
-    });
-  }, [queryClient]);
+  const cacheTrackedRepo = useCallback(
+    (trackedRepo: RepoSummary) => {
+      queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
+        if (!current) return [trackedRepo];
+        if (current.some((item) => sameRepoIdentity(item, trackedRepo))) {
+          return current;
+        }
+        return [...current, trackedRepo];
+      });
+    },
+    [queryClient],
+  );
 
-  const removeTrackedRepo = useCallback((repo: RepoIdentity) => {
-    queryClient.setQueryData<RepoSummary[]>(
-      forgeKeys.trackedRepos(),
-      (current) => (current ?? []).filter((item) => !sameRepoIdentity(item, repo)),
-    );
-  }, [queryClient]);
+  const removeTrackedRepo = useCallback(
+    (repo: RepoIdentity) => {
+      queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) =>
+        (current ?? []).filter((item) => !sameRepoIdentity(item, repo)),
+      );
+    },
+    [queryClient],
+  );
 
   const cacheTrackedPullRequest = useCallback(
     (repo: RepoIdentity, trackedPullRequest: PullRequestSummary) => {
@@ -554,8 +564,9 @@ function MainApp() {
   const persistTrackedPullRequestOrder = useCallback(
     async (nextOrder: TrackedPullRequestOrderEntry[]) => {
       const previousOrder =
-        queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(forgeKeys.trackedPullRequestOrder()) ??
-        [];
+        queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(
+          forgeKeys.trackedPullRequestOrder(),
+        ) ?? [];
 
       queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), nextOrder);
 
@@ -618,13 +629,13 @@ function MainApp() {
       parsedUrl.host === normalizeHostInput(repo.host) &&
       parsedUrl.repoPath === repo.repoKey;
 
-    if (pickerMode === "track-repo-then-pr") {
+    if (pickerMode === 'track-repo-then-pr') {
       if (!shouldKeepSearchQuery) {
-        setSearchQuery("");
-        setDebouncedQuery("");
+        setSearchQuery('');
+        setDebouncedQuery('');
       }
       setPickerRepo(repo);
-      setPickerStep("pull-request");
+      setPickerStep('pull-request');
       return;
     }
 
@@ -634,10 +645,10 @@ function MainApp() {
       cacheSavedRepo(savedRepo);
 
       setPickerRepo(savedRepo);
-      setPickerStep("pull-request");
+      setPickerStep('pull-request');
       if (!shouldKeepSearchQuery) {
-        setSearchQuery("");
-        setDebouncedQuery("");
+        setSearchQuery('');
+        setDebouncedQuery('');
       }
     } finally {
       setIsSavingRepo(false);
@@ -670,8 +681,11 @@ function MainApp() {
     await trackPullRequestForRepo(pickerRepo, pullRequest);
   }
 
-  async function handlePickDirectLinkPullRequest(repo: RepoSummary, pullRequest: PullRequestSummary) {
-    if (pickerMode === "track-repo-then-pr") {
+  async function handlePickDirectLinkPullRequest(
+    repo: RepoSummary,
+    pullRequest: PullRequestSummary,
+  ) {
+    if (pickerMode === 'track-repo-then-pr') {
       await trackPullRequestForRepo(repo, pullRequest);
       return;
     }
@@ -684,25 +698,24 @@ function MainApp() {
     }
 
     setPickerRepo(savedRepo);
-    setPickerStep("pull-request");
+    setPickerStep('pull-request');
   }
 
   useEffect(() => {
     async function openForgePullRequestLink(deepLinkUrl: string) {
       const targetUrl = parseAppOpenUrl(deepLinkUrl);
       if (!targetUrl) {
-        throw new Error("Deep link is missing a target URL.");
+        throw new Error('Deep link is missing a target URL.');
       }
 
       const parsed = parseForgeResourceUrl(targetUrl);
       if (!parsed || parsed.number === null) {
-        throw new Error("Only GitHub pull request and GitLab merge request URLs are supported.");
+        throw new Error('Only GitHub pull request and GitLab merge request URLs are supported.');
       }
 
       const matchingAccounts = readyProviderAccounts.filter(
         (account) =>
-          account.provider === parsed.provider &&
-          normalizeHostInput(account.host) === parsed.host,
+          account.provider === parsed.provider && normalizeHostInput(account.host) === parsed.host,
       );
       const account =
         matchingAccounts.find((candidate) => enabledAccountIdSet.has(candidate.id)) ??
@@ -710,7 +723,7 @@ function MainApp() {
 
       if (!account) {
         throw new Error(
-          `No signed-in ${parsed.provider === "github" ? "GitHub" : "GitLab"} account for ${parsed.host}.`,
+          `No signed-in ${parsed.provider === 'github' ? 'GitHub' : 'GitLab'} account for ${parsed.host}.`,
         );
       }
 
@@ -737,7 +750,7 @@ function MainApp() {
       setActivePullRequest(savedRepo, trackedPullRequest);
       setIsPickerOpen(false);
       setPickerRepo(null);
-      setPickerStep("repo");
+      setPickerStep('repo');
       setDeepLinkMessage(null);
     }
 
@@ -821,7 +834,7 @@ function MainApp() {
         <div className="min-h-0 w-1/4 min-w-[300px] shrink-0">
           <RepoSidebar
             repos={sidebarRepos}
-            repoErrors={sidebarView === "tracked" ? trackedRepoErrors : {}}
+            repoErrors={sidebarView === 'tracked' ? trackedRepoErrors : {}}
             overviewPullRequests={overviewPullRequests}
             trackedPullRequests={trackedPullRequestEntries}
             overviewErrors={overviewErrors}
@@ -836,14 +849,18 @@ function MainApp() {
                 No repos visible for the selected accounts.
               </div>
             }
-            onAddAction={sidebarView === "tracked" ? openTrackedPullRequestPicker : openOverviewRepoPicker}
+            onAddAction={
+              sidebarView === 'tracked' ? openTrackedPullRequestPicker : openOverviewRepoPicker
+            }
             onViewChange={setSidebarView}
             onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
             onTrackPr={(repo, pullRequest) => void handleTrackFromOverview(repo, pullRequest)}
             onRemovePr={(repo, pullRequest) =>
               void handleRemoveTrackedPullRequest(repo, pullRequest)
             }
-            onReorderTrackedPullRequests={(entries) => void handleReorderTrackedPullRequests(entries)}
+            onReorderTrackedPullRequests={(entries) =>
+              void handleReorderTrackedPullRequests(entries)
+            }
           />
         </div>
         <div className="min-h-0 min-w-[30%] flex-1">
@@ -852,7 +869,7 @@ function MainApp() {
             selectedPr={selectedPr}
             selectedPatch={selectedPatch}
             selectedBaseSha={selectedPr?.baseSha ?? null}
-            isGitDiffMode={diffDataMode === "git"}
+            isGitDiffMode={diffDataMode === 'git'}
             isPatchLoading={isPatchPreparing}
             isDark={isDark}
             approvalState={approvalState}
@@ -915,7 +932,7 @@ function MainApp() {
         pullRequests={addablePullRequests}
         isLoadingPullRequests={
           isPickerOpen &&
-          pickerStep === "pull-request" &&
+          pickerStep === 'pull-request' &&
           pickerRepoIdentity !== null &&
           pickerOpenPullRequestsQuery.isPending
         }
@@ -923,7 +940,7 @@ function MainApp() {
         isTrackingPullRequest={isTrackingPullRequest}
         onPickPullRequest={(pullRequest) => void handleTrackPullRequest(pullRequest)}
         onBack={() => {
-          setPickerStep("repo");
+          setPickerStep('repo');
           setPickerRepo(null);
         }}
       />

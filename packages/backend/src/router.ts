@@ -1,13 +1,13 @@
-import { initTRPC, TRPCError } from "@trpc/server";
-import { observable } from "@trpc/server/observable";
-import { Effect } from "effect";
-import { BackendError, getErrorMessage } from "./errors.ts";
-import { PullRequestService } from "./services/pull-requests.ts";
-import { PullRequestQualityService } from "./services/pull-request-quality.ts";
-import { RepoService } from "./services/repos.ts";
-import { ReviewCommentService } from "./services/review-comments.ts";
-import { SettingsService } from "./services/settings.ts";
-import { TrackedPullRequestService } from "./services/tracked-pull-requests.ts";
+import { initTRPC, TRPCError } from '@trpc/server';
+import { observable } from '@trpc/server/observable';
+import { Effect } from 'effect';
+import { BackendError, getErrorMessage } from './errors.ts';
+import { PullRequestService } from './services/pull-requests.ts';
+import { PullRequestQualityService } from './services/pull-request-quality.ts';
+import { RepoService } from './services/repos.ts';
+import { ReviewCommentService } from './services/review-comments.ts';
+import { SettingsService } from './services/settings.ts';
+import { TrackedPullRequestService } from './services/tracked-pull-requests.ts';
 import {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
@@ -31,17 +31,17 @@ import {
   reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
   trackedPullRequestOrderEntrySchema,
-} from "@code-review-app/shared";
-import { z } from "zod";
-import { completeOAuth, pollDeviceOAuth, startOAuth } from "./auth/oauth.ts";
-import { AuthTokenStore } from "./auth/token-store.ts";
+} from '@code-review-app/shared';
+import { z } from 'zod';
+import { completeOAuth, pollDeviceOAuth, startOAuth } from './auth/oauth.ts';
+import { AuthTokenStore } from './auth/token-store.ts';
 import type {
   AvailableUpdate,
   ProviderProfile,
   ThemePreference,
   UpdateEvent,
-} from "@code-review-app/shared";
-import type { BackendRuntime } from "./runtime.ts";
+} from '@code-review-app/shared';
+import type { BackendRuntime } from './runtime.ts';
 
 type BackendRouterPlatform = {
   getCurrentVersion(): string;
@@ -67,10 +67,10 @@ const t = initTRPC.create();
 function mapError(error: unknown): TRPCError {
   if (error instanceof TRPCError) return error;
   if (error instanceof BackendError) {
-    return new TRPCError({ code: "BAD_REQUEST", message: error.message });
+    return new TRPCError({ code: 'BAD_REQUEST', message: error.message });
   }
   return new TRPCError({
-    code: "INTERNAL_SERVER_ERROR",
+    code: 'INTERNAL_SERVER_ERROR',
     message: getErrorMessage(error),
   });
 }
@@ -85,7 +85,7 @@ function summarizeRouterError(error: unknown): unknown {
     };
   }
 
-  if (typeof error === "object" && error !== null) {
+  if (typeof error === 'object' && error !== null) {
     return Object.fromEntries(
       Object.entries(error).map(([key, value]): [string, unknown] => [
         key,
@@ -100,7 +100,7 @@ function summarizeRouterError(error: unknown): unknown {
 }
 
 function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
-  async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>, label = "effect") {
+  async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>, label = 'effect') {
     try {
       return await runtime.runPromise(effect as Effect.Effect<A, E, never>);
     } catch (error) {
@@ -156,7 +156,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           );
           const status = statuses[session.accountId];
           if (!status) {
-            throw new Error("Provider auth status was not returned.");
+            throw new Error('Provider auth status was not returned.');
           }
           return status;
         } catch (error) {
@@ -497,7 +497,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const approvalState = yield* service.getApprovalState(input, input.number);
             return pullRequestApprovalStateSchema.parse(approvalState);
           }),
-          "reviewComments.getApprovalState",
+          'reviewComments.getApprovalState',
         ),
       ),
       approve: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
@@ -506,7 +506,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.approve(input, input.number, input.headSha);
           }),
-          "reviewComments.approve",
+          'reviewComments.approve',
         ),
       ),
       removeApproval: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
@@ -515,7 +515,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.removeApproval(input, input.number);
           }),
-          "reviewComments.removeApproval",
+          'reviewComments.removeApproval',
         ),
       ),
       listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
@@ -524,7 +524,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.listThreads(input, input.number);
           }),
-          "reviewComments.listThreads",
+          'reviewComments.listThreads',
         ),
       ),
       create: t.procedure.input(createPullRequestReviewCommentInputSchema).mutation(({ input }) =>
@@ -533,7 +533,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.create(input);
           }),
-          "reviewComments.create",
+          'reviewComments.create',
         ),
       ),
       reply: t.procedure.input(replyToPullRequestReviewCommentInputSchema).mutation(({ input }) =>
@@ -542,7 +542,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.reply(input);
           }),
-          "reviewComments.reply",
+          'reviewComments.reply',
         ),
       ),
       update: t.procedure.input(updatePullRequestReviewCommentInputSchema).mutation(({ input }) =>
@@ -551,7 +551,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* ReviewCommentService;
             return yield* service.update(input);
           }),
-          "reviewComments.update",
+          'reviewComments.update',
         ),
       ),
     }),

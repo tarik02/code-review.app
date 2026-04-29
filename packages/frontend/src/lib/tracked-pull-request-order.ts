@@ -3,7 +3,7 @@ import type {
   PullRequestSummary,
   RepoIdentity,
   TrackedPullRequestOrderEntry,
-} from "../types/forge";
+} from '../types/forge';
 
 type TrackedPullRequestListEntry = OverviewPullRequestSummary;
 
@@ -42,7 +42,10 @@ function prependTrackedPullRequestOrderEntry(
   entry: TrackedPullRequestOrderEntry,
 ): TrackedPullRequestOrderEntry[] {
   const entryKey = trackedPullRequestOrderEntryKey(entry);
-  return [entry, ...order.filter((candidate) => trackedPullRequestOrderEntryKey(candidate) !== entryKey)];
+  return [
+    entry,
+    ...order.filter((candidate) => trackedPullRequestOrderEntryKey(candidate) !== entryKey),
+  ];
 }
 
 function removeTrackedPullRequestOrderEntry(
@@ -80,7 +83,8 @@ function sortTrackedPullRequestEntries(
   }
 
   ordered.sort((left, right) => {
-    const leftIndex = orderIndex.get(trackedPullRequestOrderEntryKey(toTrackedPullRequestOrderEntry(left))) ?? 0;
+    const leftIndex =
+      orderIndex.get(trackedPullRequestOrderEntryKey(toTrackedPullRequestOrderEntry(left))) ?? 0;
     const rightIndex =
       orderIndex.get(trackedPullRequestOrderEntryKey(toTrackedPullRequestOrderEntry(right))) ?? 0;
     return leftIndex - rightIndex;

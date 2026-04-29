@@ -1,8 +1,8 @@
-"use no memo";
+'use no memo';
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { normalizePath } from "../lib/review-threads";
-import { getPatchViewerSessionState, usePatchViewerStore } from "../stores/patch-viewer-store";
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { normalizePath } from '../lib/review-threads';
+import { getPatchViewerSessionState, usePatchViewerStore } from '../stores/patch-viewer-store';
 
 type UseDiffNavigatorArgs = {
   sessionKey: string | null;
@@ -25,7 +25,7 @@ type UseDiffNavigatorResult = {
   };
 };
 
-type ScrollableDiffNode = Pick<HTMLDivElement, "scrollIntoView">;
+type ScrollableDiffNode = Pick<HTMLDivElement, 'scrollIntoView'>;
 
 type DiffNavigatorControllerState = {
   selectedFilePath: string | null;
@@ -106,9 +106,9 @@ function createDiffNavigatorController({
     }
 
     node.scrollIntoView({
-      behavior: "auto",
-      block: "start",
-      inline: "nearest",
+      behavior: 'auto',
+      block: 'start',
+      inline: 'nearest',
     });
     return true;
   }
@@ -177,7 +177,7 @@ function createDiffNavigatorController({
 }
 
 function scheduleNextFrame(callback: () => void) {
-  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     const frameId = window.requestAnimationFrame(callback);
     return () => window.cancelAnimationFrame(frameId);
   }
@@ -201,20 +201,25 @@ function useDiffNavigator({
   const cancelNotifyRef = useRef<(() => void) | null>(null);
   const controller = useMemo(
     () =>
-    createDiffNavigatorController({
-      prKey: navigatorKey,
-      isDiffReady,
+      createDiffNavigatorController({
+        prKey: navigatorKey,
+        isDiffReady,
+        hasDiffError,
+        getSelectedFilePath: () =>
+          getPatchViewerSessionState(usePatchViewerStore.getState(), sessionKey).selectedFilePath,
+        setSelectedFilePath: (path) => setSelectedFilePath(sessionKey, path),
+        getPendingScrollPath: () =>
+          getPatchViewerSessionState(usePatchViewerStore.getState(), sessionKey).pendingScrollPath,
+        setPendingScrollPath: (path) => setPendingScrollPath(sessionKey, path),
+      }),
+    [
       hasDiffError,
-      getSelectedFilePath: () =>
-        getPatchViewerSessionState(usePatchViewerStore.getState(), sessionKey)
-          .selectedFilePath,
-      setSelectedFilePath: (path) => setSelectedFilePath(sessionKey, path),
-      getPendingScrollPath: () =>
-        getPatchViewerSessionState(usePatchViewerStore.getState(), sessionKey)
-          .pendingScrollPath,
-      setPendingScrollPath: (path) => setPendingScrollPath(sessionKey, path),
-    }),
-    [hasDiffError, isDiffReady, navigatorKey, sessionKey, setPendingScrollPath, setSelectedFilePath],
+      isDiffReady,
+      navigatorKey,
+      sessionKey,
+      setPendingScrollPath,
+      setSelectedFilePath,
+    ],
   );
 
   useEffect(() => {
@@ -225,13 +230,19 @@ function useDiffNavigator({
     };
   }, []);
 
-  const onSelectFile = useCallback((path: string) => {
-    controller.onSelectFile(path);
-  }, [controller]);
+  const onSelectFile = useCallback(
+    (path: string) => {
+      controller.onSelectFile(path);
+    },
+    [controller],
+  );
 
-  const registerDiffNode = useCallback((path: string, node: HTMLDivElement | null) => {
-    controller.registerDiffNode(path, node);
-  }, [controller]);
+  const registerDiffNode = useCallback(
+    (path: string, node: HTMLDivElement | null) => {
+      controller.registerDiffNode(path, node);
+    },
+    [controller],
+  );
 
   const notifyDiffContentChanged = useCallback(() => {
     if (cancelNotifyRef.current) {

@@ -1,10 +1,10 @@
-import { FileSystem } from "@effect/platform";
-import path from "node:path";
-import { Effect, Layer } from "effect";
-import { BackendConfig } from "../config.ts";
-import { CacheService } from "../cache.ts";
-import { AppSettingsService } from "./app-settings.ts";
-import { AuthTokenStore } from "../auth/token-store.ts";
+import { FileSystem } from '@effect/platform';
+import path from 'node:path';
+import { Effect, Layer } from 'effect';
+import { BackendConfig } from '../config.ts';
+import { CacheService } from '../cache.ts';
+import { AppSettingsService } from './app-settings.ts';
+import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -13,7 +13,7 @@ import type {
   ReviewEditorSettings,
   ThemePreference,
   ThemePreferenceSettings,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type SettingsServiceShape = {
   getAccountVisibility(): Effect.Effect<AccountVisibilitySettings, Error>;
@@ -37,7 +37,7 @@ type SettingsServiceShape = {
   setCustomBackgroundFromPath(filePath: string): Effect.Effect<AppearanceBackgroundSettings, Error>;
 };
 
-class SettingsService extends Effect.Tag("SettingsService")<
+class SettingsService extends Effect.Tag('SettingsService')<
   SettingsService,
   SettingsServiceShape
 >() {}
@@ -61,29 +61,29 @@ function toVisibilitySettings(
   return { enabledAccountIds, disabledAccountIds };
 }
 
-const APPEARANCE_BACKGROUND_KEY = "appearance.background";
-const THEME_PREFERENCE_KEY = "theme_preference";
-const DIFF_DATA_SETTINGS_KEY = "diff_data_settings";
-const REVIEW_EDITOR_SETTINGS_KEY = "review_editor_settings";
+const APPEARANCE_BACKGROUND_KEY = 'appearance.background';
+const THEME_PREFERENCE_KEY = 'theme_preference';
+const DIFF_DATA_SETTINGS_KEY = 'diff_data_settings';
+const REVIEW_EDITOR_SETTINGS_KEY = 'review_editor_settings';
 const MAX_BACKGROUND_FILE_SIZE = 15 * 1024 * 1024;
 
 type PersistedAppearanceBackgroundSettings =
-  | { kind: "default" }
-  | { kind: "solid"; color: string }
+  | { kind: 'default' }
+  | { kind: 'solid'; color: string }
   | {
-      kind: "customFile";
+      kind: 'customFile';
       filePath: string;
       fileName: string;
       mimeType: string;
     };
 
 const backgroundMimeTypes = {
-  avif: "image/avif",
-  gif: "image/gif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
+  avif: 'image/avif',
+  gif: 'image/gif',
+  jpeg: 'image/jpeg',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
 } as const;
 
 function getBackgroundExtension(filePath: string) {
@@ -103,29 +103,29 @@ function isBackgroundMimeType(value: string) {
 
 function parsePersistedBackground(value: unknown): PersistedAppearanceBackgroundSettings {
   if (!value) {
-    return { kind: "default" };
+    return { kind: 'default' };
   }
 
   try {
     const parsed =
-      typeof value === "string"
+      typeof value === 'string'
         ? (JSON.parse(value) as Record<string, unknown>)
         : (value as Record<string, unknown>);
-    if (parsed.kind === "default") {
-      return { kind: "default" };
+    if (parsed.kind === 'default') {
+      return { kind: 'default' };
     }
-    if (parsed.kind === "solid" && typeof parsed.color === "string" && isHexColor(parsed.color)) {
-      return { kind: "solid", color: parsed.color };
+    if (parsed.kind === 'solid' && typeof parsed.color === 'string' && isHexColor(parsed.color)) {
+      return { kind: 'solid', color: parsed.color };
     }
     if (
-      parsed.kind === "customFile" &&
-      typeof parsed.filePath === "string" &&
-      typeof parsed.fileName === "string" &&
-      typeof parsed.mimeType === "string" &&
+      parsed.kind === 'customFile' &&
+      typeof parsed.filePath === 'string' &&
+      typeof parsed.fileName === 'string' &&
+      typeof parsed.mimeType === 'string' &&
       isBackgroundMimeType(parsed.mimeType)
     ) {
       return {
-        kind: "customFile",
+        kind: 'customFile',
         filePath: parsed.filePath,
         fileName: parsed.fileName,
         mimeType: parsed.mimeType,
@@ -135,52 +135,52 @@ function parsePersistedBackground(value: unknown): PersistedAppearanceBackground
     // Fall through to the default background.
   }
 
-  return { kind: "default" };
+  return { kind: 'default' };
 }
 
 function parseDiffDataSettings(value: unknown): DiffDataSettings {
   if (
     value &&
-    typeof value === "object" &&
-    "mode" in value &&
-    (value.mode === "provider-api" || value.mode === "git")
+    typeof value === 'object' &&
+    'mode' in value &&
+    (value.mode === 'provider-api' || value.mode === 'git')
   ) {
     return { mode: value.mode };
   }
 
-  return { mode: "provider-api" };
+  return { mode: 'provider-api' };
 }
 
 function isThemePreference(value: unknown): value is ThemePreference {
-  return value === "auto" || value === "light" || value === "dark";
+  return value === 'auto' || value === 'light' || value === 'dark';
 }
 
 function parseThemePreferenceSettings(value: unknown): ThemePreferenceSettings {
   if (
     value &&
-    typeof value === "object" &&
-    "preference" in value &&
+    typeof value === 'object' &&
+    'preference' in value &&
     isThemePreference(value.preference)
   ) {
     return { preference: value.preference };
   }
 
-  return { preference: "auto" };
+  return { preference: 'auto' };
 }
 
 function validateThemePreferenceSettings(
   settings: ThemePreferenceSettings,
 ): ThemePreferenceSettings {
   if (!isThemePreference(settings.preference)) {
-    throw new Error("Unsupported theme preference.");
+    throw new Error('Unsupported theme preference.');
   }
 
   return { preference: settings.preference };
 }
 
 function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings {
-  if (settings.mode !== "provider-api" && settings.mode !== "git") {
-    throw new Error("Unsupported diff loading mode.");
+  if (settings.mode !== 'provider-api' && settings.mode !== 'git') {
+    throw new Error('Unsupported diff loading mode.');
   }
 
   return { mode: settings.mode };
@@ -189,19 +189,19 @@ function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings 
 function parseReviewEditorSettings(value: unknown): ReviewEditorSettings {
   if (
     value &&
-    typeof value === "object" &&
-    "defaultMode" in value &&
-    (value.defaultMode === "rich-text" || value.defaultMode === "source")
+    typeof value === 'object' &&
+    'defaultMode' in value &&
+    (value.defaultMode === 'rich-text' || value.defaultMode === 'source')
   ) {
     return { defaultMode: value.defaultMode };
   }
 
-  return { defaultMode: "rich-text" };
+  return { defaultMode: 'rich-text' };
 }
 
 function validateReviewEditorSettings(settings: ReviewEditorSettings): ReviewEditorSettings {
-  if (settings.defaultMode !== "rich-text" && settings.defaultMode !== "source") {
-    throw new Error("Unsupported review editor mode.");
+  if (settings.defaultMode !== 'rich-text' && settings.defaultMode !== 'source') {
+    throw new Error('Unsupported review editor mode.');
   }
 
   return { defaultMode: settings.defaultMode };
@@ -211,20 +211,20 @@ function readBackgroundDataUrl(
   fileSystem: FileSystem.FileSystem,
   background: PersistedAppearanceBackgroundSettings,
 ): Effect.Effect<AppearanceBackgroundSettings, Error> {
-  if (background.kind !== "customFile") {
+  if (background.kind !== 'customFile') {
     return Effect.succeed(background);
   }
 
   return Effect.gen(function* () {
     const dataUrl = yield* fileSystem.readFile(background.filePath).pipe(
       Effect.map(
-        (data) => `data:${background.mimeType};base64,${Buffer.from(data).toString("base64")}`,
+        (data) => `data:${background.mimeType};base64,${Buffer.from(data).toString('base64')}`,
       ),
       Effect.catchAll(() => Effect.succeed(null)),
     );
 
     return {
-      kind: "customFile",
+      kind: 'customFile',
       fileName: background.fileName,
       mimeType: background.mimeType,
       dataUrl,
@@ -239,8 +239,8 @@ const makeSettingsService = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const config = yield* BackendConfig;
 
-  const getAccountVisibility: SettingsServiceShape["getAccountVisibility"] = Effect.fn(
-    "SettingsService.getAccountVisibility",
+  const getAccountVisibility: SettingsServiceShape['getAccountVisibility'] = Effect.fn(
+    'SettingsService.getAccountVisibility',
   )(function* () {
     const accounts = yield* tokenStore.listAccounts();
     const accountIds = accounts.map((account) => account.id);
@@ -248,15 +248,15 @@ const makeSettingsService = Effect.gen(function* () {
     return toVisibilitySettings(accountIds, visibility);
   });
 
-  const setAccountVisibility: SettingsServiceShape["setAccountVisibility"] = Effect.fn(
-    "SettingsService.setAccountVisibility",
+  const setAccountVisibility: SettingsServiceShape['setAccountVisibility'] = Effect.fn(
+    'SettingsService.setAccountVisibility',
   )(function* (enabledAccountIds) {
     const accounts = yield* tokenStore.listAccounts();
     const accountIds = accounts.map((account) => account.id);
     const knownAccountIds = new Set(accountIds);
     const unknownAccountId = enabledAccountIds.find((accountId) => !knownAccountIds.has(accountId));
     if (unknownAccountId) {
-      throw new Error("Account visibility includes an unknown provider account.");
+      throw new Error('Account visibility includes an unknown provider account.');
     }
     const filteredEnabledAccountIds = enabledAccountIds.filter((accountId) =>
       knownAccountIds.has(accountId),
@@ -268,23 +268,23 @@ const makeSettingsService = Effect.gen(function* () {
     return toVisibilitySettings(accountIds, visibility);
   });
 
-  const getDiffDataSettings: SettingsServiceShape["getDiffDataSettings"] = Effect.fn(
-    "SettingsService.getDiffDataSettings",
+  const getDiffDataSettings: SettingsServiceShape['getDiffDataSettings'] = Effect.fn(
+    'SettingsService.getDiffDataSettings',
   )(function* () {
     const persisted = yield* appSettings.read<DiffDataSettings>(DIFF_DATA_SETTINGS_KEY);
     return parseDiffDataSettings(persisted);
   });
 
-  const setDiffDataSettings: SettingsServiceShape["setDiffDataSettings"] = Effect.fn(
-    "SettingsService.setDiffDataSettings",
+  const setDiffDataSettings: SettingsServiceShape['setDiffDataSettings'] = Effect.fn(
+    'SettingsService.setDiffDataSettings',
   )(function* (settings) {
     const validated = validateDiffDataSettings(settings);
     yield* appSettings.write(DIFF_DATA_SETTINGS_KEY, validated);
     return validated;
   });
 
-  const getThemePreference: SettingsServiceShape["getThemePreference"] = Effect.fn(
-    "SettingsService.getThemePreference",
+  const getThemePreference: SettingsServiceShape['getThemePreference'] = Effect.fn(
+    'SettingsService.getThemePreference',
   )(function* () {
     const persisted = yield* appSettings
       .read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY)
@@ -292,16 +292,16 @@ const makeSettingsService = Effect.gen(function* () {
     return parseThemePreferenceSettings(persisted);
   });
 
-  const setThemePreference: SettingsServiceShape["setThemePreference"] = Effect.fn(
-    "SettingsService.setThemePreference",
+  const setThemePreference: SettingsServiceShape['setThemePreference'] = Effect.fn(
+    'SettingsService.setThemePreference',
   )(function* (settings) {
     const validated = validateThemePreferenceSettings(settings);
     yield* appSettings.write(THEME_PREFERENCE_KEY, validated);
     return validated;
   });
 
-  const getReviewEditorSettings: SettingsServiceShape["getReviewEditorSettings"] = Effect.fn(
-    "SettingsService.getReviewEditorSettings",
+  const getReviewEditorSettings: SettingsServiceShape['getReviewEditorSettings'] = Effect.fn(
+    'SettingsService.getReviewEditorSettings',
   )(function* () {
     const persisted = yield* appSettings
       .read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
@@ -309,34 +309,34 @@ const makeSettingsService = Effect.gen(function* () {
     return parseReviewEditorSettings(persisted);
   });
 
-  const setReviewEditorSettings: SettingsServiceShape["setReviewEditorSettings"] = Effect.fn(
-    "SettingsService.setReviewEditorSettings",
+  const setReviewEditorSettings: SettingsServiceShape['setReviewEditorSettings'] = Effect.fn(
+    'SettingsService.setReviewEditorSettings',
   )(function* (settings) {
     const validated = validateReviewEditorSettings(settings);
     yield* appSettings.write(REVIEW_EDITOR_SETTINGS_KEY, validated);
     return validated;
   });
 
-  const getAppearanceBackground: SettingsServiceShape["getAppearanceBackground"] = Effect.fn(
-    "SettingsService.getAppearanceBackground",
+  const getAppearanceBackground: SettingsServiceShape['getAppearanceBackground'] = Effect.fn(
+    'SettingsService.getAppearanceBackground',
   )(function* () {
     const persisted =
       yield* appSettings.read<PersistedAppearanceBackgroundSettings>(APPEARANCE_BACKGROUND_KEY);
     return yield* readBackgroundDataUrl(fileSystem, parsePersistedBackground(persisted));
   });
 
-  const setAppearanceBackground: SettingsServiceShape["setAppearanceBackground"] = Effect.fn(
-    "SettingsService.setAppearanceBackground",
+  const setAppearanceBackground: SettingsServiceShape['setAppearanceBackground'] = Effect.fn(
+    'SettingsService.setAppearanceBackground',
   )(function* (input) {
     yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, input);
     return yield* getAppearanceBackground();
   });
 
-  const setCustomBackgroundFromPath: SettingsServiceShape["setCustomBackgroundFromPath"] =
-    Effect.fn("SettingsService.setCustomBackgroundFromPath")(function* (filePath) {
+  const setCustomBackgroundFromPath: SettingsServiceShape['setCustomBackgroundFromPath'] =
+    Effect.fn('SettingsService.setCustomBackgroundFromPath')(function* (filePath) {
       const extension = getBackgroundExtension(filePath);
       if (!extension) {
-        throw new Error("Background image must be a PNG, JPG, GIF, WebP, or AVIF file.");
+        throw new Error('Background image must be a PNG, JPG, GIF, WebP, or AVIF file.');
       }
 
       const sourceStats = yield* fileSystem
@@ -344,14 +344,14 @@ const makeSettingsService = Effect.gen(function* () {
         .pipe(
           Effect.mapError((error) => (error instanceof Error ? error : new Error(String(error)))),
         );
-      if (sourceStats.type !== "File") {
-        throw new Error("Background image must be a file.");
+      if (sourceStats.type !== 'File') {
+        throw new Error('Background image must be a file.');
       }
       if (Number(sourceStats.size) > MAX_BACKGROUND_FILE_SIZE) {
-        throw new Error("Background image must be 15 MB or smaller.");
+        throw new Error('Background image must be 15 MB or smaller.');
       }
 
-      const backgroundDirectory = path.join(config.userDataPath, "appearance");
+      const backgroundDirectory = path.join(config.userDataPath, 'appearance');
       const destinationPath = path.join(backgroundDirectory, `background.${extension}`);
       yield* fileSystem.makeDirectory(backgroundDirectory, { recursive: true }).pipe(
         Effect.flatMap(() =>
@@ -363,7 +363,7 @@ const makeSettingsService = Effect.gen(function* () {
       );
 
       const persisted: PersistedAppearanceBackgroundSettings = {
-        kind: "customFile",
+        kind: 'customFile',
         filePath: destinationPath,
         fileName: path.basename(filePath),
         mimeType: backgroundMimeTypes[extension],

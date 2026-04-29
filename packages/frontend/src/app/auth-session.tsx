@@ -7,16 +7,16 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getErrorMessage } from "../hooks/use-forge-queries";
-import { trpc } from "../lib/trpc";
+} from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getErrorMessage } from '../hooks/use-forge-queries';
+import { trpc } from '../lib/trpc';
 import {
   forgeKeys,
   providerAccountsQueryOptions,
   providerStatusesQueryOptions,
-} from "../queries/forge";
-import type { ForgeProviderKind, ProviderAccount, ProviderAuthStatus } from "../types/forge";
+} from '../queries/forge';
+import type { ForgeProviderKind, ProviderAccount, ProviderAuthStatus } from '../types/forge';
 
 type AuthSessionValue = {
   providerAccounts: ProviderAccount[];
@@ -35,8 +35,8 @@ const AuthSessionContext = createContext<AuthSessionValue | null>(null);
 function normalizeHostInput(host: string) {
   return host
     .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "")
+    .replace(/^https?:\/\//, '')
+    .replace(/\/+$/, '')
     .toLowerCase();
 }
 
@@ -70,11 +70,11 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     [providerStatusesQuery.data],
   );
   const providerStatusList = Object.values(providerStatuses);
-  const hasReadyProvider = providerStatusList.some((status) => status.status === "ready");
+  const hasReadyProvider = providerStatusList.some((status) => status.status === 'ready');
   const gateStatus =
-    providerStatusList.find((status) => status.status !== "not_authenticated") ??
+    providerStatusList.find((status) => status.status !== 'not_authenticated') ??
     providerStatusList[0] ??
-    ({ status: "not_authenticated", message: null } satisfies ProviderAuthStatus);
+    ({ status: 'not_authenticated', message: null } satisfies ProviderAuthStatus);
   const isCheckingAuth =
     providerAccountsQuery.isPending ||
     providerStatusesQuery.isPending ||
@@ -121,9 +121,9 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const signIn = useCallback(
-    async (provider: ForgeProviderKind, host: string, clientId: string, clientSecret = "") => {
+    async (provider: ForgeProviderKind, host: string, clientId: string, clientSecret = '') => {
       const normalizedHost =
-        normalizeHostInput(host) || (provider === "github" ? "github.com" : "gitlab.com");
+        normalizeHostInput(host) || (provider === 'github' ? 'github.com' : 'gitlab.com');
       setIsSigningIn(true);
       setAuthMessage(null);
       try {
@@ -133,7 +133,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
           clientId,
           clientSecret,
         });
-        if (result.type === "device") {
+        if (result.type === 'device') {
           pendingOAuthRef.current = null;
           setPendingOAuthStartedAt(null);
           setPendingDeviceOAuth({
@@ -144,7 +144,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
             intervalMs: result.intervalMs,
           });
           setAuthMessage(`Enter code ${result.userCode} in GitHub to finish signing in.`);
-          window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+          window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
           return;
         }
 
@@ -155,7 +155,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
           startedAt: Date.now(),
         };
         setPendingOAuthStartedAt(pendingOAuthRef.current.startedAt);
-        window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
+        window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
       } catch (error) {
         pendingOAuthRef.current = null;
         setPendingOAuthStartedAt(null);
@@ -175,7 +175,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
 
       const pending = pendingOAuthRef.current;
       if (!pending) {
-        setAuthMessage("OAuth callback received, but no sign in request is active.");
+        setAuthMessage('OAuth callback received, but no sign in request is active.');
         return;
       }
 
@@ -183,14 +183,14 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
 
       try {
         const parsed = new URL(url);
-        const code = parsed.searchParams.get("code");
-        const state = parsed.searchParams.get("state");
-        const error = parsed.searchParams.get("error");
+        const code = parsed.searchParams.get('code');
+        const state = parsed.searchParams.get('state');
+        const error = parsed.searchParams.get('error');
         if (error) {
-          throw new Error(parsed.searchParams.get("error_description") ?? error);
+          throw new Error(parsed.searchParams.get('error_description') ?? error);
         }
         if (!code || !state) {
-          throw new Error("OAuth callback is missing a code or state.");
+          throw new Error('OAuth callback is missing a code or state.');
         }
         await trpc.auth.completeOAuth.mutate({ code, state });
         await refreshAuthQueries();
@@ -263,7 +263,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
     async function pollDeviceOAuth() {
       if (Date.now() > deviceOAuth.expiresAt) {
         setPendingDeviceOAuth(null);
-        setAuthMessage("OAuth device sign in expired. Start sign in again.");
+        setAuthMessage('OAuth device sign in expired. Start sign in again.');
         return;
       }
 
@@ -272,7 +272,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
           accountId: deviceOAuth.accountId,
         });
         if (isDisposed) return;
-        if (result.status === "pending") {
+        if (result.status === 'pending') {
           setPendingDeviceOAuth((current) =>
             current
               ? {
@@ -337,7 +337,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
 function useAuthSession() {
   const value = useContext(AuthSessionContext);
   if (!value) {
-    throw new Error("useAuthSession must be used within AuthSessionProvider.");
+    throw new Error('useAuthSession must be used within AuthSessionProvider.');
   }
   return value;
 }

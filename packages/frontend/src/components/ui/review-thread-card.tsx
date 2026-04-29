@@ -1,23 +1,23 @@
-import { FloatingPortal, autoUpdate, offset, size, useFloating } from "@floating-ui/react";
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating-ui/react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   isGlobalReviewThread,
   type ReviewComment,
   type ReviewThread,
-} from "../../lib/review-threads";
-import { reviewEditorSettingsQueryOptions } from "../../queries/forge";
+} from '../../lib/review-threads';
+import { reviewEditorSettingsQueryOptions } from '../../queries/forge';
 import {
   getReviewCommentEditorSessionState,
   type ReviewCommentEditorState,
   useReviewCommentEditorStore,
-} from "../../stores/review-comment-editor-store";
-import { CommentMarkdown } from "./comment-markdown";
+} from '../../stores/review-comment-editor-store';
+import { CommentMarkdown } from './comment-markdown';
 import {
   ReviewCommentEditor,
   type CommentEditorTarget,
   type ReviewCommentEditorProps,
-} from "./review-comment-editor";
+} from './review-comment-editor';
 
 const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
 
@@ -39,9 +39,9 @@ function formatTimestamp(value: string) {
   if (Number.isNaN(timestamp)) return value;
 
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   })
     .format(timestamp)
     .toUpperCase();
@@ -49,18 +49,18 @@ function formatTimestamp(value: string) {
 
 function formatThreadLineLabel(thread: ReviewThread) {
   if (isGlobalReviewThread(thread)) {
-    return "Global comment";
+    return 'Global comment';
   }
 
   if (thread.line === null && thread.startLine === null) {
-    return "File comment";
+    return 'File comment';
   }
 
   const startLine = thread.startLine ?? thread.line;
   const endLine = thread.line ?? thread.startLine;
 
   if (startLine === null || endLine === null) {
-    return "File comment";
+    return 'File comment';
   }
 
   if (startLine === endLine) {
@@ -74,43 +74,43 @@ function formatThreadLineLabel(thread: ReviewThread) {
 
 function getCommentPreviewText(body: string) {
   return body
-    .replace(/\r\n?/g, "\n")
-    .replace(/^```[^\n`]*\n?/gm, "")
-    .replace(/^~~~[^\n~]*\n?/gm, "")
-    .replace(/```|~~~/g, "")
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, "$1")
-    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/g, "$1")
-    .replace(/<\/?[^>\s]+(?:\s+[^>]*)?>/g, "")
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/^\s{0,3}>\s?/gm, "")
-    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, "")
-    .replace(/^\s*[-*+]\s+/gm, "")
-    .replace(/^\s*\d+[.)]\s+/gm, "")
-    .replace(/`([^`]*)`/g, "$1")
-    .replace(/~~([^~]*)~~/g, "$1")
-    .replace(/(^|[\s([{])([*_]{1,3})(?=\S)(.+?\S)\2(?=[\s)\]}.,!?;:]|$)/g, "$1$3")
-    .replace(/\s+/g, " ")
+    .replace(/\r\n?/g, '\n')
+    .replace(/^```[^\n`]*\n?/gm, '')
+    .replace(/^~~~[^\n~]*\n?/gm, '')
+    .replace(/```|~~~/g, '')
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/g, '$1')
+    .replace(/<\/?[^>\s]+(?:\s+[^>]*)?>/g, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+[.)]\s+/gm, '')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/~~([^~]*)~~/g, '$1')
+    .replace(/(^|[\s([{])([*_]{1,3})(?=\S)(.+?\S)\2(?=[\s)\]}.,!?;:]|$)/g, '$1$3')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
 function getThreadEditorTarget(thread: ReviewThread): CommentEditorTarget {
   if (isGlobalReviewThread(thread)) {
     return {
-      type: "global",
+      type: 'global',
     };
   }
 
   if (thread.line === null || thread.side === null) {
     return {
-      type: "file",
+      type: 'file',
       path: thread.path,
     };
   }
 
   return {
-    type: "line",
+    type: 'line',
     path: thread.path,
     line: thread.line,
     side: thread.side,
@@ -147,10 +147,10 @@ function FloatingReviewCommentEditor({
   const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
   const portalRoot =
-    portalRootId && typeof document !== "undefined" ? document.getElementById(portalRootId) : null;
+    portalRootId && typeof document !== 'undefined' ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
-    placement: "bottom-start",
-    strategy: "absolute",
+    placement: 'bottom-start',
+    strategy: 'absolute',
     transform: false,
     whileElementsMounted: autoUpdate,
     middleware: [
@@ -168,7 +168,7 @@ function FloatingReviewCommentEditor({
   });
   useEffect(() => {
     const floatingNode = floatingNodeRef.current;
-    if (!floatingNode || typeof ResizeObserver === "undefined") {
+    if (!floatingNode || typeof ResizeObserver === 'undefined') {
       return;
     }
 
@@ -267,18 +267,18 @@ function ReviewThreadCard({
     ...reviewEditorSettingsQueryOptions(),
     enabled: canCreateEditor,
   });
-  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
   const replyEditor =
-    thread.id.length > 0 ? threadEditors.find((editor) => editor.kind === "reply") : undefined;
+    thread.id.length > 0 ? threadEditors.find((editor) => editor.kind === 'reply') : undefined;
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
     const locationLabel = isGlobalReviewThread(thread)
-      ? "Global comment"
+      ? 'Global comment'
       : threadLine === null
         ? `${thread.path} - File comment`
         : `${thread.path}:${threadLine}`;
-    const summaryBody = getCommentPreviewText(rootComment?.body ?? "");
+    const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
 
     const content = (
       <>
@@ -291,14 +291,14 @@ function ReviewThreadCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="min-w-0 truncate text-sm text-ink-700">
-            {summaryBody || "(no comment body)"}
+            {summaryBody || '(no comment body)'}
           </p>
           <p className="mt-1 text-xs text-ink-500">{locationLabel}</p>
         </div>
       </>
     );
 
-    const baseClassName = "flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left";
+    const baseClassName = 'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left';
 
     return onClick ? (
       <button
@@ -319,7 +319,7 @@ function ReviewThreadCard({
     }
 
     setEditorSubmitting(reviewEditorSessionKey, editorId, true);
-    setEditorError(reviewEditorSessionKey, editorId, "");
+    setEditorError(reviewEditorSessionKey, editorId, '');
 
     try {
       await onReplyToThread(thread, body);
@@ -348,7 +348,7 @@ function ReviewThreadCard({
     }
 
     setEditorSubmitting(reviewEditorSessionKey, editorId, true);
-    setEditorError(reviewEditorSessionKey, editorId, "");
+    setEditorError(reviewEditorSessionKey, editorId, '');
 
     try {
       await onEditComment(comment, body);
@@ -394,7 +394,7 @@ function ReviewThreadCard({
       <div className="flex flex-col gap-3">
         {thread.comments.map((comment) => {
           const editEditor = threadEditors.find(
-            (editor) => editor.kind === "edit" && editor.commentId === comment.id,
+            (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
           const canEdit =
             viewerLogin != null &&

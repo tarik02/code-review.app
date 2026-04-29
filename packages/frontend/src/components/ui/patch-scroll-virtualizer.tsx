@@ -1,7 +1,7 @@
-import type { CSSProperties, ReactNode, UIEvent } from "react";
-import { useCallback, useState } from "react";
-import { Virtualizer as PierreVirtualizer, type VirtualizerConfig } from "@pierre/diffs";
-import { VirtualizerContext } from "@pierre/diffs/react";
+import type { CSSProperties, ReactNode, UIEvent } from 'react';
+import { useCallback, useState } from 'react';
+import { Virtualizer as PierreVirtualizer, type VirtualizerConfig } from '@pierre/diffs';
+import { VirtualizerContext } from '@pierre/diffs/react';
 
 type PatchScrollVirtualizerProps = {
   children: ReactNode;
@@ -25,7 +25,7 @@ function PatchScrollVirtualizer({
   style,
 }: PatchScrollVirtualizerProps) {
   const [instance] = useState(() =>
-    typeof window !== "undefined" ? new PierreVirtualizer(config) : undefined,
+    typeof window !== 'undefined' ? new PierreVirtualizer(config) : undefined,
   );
 
   const setRoot = useCallback(

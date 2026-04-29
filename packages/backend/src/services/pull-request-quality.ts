@@ -1,14 +1,14 @@
-import { HttpClient } from "@effect/platform";
-import { Effect, Layer } from "effect";
-import { ValidationError } from "../errors.ts";
-import { createRepoIdentityFromParts } from "../repo-id.ts";
-import { providerFor } from "../providers/registry.ts";
-import { AuthTokenStore } from "../auth/token-store.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect, Layer } from 'effect';
+import { ValidationError } from '../errors.ts';
+import { createRepoIdentityFromParts } from '../repo-id.ts';
+import { providerFor } from '../providers/registry.ts';
+import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   ForgeProviderKind,
   PullRequestQualityReport,
   RepoIdentity,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type PullRequestQualityServiceShape = {
   get(
@@ -18,21 +18,21 @@ type PullRequestQualityServiceShape = {
   ): Effect.Effect<PullRequestQualityReport, Error>;
 };
 
-class PullRequestQualityService extends Effect.Tag("PullRequestQualityService")<
+class PullRequestQualityService extends Effect.Tag('PullRequestQualityService')<
   PullRequestQualityService,
   PullRequestQualityServiceShape
 >() {}
 
 function requireRepo(repo: RepoIdentity) {
   if (!repo.providerId.trim() || !repo.repoKey.trim()) {
-    throw new ValidationError("Repo is required");
+    throw new ValidationError('Repo is required');
   }
 
   return repo;
 }
 
 function qualityProviderLabel(provider: ForgeProviderKind) {
-  return provider === "github" ? "GitHub checks" : "GitLab code quality";
+  return provider === 'github' ? 'GitHub checks' : 'GitLab code quality';
 }
 
 function unavailableQualityReport(
@@ -47,7 +47,7 @@ function unavailableQualityReport(
     repoKey: repo.repoKey,
     number,
     headSha,
-    status: "unavailable",
+    status: 'unavailable',
     summary: {
       totalFindings: 0,
       inlineFindings: 0,
@@ -75,7 +75,7 @@ const makePullRequestQualityService = Effect.gen(function* () {
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
 
-  const get: PullRequestQualityServiceShape["get"] = Effect.fn("PullRequestQualityService.get")(
+  const get: PullRequestQualityServiceShape['get'] = Effect.fn('PullRequestQualityService.get')(
     function* (repoInput, number, headSha) {
       const repoIdentity = requireRepo(repoInput);
       const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
@@ -89,7 +89,7 @@ const makePullRequestQualityService = Effect.gen(function* () {
       ).pipe(
         Effect.catchAll((error) => {
           const message = error instanceof Error ? error.message : String(error);
-          console.warn("[pull-request-quality] failed to load quality report", {
+          console.warn('[pull-request-quality] failed to load quality report', {
             provider: repo.provider,
             repo: repo.path,
             number,

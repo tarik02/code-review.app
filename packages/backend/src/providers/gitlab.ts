@@ -3,11 +3,11 @@ import {
   HttpClientError,
   HttpClientRequest,
   HttpClientResponse,
-} from "@effect/platform";
-import { Effect, ParseResult, Schema } from "effect";
-import { ProviderError } from "../errors.ts";
-import { createRepoIdentity, normalizeHost, normalizePath } from "../repo-id.ts";
-import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts";
+} from '@effect/platform';
+import { Effect, ParseResult, Schema } from 'effect';
+import { ProviderError } from '../errors.ts';
+import { createRepoIdentity, normalizeHost, normalizePath } from '../repo-id.ts';
+import { getValidAccessToken, updateViewerLogin } from '../auth/provider-auth.ts';
 import type {
   OverviewPullRequestSummary,
   PullRequestApprovalState,
@@ -19,24 +19,24 @@ import type {
   RepoSummary,
   ReviewComment,
   ReviewThread,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 import type {
   ForgeProvider,
   PullRequestQualityReportInput,
   PullRequestRefs,
   ReviewThreadInput,
-} from "./types.ts";
-import type { RepoIdentity } from "../repo-id.ts";
-import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
+} from './types.ts';
+import type { RepoIdentity } from '../repo-id.ts';
+import { AuthTokenStore, type StoredAuthToken } from '../auth/token-store.ts';
 
 type GitLabRequestOptions = {
-  method?: "GET" | "POST" | "PUT";
+  method?: 'GET' | 'POST' | 'PUT';
   accept?: string;
   form?: Array<[string, string]>;
   body?: unknown;
 };
 
-const API_REQUEST_TIMEOUT = "30 seconds";
+const API_REQUEST_TIMEOUT = '30 seconds';
 
 const NullableString = Schema.NullOr(Schema.String);
 const OptionalNullableString = Schema.optional(Schema.NullOr(Schema.String));
@@ -221,9 +221,9 @@ function toChangedFile(diff: GitLabDiff): PrChangedFile {
   if (diff.new_file) {
     return {
       path,
-      oldPath: "",
+      oldPath: '',
       newPath,
-      changeType: "new",
+      changeType: 'new',
     };
   }
 
@@ -231,8 +231,8 @@ function toChangedFile(diff: GitLabDiff): PrChangedFile {
     return {
       path,
       oldPath,
-      newPath: "",
-      changeType: "deleted",
+      newPath: '',
+      changeType: 'deleted',
     };
   }
 
@@ -241,7 +241,7 @@ function toChangedFile(diff: GitLabDiff): PrChangedFile {
       path,
       oldPath,
       newPath,
-      changeType: "rename-changed",
+      changeType: 'rename-changed',
     };
   }
 
@@ -249,14 +249,14 @@ function toChangedFile(diff: GitLabDiff): PrChangedFile {
     path,
     oldPath,
     newPath,
-    changeType: "change",
+    changeType: 'change',
   };
 }
 
 const OVERVIEW_MERGE_REQUEST_SCOPES = [
-  "reviews_for_me",
-  "assigned_to_me",
-  "created_by_me",
+  'reviews_for_me',
+  'assigned_to_me',
+  'created_by_me',
 ] as const;
 
 function toProviderError(error: unknown) {
@@ -279,7 +279,7 @@ function requireStoredToken(
 ): Effect.Effect<StoredAuthToken, ProviderError, AuthTokenStore> {
   return Effect.gen(function* () {
     const token = yield* storedToken(accountId);
-    if (!token) return yield* Effect.fail(new ProviderError("GitLab is not signed in."));
+    if (!token) return yield* Effect.fail(new ProviderError('GitLab is not signed in.'));
     return token;
   });
 }
@@ -300,11 +300,11 @@ function saveViewerLogin(
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("not logged") ||
-    normalized.includes("not authenticated") ||
-    normalized.includes("authenticate") ||
-    normalized.includes("401") ||
-    normalized.includes("unauthorized")
+    normalized.includes('not logged') ||
+    normalized.includes('not authenticated') ||
+    normalized.includes('authenticate') ||
+    normalized.includes('401') ||
+    normalized.includes('unauthorized')
   );
 }
 
@@ -339,17 +339,17 @@ function mergeRequestWebUrl(repo: RepoIdentity, number: number) {
 function overviewMergeRequestsEndpoint(scope: (typeof OVERVIEW_MERGE_REQUEST_SCOPES)[number]) {
   const params = new URLSearchParams({
     scope,
-    state: "opened",
-    order_by: "updated_at",
-    sort: "desc",
-    non_archived: "true",
-    per_page: "100",
+    state: 'opened',
+    order_by: 'updated_at',
+    sort: 'desc',
+    non_archived: 'true',
+    per_page: '100',
   });
   return `merge_requests?${params}`;
 }
 
 function parseGitLabErrorBody(text: string) {
-  if (!text) return "";
+  if (!text) return '';
   try {
     const parsed = Schema.decodeUnknownSync(GitLabErrorBodySchema)(JSON.parse(text));
     return parsed.message ?? text;
@@ -374,7 +374,7 @@ function graphQlResponseSchema<A, I, R>(dataSchema: Schema.Schema<A, I, R>) {
 
 function responseErrorMessage(error: HttpClientError.ResponseError) {
   return Effect.gen(function* () {
-    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed('')));
     return parseGitLabErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
   });
 }
@@ -402,7 +402,7 @@ function summarizeGitLabFormData(form: Array<[string, string]> | undefined) {
   const summary: Record<string, string> = {};
   for (const [key, stringValue] of form) {
     summary[key] =
-      key === "body" && stringValue.length > 500 ? `${stringValue.slice(0, 500)}…` : stringValue;
+      key === 'body' && stringValue.length > 500 ? `${stringValue.slice(0, 500)}…` : stringValue;
   }
 
   return summary;
@@ -456,16 +456,16 @@ function summarizeGitLabError(error: unknown): unknown {
 
 function requestFor(url: string, token: string, options: GitLabRequestOptions = {}) {
   const request =
-    options.method === "POST"
+    options.method === 'POST'
       ? HttpClientRequest.post(url)
-      : options.method === "PUT"
+      : options.method === 'PUT'
         ? HttpClientRequest.put(url)
         : HttpClientRequest.get(url);
 
   const authorizedRequest = request.pipe(
-    HttpClientRequest.accept(options.accept ?? "application/json"),
+    HttpClientRequest.accept(options.accept ?? 'application/json'),
     HttpClientRequest.bearerToken(token),
-    HttpClientRequest.setHeader("User-Agent", "code-review.app"),
+    HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
   );
 
   if (options.form) {
@@ -474,7 +474,7 @@ function requestFor(url: string, token: string, options: GitLabRequestOptions = 
 
   if (options.body !== undefined) {
     return authorizedRequest.pipe(
-      HttpClientRequest.setHeader("Content-Type", "application/json"),
+      HttpClientRequest.setHeader('Content-Type', 'application/json'),
       HttpClientRequest.bodyJson(options.body),
       Effect.mapError(toProviderError),
       Effect.runSync,
@@ -493,7 +493,7 @@ function gitlabExecute(
     endpoint: string;
   },
 ) {
-  const method = options?.method ?? "GET";
+  const method = options?.method ?? 'GET';
   return Effect.gen(function* () {
     const token = yield* validAccessToken(accountId);
     const client = yield* HttpClient.HttpClient;
@@ -510,13 +510,13 @@ function gitlabExecute(
         Effect.gen(function* () {
           yield* Effect.sync(() => {
             if (logContext) {
-              console.error("[gitlab] request failed", {
+              console.error('[gitlab] request failed', {
                 accountId,
                 host: logContext.host,
                 endpoint: logContext.endpoint,
                 method,
                 url,
-                accept: options?.accept ?? "application/json",
+                accept: options?.accept ?? 'application/json',
                 formData: summarizeGitLabFormData(options?.form),
                 providerError: providerError.message,
                 rawError: summarizeGitLabError(error),
@@ -565,7 +565,7 @@ function gitlabText(
 ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   return gitlabResponse(accountId, host, endpoint, {
     ...options,
-    accept: options?.accept ?? "text/plain",
+    accept: options?.accept ?? 'text/plain',
   }).pipe(
     Effect.flatMap((response) => response.text),
     Effect.catchAll((error) =>
@@ -590,12 +590,12 @@ function gitlabGraphql<A, I, R>(
       accountId,
       gitlabGraphqlUrl(host),
       {
-        method: "POST",
+        method: 'POST',
         body: { query, variables },
       },
       {
         host,
-        endpoint: "/api/graphql",
+        endpoint: '/api/graphql',
       },
     ).pipe(
       Effect.flatMap(HttpClientResponse.filterStatusOk),
@@ -607,7 +607,7 @@ function gitlabGraphql<A, I, R>(
 
     if (response.errors?.length) {
       return yield* Effect.fail(
-        new ProviderError(response.errors.map((error) => error.message).join("\n")),
+        new ProviderError(response.errors.map((error) => error.message).join('\n')),
       );
     }
 
@@ -618,7 +618,7 @@ function gitlabGraphql<A, I, R>(
 function gitlabForm(
   host: string,
   accountId: string,
-  method: "POST" | "PUT",
+  method: 'POST' | 'PUT',
   endpoint: string,
   forms: Array<[string, string]>,
 ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
@@ -630,7 +630,7 @@ function gitlabViewerLogin(
 ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const token = yield* requireStoredToken(accountId);
-    const user = yield* gitlabJson(accountId, token.host, "user", GitLabUserSchema);
+    const user = yield* gitlabJson(accountId, token.host, 'user', GitLabUserSchema);
     yield* saveViewerLogin(accountId, user.username);
     return user.username;
   });
@@ -638,19 +638,19 @@ function gitlabViewerLogin(
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
   const trimmed = input.trim();
-  if (!trimmed) throw new ProviderError("Repo is required");
+  if (!trimmed) throw new ProviderError('Repo is required');
 
   const urlMatch = trimmed.match(/^https?:\/\/([^/]+)\/(.+)$/);
   if (urlMatch) {
     const inputHost = normalizeHost(urlMatch[1]);
-    const path = normalizePath(urlMatch[2].replace(/\.git$/, ""));
-    if (!path) throw new ProviderError("GitLab project path is required");
+    const path = normalizePath(urlMatch[2].replace(/\.git$/, ''));
+    if (!path) throw new ProviderError('GitLab project path is required');
     return [inputHost, path];
   }
 
-  const path = normalizePath(trimmed.replace(/\.git$/, ""));
-  if (path.split("/").length < 2) {
-    throw new ProviderError("Enter a GitLab project as namespace/project");
+  const path = normalizePath(trimmed.replace(/\.git$/, ''));
+  if (path.split('/').length < 2) {
+    throw new ProviderError('Enter a GitLab project as namespace/project');
   }
   return [normalizeHost(host), path];
 }
@@ -663,15 +663,15 @@ function repoSummaryFromProject(
 ): RepoSummary {
   const normalizedHost = normalizeHost(host);
   return {
-    ...createRepoIdentity("gitlab", normalizedHost, accountId, project.path_with_namespace),
-    provider: "gitlab",
+    ...createRepoIdentity('gitlab', normalizedHost, accountId, project.path_with_namespace),
+    provider: 'gitlab',
     host: normalizedHost,
     providerAccountId: accountId,
     providerAccountLabel: label,
     name: project.name,
     nameWithOwner: project.path_with_namespace,
     description: project.description,
-    isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== "public",
+    isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== 'public',
     avatarUrl: project.avatar_url,
   };
 }
@@ -681,9 +681,9 @@ function labelForToken(token: { viewerLogin: string | null; host: string }) {
 }
 
 function mapState(state: string) {
-  if (state === "opened") return "OPEN";
-  if (state === "closed") return "CLOSED";
-  if (state === "merged") return "MERGED";
+  if (state === 'opened') return 'OPEN';
+  if (state === 'closed') return 'CLOSED';
+  if (state === 'merged') return 'MERGED';
   return state;
 }
 
@@ -701,7 +701,7 @@ function refsFromVersion(version: GitLabMrVersion): PullRequestRefs {
 }
 
 function mergeRequestKey(mergeRequest: GitLabMergeRequest) {
-  return typeof mergeRequest.project_id === "number"
+  return typeof mergeRequest.project_id === 'number'
     ? `${mergeRequest.project_id}:${mergeRequest.iid}`
     : mergeRequest.web_url;
 }
@@ -713,15 +713,15 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     title: mr.title,
     state: mapState(mr.state),
     isDraft: Boolean(mr.draft) || Boolean(mr.work_in_progress),
-    mergeStateStatus: (mr.detailed_merge_status ?? mr.merge_status ?? "UNKNOWN").toUpperCase(),
-    mergeable: "UNKNOWN",
+    mergeStateStatus: (mr.detailed_merge_status ?? mr.merge_status ?? 'UNKNOWN').toUpperCase(),
+    mergeable: 'UNKNOWN',
     additions: null,
     deletions: null,
     changeCount: parseChangeCount(mr.changes_count),
-    authorLogin: mr.author?.username ?? "unknown",
+    authorLogin: mr.author?.username ?? 'unknown',
     updatedAt: mr.updated_at,
     url: mr.web_url,
-    headSha: mr.sha ?? diffRefs?.head_sha ?? "",
+    headSha: mr.sha ?? diffRefs?.head_sha ?? '',
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
   };
 }
@@ -733,38 +733,38 @@ function toApprovalActor(approval: typeof GitLabApprovedByEntrySchema.Type) {
     avatarUrl: approval.user.avatar_url ?? null,
     url: approval.user.web_url ?? null,
     approvedAt: approval.approved_at ?? null,
-  } satisfies PullRequestApprovalState["approvedBy"][number];
+  } satisfies PullRequestApprovalState['approvedBy'][number];
 }
 
 function gitlabQualitySeverity(
   severity: string | null | undefined,
-): PullRequestQualityFinding["severity"] {
-  switch ((severity ?? "").toLowerCase()) {
-    case "info":
-      return "info";
-    case "minor":
-      return "minor";
-    case "major":
-      return "major";
-    case "critical":
-      return "critical";
-    case "warning":
-      return "warning";
+): PullRequestQualityFinding['severity'] {
+  switch ((severity ?? '').toLowerCase()) {
+    case 'info':
+      return 'info';
+    case 'minor':
+      return 'minor';
+    case 'major':
+      return 'major';
+    case 'critical':
+      return 'critical';
+    case 'warning':
+      return 'warning';
     default:
-      return "unknown";
+      return 'unknown';
   }
 }
 
 function gitlabQualityAnchorState(path: string, line: number | null) {
   if (!path.trim()) {
-    return "unmapped" as const;
+    return 'unmapped' as const;
   }
 
   if (line == null) {
-    return "file" as const;
+    return 'file' as const;
   }
 
-  return "inline" as const;
+  return 'inline' as const;
 }
 
 function toGitLabQualityFinding(input: {
@@ -772,7 +772,7 @@ function toGitLabQualityFinding(input: {
   sourceName: string;
   path: string;
   externalUrl?: string | null;
-  status: PullRequestQualityFinding["status"];
+  status: PullRequestQualityFinding['status'];
   severity: string | null | undefined;
   line: number | null;
   description: string;
@@ -780,8 +780,8 @@ function toGitLabQualityFinding(input: {
 }): PullRequestQualityFinding {
   const anchorState = gitlabQualityAnchorState(input.path, input.line);
   return {
-    id: `${input.idPrefix}:${input.path}:${input.line ?? "file"}:${input.fingerprint ?? input.description}`,
-    sourceType: "gitlab-code-quality",
+    id: `${input.idPrefix}:${input.path}:${input.line ?? 'file'}:${input.fingerprint ?? input.description}`,
+    sourceType: 'gitlab-code-quality',
     sourceName: input.sourceName,
     severity: gitlabQualitySeverity(input.severity),
     status: input.status,
@@ -796,11 +796,11 @@ function toGitLabQualityFinding(input: {
 }
 
 function gitlabQualityPending(status: string | null | undefined) {
-  return ["parsing", "pending"].includes((status ?? "").toLowerCase());
+  return ['parsing', 'pending'].includes((status ?? '').toLowerCase());
 }
 
 function gitlabQualityUnavailable(status: string | null | undefined) {
-  return ["failed", "error", "not_found"].includes((status ?? "").toLowerCase());
+  return ['failed', 'error', 'not_found'].includes((status ?? '').toLowerCase());
 }
 
 const EMPTY_STATUS_COUNTS: Record<string, number> = {};
@@ -814,13 +814,13 @@ function gitlabQualityReportUsable(input: {
     return false;
   }
 
-  const normalizedComparerStatus = (input.comparerStatus ?? "").toLowerCase();
-  if (normalizedComparerStatus === "parsed") {
+  const normalizedComparerStatus = (input.comparerStatus ?? '').toLowerCase();
+  if (normalizedComparerStatus === 'parsed') {
     return true;
   }
 
-  const normalizedReportStatus = (input.reportStatus ?? "").toLowerCase();
-  return normalizedReportStatus === "parsed";
+  const normalizedReportStatus = (input.reportStatus ?? '').toLowerCase();
+  return normalizedReportStatus === 'parsed';
 }
 
 function fetchGitLabPullRequestRefsByProject(
@@ -830,7 +830,7 @@ function fetchGitLabPullRequestRefsByProject(
   number: number,
 ) {
   return Effect.gen(function* () {
-    console.info("[gitlab] fetching merge request diff refs", {
+    console.info('[gitlab] fetching merge request diff refs', {
       host,
       project,
       number,
@@ -843,10 +843,10 @@ function fetchGitLabPullRequestRefsByProject(
     );
     const version = versions[0];
     if (!version) {
-      return yield* Effect.fail(new ProviderError("GitLab merge request has no diff versions"));
+      return yield* Effect.fail(new ProviderError('GitLab merge request has no diff versions'));
     }
     const refs = refsFromVersion(version);
-    console.info("[gitlab] fetched merge request diff refs", {
+    console.info('[gitlab] fetched merge request diff refs', {
       host,
       project,
       number,
@@ -861,12 +861,12 @@ function fetchGitLabPullRequestRefs(repo: RepoIdentity, number: number) {
   return fetchGitLabPullRequestRefsByProject(repo.accountId, repo.host, repo.path, number);
 }
 
-function lineSide(position: GitLabPosition): "LEFT" | "RIGHT" | null {
+function lineSide(position: GitLabPosition): 'LEFT' | 'RIGHT' | null {
   const end = position.line_range?.end;
-  if (end?.type === "old") return "LEFT";
-  if (end?.type === "new") return "RIGHT";
-  if (position.old_line != null && position.new_line == null) return "LEFT";
-  if (position.new_line != null) return "RIGHT";
+  if (end?.type === 'old') return 'LEFT';
+  if (end?.type === 'new') return 'RIGHT';
+  if (position.old_line != null && position.new_line == null) return 'LEFT';
+  if (position.new_line != null) return 'RIGHT';
   return null;
 }
 
@@ -884,15 +884,15 @@ function startLineFromPosition(position: GitLabPosition) {
   return position.line_range?.start?.new_line ?? position.line_range?.start?.old_line ?? null;
 }
 
-function startSideFromPosition(position: GitLabPosition): "LEFT" | "RIGHT" | null {
+function startSideFromPosition(position: GitLabPosition): 'LEFT' | 'RIGHT' | null {
   const type = position.line_range?.start?.type;
-  if (type === "old") return "LEFT";
-  if (type === "new") return "RIGHT";
+  if (type === 'old') return 'LEFT';
+  if (type === 'new') return 'RIGHT';
   return null;
 }
 
 function pathFromPosition(position: GitLabPosition | null | undefined) {
-  return position?.new_path ?? position?.old_path ?? "";
+  return position?.new_path ?? position?.old_path ?? '';
 }
 
 function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | null {
@@ -907,23 +907,23 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
     return {
       id,
       databaseId: note.id,
-      authorLogin: note.author?.username ?? "unknown",
+      authorLogin: note.author?.username ?? 'unknown',
       authorAvatarUrl: note.author?.avatar_url ?? null,
       authorAssociation: null,
       body: note.body,
       createdAt: note.created_at,
       updatedAt: note.updated_at,
-      url: note.web_url ?? "",
+      url: note.web_url ?? '',
       replyToId: id === rootId ? null : rootId,
     };
   });
 
   const subjectType =
-    position?.position_type === "file" ? "file" : rootNote.type === "DiffNote" ? "line" : "file";
+    position?.position_type === 'file' ? 'file' : rootNote.type === 'DiffNote' ? 'line' : 'file';
 
   return {
     id: discussion.id,
-    provider: "gitlab",
+    provider: 'gitlab',
     path: pathFromPosition(position),
     isResolved: Boolean(rootNote.resolved),
     isOutdated: false,
@@ -939,26 +939,26 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
 function noteToGlobalReviewThread(note: typeof GitLabNoteSchema.Type): ReviewThread {
   return {
     id: String(note.id),
-    provider: "gitlab",
-    path: "",
+    provider: 'gitlab',
+    path: '',
     isResolved: false,
     isOutdated: false,
     line: null,
     startLine: null,
     side: null,
     startSide: null,
-    subjectType: "global",
+    subjectType: 'global',
     comments: [
       {
         id: String(note.id),
         databaseId: note.id,
-        authorLogin: note.author?.username ?? "unknown",
+        authorLogin: note.author?.username ?? 'unknown',
         authorAvatarUrl: note.author?.avatar_url ?? null,
         authorAssociation: null,
         body: note.body,
         createdAt: note.created_at,
         updatedAt: note.updated_at,
-        url: note.web_url ?? "",
+        url: note.web_url ?? '',
         replyToId: null,
       },
     ],
@@ -966,30 +966,30 @@ function noteToGlobalReviewThread(note: typeof GitLabNoteSchema.Type): ReviewThr
 }
 
 class GitLabProvider implements ForgeProvider {
-  authStatus(accountId: string): ReturnType<ForgeProvider["authStatus"]> {
+  authStatus(accountId: string): ReturnType<ForgeProvider['authStatus']> {
     const viewerLogin = this.viewerLogin.bind(this);
     return Effect.gen(function* () {
       const token = yield* storedToken(accountId);
       if (!token) {
         return {
-          status: "not_authenticated",
-          message: "Sign in with GitLab to load projects.",
+          status: 'not_authenticated',
+          message: 'Sign in with GitLab to load projects.',
         } satisfies ProviderAuthStatus;
       }
       yield* viewerLogin(accountId);
-      return { status: "ready", message: null } satisfies ProviderAuthStatus;
+      return { status: 'ready', message: null } satisfies ProviderAuthStatus;
     }).pipe(
       Effect.catchAll((error) => {
         const message = error instanceof Error ? error.message : String(error);
         const status: ProviderAuthStatus = isNotAuthenticatedMessage(message)
           ? {
-              status: "not_authenticated",
-              message: "Sign in with GitLab again.",
+              status: 'not_authenticated',
+              message: 'Sign in with GitLab again.',
             }
-          : { status: "unknown_error", message };
+          : { status: 'unknown_error', message };
         return Effect.succeed(status);
       }),
-    ) as ReturnType<ForgeProvider["authStatus"]>;
+    ) as ReturnType<ForgeProvider['authStatus']>;
   }
 
   viewerLogin(accountId: string) {
@@ -1045,7 +1045,7 @@ class GitLabProvider implements ForgeProvider {
       const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
       if (validatedHost !== normalizeHost(token.host)) {
         return yield* Effect.fail(
-          new ProviderError("Project URL host must match the selected GitLab account."),
+          new ProviderError('Project URL host must match the selected GitLab account.'),
         );
       }
       const project = yield* gitlabJson(
@@ -1064,7 +1064,7 @@ class GitLabProvider implements ForgeProvider {
       const label = labelForToken(token);
       console.info(
         `[gitlab] loading overview merge requests from ${token.host} (${OVERVIEW_MERGE_REQUEST_SCOPES.join(
-          ", ",
+          ', ',
         )})`,
       );
       const scopedResults = yield* Effect.forEach(
@@ -1079,7 +1079,7 @@ class GitLabProvider implements ForgeProvider {
             Effect.map((mergeRequests) => ({ scope, mergeRequests, error: null })),
             Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
           ),
-        { concurrency: "unbounded" },
+        { concurrency: 'unbounded' },
       );
       const mergeRequestsByKey = new Map<string, GitLabMergeRequest>();
       const errors: ProviderError[] = [];
@@ -1104,7 +1104,7 @@ class GitLabProvider implements ForgeProvider {
 
       if (mergeRequestsByKey.size === 0 && errors.length === scopedResults.length) {
         return yield* Effect.fail(
-          new ProviderError(errors[0]?.message ?? "Failed to load GitLab overview merge requests."),
+          new ProviderError(errors[0]?.message ?? 'Failed to load GitLab overview merge requests.'),
         );
       }
 
@@ -1118,7 +1118,7 @@ class GitLabProvider implements ForgeProvider {
         ...new Set(
           mergeRequests
             .map((mergeRequest) => mergeRequest.project_id)
-            .filter((projectId): projectId is number => typeof projectId === "number"),
+            .filter((projectId): projectId is number => typeof projectId === 'number'),
         ),
       ];
       const projectResults = yield* Effect.forEach(
@@ -1131,7 +1131,7 @@ class GitLabProvider implements ForgeProvider {
               return Effect.succeed({ projectId, project: null });
             }),
           ),
-        { concurrency: "unbounded" },
+        { concurrency: 'unbounded' },
       );
       const projectsById = new Map<number, GitLabProject>();
       for (const result of projectResults) {
@@ -1143,7 +1143,7 @@ class GitLabProvider implements ForgeProvider {
 
       for (const mergeRequest of mergeRequests) {
         const projectId = mergeRequest.project_id;
-        if (typeof projectId !== "number") {
+        if (typeof projectId !== 'number') {
           console.warn(`[gitlab] skipping overview MR !${mergeRequest.iid}: missing project_id`);
           continue;
         }
@@ -1169,7 +1169,7 @@ class GitLabProvider implements ForgeProvider {
         repo.host,
         projectEndpoint(
           repo,
-          "merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=100",
+          'merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=100',
         ),
         Schema.Array(GitLabMergeRequestSchema),
       );
@@ -1193,7 +1193,7 @@ class GitLabProvider implements ForgeProvider {
   getPullRequestApprovalState(
     repo: RepoIdentity,
     number: number,
-  ): ReturnType<ForgeProvider["getPullRequestApprovalState"]> {
+  ): ReturnType<ForgeProvider['getPullRequestApprovalState']> {
     return Effect.gen(function* () {
       const approvalState = yield* gitlabJson(
         repo.accountId,
@@ -1204,13 +1204,15 @@ class GitLabProvider implements ForgeProvider {
       const viewerLogin = yield* gitlabViewerLogin(repo.accountId);
       const approvedBy = (approvalState.approved_by ?? [])
         .map(toApprovalActor)
-        .sort((left, right) => Date.parse(right.approvedAt ?? "") - Date.parse(left.approvedAt ?? ""));
+        .sort(
+          (left, right) => Date.parse(right.approvedAt ?? '') - Date.parse(left.approvedAt ?? ''),
+        );
 
       return {
-        provider: "gitlab",
+        provider: 'gitlab',
         approvedBy,
         viewerApproved: approvedBy.some((approval) => approval.login === viewerLogin),
-        viewerRemoveStrategy: "unapprove",
+        viewerRemoveStrategy: 'unapprove',
         approvalsRequired: approvalState.approvals_required ?? null,
         approvalsLeft: approvalState.approvals_left ?? null,
       } satisfies PullRequestApprovalState;
@@ -1221,19 +1223,19 @@ class GitLabProvider implements ForgeProvider {
     repo: RepoIdentity,
     number: number,
     headSha: string,
-  ): ReturnType<ForgeProvider["approvePullRequest"]> {
+  ): ReturnType<ForgeProvider['approvePullRequest']> {
     return Effect.gen(function* () {
       const trimmedHeadSha = headSha.trim();
       if (!trimmedHeadSha) {
-        return yield* Effect.fail(new ProviderError("Head SHA is required"));
+        return yield* Effect.fail(new ProviderError('Head SHA is required'));
       }
 
       yield* gitlabForm(
         repo.host,
         repo.accountId,
-        "POST",
+        'POST',
         projectEndpoint(repo, `merge_requests/${number}/approve`),
-        [["sha", trimmedHeadSha]],
+        [['sha', trimmedHeadSha]],
       );
     });
   }
@@ -1241,12 +1243,12 @@ class GitLabProvider implements ForgeProvider {
   removePullRequestApproval(
     repo: RepoIdentity,
     number: number,
-  ): ReturnType<ForgeProvider["removePullRequestApproval"]> {
+  ): ReturnType<ForgeProvider['removePullRequestApproval']> {
     return Effect.gen(function* () {
       yield* gitlabForm(
         repo.host,
         repo.accountId,
-        "POST",
+        'POST',
         projectEndpoint(repo, `merge_requests/${number}/unapprove`),
         [],
       );
@@ -1296,7 +1298,7 @@ class GitLabProvider implements ForgeProvider {
   }
 
   fetchFileContent(repo: RepoIdentity, path: string, ref: string) {
-    console.info("[gitlab] fetching file content", {
+    console.info('[gitlab] fetching file content', {
       repo: repo.path,
       path,
       ref,
@@ -1311,7 +1313,7 @@ class GitLabProvider implements ForgeProvider {
     ).pipe(
       Effect.tap((content) =>
         Effect.sync(() => {
-          console.info("[gitlab] fetched file content", {
+          console.info('[gitlab] fetched file content', {
             repo: repo.path,
             path,
             ref,
@@ -1324,7 +1326,11 @@ class GitLabProvider implements ForgeProvider {
 
   getPullRequestQualityReport(
     input: PullRequestQualityReportInput,
-  ): Effect.Effect<PullRequestQualityReport, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
+  ): Effect.Effect<
+    PullRequestQualityReport,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  > {
     return Effect.gen(function* () {
       const { repo, number, headSha } = input;
       const graphqlQuery = `
@@ -1385,7 +1391,7 @@ query($fullPath: ID!, $iid: String!) {
         GitLabCodeQualityGraphqlQueryDataSchema,
       ).pipe(
         Effect.catchAll((error) => {
-          console.warn("[gitlab] GraphQL code quality query failed", {
+          console.warn('[gitlab] GraphQL code quality query failed', {
             repo: repo.path,
             number,
             message: error.message,
@@ -1397,7 +1403,7 @@ query($fullPath: ID!, $iid: String!) {
       const graphqlResult =
         graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ?? null;
 
-      console.info("[gitlab] GraphQL code quality response", {
+      console.info('[gitlab] GraphQL code quality response', {
         repo: repo.path,
         number,
         comparer: graphqlResult,
@@ -1409,24 +1415,24 @@ query($fullPath: ID!, $iid: String!) {
 
         if (gitlabQualityPending(comparerStatus) || gitlabQualityPending(reportStatus)) {
           return {
-            provider: "gitlab",
+            provider: 'gitlab',
             repoKey: repo.repoKey,
             number,
             headSha,
-            status: "pending",
+            status: 'pending',
             summary: {
               totalFindings: 0,
               inlineFindings: 0,
               fileOnlyFindings: 0,
               statusCounts: EMPTY_STATUS_COUNTS,
-              providerLabel: "GitLab code quality",
+              providerLabel: 'GitLab code quality',
               detailsUrl: mergeRequestWebUrl(repo, number),
-              notes: ["Code quality report is still processing."],
+              notes: ['Code quality report is still processing.'],
             },
             findings: [],
             fetchedAt: new Date().toISOString(),
             sourceMetadata: {
-              source: "graphql",
+              source: 'graphql',
               comparerStatus,
               reportStatus,
             },
@@ -1447,10 +1453,10 @@ query($fullPath: ID!, $iid: String!) {
           const findings = newErrors.map((finding, index) =>
             toGitLabQualityFinding({
               idPrefix: `graphql:${index}`,
-              sourceName: finding.engineName?.trim() || "GitLab Code Quality",
-              path: finding.filePath?.trim() ?? "",
+              sourceName: finding.engineName?.trim() || 'GitLab Code Quality',
+              path: finding.filePath?.trim() ?? '',
               externalUrl: finding.webUrl,
-              status: "new",
+              status: 'new',
               severity: finding.severity,
               line: finding.line ?? null,
               description: finding.description,
@@ -1459,23 +1465,23 @@ query($fullPath: ID!, $iid: String!) {
           );
 
           return {
-            provider: "gitlab",
+            provider: 'gitlab',
             repoKey: repo.repoKey,
             number,
             headSha,
-            status: findings.length > 0 ? "warning" : "ok",
+            status: findings.length > 0 ? 'warning' : 'ok',
             summary: {
               totalFindings:
                 graphqlResult.report.summary?.total ??
                 newErrors.length + resolvedErrors.length + existingErrors.length,
-              inlineFindings: findings.filter((finding) => finding.anchorState === "inline").length,
-              fileOnlyFindings: findings.filter((finding) => finding.anchorState === "file").length,
+              inlineFindings: findings.filter((finding) => finding.anchorState === 'inline').length,
+              fileOnlyFindings: findings.filter((finding) => finding.anchorState === 'file').length,
               statusCounts: {
                 new: newErrors.length,
                 existing: existingErrors.length,
                 resolved: resolvedErrors.length,
               },
-              providerLabel: "GitLab code quality",
+              providerLabel: 'GitLab code quality',
               detailsUrl: mergeRequestWebUrl(repo, number),
               notes: gitlabQualityUnavailable(reportStatus)
                 ? [`GitLab reported code quality status ${reportStatus}, but returned findings.`]
@@ -1484,7 +1490,7 @@ query($fullPath: ID!, $iid: String!) {
             findings,
             fetchedAt: new Date().toISOString(),
             sourceMetadata: {
-              source: "graphql",
+              source: 'graphql',
               comparerStatus,
               reportStatus,
               resolvedCount: graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
@@ -1495,28 +1501,28 @@ query($fullPath: ID!, $iid: String!) {
       }
 
       return {
-        provider: "gitlab",
+        provider: 'gitlab',
         repoKey: repo.repoKey,
         number,
         headSha,
-        status: "unavailable",
+        status: 'unavailable',
         summary: {
           totalFindings: 0,
           inlineFindings: 0,
           fileOnlyFindings: 0,
           statusCounts: EMPTY_STATUS_COUNTS,
-          providerLabel: "GitLab code quality",
+          providerLabel: 'GitLab code quality',
           detailsUrl: mergeRequestWebUrl(repo, number),
           notes: [
             graphqlResponse
-              ? "GitLab GraphQL returned no usable code quality report for this merge request."
-              : "GitLab GraphQL code quality query failed for this merge request.",
+              ? 'GitLab GraphQL returned no usable code quality report for this merge request.'
+              : 'GitLab GraphQL code quality query failed for this merge request.',
           ],
         },
         findings: [],
         fetchedAt: new Date().toISOString(),
         sourceMetadata: {
-          source: "graphql",
+          source: 'graphql',
           comparerStatus: graphqlResult?.status ?? null,
           reportStatus: graphqlResult?.report?.status ?? null,
           graphqlAvailable: graphqlResponse !== null,
@@ -1533,7 +1539,7 @@ query($fullPath: ID!, $iid: String!) {
         auth: {
           envConfig: [],
           askPass: {
-            username: "oauth2",
+            username: 'oauth2',
             password: token,
           },
         },
@@ -1590,7 +1596,7 @@ query($fullPath: ID!, $iid: String!) {
           if (note.system) continue;
           if (discussionNoteIds.has(note.id)) continue;
           if (note.position != null) continue;
-          if (note.type === "DiffNote") continue;
+          if (note.type === 'DiffNote') continue;
           threads.push(noteToGlobalReviewThread(note));
         }
         notesPage += 1;
@@ -1603,14 +1609,14 @@ query($fullPath: ID!, $iid: String!) {
   createReviewThread(repo: RepoIdentity, number: number, input: ReviewThreadInput) {
     return Effect.gen(function* () {
       const body = input.body.trim();
-      if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
-      if (input.subjectType === "global") {
+      if (!body) return yield* Effect.fail(new ProviderError('Comment body is required'));
+      if (input.subjectType === 'global') {
         yield* gitlabForm(
           repo.host,
           repo.accountId,
-          "POST",
+          'POST',
           projectEndpoint(repo, `merge_requests/${number}/notes`),
-          [["body", body]],
+          [['body', body]],
         );
         return;
       }
@@ -1623,38 +1629,38 @@ query($fullPath: ID!, $iid: String!) {
       );
       const version = versions[0];
       if (!version) {
-        return yield* Effect.fail(new ProviderError("GitLab merge request has no diff versions"));
+        return yield* Effect.fail(new ProviderError('GitLab merge request has no diff versions'));
       }
 
       const oldPath = input.oldPath.trim() || input.path.trim();
       const newPath = input.newPath.trim() || input.path.trim();
       const forms: Array<[string, string]> = [
-        ["body", body],
-        ["position[base_sha]", version.base_commit_sha],
-        ["position[head_sha]", version.head_commit_sha],
-        ["position[start_sha]", version.start_commit_sha],
-        ["position[old_path]", oldPath],
-        ["position[new_path]", newPath],
+        ['body', body],
+        ['position[base_sha]', version.base_commit_sha],
+        ['position[head_sha]', version.head_commit_sha],
+        ['position[start_sha]', version.start_commit_sha],
+        ['position[old_path]', oldPath],
+        ['position[new_path]', newPath],
       ];
 
-      if (input.subjectType === "file") {
-        forms.push(["position[position_type]", "file"]);
+      if (input.subjectType === 'file') {
+        forms.push(['position[position_type]', 'file']);
       } else {
         if (input.line == null) {
-          return yield* Effect.fail(new ProviderError("Line comments require a target line"));
+          return yield* Effect.fail(new ProviderError('Line comments require a target line'));
         }
-        forms.push(["position[position_type]", "text"]);
-        if (input.side === "LEFT") {
-          forms.push(["position[old_line]", String(input.line)]);
+        forms.push(['position[position_type]', 'text']);
+        if (input.side === 'LEFT') {
+          forms.push(['position[old_line]', String(input.line)]);
         } else {
-          forms.push(["position[new_line]", String(input.line)]);
+          forms.push(['position[new_line]', String(input.line)]);
         }
       }
 
       yield* gitlabForm(
         repo.host,
         repo.accountId,
-        "POST",
+        'POST',
         projectEndpoint(repo, `merge_requests/${number}/discussions`),
         forms,
       );
@@ -1665,14 +1671,14 @@ query($fullPath: ID!, $iid: String!) {
     return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedBody = body.trim();
-      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError("Thread id is required"));
-      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Reply body is required"));
+      if (!trimmedThreadId) return yield* Effect.fail(new ProviderError('Thread id is required'));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Reply body is required'));
       yield* gitlabForm(
         repo.host,
         repo.accountId,
-        "POST",
+        'POST',
         projectEndpoint(repo, `merge_requests/${number}/discussions/${trimmedThreadId}/notes`),
-        [["body", trimmedBody]],
+        [['body', trimmedBody]],
       );
     });
   }
@@ -1683,25 +1689,25 @@ query($fullPath: ID!, $iid: String!) {
     threadId: string,
     commentId: string,
     body: string,
-    subjectType: ReviewThreadInput["subjectType"],
+    subjectType: ReviewThreadInput['subjectType'],
   ) {
     return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedCommentId = commentId.trim();
       const trimmedBody = body.trim();
-      if (!trimmedCommentId) return yield* Effect.fail(new ProviderError("Comment id is required"));
-      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
-      if (subjectType !== "global" && !trimmedThreadId) {
-        return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!trimmedCommentId) return yield* Effect.fail(new ProviderError('Comment id is required'));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Comment body is required'));
+      if (subjectType !== 'global' && !trimmedThreadId) {
+        return yield* Effect.fail(new ProviderError('Thread id is required'));
       }
 
-      if (subjectType === "global") {
+      if (subjectType === 'global') {
         yield* gitlabForm(
           repo.host,
           repo.accountId,
-          "PUT",
+          'PUT',
           projectEndpoint(repo, `merge_requests/${number}/notes/${trimmedCommentId}`),
-          [["body", trimmedBody]],
+          [['body', trimmedBody]],
         );
         return;
       }
@@ -1709,12 +1715,12 @@ query($fullPath: ID!, $iid: String!) {
       yield* gitlabForm(
         repo.host,
         repo.accountId,
-        "PUT",
+        'PUT',
         projectEndpoint(
           repo,
           `merge_requests/${number}/discussions/${trimmedThreadId}/notes/${trimmedCommentId}`,
         ),
-        [["body", trimmedBody]],
+        [['body', trimmedBody]],
       );
     });
   }

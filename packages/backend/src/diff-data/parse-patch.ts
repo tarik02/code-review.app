@@ -1,5 +1,5 @@
-import { parsePatchFiles, type FileDiffMetadata } from "@pierre/diffs";
-import type { DiffDataMode } from "@code-review-app/shared";
+import { parsePatchFiles, type FileDiffMetadata } from '@pierre/diffs';
+import type { DiffDataMode } from '@code-review-app/shared';
 
 const GIT_PATCH_CONTEXT_SIZE = 3;
 
@@ -7,39 +7,39 @@ function parsePatch(patch: string, cacheKeyPrefix: string) {
   return parsePatchFiles(patch, cacheKeyPrefix).flatMap((parsedPatch) => parsedPatch.files);
 }
 
-type Hunk = FileDiffMetadata["hunks"][number];
-type HunkContent = Hunk["hunkContent"][number];
+type Hunk = FileDiffMetadata['hunks'][number];
+type HunkContent = Hunk['hunkContent'][number];
 
 function hunkContentSplitLineCount(content: HunkContent) {
-  if (content.type === "context") {
+  if (content.type === 'context') {
     return content.lines;
   }
   return Math.max(content.deletions, content.additions);
 }
 
 function hunkContentUnifiedLineCount(content: HunkContent) {
-  if (content.type === "context") {
+  if (content.type === 'context') {
     return content.lines;
   }
   return content.deletions + content.additions;
 }
 
 function hunkContentDeletionEnd(content: HunkContent) {
-  if (content.type === "context") {
+  if (content.type === 'context') {
     return content.deletionLineIndex + content.lines;
   }
   return content.deletionLineIndex + content.deletions;
 }
 
 function hunkContentAdditionEnd(content: HunkContent) {
-  if (content.type === "context") {
+  if (content.type === 'context') {
     return content.additionLineIndex + content.lines;
   }
   return content.additionLineIndex + content.additions;
 }
 
 function sliceContextContent(
-  content: Extract<HunkContent, { type: "context" }>,
+  content: Extract<HunkContent, { type: 'context' }>,
   offset: number,
   lines: number,
 ): HunkContent | null {
@@ -57,7 +57,7 @@ function sliceContextContent(
 
 function appendContextContent(
   group: HunkContent[],
-  content: Extract<HunkContent, { type: "context" }>,
+  content: Extract<HunkContent, { type: 'context' }>,
   offset: number,
   lines: number,
 ) {
@@ -68,11 +68,11 @@ function appendContextContent(
 }
 
 function groupHasChange(group: HunkContent[]) {
-  return group.some((content) => content.type === "change");
+  return group.some((content) => content.type === 'change');
 }
 
 function hasLaterChange(hunkContent: HunkContent[], startIndex: number) {
-  return hunkContent.slice(startIndex).some((content) => content.type === "change");
+  return hunkContent.slice(startIndex).some((content) => content.type === 'change');
 }
 
 function compactHunkContent(hunkContent: HunkContent[], contextSize: number) {
@@ -87,7 +87,7 @@ function compactHunkContent(hunkContent: HunkContent[], contextSize: number) {
   }
 
   for (const [index, content] of hunkContent.entries()) {
-    if (content.type === "change") {
+    if (content.type === 'change') {
       group.push(content);
       continue;
     }
@@ -142,7 +142,7 @@ function createCompactedHunk(input: {
   const firstContent = input.hunkContent[0];
   const lastContent = input.hunkContent[input.hunkContent.length - 1];
   if (!firstContent || !lastContent) {
-    throw new Error("Cannot compact an empty diff hunk.");
+    throw new Error('Cannot compact an empty diff hunk.');
   }
 
   const deletionLineIndex = firstContent.deletionLineIndex;
@@ -168,11 +168,11 @@ function createCompactedHunk(input: {
     deletionCount,
     additionCount,
     deletionLines: input.hunkContent.reduce(
-      (count, content) => count + (content.type === "change" ? content.deletions : 0),
+      (count, content) => count + (content.type === 'change' ? content.deletions : 0),
       0,
     ),
     additionLines: input.hunkContent.reduce(
-      (count, content) => count + (content.type === "change" ? content.additions : 0),
+      (count, content) => count + (content.type === 'change' ? content.additions : 0),
       0,
     ),
     splitLineStart: input.splitLineStart + collapsedBefore,
@@ -186,7 +186,7 @@ function createCompactedHunk(input: {
       0,
     ),
     hunkContent: input.hunkContent,
-    hunkSpecs: "",
+    hunkSpecs: '',
   } satisfies Hunk;
 
   return {
@@ -263,7 +263,7 @@ function parsePullRequestPatch(input: {
 }): FileDiffMetadata[] {
   const cacheKeyPrefix = `${input.providerId}:${input.repoKey}-${input.number}-${input.headSha}-${input.mode}`;
 
-  if (input.mode === "git") {
+  if (input.mode === 'git') {
     return parseGitPatch(input.patch, `${cacheKeyPrefix}:git`);
   }
 

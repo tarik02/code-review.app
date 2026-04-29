@@ -11,18 +11,18 @@ safe-storage encryption, are injected by the host package.
 Use this shape for new services and when refactoring existing services:
 
 ```ts
-import { Effect, Layer } from "effect";
+import { Effect, Layer } from 'effect';
 
 type ExampleServiceShape = {
   run(input: string): Effect.Effect<string, Error>;
 };
 
-class ExampleService extends Effect.Tag("ExampleService")<ExampleService, ExampleServiceShape>() {}
+class ExampleService extends Effect.Tag('ExampleService')<ExampleService, ExampleServiceShape>() {}
 
 const makeExampleService = Effect.gen(function* () {
   const dependency = yield* DependencyService;
 
-  const run: ExampleServiceShape["run"] = Effect.fn("ExampleService.run")(function* (input) {
+  const run: ExampleServiceShape['run'] = Effect.fn('ExampleService.run')(function* (input) {
     return yield* dependency.doWork(input);
   });
 
@@ -57,9 +57,9 @@ that call providers should capture those dependencies in the constructor and
 provide them into provider effects:
 
 ```ts
-import { HttpClient } from "@effect/platform";
-import { Effect } from "effect";
-import { AuthTokenStore } from "../auth/token-store";
+import { HttpClient } from '@effect/platform';
+import { Effect } from 'effect';
+import { AuthTokenStore } from '../auth/token-store';
 
 const makeExampleService = Effect.gen(function* () {
   const tokenStore = yield* AuthTokenStore;

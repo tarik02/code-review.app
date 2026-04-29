@@ -11,7 +11,7 @@ files:
   - from: ../../packages/backend/drizzle
     to: drizzle
     filter:
-      - "**/*"
+      - '**/*'
 
 mac:
   artifactName: code-review.app-${version}-${arch}.${ext}
@@ -32,7 +32,7 @@ linux:
   maintainer: Taras Fomin <Taras.Fomin@gmail.com>
   executableName: code-review.app
   executableArgs:
-    - "%U"
+    - '%U'
   icon: build/icons
   desktop:
     entry:
@@ -40,7 +40,7 @@ linux:
       Name: code-review.app
       Comment: Browse GitHub and GitLab pull requests locally
       Icon: code-review.app
-      Terminal: "false"
+      Terminal: 'false'
       Categories: Development;Utility;
       MimeType: x-scheme-handler/code-review.app;
       StartupWMClass: code-review.app
@@ -70,5 +70,5 @@ publish:
     owner: tarik02
     repo: code-review.app
 
-electronUpdaterCompatibility: ">=2.16"
+electronUpdaterCompatibility: '>=2.16'
 generateUpdatesFilesForAllChannels: false

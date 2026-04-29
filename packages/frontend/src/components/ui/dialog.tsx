@@ -1,9 +1,9 @@
-import * as React from "react";
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { cx } from "../../lib/cx";
+import * as React from 'react';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { cx } from '../../lib/cx';
 
 function toClassName(className: unknown) {
-  return typeof className === "string" ? className : undefined;
+  return typeof className === 'string' ? className : undefined;
 }
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -25,7 +25,7 @@ function DialogContent({
       <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <DialogPrimitive.Popup
           className={cx(
-            "flex max-h-[80vh] w-full max-w-[520px] flex-col rounded-xl bg-surface shadow-dialog",
+            'flex max-h-[80vh] w-full max-w-[520px] flex-col rounded-xl bg-surface shadow-dialog',
             toClassName(className),
           )}
           {...props}
@@ -37,13 +37,10 @@ function DialogContent({
   );
 }
 
-function DialogTitle({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cx("m-0 text-lg font-bold", toClassName(className))}
+      className={cx('m-0 text-lg font-bold', toClassName(className))}
       {...props}
     />
   );
@@ -55,20 +52,17 @@ function DialogDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      className={cx("m-0 text-sm text-ink-600", toClassName(className))}
+      className={cx('m-0 text-sm text-ink-600', toClassName(className))}
       {...props}
     />
   );
 }
 
-function DialogClose({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
+function DialogClose({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {
   return (
     <DialogPrimitive.Close
       className={cx(
-        "rounded-xl border border-ink-300 bg-surface px-3.5 py-2.5 text-ink-900 transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60",
+        'rounded-xl border border-ink-300 bg-surface px-3.5 py-2.5 text-ink-900 transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60',
         toClassName(className),
       )}
       {...props}
@@ -76,11 +70,4 @@ function DialogClose({
   );
 }
 
-export {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-  DialogTrigger,
-};
+export { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle, DialogTrigger };

@@ -1,9 +1,9 @@
-const WCO_CLASS_NAME = "wco";
+const WCO_CLASS_NAME = 'wco';
 
 interface WindowControlsOverlayLike {
   readonly visible: boolean;
-  addEventListener(type: "geometrychange", listener: EventListener): void;
-  removeEventListener(type: "geometrychange", listener: EventListener): void;
+  addEventListener(type: 'geometrychange', listener: EventListener): void;
+  removeEventListener(type: 'geometrychange', listener: EventListener): void;
 }
 
 interface NavigatorWithWindowControlsOverlay extends Navigator {
@@ -11,7 +11,7 @@ interface NavigatorWithWindowControlsOverlay extends Navigator {
 }
 
 function getWindowControlsOverlay(): WindowControlsOverlayLike | null {
-  if (typeof navigator === "undefined") {
+  if (typeof navigator === 'undefined') {
     return null;
   }
 
@@ -19,7 +19,7 @@ function getWindowControlsOverlay(): WindowControlsOverlayLike | null {
 }
 
 export function syncDocumentWindowControlsOverlayClass(): () => void {
-  if (typeof document === "undefined") {
+  if (typeof document === 'undefined') {
     return () => {};
   }
 
@@ -33,8 +33,8 @@ export function syncDocumentWindowControlsOverlayClass(): () => void {
     return () => {};
   }
 
-  overlay.addEventListener("geometrychange", update);
+  overlay.addEventListener('geometrychange', update);
   return () => {
-    overlay.removeEventListener("geometrychange", update);
+    overlay.removeEventListener('geometrychange', update);
   };
 }

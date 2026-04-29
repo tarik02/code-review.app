@@ -10,43 +10,43 @@ class BackendError extends Error {
 
 class ValidationError extends BackendError {
   constructor(message: string) {
-    super("ValidationError", message);
+    super('ValidationError', message);
   }
 }
 
 class CliMissingError extends BackendError {
   constructor(message: string) {
-    super("CliMissingError", message);
+    super('CliMissingError', message);
   }
 }
 
 class CliAuthError extends BackendError {
   constructor(message: string) {
-    super("CliAuthError", message);
+    super('CliAuthError', message);
   }
 }
 
 class CliExecutionError extends BackendError {
   constructor(message: string) {
-    super("CliExecutionError", message);
+    super('CliExecutionError', message);
   }
 }
 
 class ProviderError extends BackendError {
   constructor(message: string, options?: ErrorOptions) {
-    super("ProviderError", message, options);
+    super('ProviderError', message, options);
   }
 }
 
 class CacheError extends BackendError {
   constructor(message: string) {
-    super("CacheError", message);
+    super('CacheError', message);
   }
 }
 
 class UpdateError extends BackendError {
   constructor(message: string) {
-    super("UpdateError", message);
+    super('UpdateError', message);
   }
 }
 

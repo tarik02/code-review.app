@@ -1,14 +1,14 @@
-import { HttpClient } from "@effect/platform";
-import { Effect, Layer } from "effect";
-import { CacheService } from "../cache.ts";
-import { providerFor } from "../providers/registry.ts";
-import { AuthTokenStore } from "../auth/token-store.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect, Layer } from 'effect';
+import { CacheService } from '../cache.ts';
+import { providerFor } from '../providers/registry.ts';
+import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   ProviderProfile,
   ProviderAccount,
   ProviderAuthStatus,
   RepoSummary,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type RepoServiceShape = {
   listProviderAccounts(): Effect.Effect<ProviderAccount[], Error>;
@@ -25,7 +25,7 @@ type RepoServiceShape = {
   saveRepo(repo: RepoSummary): Effect.Effect<RepoSummary, Error>;
 };
 
-class RepoService extends Effect.Tag("RepoService")<RepoService, RepoServiceShape>() {}
+class RepoService extends Effect.Tag('RepoService')<RepoService, RepoServiceShape>() {}
 
 const makeRepoService = Effect.gen(function* () {
   const tokenStore = yield* AuthTokenStore;
@@ -40,14 +40,14 @@ const makeRepoService = Effect.gen(function* () {
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
 
-  const listProviderAccounts: RepoServiceShape["listProviderAccounts"] = Effect.fn(
-    "RepoService.listProviderAccounts",
+  const listProviderAccounts: RepoServiceShape['listProviderAccounts'] = Effect.fn(
+    'RepoService.listProviderAccounts',
   )(function* () {
     return yield* tokenStore.listAccounts();
   });
 
-  const getProviderStatuses: RepoServiceShape["getProviderStatuses"] = Effect.fn(
-    "RepoService.getProviderStatuses",
+  const getProviderStatuses: RepoServiceShape['getProviderStatuses'] = Effect.fn(
+    'RepoService.getProviderStatuses',
   )(function* () {
     const accounts = yield* tokenStore.listAccounts();
     const statuses: Record<string, ProviderAuthStatus> = {};
@@ -59,11 +59,11 @@ const makeRepoService = Effect.gen(function* () {
     return statuses;
   });
 
-  const getProviderProfile: RepoServiceShape["getProviderProfile"] = Effect.fn(
-    "RepoService.getProviderProfile",
+  const getProviderProfile: RepoServiceShape['getProviderProfile'] = Effect.fn(
+    'RepoService.getProviderProfile',
   )(function* (accountId) {
     const account = yield* tokenStore.get(accountId);
-    if (!account) throw new Error("Provider account is not signed in.");
+    if (!account) throw new Error('Provider account is not signed in.');
     const cached = yield* cache
       .readProviderProfile(accountId)
       .pipe(Effect.catchAll(() => Effect.succeed(null)));
@@ -75,8 +75,8 @@ const makeRepoService = Effect.gen(function* () {
     return profile;
   });
 
-  const listInitialRepos: RepoServiceShape["listInitialRepos"] = Effect.fn(
-    "RepoService.listInitialRepos",
+  const listInitialRepos: RepoServiceShape['listInitialRepos'] = Effect.fn(
+    'RepoService.listInitialRepos',
   )(function* (accountId, limit = 5) {
     const account = yield* tokenStore.get(accountId);
     if (!account) return [];
@@ -85,7 +85,7 @@ const makeRepoService = Effect.gen(function* () {
     );
   });
 
-  const searchRepos: RepoServiceShape["searchRepos"] = Effect.fn("RepoService.searchRepos")(
+  const searchRepos: RepoServiceShape['searchRepos'] = Effect.fn('RepoService.searchRepos')(
     function* (accountId, query, limit = 20) {
       const account = yield* tokenStore.get(accountId);
       if (!account) return [];
@@ -95,23 +95,23 @@ const makeRepoService = Effect.gen(function* () {
     },
   );
 
-  const validateRepo: RepoServiceShape["validateRepo"] = Effect.fn("RepoService.validateRepo")(
+  const validateRepo: RepoServiceShape['validateRepo'] = Effect.fn('RepoService.validateRepo')(
     function* (accountId, repo) {
       const account = yield* tokenStore.get(accountId);
-      if (!account) throw new Error("Provider account is not signed in.");
+      if (!account) throw new Error('Provider account is not signed in.');
       return yield* provideProviderDeps(
         providerFor(account.provider).validateRepo(accountId, repo),
       );
     },
   );
 
-  const listSavedRepos: RepoServiceShape["listSavedRepos"] = Effect.fn(
-    "RepoService.listSavedRepos",
+  const listSavedRepos: RepoServiceShape['listSavedRepos'] = Effect.fn(
+    'RepoService.listSavedRepos',
   )(function* () {
     return yield* cache.listSavedRepos();
   });
 
-  const saveRepo: RepoServiceShape["saveRepo"] = Effect.fn("RepoService.saveRepo")(
+  const saveRepo: RepoServiceShape['saveRepo'] = Effect.fn('RepoService.saveRepo')(
     function* (repo) {
       const account = yield* tokenStore.get(repo.providerAccountId);
       if (account?.viewerLogin) {

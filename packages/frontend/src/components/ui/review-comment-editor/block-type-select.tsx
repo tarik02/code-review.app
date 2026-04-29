@@ -1,5 +1,5 @@
-import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
-import { useCellValue, usePublisher } from "@mdxeditor/gurx";
+import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from '@lexical/rich-text';
+import { useCellValue, usePublisher } from '@mdxeditor/gurx';
 import {
   activePlugins$,
   allowedHeadingLevels$,
@@ -7,11 +7,11 @@ import {
   currentBlockType$,
   useTranslation,
   type BlockType,
-} from "@mdxeditor/editor";
-import { $createParagraphNode } from "lexical";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../select";
+} from '@mdxeditor/editor';
+import { $createParagraphNode } from 'lexical';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
 
-type CommentBlockType = Exclude<BlockType, "">;
+type CommentBlockType = Exclude<BlockType, ''>;
 
 type CommentBlockTypeOption = {
   label: string;
@@ -19,7 +19,7 @@ type CommentBlockTypeOption = {
 };
 
 function isHeadingBlockType(blockType: CommentBlockType): blockType is HeadingTagType {
-  return blockType.startsWith("h");
+  return blockType.startsWith('h');
 }
 
 type CommentBlockTypeSelectProps = {
@@ -32,8 +32,8 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
   const activePlugins = useCellValue(activePlugins$);
   const allowedHeadingLevels = useCellValue(allowedHeadingLevels$);
   const t = useTranslation();
-  const hasQuote = activePlugins.includes("quote");
-  const hasHeadings = activePlugins.includes("headings");
+  const hasQuote = activePlugins.includes('quote');
+  const hasHeadings = activePlugins.includes('headings');
 
   if (!hasQuote && !hasHeadings) {
     return null;
@@ -41,22 +41,22 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
 
   const blockTypeOptions: CommentBlockTypeOption[] = [
     {
-      label: t("toolbar.blockTypes.paragraph", "Paragraph"),
-      value: "paragraph",
+      label: t('toolbar.blockTypes.paragraph', 'Paragraph'),
+      value: 'paragraph',
     },
   ];
 
   if (hasQuote) {
     blockTypeOptions.push({
-      label: t("toolbar.blockTypes.quote", "Quote"),
-      value: "quote",
+      label: t('toolbar.blockTypes.quote', 'Quote'),
+      value: 'quote',
     });
   }
 
   if (hasHeadings) {
     blockTypeOptions.push(
       ...allowedHeadingLevels.map((level) => ({
-        label: t("toolbar.blockTypes.heading", "Heading {{level}}", {
+        label: t('toolbar.blockTypes.heading', 'Heading {{level}}', {
           level,
         }),
         value: `h${level}` as CommentBlockType,
@@ -65,8 +65,8 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
   }
 
   const isSupportedBlockType = blockTypeOptions.some((option) => option.value === currentBlockType);
-  const isUnsupportedBlockType = disabled || (currentBlockType !== "" && !isSupportedBlockType);
-  const selectedBlockType = isUnsupportedBlockType ? "paragraph" : currentBlockType || "paragraph";
+  const isUnsupportedBlockType = disabled || (currentBlockType !== '' && !isSupportedBlockType);
+  const selectedBlockType = isUnsupportedBlockType ? 'paragraph' : currentBlockType || 'paragraph';
 
   function handleBlockTypeChange(blockType: CommentBlockType | null) {
     if (!blockType) {
@@ -74,10 +74,10 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
     }
 
     switch (blockType) {
-      case "paragraph":
+      case 'paragraph':
         convertSelectionToNode(() => $createParagraphNode());
         break;
-      case "quote":
+      case 'quote':
         convertSelectionToNode(() => $createQuoteNode());
         break;
       default:
@@ -98,12 +98,12 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
       onValueChange={(blockType) => handleBlockTypeChange(blockType as CommentBlockType | null)}
     >
       <SelectTrigger
-        aria-label={t("toolbar.blockTypeSelect.selectBlockTypeTooltip", "Select block type")}
+        aria-label={t('toolbar.blockTypeSelect.selectBlockTypeTooltip', 'Select block type')}
         className="comment-editor-block-select"
         disabled={isUnsupportedBlockType}
         size="sm"
       >
-        <SelectValue placeholder={t("toolbar.blockTypeSelect.placeholder", "Block type")} />
+        <SelectValue placeholder={t('toolbar.blockTypeSelect.placeholder', 'Block type')} />
       </SelectTrigger>
       <SelectContent align="start" className="comment-editor-block-select-content">
         {blockTypeOptions.map((option) => (

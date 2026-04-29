@@ -1,6 +1,6 @@
-import { queryOptions } from "@tanstack/react-query";
-import { trpc } from "../lib/trpc";
-import { normalizeHostInput, parseForgeResourceUrl } from "../lib/forge-links";
+import { queryOptions } from '@tanstack/react-query';
+import { trpc } from '../lib/trpc';
+import { normalizeHostInput, parseForgeResourceUrl } from '../lib/forge-links';
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -20,46 +20,46 @@ import type {
   ThemePreferenceSettings,
   TrackedPullRequestOrderEntry,
   UpdatePullRequestReviewCommentInput,
-} from "../types/forge";
+} from '../types/forge';
 
 const INITIAL_REPO_LIMIT = 5;
 const SEARCH_REPO_LIMIT = 20;
 
 const forgeKeys = {
-  all: ["forge"] as const,
-  auth: () => [...forgeKeys.all, "auth"] as const,
-  settings: () => [...forgeKeys.all, "settings"] as const,
-  repos: () => [...forgeKeys.all, "repos"] as const,
-  providerAccounts: () => [...forgeKeys.auth(), "provider-accounts"] as const,
-  providerStatuses: () => [...forgeKeys.auth(), "provider-statuses"] as const,
+  all: ['forge'] as const,
+  auth: () => [...forgeKeys.all, 'auth'] as const,
+  settings: () => [...forgeKeys.all, 'settings'] as const,
+  repos: () => [...forgeKeys.all, 'repos'] as const,
+  providerAccounts: () => [...forgeKeys.auth(), 'provider-accounts'] as const,
+  providerStatuses: () => [...forgeKeys.auth(), 'provider-statuses'] as const,
   providerProfile: (accountId: string) =>
-    [...forgeKeys.auth(), "provider-profile", accountId] as const,
-  accountVisibility: () => [...forgeKeys.auth(), "account-visibility"] as const,
-  appearanceBackground: () => [...forgeKeys.settings(), "appearance-background"] as const,
-  diffDataSettings: () => [...forgeKeys.settings(), "diff-data"] as const,
-  themePreference: () => [...forgeKeys.settings(), "theme-preference"] as const,
-  reviewEditorSettings: () => [...forgeKeys.settings(), "review-editor"] as const,
-  savedRepos: () => [...forgeKeys.repos(), "saved"] as const,
-  initialRepos: (accountId: string) => [...forgeKeys.repos(), "initial", accountId] as const,
+    [...forgeKeys.auth(), 'provider-profile', accountId] as const,
+  accountVisibility: () => [...forgeKeys.auth(), 'account-visibility'] as const,
+  appearanceBackground: () => [...forgeKeys.settings(), 'appearance-background'] as const,
+  diffDataSettings: () => [...forgeKeys.settings(), 'diff-data'] as const,
+  themePreference: () => [...forgeKeys.settings(), 'theme-preference'] as const,
+  reviewEditorSettings: () => [...forgeKeys.settings(), 'review-editor'] as const,
+  savedRepos: () => [...forgeKeys.repos(), 'saved'] as const,
+  initialRepos: (accountId: string) => [...forgeKeys.repos(), 'initial', accountId] as const,
   searchRepos: (accountId: string, query: string) =>
-    [...forgeKeys.repos(), "search", accountId, query] as const,
-  viewerLogin: (accountId: string) => [...forgeKeys.repos(), "viewer-login", accountId] as const,
-  pullRequests: () => [...forgeKeys.all, "pull-requests"] as const,
+    [...forgeKeys.repos(), 'search', accountId, query] as const,
+  viewerLogin: (accountId: string) => [...forgeKeys.repos(), 'viewer-login', accountId] as const,
+  pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
-    [...forgeKeys.pullRequests(), "overview", accountId] as const,
+    [...forgeKeys.pullRequests(), 'overview', accountId] as const,
   pullRequestList: (repo: RepoIdentity) =>
-    [...forgeKeys.pullRequests(), "list", repo.providerId, repo.repoKey] as const,
+    [...forgeKeys.pullRequests(), 'list', repo.providerId, repo.repoKey] as const,
   pullRequestCachedList: (repo: RepoIdentity) =>
-    [...forgeKeys.pullRequests(), "list", repo.providerId, repo.repoKey, "cached"] as const,
-  trackedPullRequests: () => [...forgeKeys.pullRequests(), "tracked"] as const,
-  trackedRepos: () => [...forgeKeys.trackedPullRequests(), "repos"] as const,
-  trackedPullRequestOrder: () => [...forgeKeys.trackedPullRequests(), "order"] as const,
+    [...forgeKeys.pullRequests(), 'list', repo.providerId, repo.repoKey, 'cached'] as const,
+  trackedPullRequests: () => [...forgeKeys.pullRequests(), 'tracked'] as const,
+  trackedRepos: () => [...forgeKeys.trackedPullRequests(), 'repos'] as const,
+  trackedPullRequestOrder: () => [...forgeKeys.trackedPullRequests(), 'order'] as const,
   trackedPullRequestList: (repo: RepoIdentity) =>
-    [...forgeKeys.trackedPullRequests(), "list", repo.providerId, repo.repoKey] as const,
+    [...forgeKeys.trackedPullRequests(), 'list', repo.providerId, repo.repoKey] as const,
   pullRequestPatch: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
-      "patch",
+      'patch',
       pr.providerId,
       pr.repoKey,
       pr.number,
@@ -68,7 +68,7 @@ const forgeKeys = {
   pullRequestFiles: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
-      "files",
+      'files',
       pr.providerId,
       pr.repoKey,
       pr.number,
@@ -77,7 +77,7 @@ const forgeKeys = {
   pullRequestQualityReport: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
-      "quality-report",
+      'quality-report',
       pr.providerId,
       pr.repoKey,
       pr.number,
@@ -95,7 +95,7 @@ const forgeKeys = {
   }) =>
     [
       ...forgeKeys.pullRequests(),
-      "file-contents",
+      'file-contents',
       input.providerId,
       input.repoKey,
       input.number,
@@ -108,7 +108,7 @@ const forgeKeys = {
   pullRequestReviewThreads: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
-      "review-threads",
+      'review-threads',
       pr.providerId,
       pr.repoKey,
       pr.number,
@@ -117,20 +117,20 @@ const forgeKeys = {
   pullRequestApprovalState: (pr: SelectedPullRequest) =>
     [
       ...forgeKeys.pullRequests(),
-      "approval-state",
+      'approval-state',
       pr.providerId,
       pr.repoKey,
       pr.number,
       pr.headSha,
     ] as const,
-  pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), "patch", "idle"] as const,
-  pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), "files", "idle"] as const,
+  pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), 'patch', 'idle'] as const,
+  pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), 'files', 'idle'] as const,
   pullRequestReviewThreadsIdle: () =>
-    [...forgeKeys.pullRequests(), "review-threads", "idle"] as const,
+    [...forgeKeys.pullRequests(), 'review-threads', 'idle'] as const,
   pullRequestQualityReportIdle: () =>
-    [...forgeKeys.pullRequests(), "quality-report", "idle"] as const,
+    [...forgeKeys.pullRequests(), 'quality-report', 'idle'] as const,
   pullRequestApprovalStateIdle: () =>
-    [...forgeKeys.pullRequests(), "approval-state", "idle"] as const,
+    [...forgeKeys.pullRequests(), 'approval-state', 'idle'] as const,
 };
 
 function savedReposQueryOptions() {
@@ -229,7 +229,7 @@ async function setDiffDataMode(mode: DiffDataMode) {
   return trpc.settings.setDiffDataSettings.mutate({ mode });
 }
 
-async function setThemePreference(preference: ThemePreferenceSettings["preference"]) {
+async function setThemePreference(preference: ThemePreferenceSettings['preference']) {
   return trpc.settings.setThemePreference.mutate({ preference });
 }
 
@@ -268,7 +268,10 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
     queryKey: forgeKeys.searchRepos(accountId, query),
     queryFn: async () => {
       const trimmedQuery = query.trim();
-      const parsedUrl = parseForgeResourceUrl(trimmedQuery, provider === "gitlab" ? "gitlab" : "github");
+      const parsedUrl = parseForgeResourceUrl(
+        trimmedQuery,
+        provider === 'gitlab' ? 'gitlab' : 'github',
+      );
       const normalizedHost = normalizeHostInput(host);
 
       if (parsedUrl?.number !== null) {
@@ -283,7 +286,7 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
         return [repo];
       }
 
-      if (provider === "gitlab" && trimmedQuery.includes("/")) {
+      if (provider === 'gitlab' && trimmedQuery.includes('/')) {
         const repo = await trpc.repos.validate.query({
           accountId,
           repo: trimmedQuery,

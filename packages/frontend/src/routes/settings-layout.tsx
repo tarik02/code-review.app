@@ -1,9 +1,9 @@
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { useHotkey } from "@tanstack/react-hotkeys";
-import { ArrowLeftIcon } from "lucide-react";
-import { Button } from "../components/ui/button";
-import { TopBar } from "../components/ui/top-bar";
-import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "../lib/settings-return-location";
+import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { useHotkey } from '@tanstack/react-hotkeys';
+import { ArrowLeftIcon } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { TopBar } from '../components/ui/top-bar';
+import { SETTINGS_RETURN_HREF_STORAGE_KEY } from '../lib/settings-return-location';
 
 function SettingsLayout() {
   const navigate = useNavigate();
@@ -16,10 +16,10 @@ function SettingsLayout() {
       return;
     }
 
-    void navigate({ to: "/" });
+    void navigate({ to: '/' });
   }
 
-  useHotkey("Escape", () => {
+  useHotkey('Escape', () => {
     handleBackToPrs();
   });
 
@@ -37,7 +37,7 @@ function SettingsLayout() {
           <nav className="flex flex-1 flex-col gap-1">
             <Link
               activeProps={{
-                className: "bg-canvasDark text-ink-900",
+                className: 'bg-canvasDark text-ink-900',
               }}
               className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
               to="/settings/appearance"
@@ -46,7 +46,7 @@ function SettingsLayout() {
             </Link>
             <Link
               activeProps={{
-                className: "bg-canvasDark text-ink-900",
+                className: 'bg-canvasDark text-ink-900',
               }}
               className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
               to="/settings/profiles"
@@ -55,7 +55,7 @@ function SettingsLayout() {
             </Link>
             <Link
               activeProps={{
-                className: "bg-canvasDark text-ink-900",
+                className: 'bg-canvasDark text-ink-900',
               }}
               className="rounded-md px-2 py-2 text-sm font-medium text-ink-600 transition hover:bg-canvasDark hover:text-ink-900"
               to="/settings/review"

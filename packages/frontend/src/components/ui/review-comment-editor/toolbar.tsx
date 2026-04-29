@@ -1,4 +1,4 @@
-import type { EditorView } from "@codemirror/view";
+import type { EditorView } from '@codemirror/view';
 import {
   IS_BOLD,
   IS_CODE,
@@ -12,8 +12,8 @@ import {
   useTranslation,
   viewMode$,
   type ViewMode,
-} from "@mdxeditor/editor";
-import { useCellValues, usePublisher } from "@mdxeditor/gurx";
+} from '@mdxeditor/editor';
+import { useCellValues, usePublisher } from '@mdxeditor/gurx';
 import {
   Bold,
   Code,
@@ -25,11 +25,11 @@ import {
   ListChecks,
   ListOrdered,
   Pencil,
-} from "lucide-react";
-import type { ReactNode } from "react";
-import { Button } from "../button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../tooltip";
-import { CommentBlockTypeSelect } from "./block-type-select";
+} from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Button } from '../button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../tooltip';
+import { CommentBlockTypeSelect } from './block-type-select';
 import {
   insertSourceCodeBlock,
   insertSourceLink,
@@ -37,8 +37,8 @@ import {
   toggleSourceInlineMarker,
   toggleSourceList,
   type MarkdownListType,
-} from "./source-markdown-actions";
-import type { ForgeProviderKind } from "../../../types/forge";
+} from './source-markdown-actions';
+import type { ForgeProviderKind } from '../../../types/forge';
 
 type ReviewCommentToolbarProps = {
   canInsertSuggestion: boolean;
@@ -70,7 +70,7 @@ function ToolbarButton({
           <Button
             aria-label={title}
             className="comment-editor-toolbar-button"
-            data-active={active ? "true" : undefined}
+            data-active={active ? 'true' : undefined}
             disabled={disabled}
             onClick={onClick}
             size="icon-sm"
@@ -108,7 +108,7 @@ function ReviewCommentToolbar({
   const openLinkEditDialog = usePublisher(openLinkEditDialog$);
   const insertCodeBlock = usePublisher(insertCodeBlock$);
   const t = useTranslation();
-  const isSourceMode = viewMode === "source";
+  const isSourceMode = viewMode === 'source';
 
   function runSourceAction(action: (view: EditorView) => void) {
     if (!sourceEditorView) {
@@ -118,9 +118,9 @@ function ReviewCommentToolbar({
     action(sourceEditorView);
   }
 
-  function handleFormat(format: "bold" | "italic" | "code") {
+  function handleFormat(format: 'bold' | 'italic' | 'code') {
     if (isSourceMode) {
-      const marker = format === "bold" ? "**" : format === "italic" ? "*" : "`";
+      const marker = format === 'bold' ? '**' : format === 'italic' ? '*' : '`';
       runSourceAction((view) => toggleSourceInlineMarker(view, marker));
       return;
     }
@@ -134,7 +134,7 @@ function ReviewCommentToolbar({
       return;
     }
 
-    applyListType(currentListType === type ? "" : type);
+    applyListType(currentListType === type ? '' : type);
   }
 
   function handleLink() {
@@ -169,7 +169,7 @@ function ReviewCommentToolbar({
   }
 
   const suggestionTitle =
-    provider === "gitlab" ? "Insert GitLab suggestion" : "Insert GitHub suggestion";
+    provider === 'gitlab' ? 'Insert GitLab suggestion' : 'Insert GitHub suggestion';
 
   return (
     <TooltipProvider delay={500} closeDelay={0}>
@@ -177,52 +177,52 @@ function ReviewCommentToolbar({
         <CommentBlockTypeSelect disabled={isSourceMode} />
         <ToolbarButton
           active={!isSourceMode && (currentFormat & IS_BOLD) !== 0}
-          title={t("toolbar.bold", "Bold")}
-          onClick={() => handleFormat("bold")}
+          title={t('toolbar.bold', 'Bold')}
+          onClick={() => handleFormat('bold')}
         >
           <Bold className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           active={!isSourceMode && (currentFormat & IS_ITALIC) !== 0}
-          title={t("toolbar.italic", "Italic")}
-          onClick={() => handleFormat("italic")}
+          title={t('toolbar.italic', 'Italic')}
+          onClick={() => handleFormat('italic')}
         >
           <Italic className="size-4" />
         </ToolbarButton>
         <ToolbarButton
           active={!isSourceMode && (currentFormat & IS_CODE) !== 0}
-          title={t("toolbar.inlineCode", "Inline code format")}
-          onClick={() => handleFormat("code")}
+          title={t('toolbar.inlineCode', 'Inline code format')}
+          onClick={() => handleFormat('code')}
         >
           <Code className="size-4" />
         </ToolbarButton>
-        <ToolbarButton title={t("toolbar.link", "Create link")} onClick={handleLink}>
+        <ToolbarButton title={t('toolbar.link', 'Create link')} onClick={handleLink}>
           <Link className="size-4" />
         </ToolbarButton>
         <ToolbarSeparator />
         <ToolbarButton
-          active={!isSourceMode && currentListType === "bullet"}
-          title={t("toolbar.bulletedList", "Bulleted list")}
-          onClick={() => handleList("bullet")}
+          active={!isSourceMode && currentListType === 'bullet'}
+          title={t('toolbar.bulletedList', 'Bulleted list')}
+          onClick={() => handleList('bullet')}
         >
           <List className="size-4" />
         </ToolbarButton>
         <ToolbarButton
-          active={!isSourceMode && currentListType === "number"}
-          title={t("toolbar.numberedList", "Numbered list")}
-          onClick={() => handleList("number")}
+          active={!isSourceMode && currentListType === 'number'}
+          title={t('toolbar.numberedList', 'Numbered list')}
+          onClick={() => handleList('number')}
         >
           <ListOrdered className="size-4" />
         </ToolbarButton>
         <ToolbarButton
-          active={!isSourceMode && currentListType === "check"}
-          title={t("toolbar.checkList", "Check list")}
-          onClick={() => handleList("check")}
+          active={!isSourceMode && currentListType === 'check'}
+          title={t('toolbar.checkList', 'Check list')}
+          onClick={() => handleList('check')}
         >
           <ListChecks className="size-4" />
         </ToolbarButton>
         <ToolbarButton
-          title={t("toolbar.codeBlock", "Insert Code Block")}
+          title={t('toolbar.codeBlock', 'Insert Code Block')}
           onClick={handleCodeBlock}
         >
           <Code2 className="size-4" />
@@ -238,16 +238,16 @@ function ReviewCommentToolbar({
       </div>
       <div className="comment-editor-toolbar-modes">
         <ToolbarButton
-          active={viewMode === "rich-text"}
-          title={t("toolbar.richText", "Rich text")}
-          onClick={() => handleModeChange("rich-text")}
+          active={viewMode === 'rich-text'}
+          title={t('toolbar.richText', 'Rich text')}
+          onClick={() => handleModeChange('rich-text')}
         >
           <FileText className="size-4" />
         </ToolbarButton>
         <ToolbarButton
-          active={viewMode === "source"}
-          title={t("toolbar.source", "Source mode")}
-          onClick={() => handleModeChange("source")}
+          active={viewMode === 'source'}
+          title={t('toolbar.source', 'Source mode')}
+          onClick={() => handleModeChange('source')}
         >
           <Code2 className="size-4" />
         </ToolbarButton>

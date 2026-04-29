@@ -1,15 +1,15 @@
-import { eq } from "drizzle-orm";
-import { Effect, Layer } from "effect";
-import { DatabaseService } from "../db/client.ts";
-import { appSettings } from "../db/schema.ts";
-import { CacheError } from "../errors.ts";
+import { eq } from 'drizzle-orm';
+import { Effect, Layer } from 'effect';
+import { DatabaseService } from '../db/client.ts';
+import { appSettings } from '../db/schema.ts';
+import { CacheError } from '../errors.ts';
 
 type AppSettingsServiceShape = {
   read<T>(key: string): Effect.Effect<T | null, CacheError>;
   write<T>(key: string, value: T): Effect.Effect<void, CacheError>;
 };
 
-class AppSettingsService extends Effect.Tag("AppSettingsService")<
+class AppSettingsService extends Effect.Tag('AppSettingsService')<
   AppSettingsService,
   AppSettingsServiceShape
 >() {}
@@ -30,7 +30,7 @@ const makeAppSettingsService = Effect.gen(function* () {
         .limit(1);
 
       return row ? (JSON.parse(row.valueJson) as T) : null;
-    })) satisfies AppSettingsServiceShape["read"];
+    })) satisfies AppSettingsServiceShape['read'];
 
   const write = (<T>(key: string, value: T) =>
     database.transaction(async (tx) => {
@@ -47,7 +47,7 @@ const makeAppSettingsService = Effect.gen(function* () {
             updatedAt: timestamp,
           },
         });
-    })) satisfies AppSettingsServiceShape["write"];
+    })) satisfies AppSettingsServiceShape['write'];
 
   return {
     read,

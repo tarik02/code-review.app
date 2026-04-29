@@ -1,11 +1,11 @@
-"use no memo";
+'use no memo';
 
-import { indentWithTab } from "@codemirror/commands";
-import { languages } from "@codemirror/language-data";
-import { EditorState, Prec } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { autoUpdate, offset, shift, useFloating } from "@floating-ui/react";
-import { useCellValues, usePublisher } from "@mdxeditor/gurx";
+import { indentWithTab } from '@codemirror/commands';
+import { languages } from '@codemirror/language-data';
+import { EditorState, Prec } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { autoUpdate, offset, shift, useFloating } from '@floating-ui/react';
+import { useCellValues, usePublisher } from '@mdxeditor/gurx';
 import {
   codeBlockLanguages$,
   codeMirrorAutoLoadLanguageSupport$,
@@ -17,23 +17,23 @@ import {
   useTranslation,
   type CodeBlockEditorDescriptor,
   type CodeBlockEditorProps,
-} from "@mdxeditor/editor";
-import { basicLight } from "cm6-theme-basic-light";
-import { basicSetup, minimalSetup } from "codemirror";
+} from '@mdxeditor/editor';
+import { basicLight } from 'cm6-theme-basic-light';
+import { basicSetup, minimalSetup } from 'codemirror';
 import {
   $createLineBreakNode,
   $createParagraphNode,
   $createTextNode,
   $setSelection,
-} from "lexical";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "../../../lib/utils";
-import { Combobox } from "../combobox";
-import { toggleCodeFormatting } from "../review-comment-editor-actions";
-import { createSuggestionLineNumberGutter } from "./suggestion-gutter";
-import type { SuggestionGutterColumns } from "./types";
+} from 'lexical';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cn } from '../../../lib/utils';
+import { Combobox } from '../combobox';
+import { toggleCodeFormatting } from '../review-comment-editor-actions';
+import { createSuggestionLineNumberGutter } from './suggestion-gutter';
+import type { SuggestionGutterColumns } from './types';
 
-const CODE_LANGUAGE_EMPTY_VALUE = "__EMPTY_VALUE__";
+const CODE_LANGUAGE_EMPTY_VALUE = '__EMPTY_VALUE__';
 
 type CommentCodeMirrorEditorProps = CodeBlockEditorProps & {
   className?: string;
@@ -48,50 +48,50 @@ type CommentCodeMirrorEditorProps = CodeBlockEditorProps & {
 };
 
 const commentCodeMirrorTheme = EditorView.theme({
-  "&": {
-    backgroundColor: "rgb(var(--rgb-surface))",
-    color: "rgb(var(--rgb-ink-900))",
-    fontFamily: "var(--font-mono)",
-    fontSize: "13px",
-    lineHeight: "20px",
+  '&': {
+    backgroundColor: 'rgb(var(--rgb-surface))',
+    color: 'rgb(var(--rgb-ink-900))',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '13px',
+    lineHeight: '20px',
   },
-  ".cm-content": {
-    caretColor: "rgb(var(--rgb-ink-900))",
-    fontFamily: "var(--font-mono)",
-    minHeight: "2.5rem",
+  '.cm-content': {
+    caretColor: 'rgb(var(--rgb-ink-900))',
+    fontFamily: 'var(--font-mono)',
+    minHeight: '2.5rem',
   },
-  ".cm-line": {
-    padding: "0 0.75rem",
+  '.cm-line': {
+    padding: '0 0.75rem',
   },
-  ".cm-cursor, .cm-dropCursor": {
-    borderLeftColor: "rgb(var(--rgb-ink-900))",
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: 'rgb(var(--rgb-ink-900))',
   },
-  ".cm-selectionBackground": {
-    backgroundColor: "rgb(59 130 246 / 0.45)",
+  '.cm-selectionBackground': {
+    backgroundColor: 'rgb(59 130 246 / 0.45)',
   },
-  "&.cm-focused .cm-selectionBackground": {
-    backgroundColor: "rgb(59 130 246 / 0.45)",
+  '&.cm-focused .cm-selectionBackground': {
+    backgroundColor: 'rgb(59 130 246 / 0.45)',
   },
-  ".cm-gutters": {
-    backgroundColor: "rgb(var(--rgb-canvas))",
-    borderRight: "1px solid rgb(var(--rgb-ink-200))",
-    color: "rgb(var(--rgb-ink-500))",
-    fontFamily: "var(--font-mono)",
-    fontSize: "13px",
-    lineHeight: "20px",
+  '.cm-gutters': {
+    backgroundColor: 'rgb(var(--rgb-canvas))',
+    borderRight: '1px solid rgb(var(--rgb-ink-200))',
+    color: 'rgb(var(--rgb-ink-500))',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '13px',
+    lineHeight: '20px',
   },
-  ".cm-lineNumbers .cm-gutterElement": {
-    minWidth: "2rem",
-    padding: "0 0.5rem",
+  '.cm-lineNumbers .cm-gutterElement': {
+    minWidth: '2rem',
+    padding: '0 0.5rem',
   },
-  ".cm-activeLine, .cm-activeLineGutter": {
-    backgroundColor: "transparent",
+  '.cm-activeLine, .cm-activeLineGutter': {
+    backgroundColor: 'transparent',
   },
 });
 
 const sourceCodeFormattingKeymap = keymap.of([
   {
-    key: "`",
+    key: '`',
     run(view) {
       const selection = view.state.selection.main;
       if (selection.empty) {
@@ -130,7 +130,7 @@ function appendTextWithLineBreaks(
   paragraphNode: ReturnType<typeof $createParagraphNode>,
   text: string,
 ) {
-  const lines = text.split("\n");
+  const lines = text.split('\n');
 
   lines.forEach((line, index) => {
     if (index > 0) {
@@ -144,7 +144,7 @@ function appendTextWithLineBreaks(
 }
 
 function replaceCodeBlockWithTextAfterCursor(
-  lexicalNode: ReturnType<typeof useCodeBlockEditorContext>["lexicalNode"],
+  lexicalNode: ReturnType<typeof useCodeBlockEditorContext>['lexicalNode'],
   textAfterCursor: string,
 ) {
   const latestNode = lexicalNode.getLatest();
@@ -184,7 +184,7 @@ function CommentCodeMirrorEditor({
   highlightLanguage,
   language,
   lineNumberColumns,
-  lineNumberPrefix = "",
+  lineNumberPrefix = '',
   lineNumberStart = 1,
 }: CommentCodeMirrorEditorProps) {
   const editorHostRef = useRef<HTMLDivElement | null>(null);
@@ -211,8 +211,8 @@ function CommentCodeMirrorEditor({
   );
   const [isLanguageComboboxOpen, setIsLanguageComboboxOpen] = useState(false);
   const { floatingStyles, refs } = useFloating({
-    placement: "top",
-    strategy: "fixed",
+    placement: 'top',
+    strategy: 'fixed',
     transform: false,
     whileElementsMounted: autoUpdate,
     middleware: [offset(6), shift({ padding: 8 })],
@@ -289,7 +289,7 @@ function CommentCodeMirrorEditor({
         Prec.highest(
           keymap.of([
             {
-              key: "Backspace",
+              key: 'Backspace',
               stopPropagation: true,
               run(view) {
                 const selection = view.state.selection.main;
@@ -311,7 +311,7 @@ function CommentCodeMirrorEditor({
         EditorView.domEventHandlers({
           focus: () => {
             setEditorInFocusRef.current({
-              editorType: "codeblock",
+              editorType: 'codeblock',
               rootNode: lexicalNodeRef.current,
               editorRef: editorHandleRef.current,
             });
@@ -328,7 +328,7 @@ function CommentCodeMirrorEditor({
         extensions.push(EditorView.editable.of(false));
       }
 
-      if (effectiveLanguage !== "") {
+      if (effectiveLanguage !== '') {
         const currentCodeBlockLanguages = codeBlockLanguagesRef.current;
         const canonical = currentCodeBlockLanguages.keyMap[effectiveLanguage] ?? effectiveLanguage;
         const providedSupport = currentCodeBlockLanguages.supportMap[canonical];
@@ -348,7 +348,7 @@ function CommentCodeMirrorEditor({
               const languageSupport = await languageData.load();
               extensions.push(languageSupport.extension);
             } catch {
-              console.warn("failed to load language support for", effectiveLanguage);
+              console.warn('failed to load language support for', effectiveLanguage);
             }
           }
         }
@@ -358,7 +358,7 @@ function CommentCodeMirrorEditor({
         return;
       }
 
-      editorHost.innerHTML = "";
+      editorHost.innerHTML = '';
       editorViewRef.current = new EditorView({
         parent: editorHost,
         state: EditorState.create({
@@ -366,7 +366,7 @@ function CommentCodeMirrorEditor({
           extensions,
         }),
       });
-      editorHost.addEventListener("keydown", stopNestedEditorDomKeyDown);
+      editorHost.addEventListener('keydown', stopNestedEditorDomKeyDown);
     }
 
     void mountEditor();
@@ -375,7 +375,7 @@ function CommentCodeMirrorEditor({
       disposed = true;
       editorViewRef.current?.destroy();
       editorViewRef.current = null;
-      editorHost.removeEventListener("keydown", stopNestedEditorDomKeyDown);
+      editorHost.removeEventListener('keydown', stopNestedEditorDomKeyDown);
     };
   }, [
     autoLoadLanguageSupport,
@@ -392,7 +392,7 @@ function CommentCodeMirrorEditor({
   function handleLanguageChange(nextLanguage: string | null) {
     parentEditor.update(() => {
       lexicalNode.setLanguage(
-        nextLanguage === CODE_LANGUAGE_EMPTY_VALUE ? "" : (nextLanguage ?? ""),
+        nextLanguage === CODE_LANGUAGE_EMPTY_VALUE ? '' : (nextLanguage ?? ''),
       );
       setTimeout(() => {
         parentEditor.update(() => {
@@ -403,21 +403,21 @@ function CommentCodeMirrorEditor({
   }
 
   return (
-    <div ref={setCodeBlockReference} className={cn("comment-editor-code-block", className)}>
+    <div ref={setCodeBlockReference} className={cn('comment-editor-code-block', className)}>
       {hideLanguageToolbar ? null : (
         <div
           ref={setLanguageToolbar}
           className="comment-editor-code-toolbar"
-          data-open={isLanguageComboboxOpen ? "true" : undefined}
+          data-open={isLanguageComboboxOpen ? 'true' : undefined}
           style={floatingStyles}
         >
           <Combobox
-            aria-label={t("codeBlock.selectLanguage", "Select code block language")}
+            aria-label={t('codeBlock.selectLanguage', 'Select code block language')}
             className="comment-editor-code-language-combobox"
             contentClassName="comment-editor-code-language-combobox-content"
             disabled={readOnly}
             options={languageOptions}
-            placeholder={t("codeBlock.inlineLanguage", "Language")}
+            placeholder={t('codeBlock.inlineLanguage', 'Language')}
             value={selectedLanguage || null}
             onOpenChange={setIsLanguageComboboxOpen}
             onValueChange={handleLanguageChange}

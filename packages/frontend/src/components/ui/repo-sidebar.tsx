@@ -1,15 +1,19 @@
-import { Link } from "@tanstack/react-router";
-import { Cog6ToothIcon, PlusIcon } from "@heroicons/react/20/solid";
-import { PlusIcon as OutlinePlusIcon } from "@heroicons/react/24/outline";
-import { useMemo, type CSSProperties, type ReactNode } from "react";
-import { repoIdentityKey } from "../../lib/repo-identity";
-import type { OverviewPullRequestSummary, PullRequestSummary, RepoSummary } from "../../types/forge";
-import { AppUpdater } from "./app-updater";
-import { PullRequestListCard, getRepoLabel } from "./pull-request-list-card";
-import { TopBar } from "./top-bar";
-import { TrackedPullRequestList } from "./tracked-pull-request-list";
+import { Link } from '@tanstack/react-router';
+import { Cog6ToothIcon, PlusIcon } from '@heroicons/react/20/solid';
+import { PlusIcon as OutlinePlusIcon } from '@heroicons/react/24/outline';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { repoIdentityKey } from '../../lib/repo-identity';
+import type {
+  OverviewPullRequestSummary,
+  PullRequestSummary,
+  RepoSummary,
+} from '../../types/forge';
+import { AppUpdater } from './app-updater';
+import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
+import { TopBar } from './top-bar';
+import { TrackedPullRequestList } from './tracked-pull-request-list';
 
-type SidebarPullRequestView = "overview" | "tracked";
+type SidebarPullRequestView = 'overview' | 'tracked';
 
 type RepoSidebarProps = {
   repos: RepoSummary[];
@@ -58,7 +62,7 @@ function RepoSidebar({
   onReorderTrackedPullRequests,
 }: RepoSidebarProps) {
   const noDragRegionStyle = {
-    WebkitAppRegion: "no-drag",
+    WebkitAppRegion: 'no-drag',
   } as CSSProperties & { WebkitAppRegion: string };
   const sortedOverviewPullRequests = useMemo(
     () =>
@@ -75,7 +79,7 @@ function RepoSidebar({
       }),
     [repoErrors, repos],
   );
-  const isOverview = view === "overview";
+  const isOverview = view === 'overview';
 
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-ink-300 bg-canvas md:border-b-0">
@@ -98,7 +102,7 @@ function RepoSidebar({
         </TopBar>
 
         <div className="flex items-center gap-2.5 border-b border-neutral-300 dark:border-neutral-700 bg-canvas px-3 py-2.5 text-sm font-medium">
-          {isOverview ? "Pull requests" : "Tracked items"}
+          {isOverview ? 'Pull requests' : 'Tracked items'}
           <div className="ml-auto flex items-center gap-1.5">
             <AppUpdater
               buttonClassName="rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium hover:bg-canvasDark dark:bg-transparent dark:hover:bg-canvasDark"
@@ -108,7 +112,7 @@ function RepoSidebar({
             />
           </div>
           <button
-            aria-label={isOverview ? "Add repo" : "Add tracked PR or MR"}
+            aria-label={isOverview ? 'Add repo' : 'Add tracked PR or MR'}
             className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
             onClick={onAddAction}
             style={noDragRegionStyle}
@@ -122,17 +126,17 @@ function RepoSidebar({
             className="grid grid-cols-2 rounded-md bg-canvasDark p-0.5 text-xs font-medium text-ink-600"
             style={noDragRegionStyle}
           >
-            {(["overview", "tracked"] as const).map((candidate) => {
+            {(['overview', 'tracked'] as const).map((candidate) => {
               const isSelected = view === candidate;
               return (
                 <button
                   aria-pressed={isSelected}
                   className={[
-                    "rounded px-2 py-1.5 transition",
+                    'rounded px-2 py-1.5 transition',
                     isSelected
-                      ? "bg-surface text-ink-800 shadow-sm"
-                      : "text-ink-500 hover:text-ink-800",
-                  ].join(" ")}
+                      ? 'bg-surface text-ink-800 shadow-sm'
+                      : 'text-ink-500 hover:text-ink-800',
+                  ].join(' ')}
                   key={candidate}
                   onClick={() => onViewChange(candidate)}
                   type="button"
@@ -155,7 +159,7 @@ function RepoSidebar({
             repoErrorEntries.length === 0 &&
             !isOverviewLoading ? (
               <div className="px-3 py-2.5 text-sm text-ink-500">
-                {overviewStatusMessage ?? "No open PRs or MRs."}
+                {overviewStatusMessage ?? 'No open PRs or MRs.'}
               </div>
             ) : null}
             {sortedOverviewPullRequests.length === 0 && isOverviewLoading ? (
@@ -170,7 +174,9 @@ function RepoSidebar({
                 repoLabel={getRepoLabel(repo)}
                 onSelectPr={onSelectPr}
                 trailingActions={
-                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(pullRequest.number) ? null : (
+                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
+                    pullRequest.number,
+                  ) ? null : (
                     <button
                       aria-label={`Track PR #${pullRequest.number}`}
                       className="rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100 group-focus-within:opacity-100"

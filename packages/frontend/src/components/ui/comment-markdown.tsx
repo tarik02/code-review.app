@@ -1,16 +1,16 @@
-import { useEffect, useState, type ComponentProps } from "react";
-import Markdown, { RuleType } from "markdown-to-jsx";
-import { codeToHtml, type BundledLanguage } from "shiki";
-import type { ThemeRegistrationResolved } from "@shikijs/types";
-import pierreDarkTheme from "@pierre/theme/pierre-dark";
-import pierreLightTheme from "@pierre/theme/pierre-light";
-import { useDocumentDarkMode } from "../../hooks/use-document-dark-mode";
-import { getLanguageFromPath } from "./review-comment-editor/language";
-import "./comment-markdown.css";
+import { useEffect, useState, type ComponentProps } from 'react';
+import Markdown, { RuleType } from 'markdown-to-jsx';
+import { codeToHtml, type BundledLanguage } from 'shiki';
+import type { ThemeRegistrationResolved } from '@shikijs/types';
+import pierreDarkTheme from '@pierre/theme/pierre-dark';
+import pierreLightTheme from '@pierre/theme/pierre-light';
+import { useDocumentDarkMode } from '../../hooks/use-document-dark-mode';
+import { getLanguageFromPath } from './review-comment-editor/language';
+import './comment-markdown.css';
 
 const CODE_THEME = {
-  dark: { id: "pierre-dark", theme: toShikiTheme(pierreDarkTheme) },
-  light: { id: "pierre-light", theme: toShikiTheme(pierreLightTheme) },
+  dark: { id: 'pierre-dark', theme: toShikiTheme(pierreDarkTheme) },
+  light: { id: 'pierre-light', theme: toShikiTheme(pierreLightTheme) },
 } as const;
 
 const codeHtmlCache = new Map<string, Promise<string>>();
@@ -18,7 +18,7 @@ const codeHtmlCache = new Map<string, Promise<string>>();
 function toShikiTheme(theme: typeof pierreDarkTheme): ThemeRegistrationResolved {
   const semanticTokenColors = Object.fromEntries(
     Object.entries(theme.semanticTokenColors).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
     ),
   );
 
@@ -33,32 +33,32 @@ function toShikiTheme(theme: typeof pierreDarkTheme): ThemeRegistrationResolved 
       settings: { ...token.settings },
     })),
     semanticTokenColors,
-    fg: theme.colors["editor.foreground"] ?? theme.colors.foreground ?? "#000000",
-    bg: theme.colors["editor.background"] ?? "#ffffff",
+    fg: theme.colors['editor.foreground'] ?? theme.colors.foreground ?? '#000000',
+    bg: theme.colors['editor.background'] ?? '#ffffff',
   };
 }
 
 function normalizeLanguage(language: string | undefined) {
-  if (!language) return "text";
+  if (!language) return 'text';
 
   switch (language.toLowerCase()) {
-    case "js":
-    case "jsx":
-      return "javascript";
-    case "ts":
-    case "tsx":
-      return "typescript";
-    case "sh":
-    case "shell":
-      return "bash";
+    case 'js':
+    case 'jsx':
+      return 'javascript';
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'sh':
+    case 'shell':
+      return 'bash';
     default:
       return language.toLowerCase();
   }
 }
 
 function getCodeBlockLanguage(language: string | undefined, filePath?: string) {
-  if (language?.toLowerCase().startsWith("suggestion")) {
-    return getLanguageFromPath(filePath) || "text";
+  if (language?.toLowerCase().startsWith('suggestion')) {
+    return getLanguageFromPath(filePath) || 'text';
   }
 
   return language;
@@ -68,7 +68,7 @@ function getThemeEntry(isDark: boolean) {
   return isDark ? CODE_THEME.dark : CODE_THEME.light;
 }
 
-function InlineCode({ children, ...props }: ComponentProps<"code">) {
+function InlineCode({ children, ...props }: ComponentProps<'code'>) {
   return (
     <code {...props} className="rounded bg-canvas px-1 py-0.5 font-mono text-[0.92em] text-ink-900">
       {children}
@@ -148,7 +148,7 @@ function CommentMarkdown({ body, filePath }: { body: string; filePath?: string }
                 <MarkdownCodeBlock
                   filePath={filePath}
                   lang={node.lang}
-                  text={String(node.text ?? "")}
+                  text={String(node.text ?? '')}
                 />
               );
             }

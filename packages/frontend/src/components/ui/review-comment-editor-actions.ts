@@ -1,4 +1,4 @@
-import type { ForgeProviderKind, ReviewCommentSide } from "../../types/forge";
+import type { ForgeProviderKind, ReviewCommentSide } from '../../types/forge';
 
 type MarkdownSelection = {
   start: number;
@@ -11,10 +11,10 @@ type MarkdownTransform = {
 };
 
 type CommentEditorTarget =
-  | { type: "global" }
-  | { type: "file"; path: string }
+  | { type: 'global' }
+  | { type: 'file'; path: string }
   | {
-      type: "line";
+      type: 'line';
       path: string;
       line: number;
       side: ReviewCommentSide;
@@ -25,10 +25,10 @@ type CommentEditorTarget =
 type SuggestionBlockResult =
   | {
       block: string;
-      error: "";
+      error: '';
     }
   | {
-      block: "";
+      block: '';
       error: string;
     };
 
@@ -114,43 +114,43 @@ function unwrapSelection(
 }
 
 function toggleInlineCode(markdown: string, selection: MarkdownSelection): MarkdownTransform {
-  const unwrapped = unwrapSelection(markdown, selection, "`", "`");
-  return unwrapped ?? wrapSelection(markdown, selection, "`", "`");
+  const unwrapped = unwrapSelection(markdown, selection, '`', '`');
+  return unwrapped ?? wrapSelection(markdown, selection, '`', '`');
 }
 
 function toggleCodeFence(markdown: string, selection: MarkdownSelection): MarkdownTransform {
-  const unwrapped = unwrapSelection(markdown, selection, "```\n", "\n```");
-  return unwrapped ?? wrapSelection(markdown, selection, "```\n", "\n```");
+  const unwrapped = unwrapSelection(markdown, selection, '```\n', '\n```');
+  return unwrapped ?? wrapSelection(markdown, selection, '```\n', '\n```');
 }
 
 function toggleCodeFormatting(markdown: string, selection: MarkdownSelection): MarkdownTransform {
   const selectedText = getSelectedText(markdown, selection);
-  return selectedText.includes("\n")
+  return selectedText.includes('\n')
     ? toggleCodeFence(markdown, selection)
     : toggleInlineCode(markdown, selection);
 }
 
 function insertFence(language: string, body: string) {
   const fenceLanguage = language.trim();
-  const normalizedBody = body.replace(/\n+$/, "");
+  const normalizedBody = body.replace(/\n+$/, '');
   return `\`\`\`${fenceLanguage}\n${normalizedBody}\n\`\`\``;
 }
 
-function buildGitlabSuggestionLanguage(target: Extract<CommentEditorTarget, { type: "line" }>) {
+function buildGitlabSuggestionLanguage(target: Extract<CommentEditorTarget, { type: 'line' }>) {
   const startLine = target.startLine ?? target.line;
   const endLine = target.line;
   const linesAbove = Math.max(endLine - startLine, 0);
 
   if (linesAbove > GITLAB_SUGGESTION_CONTEXT_LIMIT) {
     return {
-      language: "",
-      error: "GitLab suggestions support up to 100 selected lines above the commented line.",
+      language: '',
+      error: 'GitLab suggestions support up to 100 selected lines above the commented line.',
     };
   }
 
   return {
     language: `suggestion:-${linesAbove}+0`,
-    error: "",
+    error: '',
   };
 }
 
@@ -159,31 +159,31 @@ function buildSuggestionBlock(
   target: CommentEditorTarget | null | undefined,
   selectedText: string,
 ): SuggestionBlockResult {
-  if (!target || target.type !== "line") {
+  if (!target || target.type !== 'line') {
     return {
-      block: "",
-      error: "Suggestions require a line comment.",
+      block: '',
+      error: 'Suggestions require a line comment.',
     };
   }
 
-  if (provider === "gitlab") {
+  if (provider === 'gitlab') {
     const gitlabSuggestion = buildGitlabSuggestionLanguage(target);
     if (gitlabSuggestion.error) {
       return {
-        block: "",
+        block: '',
         error: gitlabSuggestion.error,
       };
     }
 
     return {
       block: insertFence(gitlabSuggestion.language, selectedText),
-      error: "",
+      error: '',
     };
   }
 
   return {
-    block: insertFence("suggestion", selectedText),
-    error: "",
+    block: insertFence('suggestion', selectedText),
+    error: '',
   };
 }
 

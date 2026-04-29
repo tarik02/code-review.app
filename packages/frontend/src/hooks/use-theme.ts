@@ -1,67 +1,67 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { flushSync } from "react-dom";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { flushSync } from 'react-dom';
 import {
   setThemePreference as persistThemePreference,
   themePreferenceQueryOptions,
-} from "../queries/forge";
-import type { ThemePreference as AppThemePreference } from "../types/forge";
+} from '../queries/forge';
+import type { ThemePreference as AppThemePreference } from '../types/forge';
 
-type Theme = Exclude<AppThemePreference, "auto">;
+type Theme = Exclude<AppThemePreference, 'auto'>;
 type ThemePreference = AppThemePreference;
-type ThemeTransitionKind = "reveal" | "fade" | "none";
+type ThemeTransitionKind = 'reveal' | 'fade' | 'none';
 type ThemeTransitionOptions = {
   kind?: ThemeTransitionKind;
   trigger?: HTMLElement | null;
 };
 
-const THEME_STORAGE_KEY = "theme";
-const THEME_TRANSITION_ACTIVE_CLASS = "theme-view-transition-active";
-const THEME_REVEAL_TRANSITION_CLASS = "theme-reveal-transition";
-const THEME_FADE_TRANSITION_CLASS = "theme-fade-transition";
+const THEME_STORAGE_KEY = 'theme';
+const THEME_TRANSITION_ACTIVE_CLASS = 'theme-view-transition-active';
+const THEME_REVEAL_TRANSITION_CLASS = 'theme-reveal-transition';
+const THEME_FADE_TRANSITION_CLASS = 'theme-fade-transition';
 
 function getSystemTheme(): Theme {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return "light";
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function getStoredPreference(): ThemePreference {
-  if (typeof window === "undefined") {
-    return "auto";
+  if (typeof window === 'undefined') {
+    return 'auto';
   }
 
   try {
     const value = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (value === "light" || value === "dark") {
+    if (value === 'light' || value === 'dark') {
       return value;
     }
   } catch {
     // Ignore storage errors and fall back to the system preference.
   }
 
-  return "auto";
+  return 'auto';
 }
 
 function resolveTheme(preference: ThemePreference, systemTheme: Theme): Theme {
-  return preference === "auto" ? systemTheme : preference;
+  return preference === 'auto' ? systemTheme : preference;
 }
 
 function applyDocumentTheme(theme: Theme) {
   const root = document.documentElement;
-  const isDark = theme === "dark";
-  root.classList.toggle("dark", isDark);
-  root.style.colorScheme = isDark ? "dark" : "light";
+  const isDark = theme === 'dark';
+  root.classList.toggle('dark', isDark);
+  root.style.colorScheme = isDark ? 'dark' : 'light';
 }
 
 function shouldReduceMotion() {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false;
   }
 
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function useTheme() {
@@ -76,7 +76,7 @@ function useTheme() {
   const systemThemeRef = useRef(systemTheme);
 
   const theme = resolveTheme(preference, systemTheme);
-  const isDark = theme === "dark";
+  const isDark = theme === 'dark';
 
   const themePreferenceMutation = useMutation({
     mutationFn: persistThemePreference,
@@ -103,9 +103,9 @@ function useTheme() {
       return;
     }
 
-    if (persistedPreference === "auto" && initialStoredPreferenceRef.current !== "auto") {
+    if (persistedPreference === 'auto' && initialStoredPreferenceRef.current !== 'auto') {
       const legacyPreference = initialStoredPreferenceRef.current;
-      initialStoredPreferenceRef.current = "auto";
+      initialStoredPreferenceRef.current = 'auto';
       queryClient.setQueryData(themePreferenceQueryKey, {
         preference: legacyPreference,
       });
@@ -129,7 +129,7 @@ function useTheme() {
 
   useEffect(() => {
     try {
-      if (preference === "auto") {
+      if (preference === 'auto') {
         window.localStorage.removeItem(THEME_STORAGE_KEY);
       } else {
         window.localStorage.setItem(THEME_STORAGE_KEY, preference);
@@ -150,9 +150,9 @@ function useTheme() {
       update: () => void;
     }) => {
       if (
-        kind === "none" ||
-        typeof document === "undefined" ||
-        typeof document.startViewTransition !== "function" ||
+        kind === 'none' ||
+        typeof document === 'undefined' ||
+        typeof document.startViewTransition !== 'function' ||
         shouldReduceMotion() ||
         isTransitionActiveRef.current
       ) {
@@ -162,12 +162,12 @@ function useTheme() {
 
       const root = document.documentElement;
       const actualKind =
-        kind === "reveal" && trigger !== null && trigger !== undefined ? "reveal" : "fade";
+        kind === 'reveal' && trigger !== null && trigger !== undefined ? 'reveal' : 'fade';
       const transitionClass =
-        actualKind === "reveal" ? THEME_REVEAL_TRANSITION_CLASS : THEME_FADE_TRANSITION_CLASS;
+        actualKind === 'reveal' ? THEME_REVEAL_TRANSITION_CLASS : THEME_FADE_TRANSITION_CLASS;
       const rect = trigger?.getBoundingClientRect();
       const revealCenter =
-        actualKind === "reveal" && rect
+        actualKind === 'reveal' && rect
           ? {
               x: rect.left + rect.width / 2,
               y: rect.top + rect.height / 2,
@@ -193,7 +193,7 @@ function useTheme() {
         try {
           await transition.ready;
 
-          if (actualKind === "reveal" && revealCenter) {
+          if (actualKind === 'reveal' && revealCenter) {
             const radius = Math.hypot(
               Math.max(revealCenter.x, window.innerWidth - revealCenter.x),
               Math.max(revealCenter.y, window.innerHeight - revealCenter.y),
@@ -207,8 +207,8 @@ function useTheme() {
               },
               {
                 duration: 500,
-                easing: "ease-in-out",
-                pseudoElement: "::view-transition-new(root)",
+                easing: 'ease-in-out',
+                pseudoElement: '::view-transition-new(root)',
               },
             );
 
@@ -244,7 +244,7 @@ function useTheme() {
       });
 
       runThemeTransition({
-        kind: currentTheme === nextTheme ? "none" : (options.kind ?? "fade"),
+        kind: currentTheme === nextTheme ? 'none' : (options.kind ?? 'fade'),
         trigger: options.trigger,
         update,
       });
@@ -264,14 +264,14 @@ function useTheme() {
   );
 
   useEffect(() => {
-    if (typeof window.matchMedia !== "function") {
+    if (typeof window.matchMedia !== 'function') {
       return;
     }
 
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handleChange = (event: MediaQueryListEvent) => {
-      const nextSystemTheme = event.matches ? "dark" : "light";
+      const nextSystemTheme = event.matches ? 'dark' : 'light';
       const currentSystemTheme = systemThemeRef.current;
 
       if (nextSystemTheme === currentSystemTheme) {
@@ -288,14 +288,14 @@ function useTheme() {
       };
 
       runThemeTransition({
-        kind: currentPreference === "auto" && currentTheme !== nextTheme ? "fade" : "none",
+        kind: currentPreference === 'auto' && currentTheme !== nextTheme ? 'fade' : 'none',
         update,
       });
     };
 
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
     }
 
     mediaQuery.addListener(handleChange);

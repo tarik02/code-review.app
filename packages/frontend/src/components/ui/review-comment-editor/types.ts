@@ -1,8 +1,8 @@
-import type { CommentEditorTarget } from "../review-comment-editor-actions";
-import type { ReviewCommentEditorCursorPosition } from "../../../stores/review-comment-editor-store";
-import type { ForgeProviderKind } from "../../../types/forge";
+import type { CommentEditorTarget } from '../review-comment-editor-actions';
+import type { ReviewCommentEditorCursorPosition } from '../../../stores/review-comment-editor-store';
+import type { ForgeProviderKind } from '../../../types/forge';
 
-type CommentEditorMode = "rich-text" | "source";
+type CommentEditorMode = 'rich-text' | 'source';
 
 type SuggestionSourceLine = {
   content: string;
@@ -21,14 +21,14 @@ type SuggestionEditorContextValue = {
   language: string;
   lines: SuggestionSourceLine[];
   provider: ForgeProviderKind;
-  sourceSide: "LEFT" | "RIGHT";
+  sourceSide: 'LEFT' | 'RIGHT';
   startLine: number;
 };
 
 type SuggestionGutterColumns = {
   newLine: number | null;
   oldLine: number | null;
-  sign: "" | "+" | "-";
+  sign: '' | '+' | '-';
 };
 
 type SuggestionRange = {

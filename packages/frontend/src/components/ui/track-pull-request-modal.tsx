@@ -1,27 +1,27 @@
-import { useEffect, useRef } from "react";
-import { Link } from "@tanstack/react-router";
-import { ArrowLeftIcon } from "@heroicons/react/20/solid";
-import { Dialog, DialogContent } from "./dialog";
-import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from "../../lib/forge-owner";
-import { normalizeHostInput, parseForgeResourceUrl } from "../../lib/forge-links";
+import { useEffect, useRef } from 'react';
+import { Link } from '@tanstack/react-router';
+import { ArrowLeftIcon } from '@heroicons/react/20/solid';
+import { Dialog, DialogContent } from './dialog';
+import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from '../../lib/forge-owner';
+import { normalizeHostInput, parseForgeResourceUrl } from '../../lib/forge-links';
 import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
   type PullRequestSummary,
   type RepoSummary,
-} from "../../types/forge";
+} from '../../types/forge';
 import {
   formatPullRequestDisplayTitle,
   getDraftIndicatorLabel,
-} from "../../lib/pull-request-display";
-import LucideGitBranch from "../../assets/icons/LucideGitBranch";
-import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
-import LucideGitMerge from "../../assets/icons/LucideGitMerge";
-import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestArrow";
-import { repoIdentityKey } from "../../lib/repo-identity";
+} from '../../lib/pull-request-display';
+import LucideGitBranch from '../../assets/icons/LucideGitBranch';
+import LucideGitPullRequestClosed from '../../assets/icons/LucideGitPullRequestClosed';
+import LucideGitMerge from '../../assets/icons/LucideGitMerge';
+import LucideGitPullRequestArrow from '../../assets/icons/LucideGitPullRequestArrow';
+import { repoIdentityKey } from '../../lib/repo-identity';
 
-type TrackPullRequestModalMode = "repo-then-pr" | "pr-only" | "track-repo-then-pr";
-type TrackPullRequestModalStep = "repo" | "pull-request";
+type TrackPullRequestModalMode = 'repo-then-pr' | 'pr-only' | 'track-repo-then-pr';
+type TrackPullRequestModalStep = 'repo' | 'pull-request';
 
 type TrackPullRequestModalProps = {
   open: boolean;
@@ -63,11 +63,12 @@ type RepoSelectionStepProps = {
 };
 
 function getRepoProviderLabel(repo: RepoSummary) {
-  return `${repo.provider === "github" ? "GitHub" : "GitLab"} · ${repo.providerAccountLabel}`;
+  return `${repo.provider === 'github' ? 'GitHub' : 'GitLab'} · ${repo.providerAccountLabel}`;
 }
 
 function RepoAvatar({ repo }: { repo: RepoSummary }) {
-  const avatarUrl = repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner, repo.provider, repo.host);
+  const avatarUrl =
+    repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner, repo.provider, repo.host);
   if (!avatarUrl) {
     return (
       <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
@@ -106,7 +107,7 @@ function RepoSelectionStep({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       <p className="px-4 font-sans text-xs text-neutral-500">
-        {showDirectLinkOption ? "Pull requests" : "Repositories"}
+        {showDirectLinkOption ? 'Pull requests' : 'Repositories'}
       </p>
 
       {showDirectLinkOption && isLoadingDirectLinkPullRequest ? (
@@ -149,10 +150,10 @@ function RepoSelectionStep({
           {repos.length === 0 ? (
             <div className="px-0 py-2 text-sm text-ink-500">
               {hasRepoSources ? (
-                "No repositories found."
+                'No repositories found.'
               ) : (
                 <>
-                  No enabled accounts.{" "}
+                  No enabled accounts.{' '}
                   <Link
                     className="font-medium text-ink-700 underline-offset-2 hover:underline"
                     to="/settings/profiles"
@@ -185,8 +186,8 @@ function RepoSelectionStep({
                     ) : null}
                     <div className="mt-1 truncate text-[11px] text-neutral-500">
                       {getRepoProviderLabel(repo)}
-                      {repo.host === "github.com" || repo.host === "gitlab.com"
-                        ? ""
+                      {repo.host === 'github.com' || repo.host === 'gitlab.com'
+                        ? ''
                         : ` · ${repo.host}`}
                     </div>
                   </div>
@@ -219,53 +220,53 @@ type PullRequestStatusViewModel = {
 };
 
 function getPullRequestStatus(pullRequest: PullRequestSummary): PullRequestStatusViewModel {
-  if (pullRequest.state === "MERGED") {
+  if (pullRequest.state === 'MERGED') {
     return {
       status: PullRequestBadgeStatus.Merged,
-      label: "Merged",
+      label: 'Merged',
       className:
-        "border-[#BFE1CC] bg-[#EAF6EF] text-[#1C6B3A] dark:border-green-900/30 dark:bg-green-950/40 dark:text-green-300",
+        'border-[#BFE1CC] bg-[#EAF6EF] text-[#1C6B3A] dark:border-green-900/30 dark:bg-green-950/40 dark:text-green-300',
     };
   }
 
-  if (pullRequest.state !== "OPEN") {
+  if (pullRequest.state !== 'OPEN') {
     return {
       status: PullRequestBadgeStatus.Closed,
-      label: "Closed",
-      className: "border-ink-300 bg-surface text-ink-600",
+      label: 'Closed',
+      className: 'border-ink-300 bg-surface text-ink-600',
     };
   }
 
   if (pullRequest.isDraft) {
     return {
       status: PullRequestBadgeStatus.Draft,
-      label: "Draft",
-      className: "border-ink-300 bg-surface text-ink-600",
+      label: 'Draft',
+      className: 'border-ink-300 bg-surface text-ink-600',
     };
   }
 
-  if (pullRequest.mergeable === "CONFLICTING" || pullRequest.mergeStateStatus === "DIRTY") {
+  if (pullRequest.mergeable === 'CONFLICTING' || pullRequest.mergeStateStatus === 'DIRTY') {
     return {
       status: PullRequestBadgeStatus.Conflicting,
-      label: "Conflicting",
+      label: 'Conflicting',
       className:
-        "border-[#F1C9C9] bg-[#FBEAEA] text-danger-600 dark:border-red-900/30 dark:bg-red-950/40 dark:text-red-300",
+        'border-[#F1C9C9] bg-[#FBEAEA] text-danger-600 dark:border-red-900/30 dark:bg-red-950/40 dark:text-red-300',
     };
   }
 
-  if (pullRequest.mergeable === "MERGEABLE") {
+  if (pullRequest.mergeable === 'MERGEABLE') {
     return {
       status: PullRequestBadgeStatus.CanMerge,
-      label: "Can Merge",
+      label: 'Can Merge',
       className:
-        "border-[#BFE1CC] bg-[#EAF6EF] text-[#1C6B3A] dark:border-green-900/30 dark:bg-green-950/40 dark:text-green-300",
+        'border-[#BFE1CC] bg-[#EAF6EF] text-[#1C6B3A] dark:border-green-900/30 dark:bg-green-950/40 dark:text-green-300',
     };
   }
 
   return {
     status: PullRequestBadgeStatus.Open,
-    label: "Open",
-    className: "border-ink-300 bg-surface text-ink-600",
+    label: 'Open',
+    className: 'border-ink-300 bg-surface text-ink-600',
   };
 }
 
@@ -300,7 +301,7 @@ function formatChangeSummary(pullRequest: PullRequestSummary) {
   if (pullRequest.additions !== null && pullRequest.deletions !== null) {
     return (
       <>
-        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{" "}
+        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{' '}
         <span className="text-red-600 dark:text-red-300">-{pullRequest.deletions}</span>
       </>
     );
@@ -377,7 +378,7 @@ function filterPullRequests(
   }
 
   const normalizedQuery = trimmedQuery.toLowerCase();
-  const normalizedNumberQuery = normalizedQuery.startsWith("#")
+  const normalizedNumberQuery = normalizedQuery.startsWith('#')
     ? normalizedQuery.slice(1)
     : normalizedQuery;
 
@@ -404,13 +405,13 @@ function PullRequestSelectionStep({
   onBack,
   searchQuery,
 }: PullRequestSelectionStepProps) {
-  const provider = selectedRepo?.provider ?? "github";
+  const provider = selectedRepo?.provider ?? 'github';
   const filteredPullRequests = filterPullRequests(pullRequests, selectedRepo, searchQuery);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       <div className="flex items-center gap-2 px-4 font-sans text-xs text-neutral-500">
-        {mode !== "pr-only" ? (
+        {mode !== 'pr-only' ? (
           <button
             aria-label="Back to repo list"
             className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvas hover:text-ink-700"
@@ -420,10 +421,12 @@ function PullRequestSelectionStep({
             <ArrowLeftIcon className="size-4 shrink-0" />
           </button>
         ) : null}
-        <p>{selectedRepo ? `Pull requests in ${selectedRepo.nameWithOwner}` : "Pull requests"}</p>
+        <p>{selectedRepo ? `Pull requests in ${selectedRepo.nameWithOwner}` : 'Pull requests'}</p>
       </div>
 
-      {isLoadingPullRequests ? <div className="px-4 py-3 text-sm text-ink-500">Loading...</div> : null}
+      {isLoadingPullRequests ? (
+        <div className="px-4 py-3 text-sm text-ink-500">Loading...</div>
+      ) : null}
 
       {pullRequestsError ? (
         <div className="px-4 py-3 text-sm text-danger-600">{pullRequestsError}</div>
@@ -432,7 +435,9 @@ function PullRequestSelectionStep({
       {!isLoadingPullRequests && !pullRequestsError ? (
         <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
           {filteredPullRequests.length === 0 ? (
-            <div className="px-0 py-2 text-sm text-ink-500">No pull requests or merge requests found.</div>
+            <div className="px-0 py-2 text-sm text-ink-500">
+              No pull requests or merge requests found.
+            </div>
           ) : (
             filteredPullRequests.map((pullRequest) => {
               const prKey = `modal-pr-${pullRequest.number}`;
@@ -495,13 +500,13 @@ function TrackPullRequestModal({
   onBack,
 }: TrackPullRequestModalProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const showRepoStep = step === "repo";
-  const showPullRequestStep = step === "pull-request";
+  const showRepoStep = step === 'repo';
+  const showPullRequestStep = step === 'pull-request';
   const inputPlaceholder = showRepoStep
-    ? "Search repositories, repo paths, or PR/MR links"
+    ? 'Search repositories, repo paths, or PR/MR links'
     : selectedRepo
       ? `Search ${selectedRepo.nameWithOwner} or paste a PR/MR link`
-      : "Search pull requests or paste a PR/MR link";
+      : 'Search pull requests or paste a PR/MR link';
   const isInputDisabled = isSavingRepo || isTrackingPullRequest;
 
   useEffect(() => {

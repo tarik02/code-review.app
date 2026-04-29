@@ -1,11 +1,11 @@
-import { Effect } from "effect";
+import { Effect } from 'effect';
 
 type EncryptionServiceShape = {
   encryptString(value: string): Effect.Effect<string, Error>;
   decryptString(value: string): Effect.Effect<string, Error>;
 };
 
-class EncryptionService extends Effect.Tag("EncryptionService")<
+class EncryptionService extends Effect.Tag('EncryptionService')<
   EncryptionService,
   EncryptionServiceShape
 >() {}

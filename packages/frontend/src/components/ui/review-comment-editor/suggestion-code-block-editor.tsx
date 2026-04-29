@@ -1,29 +1,29 @@
-"use no memo";
+'use no memo';
 
 import {
   useCodeBlockEditorContext,
   type CodeBlockEditorDescriptor,
   type CodeBlockEditorProps,
-} from "@mdxeditor/editor";
-import { useCallback, useContext, useMemo, useState } from "react";
-import { Button } from "../button";
-import { CommentCodeMirrorEditor } from "./code-block-editor";
-import { SuggestionEditorContext } from "./suggestion-context";
+} from '@mdxeditor/editor';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import { Button } from '../button';
+import { CommentCodeMirrorEditor } from './code-block-editor';
+import { SuggestionEditorContext } from './suggestion-context';
 import {
   clampSuggestionRange,
   getSuggestionLanguageForRange,
   parseGitlabSuggestionRange,
-} from "./suggestion-range";
-import type { SuggestionEditorContextValue, SuggestionRange, SuggestionSourceLine } from "./types";
+} from './suggestion-range';
+import type { SuggestionEditorContextValue, SuggestionRange, SuggestionSourceLine } from './types';
 
 type SuggestionCodeBlockEditorInnerProps = CodeBlockEditorProps & {
   anchorLine: number;
   canAdjustRange: boolean;
   initialRange: SuggestionRange;
-  lexicalNode: ReturnType<typeof useCodeBlockEditorContext>["lexicalNode"];
-  parentEditor: ReturnType<typeof useCodeBlockEditorContext>["parentEditor"];
+  lexicalNode: ReturnType<typeof useCodeBlockEditorContext>['lexicalNode'];
+  parentEditor: ReturnType<typeof useCodeBlockEditorContext>['parentEditor'];
   sourceLines: SuggestionSourceLine[];
-  sourceSide: "LEFT" | "RIGHT";
+  sourceSide: 'LEFT' | 'RIGHT';
   suggestionContext: SuggestionEditorContextValue | null;
 };
 
@@ -46,16 +46,16 @@ function SuggestionCodeBlockEditorInner({
     [range.from, range.to, sourceLines],
   );
   const selectedSourceText = useMemo(
-    () => selectedSourceLines.map((line) => line.content).join("\n"),
+    () => selectedSourceLines.map((line) => line.content).join('\n'),
     [selectedSourceLines],
   );
-  const highlightLanguage = suggestionContext?.language ?? "";
+  const highlightLanguage = suggestionContext?.language ?? '';
   const originalLineColumns = useMemo(
     () =>
       selectedSourceLines.map((line) => ({
         newLine: null,
         oldLine: line.line,
-        sign: "-" as const,
+        sign: '-' as const,
       })),
     [selectedSourceLines],
   );
@@ -64,7 +64,7 @@ function SuggestionCodeBlockEditorInner({
       originalLineColumns[lineNumber - 1] ?? {
         newLine: null,
         oldLine: null,
-        sign: "-" as const,
+        sign: '-' as const,
       },
     [originalLineColumns],
   );
@@ -72,9 +72,9 @@ function SuggestionCodeBlockEditorInner({
     (lineNumber: number) => {
       const nextLine = range.from + lineNumber - 1;
       return {
-        newLine: sourceSide === "RIGHT" ? nextLine : null,
-        oldLine: sourceSide === "LEFT" ? nextLine : null,
-        sign: "+" as const,
+        newLine: sourceSide === 'RIGHT' ? nextLine : null,
+        oldLine: sourceSide === 'LEFT' ? nextLine : null,
+        sign: '+' as const,
       };
     },
     [range.from, sourceSide],
@@ -103,7 +103,7 @@ function SuggestionCodeBlockEditorInner({
     commitRange({
       ...range,
       [edge]:
-        edge === "from"
+        edge === 'from'
           ? Math.min(anchorLine, range.to, Math.max(minLine, range.from + delta))
           : Math.max(anchorLine, range.from, Math.min(maxLine, range.to + delta)),
     });
@@ -113,10 +113,10 @@ function SuggestionCodeBlockEditorInner({
     const value = range[edge];
     const decrementDisabled =
       !canAdjustRange ||
-      (edge === "from" ? value <= minLine : value <= Math.max(range.from, anchorLine));
+      (edge === 'from' ? value <= minLine : value <= Math.max(range.from, anchorLine));
     const incrementDisabled =
       !canAdjustRange ||
-      (edge === "from" ? value >= Math.min(range.to, anchorLine) : value >= maxLine);
+      (edge === 'from' ? value >= Math.min(range.to, anchorLine) : value >= maxLine);
 
     return (
       <div className="comment-editor-suggestion-range-control">
@@ -160,9 +160,9 @@ function SuggestionCodeBlockEditorInner({
         <strong>Suggested change</strong>
         <span className="comment-editor-suggestion-header-spacer" />
         <span>From line</span>
-        {renderRangeControl("from")}
+        {renderRangeControl('from')}
         <span>to</span>
-        {renderRangeControl("to")}
+        {renderRangeControl('to')}
       </div>
       <CommentCodeMirrorEditor
         {...props}
@@ -191,7 +191,7 @@ function SuggestionCodeBlockEditor(props: CodeBlockEditorProps) {
   const { parentEditor, lexicalNode } = useCodeBlockEditorContext();
   const fallbackLines = useMemo(
     () =>
-      props.code.split("\n").map((content, index) => ({
+      props.code.split('\n').map((content, index) => ({
         content,
         line: index + 1,
         newLine: index + 1,
@@ -217,19 +217,19 @@ function SuggestionCodeBlockEditor(props: CodeBlockEditorProps) {
       ),
     [fallbackRange, props.language, sourceLines, suggestionContext],
   );
-  const canAdjustRange = suggestionContext?.provider === "gitlab" && sourceLines.length > 1;
+  const canAdjustRange = suggestionContext?.provider === 'gitlab' && sourceLines.length > 1;
   const anchorLine = suggestionContext?.anchorLine ?? initialRange.from;
   const rangeResetKey = useMemo(
     () =>
       [
         props.language,
-        suggestionContext?.provider ?? "",
-        suggestionContext?.anchorLine ?? "",
-        suggestionContext?.startLine ?? "",
-        suggestionContext?.endLine ?? "",
-        suggestionContext?.sourceSide ?? "",
-        sourceLines.map((line) => `${line.line}:${line.content}`).join("|"),
-      ].join("::"),
+        suggestionContext?.provider ?? '',
+        suggestionContext?.anchorLine ?? '',
+        suggestionContext?.startLine ?? '',
+        suggestionContext?.endLine ?? '',
+        suggestionContext?.sourceSide ?? '',
+        sourceLines.map((line) => `${line.line}:${line.content}`).join('|'),
+      ].join('::'),
     [props.language, sourceLines, suggestionContext],
   );
 
@@ -243,7 +243,7 @@ function SuggestionCodeBlockEditor(props: CodeBlockEditorProps) {
       lexicalNode={lexicalNode}
       parentEditor={parentEditor}
       sourceLines={sourceLines}
-      sourceSide={suggestionContext?.sourceSide ?? "RIGHT"}
+      sourceSide={suggestionContext?.sourceSide ?? 'RIGHT'}
       suggestionContext={suggestionContext}
     />
   );
@@ -251,7 +251,7 @@ function SuggestionCodeBlockEditor(props: CodeBlockEditorProps) {
 
 const suggestionCodeBlockDescriptor: CodeBlockEditorDescriptor = {
   priority: 100,
-  match: (language) => language?.startsWith("suggestion") ?? false,
+  match: (language) => language?.startsWith('suggestion') ?? false,
   Editor: SuggestionCodeBlockEditor,
 };
 

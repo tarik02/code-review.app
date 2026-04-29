@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUpCircleIcon } from "@heroicons/react/20/solid";
-import { cx } from "../../lib/cx";
-import { trpc } from "../../lib/trpc";
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowUpCircleIcon } from '@heroicons/react/20/solid';
+import { cx } from '../../lib/cx';
+import { trpc } from '../../lib/trpc';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,8 +11,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "./alert-dialog";
-import type { AvailableUpdate, UpdateEvent } from "@code-review-app/shared";
+} from './alert-dialog';
+import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
 
 type DownloadProgress = {
   downloaded: number;
@@ -48,13 +48,13 @@ function formatProgress(progress: DownloadProgress | null) {
 }
 
 function AppUpdater({
-  buttonLabel = "Check for updates",
+  buttonLabel = 'Check for updates',
   showFeedback = true,
   buttonClassName,
   containerClassName,
 }: AppUpdaterProps) {
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string>("");
+  const [feedback, setFeedback] = useState<string>('');
   const [isInstalling, setIsInstalling] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<AvailableUpdate | null>(null);
@@ -75,23 +75,23 @@ function AppUpdater({
         if (!isMounted) return;
 
         switch (event.type) {
-          case "available":
-          case "downloaded":
+          case 'available':
+          case 'downloaded':
             setAvailableUpdate(event.update);
             break;
-          case "not_available":
+          case 'not_available':
             setAvailableUpdate(null);
             break;
-          case "progress":
+          case 'progress':
             setProgress({
               downloaded: event.downloaded,
               contentLength: event.contentLength,
             });
             break;
-          case "error":
+          case 'error':
             setFeedback(`Update failed: ${event.message}`);
             break;
-          case "checking":
+          case 'checking':
             break;
         }
       },
@@ -127,12 +127,12 @@ function AppUpdater({
     }
 
     setIsInstalling(true);
-    setFeedback("");
+    setFeedback('');
     setProgress({ downloaded: 0, contentLength: null });
 
     try {
       await trpc.updates.install.mutate();
-      setFeedback("Update installed. Relaunching code-review.app...");
+      setFeedback('Update installed. Relaunching code-review.app...');
     } catch (error) {
       setFeedback(`Update install failed: ${getErrorMessage(error)}`);
     } finally {
@@ -143,18 +143,18 @@ function AppUpdater({
   return (
     <>
       {availableUpdate ? (
-        <div className={cx("flex min-w-0 shrink-0 flex-col items-end gap-1", containerClassName)}>
+        <div className={cx('flex min-w-0 shrink-0 flex-col items-end gap-1', containerClassName)}>
           <button
             className={cx(
-              "flex items-center gap-1 rounded-full border border-ink-300 bg-white px-3 py-1 pl-1 text-xs font-medium transition hover:bg-canvas dark:bg-surface dark:hover:bg-canvasDark",
+              'flex items-center gap-1 rounded-full border border-ink-300 bg-white px-3 py-1 pl-1 text-xs font-medium transition hover:bg-canvas dark:bg-surface dark:hover:bg-canvasDark',
               buttonClassName,
             )}
             disabled={isInstalling}
             onClick={() => setIsDialogOpen(true)}
             type="button"
           >
-            <ArrowUpCircleIcon className="size-4 text-ink-500" />{" "}
-            {isInstalling ? "Installing..." : buttonLabel}
+            <ArrowUpCircleIcon className="size-4 text-ink-500" />{' '}
+            {isInstalling ? 'Installing...' : buttonLabel}
           </button>
           {showFeedback && feedback ? (
             <p className="max-w-72 text-right text-xs text-ink-600">{feedback}</p>
@@ -175,8 +175,8 @@ function AppUpdater({
             <AlertDialogTitle>Install update</AlertDialogTitle>
             <AlertDialogDescription>
               {currentVersion
-                ? `code-review.app ${currentVersion} can be updated to ${availableUpdate?.version ?? "a newer version"}.`
-                : `A newer version of code-review.app is available: ${availableUpdate?.version ?? "unknown"}.`}
+                ? `code-review.app ${currentVersion} can be updated to ${availableUpdate?.version ?? 'a newer version'}.`
+                : `A newer version of code-review.app is available: ${availableUpdate?.version ?? 'unknown'}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -197,7 +197,7 @@ function AppUpdater({
               onClick={() => void handleInstallUpdate()}
               type="button"
             >
-              {isInstalling ? "Installing..." : "Install and relaunch"}
+              {isInstalling ? 'Installing...' : 'Install and relaunch'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

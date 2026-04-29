@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   type QueryKey,
   useMutation,
   useQueries,
   useQuery,
   useQueryClient,
-} from "@tanstack/react-query";
-import type { ReviewComment, ReviewThread } from "../lib/review-threads";
-import { trpc } from "../lib/trpc";
+} from '@tanstack/react-query';
+import type { ReviewComment, ReviewThread } from '../lib/review-threads';
+import { trpc } from '../lib/trpc';
 import {
   approvePullRequest,
   createPullRequestReviewComment,
@@ -23,7 +23,7 @@ import {
   trackedPullRequestListQueryOptions,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
-} from "../queries/forge";
+} from '../queries/forge';
 import type {
   CreatePullRequestReviewCommentInput,
   DiffDataMode,
@@ -39,16 +39,16 @@ import type {
   RepoSummary,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
-} from "../types/forge";
+} from '../types/forge';
 import {
   providerAccountIdFromProviderId,
   providerFromProviderId,
   repoIdentity,
   repoIdentityKey,
-} from "../lib/repo-identity";
+} from '../lib/repo-identity';
 
 function getErrorMessage(error: unknown): string {
-  if (!error) return "";
+  if (!error) return '';
   if (error instanceof Error) return error.message;
   return String(error);
 }
@@ -65,7 +65,7 @@ function createOptimisticComment(
   const timestamp = new Date().toISOString();
 
   return {
-    id: createTemporaryId("temp-comment"),
+    id: createTemporaryId('temp-comment'),
     databaseId: null,
     authorLogin,
     authorAvatarUrl: null,
@@ -73,7 +73,7 @@ function createOptimisticComment(
     body,
     createdAt: timestamp,
     updatedAt: timestamp,
-    url: "",
+    url: '',
     replyToId,
     isPending: true,
     isOptimistic: true,
@@ -240,7 +240,7 @@ function useRepoPickerReposForAccounts(
     }
 
     if (errors.length === activeQueries.length || availableRepos.length === 0) {
-      return errors.map(getErrorMessage).join("; ");
+      return errors.map(getErrorMessage).join('; ');
     }
 
     return null;
@@ -490,7 +490,7 @@ function useSelectedPullRequestData(
       : forgeKeys.pullRequestPatchIdle(),
     queryFn: () => {
       if (!selectedPr) {
-        throw new Error("No pull request selected");
+        throw new Error('No pull request selected');
       }
 
       return trpc.pullRequests.getPatch.query({
@@ -509,7 +509,7 @@ function useSelectedPullRequestData(
       : forgeKeys.pullRequestFilesIdle(),
     queryFn: () => {
       if (!selectedPr) {
-        throw new Error("No pull request selected");
+        throw new Error('No pull request selected');
       }
 
       return trpc.pullRequests.listChangedFiles.query({
@@ -528,7 +528,7 @@ function useSelectedPullRequestData(
       : forgeKeys.pullRequestReviewThreadsIdle(),
     queryFn: () => {
       if (!selectedPr) {
-        throw new Error("No pull request selected");
+        throw new Error('No pull request selected');
       }
 
       return trpc.reviewComments.listThreads.query({
@@ -546,7 +546,7 @@ function useSelectedPullRequestData(
       : forgeKeys.pullRequestQualityReportIdle(),
     queryFn: () => {
       if (!selectedPr) {
-        throw new Error("No pull request selected");
+        throw new Error('No pull request selected');
       }
 
       return trpc.pullRequests.getQualityReport.query({
@@ -567,7 +567,7 @@ function useSelectedPullRequestData(
       : forgeKeys.pullRequestApprovalStateIdle(),
     queryFn: async () => {
       if (!selectedPr) {
-        throw new Error("No pull request selected");
+        throw new Error('No pull request selected');
       }
 
       return trpc.reviewComments.getApprovalState.query({
@@ -667,12 +667,12 @@ function usePullRequestApprovalMutations(selectedPr: SelectedPullRequest | null)
 
 function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | null) {
   const queryClient = useQueryClient();
-  const viewerAccountId = selectedPr ? providerAccountIdFromProviderId(selectedPr.providerId) : "";
+  const viewerAccountId = selectedPr ? providerAccountIdFromProviderId(selectedPr.providerId) : '';
   const viewerLoginQuery = useQuery({
     ...viewerLoginQueryOptions(viewerAccountId),
     enabled: selectedPr !== null,
   });
-  const viewerLogin = viewerLoginQuery.data?.login ?? "You";
+  const viewerLogin = viewerLoginQuery.data?.login ?? 'You';
 
   const reviewThreadsQueryKey = selectedPr ? forgeKeys.pullRequestReviewThreads(selectedPr) : null;
 
@@ -723,7 +723,7 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
 
       const rootComment = createOptimisticComment(input.body, viewerLogin, null);
       const optimisticThread: ReviewThread = {
-        id: createTemporaryId("temp-thread"),
+        id: createTemporaryId('temp-thread'),
         provider: providerFromProviderId(input.providerId),
         path: input.path,
         isResolved: false,

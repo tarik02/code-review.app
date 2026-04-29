@@ -1,4 +1,4 @@
-import type { ForgeProviderKind, RepoIdentity } from "../types/forge";
+import type { ForgeProviderKind, RepoIdentity } from '../types/forge';
 
 function repoIdentity(repo: RepoIdentity): RepoIdentity {
   return {
@@ -16,7 +16,7 @@ function sameRepoIdentity(left: RepoIdentity, right: RepoIdentity) {
 }
 
 function providerFromProviderId(providerId: string): ForgeProviderKind {
-  return providerId.startsWith("gitlab:") ? "gitlab" : "github";
+  return providerId.startsWith('gitlab:') ? 'gitlab' : 'github';
 }
 
 function decodeProviderIdComponent(value: string) {
@@ -26,10 +26,10 @@ function decodeProviderIdComponent(value: string) {
 }
 
 function providerAccountIdFromProviderId(providerId: string) {
-  const firstSeparator = providerId.indexOf(":");
-  const secondSeparator = firstSeparator === -1 ? -1 : providerId.indexOf(":", firstSeparator + 1);
+  const firstSeparator = providerId.indexOf(':');
+  const secondSeparator = firstSeparator === -1 ? -1 : providerId.indexOf(':', firstSeparator + 1);
   if (secondSeparator === -1) {
-    return "";
+    return '';
   }
   return decodeProviderIdComponent(providerId.slice(secondSeparator + 1));
 }

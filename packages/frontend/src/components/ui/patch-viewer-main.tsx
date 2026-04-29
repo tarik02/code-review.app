@@ -1,6 +1,6 @@
-"use no memo";
+'use no memo';
 
-import { autoUpdate, FloatingPortal, offset, size, useFloating } from "@floating-ui/react";
+import { autoUpdate, FloatingPortal, offset, size, useFloating } from '@floating-ui/react';
 import {
   createContext,
   useCallback,
@@ -10,9 +10,9 @@ import {
   useMemo,
   useRef,
   useState,
-} from "react";
-import type { CSSProperties, UIEvent } from "react";
-import { createPortal } from "react-dom";
+} from 'react';
+import type { CSSProperties, UIEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   DiffLineAnnotation,
   AnnotationSide,
@@ -23,29 +23,29 @@ import type {
   SelectedLineRange,
   VirtualFileMetrics,
   VirtualizerConfig,
-} from "@pierre/diffs";
-import { useQuery } from "@tanstack/react-query";
-import type { GitStatusEntry } from "@pierre/trees";
-import { FileDiff, VirtualizerContext } from "@pierre/diffs/react";
-import { ChangedFilesTree } from "./changed-files-tree";
-import { AppearanceBackground } from "./appearance-background";
-import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
-import { PullRequestApprovalSummary } from "./pull-request-approval-summary";
-import { PullRequestQualitySummary } from "./pull-request-quality-summary";
-import { ReviewCommentEditor, type CommentEditorMode } from "./review-comment-editor";
-import { ReviewThreadCard } from "./review-thread-card";
-import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from "./top-bar";
+} from '@pierre/diffs';
+import { useQuery } from '@tanstack/react-query';
+import type { GitStatusEntry } from '@pierre/trees';
+import { FileDiff, VirtualizerContext } from '@pierre/diffs/react';
+import { ChangedFilesTree } from './changed-files-tree';
+import { AppearanceBackground } from './appearance-background';
+import { PatchScrollVirtualizer } from './patch-scroll-virtualizer';
+import { PullRequestApprovalSummary } from './pull-request-approval-summary';
+import { PullRequestQualitySummary } from './pull-request-quality-summary';
+import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-editor';
+import { ReviewThreadCard } from './review-thread-card';
+import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
   usePullRequestApprovalMutations,
   usePullRequestReviewCommentMutations,
-} from "../../hooks/use-forge-queries";
-import { useDiffNavigator } from "../../hooks/use-diff-navigator";
-import { cx } from "../../lib/cx";
+} from '../../hooks/use-forge-queries';
+import { useDiffNavigator } from '../../hooks/use-diff-navigator';
+import { cx } from '../../lib/cx';
 import {
   appearanceBackgroundQueryOptions,
   pullRequestFileContentsQueryOptions,
   reviewEditorSettingsQueryOptions,
-} from "../../queries/forge";
+} from '../../queries/forge';
 import {
   getGlobalReviewThreads,
   getFileReviewThreadsForPath,
@@ -57,12 +57,12 @@ import {
   type ReviewComment,
   type ReviewThread,
   type ReviewThreadAnnotation,
-} from "../../lib/review-threads";
+} from '../../lib/review-threads';
 import {
   getFileQualityFindings,
   type FileQualityFindings,
   type QualityFindingAnnotation,
-} from "../../lib/pull-request-quality";
+} from '../../lib/pull-request-quality';
 import type {
   FileStatsEntry,
   ForgeProviderKind,
@@ -74,15 +74,15 @@ import type {
   RepoIdentity,
   ReviewCommentSide,
   SelectedPullRequest,
-} from "../../types/forge";
-import { providerFromProviderId, repoIdentityKey } from "../../lib/repo-identity";
-import { getPatchViewerSessionState, usePatchViewerStore } from "../../stores/patch-viewer-store";
+} from '../../types/forge';
+import { providerFromProviderId, repoIdentityKey } from '../../lib/repo-identity';
+import { getPatchViewerSessionState, usePatchViewerStore } from '../../stores/patch-viewer-store';
 import {
   getReviewCommentEditorSessionState,
   useReviewCommentEditorStore,
   type DraftReviewCommentTarget,
   type ReviewCommentEditorState,
-} from "../../stores/review-comment-editor-store";
+} from '../../stores/review-comment-editor-store';
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
@@ -98,9 +98,9 @@ const VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
 };
 
 const DIFF_FONT_STYLE = {
-  "--diffs-font-family":
+  '--diffs-font-family':
     '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  "--diffs-header-font-family":
+  '--diffs-header-font-family':
     '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 } as CSSProperties;
 
@@ -127,7 +127,7 @@ type SelectedPatch = RepoIdentity & {
 };
 
 type DraftReviewCommentAnnotation = {
-  kind: "draft";
+  kind: 'draft';
   editorId: string;
   portalRootId: string;
 };
@@ -137,7 +137,7 @@ type ReviewThreadLineAnnotation = ReviewThreadAnnotation & {
 };
 
 type QualityFindingLineAnnotation = QualityFindingAnnotation & {
-  kind: "quality";
+  kind: 'quality';
 };
 
 type PatchLineAnnotation =
@@ -182,7 +182,7 @@ type PatchViewerMainProps = {
 
 type PatchFileDiffItemContextValue = {
   defaultReviewEditorMode: CommentEditorMode;
-  diffNavigator: ReturnType<typeof useDiffNavigator>["diff"];
+  diffNavigator: ReturnType<typeof useDiffNavigator>['diff'];
   isInactiveFileCommentsExpanded: (filePath: string) => boolean;
   parsedFileDiffs: FileDiffMetadata[];
   registerFileCommentsSection: (filePath: string, node: HTMLDivElement | null) => void;
@@ -212,47 +212,47 @@ const PatchFileDiffItemContext = createContext<PatchFileDiffItemContextValue | n
 function usePatchFileDiffItemContext() {
   const context = useContext(PatchFileDiffItemContext);
   if (!context) {
-    throw new Error("PatchFileDiffItem must be rendered inside PatchViewerMain");
+    throw new Error('PatchFileDiffItem must be rendered inside PatchViewerMain');
   }
 
   return context;
 }
 
-function toGithubSide(side: SelectedLineRange["side"]): ReviewCommentSide {
-  return side === "deletions" ? "LEFT" : "RIGHT";
+function toGithubSide(side: SelectedLineRange['side']): ReviewCommentSide {
+  return side === 'deletions' ? 'LEFT' : 'RIGHT';
 }
 
 function toSelectionSide(side: ReviewCommentSide | null | undefined): AnnotationSide {
-  return side === "LEFT" ? "deletions" : "additions";
+  return side === 'LEFT' ? 'deletions' : 'additions';
 }
 
 function createFileDraftTarget(
   fileDiff: FileDiffMetadata,
-): Extract<DraftReviewCommentTarget, { type: "file" }> {
+): Extract<DraftReviewCommentTarget, { type: 'file' }> {
   const changeType = fileDiff.type as PrFileChangeType;
 
-  if (changeType === "new") {
+  if (changeType === 'new') {
     return {
-      type: "file",
+      type: 'file',
       path: fileDiff.name,
-      oldPath: "",
+      oldPath: '',
       newPath: fileDiff.name,
       changeType,
     };
   }
 
-  if (changeType === "deleted") {
+  if (changeType === 'deleted') {
     return {
-      type: "file",
+      type: 'file',
       path: fileDiff.name,
       oldPath: fileDiff.prevName ?? fileDiff.name,
-      newPath: "",
+      newPath: '',
       changeType,
     };
   }
 
   return {
-    type: "file",
+    type: 'file',
     path: fileDiff.name,
     oldPath: fileDiff.prevName ?? fileDiff.name,
     newPath: fileDiff.name,
@@ -277,31 +277,31 @@ function getFileChangeTypePresentation(changeType: PrFileChangeType): {
   label: string;
 } {
   switch (changeType) {
-    case "new":
+    case 'new':
       return {
-        iconClassName: "text-emerald-600 dark:text-emerald-400",
-        label: "Added file",
+        iconClassName: 'text-emerald-600 dark:text-emerald-400',
+        label: 'Added file',
       };
-    case "deleted":
+    case 'deleted':
       return {
-        iconClassName: "text-red-600 dark:text-red-400",
-        label: "Deleted file",
+        iconClassName: 'text-red-600 dark:text-red-400',
+        label: 'Deleted file',
       };
-    case "rename-pure":
+    case 'rename-pure':
       return {
-        iconClassName: "text-sky-600 dark:text-sky-400",
-        label: "Renamed file",
+        iconClassName: 'text-sky-600 dark:text-sky-400',
+        label: 'Renamed file',
       };
-    case "rename-changed":
+    case 'rename-changed':
       return {
-        iconClassName: "text-amber-600 dark:text-amber-400",
-        label: "Renamed and changed file",
+        iconClassName: 'text-amber-600 dark:text-amber-400',
+        label: 'Renamed and changed file',
       };
-    case "change":
+    case 'change':
     default:
       return {
-        iconClassName: "text-ink-500 dark:text-ink-400",
-        label: "Modified file",
+        iconClassName: 'text-ink-500 dark:text-ink-400',
+        label: 'Modified file',
       };
   }
 }
@@ -314,29 +314,29 @@ function PierreChangeTypeIcon({
   className?: string;
 }) {
   switch (changeType) {
-    case "new":
+    case 'new':
       return (
         <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4" />
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
         </svg>
       );
-    case "deleted":
+    case 'deleted':
       return (
         <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M4 8a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 8" />
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
         </svg>
       );
-    case "rename-pure":
-    case "rename-changed":
+    case 'rename-pure':
+    case 'rename-changed':
       return (
         <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
           <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
           <path d="M8.495 4.695a.75.75 0 0 0-.05 1.06L10.486 8l-2.041 2.246a.75.75 0 0 0 1.11 1.008l2.5-2.75a.75.75 0 0 0 0-1.008l-2.5-2.75a.75.75 0 0 0-1.06-.051m-4 0a.75.75 0 0 0-.05 1.06l2.044 2.248-1.796 1.995a.75.75 0 0 0 1.114 1.004l2.25-2.5a.75.75 0 0 0-.002-1.007l-2.5-2.75a.75.75 0 0 0-1.06-.05" />
         </svg>
       );
-    case "change":
+    case 'change':
     default:
       return (
         <svg aria-hidden className={className} fill="currentColor" viewBox="0 0 16 16">
@@ -355,7 +355,7 @@ function PierreRenameArrowIcon({ className }: { className?: string }) {
 }
 
 function scheduleNextFrame(callback: () => void) {
-  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
     const frameId = window.requestAnimationFrame(callback);
     return () => window.cancelAnimationFrame(frameId);
   }
@@ -365,7 +365,7 @@ function scheduleNextFrame(callback: () => void) {
 }
 
 function normalizeDiffLineText(content: string) {
-  return content.replace(/[\r\n]+$/g, "");
+  return content.replace(/[\r\n]+$/g, '');
 }
 
 function splitFileContentLines(content: string) {
@@ -374,14 +374,14 @@ function splitFileContentLines(content: string) {
   }
 
   const lines = content.split(/\r\n|\n|\r/);
-  if (lines.at(-1) === "") {
+  if (lines.at(-1) === '') {
     lines.pop();
   }
   return lines;
 }
 
 function getDiffLineContent(fileDiff: FileDiffMetadata, side: ReviewCommentSide, line: number) {
-  const isAdditionSide = side === "RIGHT";
+  const isAdditionSide = side === 'RIGHT';
   const lines = isAdditionSide ? fileDiff.additionLines : fileDiff.deletionLines;
 
   for (const hunk of fileDiff.hunks) {
@@ -390,7 +390,7 @@ function getDiffLineContent(fileDiff: FileDiffMetadata, side: ReviewCommentSide,
     const lineIndex = isAdditionSide ? hunk.additionLineIndex : hunk.deletionLineIndex;
 
     if (line >= startLine && line < startLine + lineCount) {
-      return normalizeDiffLineText(lines[lineIndex + line - startLine] ?? "");
+      return normalizeDiffLineText(lines[lineIndex + line - startLine] ?? '');
     }
   }
 
@@ -411,19 +411,19 @@ function getDraftSelectedText(
   target: DraftReviewCommentTarget | null,
   fileContents?: PrFileContents | null,
 ) {
-  if (!target || target.type !== "line") {
-    return "";
+  if (!target || target.type !== 'line') {
+    return '';
   }
 
   if (target.startSide && target.startSide !== target.side) {
-    return "";
+    return '';
   }
 
   const fileDiff = fileDiffs.find(
     (candidate) => normalizePath(candidate.name) === normalizePath(target.path),
   );
   if (!fileDiff) {
-    return "";
+    return '';
   }
 
   const startLine = Math.min(target.startLine ?? target.line, target.line);
@@ -435,21 +435,21 @@ function getDraftSelectedText(
       getFullFileLineContent(fileContents, target.side, line) ??
       getDiffLineContent(fileDiff, target.side, line);
     if (lineContent === null) {
-      return "";
+      return '';
     }
 
     selectedLines.push(lineContent);
   }
 
-  return selectedLines.join("\n");
+  return selectedLines.join('\n');
 }
 
 function createSuggestionSourceLine(content: string, line: number, side: ReviewCommentSide) {
   return {
     content: normalizeDiffLineText(content),
     line,
-    newLine: side === "RIGHT" ? line : null,
-    oldLine: side === "LEFT" ? line : null,
+    newLine: side === 'RIGHT' ? line : null,
+    oldLine: side === 'LEFT' ? line : null,
   };
 }
 
@@ -461,7 +461,7 @@ function getFullFileSuggestionLines(
     return null;
   }
 
-  const sourceContent = side === "RIGHT" ? fileContents.newContent : fileContents.oldContent;
+  const sourceContent = side === 'RIGHT' ? fileContents.newContent : fileContents.oldContent;
   const lines = splitFileContentLines(sourceContent);
   if (lines.length === 0) {
     return null;
@@ -471,7 +471,7 @@ function getFullFileSuggestionLines(
 }
 
 function getPatchSuggestionLines(fileDiff: FileDiffMetadata, side: ReviewCommentSide) {
-  const isAdditionSide = side === "RIGHT";
+  const isAdditionSide = side === 'RIGHT';
   const sourceLines = isAdditionSide ? fileDiff.additionLines : fileDiff.deletionLines;
 
   if (!fileDiff.isPartial) {
@@ -491,7 +491,7 @@ function getPatchSuggestionLines(fileDiff: FileDiffMetadata, side: ReviewComment
       const line = startLine + index;
       linesByNumber.set(
         line,
-        createSuggestionSourceLine(sourceLines[lineIndex + index] ?? "", line, side),
+        createSuggestionSourceLine(sourceLines[lineIndex + index] ?? '', line, side),
       );
     }
   }
@@ -504,7 +504,7 @@ function getDraftSuggestionContext(
   target: DraftReviewCommentTarget | null,
   fileContents?: PrFileContents | null,
 ) {
-  if (!target || target.type !== "line") {
+  if (!target || target.type !== 'line') {
     return null;
   }
 
@@ -538,7 +538,7 @@ function getFileContentsInput(
   fileDiffs: FileDiffMetadata[],
   target: DraftReviewCommentTarget | null,
 ) {
-  if (!selectedPatch || !target || target.type !== "line") {
+  if (!selectedPatch || !target || target.type !== 'line') {
     return null;
   }
 
@@ -562,7 +562,7 @@ function getFileContentsInput(
 }
 
 type FloatingLineDraftEditorProps = {
-  cursorPosition: ReviewCommentEditorState["cursorPosition"];
+  cursorPosition: ReviewCommentEditorState['cursorPosition'];
   defaultMode: CommentEditorMode;
   error: string;
   isPending: boolean;
@@ -574,7 +574,7 @@ type FloatingLineDraftEditorProps = {
   value: string;
   onCancel: () => void;
   onChange: (body: string) => void;
-  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState["cursorPosition"]) => void;
+  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState['cursorPosition']) => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
@@ -597,11 +597,10 @@ function FloatingLineDraftEditor({
   const spacerRef = useRef<HTMLDivElement | null>(null);
   const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
-  const portalRoot =
-    typeof document !== "undefined" ? document.getElementById(portalRootId) : null;
+  const portalRoot = typeof document !== 'undefined' ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
-    placement: "bottom-start",
-    strategy: "absolute",
+    placement: 'bottom-start',
+    strategy: 'absolute',
     transform: false,
     whileElementsMounted: autoUpdate,
     middleware: [
@@ -619,7 +618,7 @@ function FloatingLineDraftEditor({
   });
   useEffect(() => {
     const floatingNode = floatingNodeRef.current;
-    if (!floatingNode || typeof ResizeObserver === "undefined") {
+    if (!floatingNode || typeof ResizeObserver === 'undefined') {
       return;
     }
 
@@ -699,7 +698,7 @@ type FloatingLineDraftEditorForTargetProps = {
   selectedPatch: SelectedPatch | null;
   onCancel: () => void;
   onChange: (body: string) => void;
-  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState["cursorPosition"]) => void;
+  onCursorPositionChange: (cursorPosition: ReviewCommentEditorState['cursorPosition']) => void;
   onSubmit: (body: string) => Promise<void>;
 };
 
@@ -724,14 +723,14 @@ function FloatingLineDraftEditorForTarget({
   const fileContentsQuery = useQuery({
     ...pullRequestFileContentsQueryOptions(
       fileContentsInput ?? {
-        providerId: "__idle__",
-        repoKey: "__idle__",
+        providerId: '__idle__',
+        repoKey: '__idle__',
         number: 0,
-        oldPath: "",
-        newPath: "",
+        oldPath: '',
+        newPath: '',
         baseSha: null,
-        headSha: "__idle__",
-        changeType: "change",
+        headSha: '__idle__',
+        changeType: 'change',
       },
     ),
     enabled: fileContentsInput !== null,
@@ -804,19 +803,19 @@ function replayHunkExpansions(
     const downExpansion = getMissingExpansion(desiredRegion.fromEnd, currentRegion.fromEnd);
 
     if (upExpansion > 0 && downExpansion > 0 && upExpansion === downExpansion) {
-      instance.expandHunk(hunkIndex, "both", upExpansion);
+      instance.expandHunk(hunkIndex, 'both', upExpansion);
       continue;
     }
 
     if (upExpansion > 0) {
-      instance.expandHunk(hunkIndex, "up", upExpansion);
+      instance.expandHunk(hunkIndex, 'up', upExpansion);
     }
 
     const nextRegion = getCurrentHunkExpansion(instance, hunkIndex);
     const nextDownExpansion = getMissingExpansion(desiredRegion.fromEnd, nextRegion.fromEnd);
 
     if (nextDownExpansion > 0) {
-      instance.expandHunk(hunkIndex, "down", nextDownExpansion);
+      instance.expandHunk(hunkIndex, 'down', nextDownExpansion);
     }
   }
 }
@@ -826,7 +825,7 @@ function getExpansionClick(event: MouseEvent): {
   direction: ExpansionDirections;
   lineCount: number;
 } | null {
-  let direction: ExpansionDirections = "both";
+  let direction: ExpansionDirections = 'both';
   let hunkIndex: number | null = null;
   let isExpansionClick = false;
   let expandAll = event.shiftKey;
@@ -834,20 +833,20 @@ function getExpansionClick(event: MouseEvent): {
   for (const target of event.composedPath()) {
     if (!(target instanceof Element)) continue;
 
-    if (target.hasAttribute("data-expand-button") || target.hasAttribute("data-unmodified-lines")) {
+    if (target.hasAttribute('data-expand-button') || target.hasAttribute('data-unmodified-lines')) {
       isExpansionClick = true;
-      expandAll ||= target.hasAttribute("data-expand-all-button");
+      expandAll ||= target.hasAttribute('data-expand-all-button');
 
-      if (target.hasAttribute("data-expand-up")) {
-        direction = "up";
-      } else if (target.hasAttribute("data-expand-down")) {
-        direction = "down";
+      if (target.hasAttribute('data-expand-up')) {
+        direction = 'up';
+      } else if (target.hasAttribute('data-expand-down')) {
+        direction = 'down';
       } else {
-        direction = "both";
+        direction = 'both';
       }
     }
 
-    const expandIndex = target.getAttribute("data-expand-index");
+    const expandIndex = target.getAttribute('data-expand-index');
     if (expandIndex !== null && hunkIndex === null) {
       const parsedIndex = Number.parseInt(expandIndex, 10);
       if (!Number.isNaN(parsedIndex)) {
@@ -880,7 +879,7 @@ function getThreadRefKey(thread: ReviewThread) {
     return `id:${thread.id}`;
   }
 
-  return `fallback:${normalizePath(thread.path)}:${thread.startLine ?? thread.line ?? "file"}:${thread.comments[0]?.id ?? "unknown"}`;
+  return `fallback:${normalizePath(thread.path)}:${thread.startLine ?? thread.line ?? 'file'}:${thread.comments[0]?.id ?? 'unknown'}`;
 }
 
 type GlobalCommentsSectionProps = {
@@ -928,8 +927,8 @@ function GlobalCommentsSection({
           (
             editor,
           ): editor is ReviewCommentEditorState & {
-            target: Extract<DraftReviewCommentTarget, { type: "global" }>;
-          } => editor != null && editor.kind === "new" && editor.target?.type === "global",
+            target: Extract<DraftReviewCommentTarget, { type: 'global' }>;
+          } => editor != null && editor.kind === 'new' && editor.target?.type === 'global',
         ),
     [reviewEditorSession],
   );
@@ -1164,7 +1163,7 @@ function PatchFileDiffItem({
         .map((editorId) => reviewEditorSession.editorsById[editorId])
         .filter(
           (editor): editor is ReviewCommentEditorState =>
-            editor != null && editor.kind === "new" && editor.target != null,
+            editor != null && editor.kind === 'new' && editor.target != null,
         ),
     [reviewEditorSession],
   );
@@ -1189,25 +1188,25 @@ function PatchFileDiffItem({
       ...annotation,
       metadata: {
         ...annotation.metadata,
-        kind: "quality" as const,
+        kind: 'quality' as const,
       },
     }));
   const lineDraftEditors = newCommentEditors.filter(
     (
       editor,
     ): editor is ReviewCommentEditorState & {
-      target: Extract<DraftReviewCommentTarget, { type: "line" }>;
-    } => editor.target?.type === "line" && normalizePath(editor.target.path) === normalizedFilePath,
+      target: Extract<DraftReviewCommentTarget, { type: 'line' }>;
+    } => editor.target?.type === 'line' && normalizePath(editor.target.path) === normalizedFilePath,
   );
   const fileDraftEditors = newCommentEditors.filter(
     (
       editor,
     ): editor is ReviewCommentEditorState & {
-      target: Extract<DraftReviewCommentTarget, { type: "file" }>;
-    } => editor.target?.type === "file" && normalizePath(editor.target.path) === normalizedFilePath,
+      target: Extract<DraftReviewCommentTarget, { type: 'file' }>;
+    } => editor.target?.type === 'file' && normalizePath(editor.target.path) === normalizedFilePath,
   );
   const latestLineDraft = lineDraftEditors.at(-1);
-  const lineDraft: Extract<DraftReviewCommentTarget, { type: "line" }> | null =
+  const lineDraft: Extract<DraftReviewCommentTarget, { type: 'line' }> | null =
     latestLineDraft?.target ?? null;
   const lineAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
     lineDraftEditors.length > 0
@@ -1218,7 +1217,7 @@ function PatchFileDiffItem({
             side: toSelectionSide(editor.target.side),
             lineNumber: editor.target.line,
             metadata: {
-              kind: "draft" as const,
+              kind: 'draft' as const,
               editorId: editor.id,
               portalRootId: lineDraftPortalRootId,
             },
@@ -1235,8 +1234,8 @@ function PatchFileDiffItem({
     : null;
   const lineAnnotationKey = lineAnnotations
     .map((annotation) => {
-      if ("kind" in annotation.metadata) {
-        if (annotation.metadata.kind === "quality") {
+      if ('kind' in annotation.metadata) {
+        if (annotation.metadata.kind === 'quality') {
           return `${annotation.side}:${annotation.lineNumber}:quality:${annotation.metadata.finding.id}`;
         }
 
@@ -1245,7 +1244,7 @@ function PatchFileDiffItem({
 
       return `${annotation.side}:${annotation.lineNumber}:thread:${getThreadRefKey(annotation.metadata.thread)}`;
     })
-    .join("|");
+    .join('|');
   const shouldRenderFileCommentsInHeader =
     fileReviewThreads.fileThreadCount > 0 ||
     fileDraftEditors.length > 0 ||
@@ -1274,7 +1273,7 @@ function PatchFileDiffItem({
     const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
 
     openNewEditor(reviewEditorSessionKey, {
-      type: "line",
+      type: 'line',
       path: fileDiff.name,
       line: endLine,
       side: endGithubSide,
@@ -1286,7 +1285,7 @@ function PatchFileDiffItem({
   function renderReviewThreadSummary() {
     const hasDraft = newCommentEditors.some(
       (editor) =>
-        editor.target?.type === "file" && normalizePath(editor.target.path) === normalizedFilePath,
+        editor.target?.type === 'file' && normalizePath(editor.target.path) === normalizedFilePath,
     );
 
     return (
@@ -1299,15 +1298,15 @@ function PatchFileDiffItem({
         {fileReviewThreads.totalCount > 0 ? (
           <span
             className={cx(
-              "rounded-full px-2 py-0.5",
+              'rounded-full px-2 py-0.5',
               fileReviewThreads.unresolvedCount > 0
-                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
             )}
           >
             {fileReviewThreads.unresolvedCount > 0
               ? `${fileReviewThreads.unresolvedCount} open`
-              : "All resolved"}
+              : 'All resolved'}
           </span>
         ) : null}
         {hasDraft ? (
@@ -1412,7 +1411,7 @@ function PatchFileDiffItem({
               }
               type="button"
             >
-              {inactiveFileCommentsExpanded ? "Hide inactive comments" : "Show inactive comments"} (
+              {inactiveFileCommentsExpanded ? 'Hide inactive comments' : 'Show inactive comments'} (
               {fileReviewThreads.inactiveFileThreads.length})
             </button>
             {inactiveFileCommentsExpanded ? (
@@ -1444,7 +1443,7 @@ function PatchFileDiffItem({
             <span
               aria-label={fileChangeLabel}
               className={cx(
-                "inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas",
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas',
                 fileChangeIconClassName,
               )}
               title={fileChangeLabel}
@@ -1496,7 +1495,7 @@ function PatchFileDiffItem({
       return;
     }
 
-    const headerElement = shadowRoot.querySelector("[data-diffs-header]");
+    const headerElement = shadowRoot.querySelector('[data-diffs-header]');
     if (!(headerElement instanceof HTMLElement)) {
       return;
     }
@@ -1505,18 +1504,18 @@ function PatchFileDiffItem({
       `[data-file-comments-slot-container="${fileCommentsSlotName}"]`,
     );
     if (!(slotContainer instanceof HTMLDivElement)) {
-      slotContainer = document.createElement("div");
+      slotContainer = document.createElement('div');
       slotContainer.dataset.fileCommentsSlotContainer = fileCommentsSlotName;
 
-      const slotElement = document.createElement("slot");
+      const slotElement = document.createElement('slot');
       slotElement.name = fileCommentsSlotName;
       slotContainer.appendChild(slotElement);
 
-      const preElement = shadowRoot.querySelector("pre");
+      const preElement = shadowRoot.querySelector('pre');
       if (preElement?.parentNode === shadowRoot) {
         shadowRoot.insertBefore(slotContainer, preElement);
       } else {
-        headerElement.insertAdjacentElement("afterend", slotContainer);
+        headerElement.insertAdjacentElement('afterend', slotContainer);
       }
     }
 
@@ -1526,7 +1525,7 @@ function PatchFileDiffItem({
         child.dataset.fileCommentsSlotHost === fileCommentsSlotName,
     );
     if (!portalHost) {
-      portalHost = document.createElement("div");
+      portalHost = document.createElement('div');
       portalHost.dataset.fileCommentsSlotHost = fileCommentsSlotName;
       portalHost.slot = fileCommentsSlotName;
       node.appendChild(portalHost);
@@ -1539,7 +1538,7 @@ function PatchFileDiffItem({
   }
 
   function renderReviewThreadAnnotations(annotation: DiffLineAnnotation<PatchLineAnnotation>) {
-    if ("kind" in annotation.metadata && annotation.metadata.kind === "draft") {
+    if ('kind' in annotation.metadata && annotation.metadata.kind === 'draft') {
       const draftAnnotation = annotation.metadata;
       const editor = getReviewCommentEditorSessionState(
         useReviewCommentEditorStore.getState(),
@@ -1572,7 +1571,7 @@ function PatchFileDiffItem({
       );
     }
 
-    if ("kind" in annotation.metadata && annotation.metadata.kind === "quality") {
+    if ('kind' in annotation.metadata && annotation.metadata.kind === 'quality') {
       const finding = annotation.metadata.finding;
 
       return (
@@ -1622,13 +1621,13 @@ function PatchFileDiffItem({
       style={DIFF_FONT_STYLE}
       options={{
         theme: {
-          dark: "pierre-dark",
-          light: "pierre-light",
+          dark: 'pierre-dark',
+          light: 'pierre-light',
         },
-        diffStyle: "unified",
-        diffIndicators: "bars",
-        lineDiffType: "word",
-        overflow: "scroll",
+        diffStyle: 'unified',
+        diffIndicators: 'bars',
+        lineDiffType: 'word',
+        overflow: 'scroll',
         expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
         collapsedContextThreshold: DIFF_COLLAPSED_CONTEXT_THRESHOLD,
         unsafeCSS: `
@@ -1753,9 +1752,9 @@ function PatchViewerMain({
 }: PatchViewerMainProps) {
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
-  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? "rich-text";
+  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
   const patchViewerSessionKey = selectedPrKey
-    ? `${selectedPrKey}:${isGitDiffMode ? "git" : "provider"}`
+    ? `${selectedPrKey}:${isGitDiffMode ? 'git' : 'provider'}`
     : null;
   const reviewEditorSessionKey = selectedPrKey;
   const ensureSession = usePatchViewerStore((state) => state.ensureSession);
@@ -1766,12 +1765,12 @@ function PatchViewerMain({
   const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
   const inactiveFileCommentsScopeKey = [
-    patchViewerSessionKey ?? "",
-    selectedPatch?.providerId ?? "",
-    selectedPatch?.repoKey ?? "",
-    selectedPatch?.number ?? "",
-    selectedPatch?.headSha ?? "",
-  ].join("::");
+    patchViewerSessionKey ?? '',
+    selectedPatch?.providerId ?? '',
+    selectedPatch?.repoKey ?? '',
+    selectedPatch?.number ?? '',
+    selectedPatch?.headSha ?? '',
+  ].join('::');
   const [inactiveFileCommentsState, setInactiveFileCommentsState] = useState<{
     byPath: Record<string, boolean>;
     scopeKey: string;
@@ -1814,7 +1813,7 @@ function PatchViewerMain({
   const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
   const selectedProvider = selectedPatch
     ? providerFromProviderId(selectedPatch.providerId)
-    : "github";
+    : 'github';
   const handleVirtualizerRootChange = useCallback((node: HTMLDivElement | null) => {
     scrollRootRef.current = node;
   }, []);
@@ -1842,33 +1841,36 @@ function PatchViewerMain({
     [expandedInactiveFileCommentsByPath],
   );
 
-  const setInactiveFileCommentsExpanded = useCallback((filePath: string, expanded: boolean) => {
-    setInactiveFileCommentsState((current) => {
-      const currentByPath =
-        current.scopeKey === inactiveFileCommentsScopeKey ? current.byPath : {};
+  const setInactiveFileCommentsExpanded = useCallback(
+    (filePath: string, expanded: boolean) => {
+      setInactiveFileCommentsState((current) => {
+        const currentByPath =
+          current.scopeKey === inactiveFileCommentsScopeKey ? current.byPath : {};
 
-      if (Boolean(currentByPath[filePath]) === expanded) {
-        return current;
-      }
+        if (Boolean(currentByPath[filePath]) === expanded) {
+          return current;
+        }
 
-      if (expanded) {
+        if (expanded) {
+          return {
+            byPath: {
+              ...currentByPath,
+              [filePath]: true,
+            },
+            scopeKey: inactiveFileCommentsScopeKey,
+          };
+        }
+
+        const next = { ...currentByPath };
+        delete next[filePath];
         return {
-          byPath: {
-            ...currentByPath,
-            [filePath]: true,
-          },
+          byPath: next,
           scopeKey: inactiveFileCommentsScopeKey,
         };
-      }
-
-      const next = { ...currentByPath };
-      delete next[filePath];
-      return {
-        byPath: next,
-        scopeKey: inactiveFileCommentsScopeKey,
-      };
-    });
-  }, [inactiveFileCommentsScopeKey]);
+      });
+    },
+    [inactiveFileCommentsScopeKey],
+  );
 
   const registerFileCommentsSection = useCallback(
     (filePath: string, node: HTMLDivElement | null) => {
@@ -1909,9 +1911,9 @@ function PatchViewerMain({
       const node = fileCommentsSectionNodesRef.current.get(filePath);
       if (node?.isConnected) {
         node.scrollIntoView({
-          behavior: "auto",
-          block: "center",
-          inline: "nearest",
+          behavior: 'auto',
+          block: 'center',
+          inline: 'nearest',
         });
         stop();
         return;
@@ -1948,9 +1950,9 @@ function PatchViewerMain({
 
       if (isGlobalReviewThread(thread)) {
         globalCommentsSectionNodeRef.current?.scrollIntoView({
-          behavior: "auto",
-          block: "start",
-          inline: "nearest",
+          behavior: 'auto',
+          block: 'start',
+          inline: 'nearest',
         });
       } else {
         navigator.tree.onSelectFile(thread.path);
@@ -1981,9 +1983,9 @@ function PatchViewerMain({
         const node = threadAnchorNodesRef.current.get(threadKey);
         if (node?.isConnected) {
           node.scrollIntoView({
-            behavior: "auto",
-            block: "center",
-            inline: "nearest",
+            behavior: 'auto',
+            block: 'center',
+            inline: 'nearest',
           });
           stop();
           return;
@@ -2016,7 +2018,7 @@ function PatchViewerMain({
       fileDiff: FileDiffMetadata,
       normalizedFilePath: string,
     ) => {
-      node.dataset.patchViewerSessionKey = patchViewerSessionKey ?? "";
+      node.dataset.patchViewerSessionKey = patchViewerSessionKey ?? '';
       node.dataset.patchViewerFilePath = normalizedFilePath;
 
       if (!hunkExpansionNodesRef.current.has(node)) {
@@ -2036,7 +2038,7 @@ function PatchViewerMain({
           );
         };
 
-        node.addEventListener("click", clickListener, { capture: true });
+        node.addEventListener('click', clickListener, { capture: true });
         hunkExpansionNodesRef.current.add(node);
       }
 
@@ -2080,7 +2082,7 @@ function PatchViewerMain({
 
       root.scrollTo({
         top: scrollTop,
-        behavior: "auto",
+        behavior: 'auto',
       });
 
       const maxScrollTop = Math.max(root.scrollHeight - root.clientHeight, 0);
@@ -2193,7 +2195,7 @@ function PatchViewerMain({
     }
 
     setEditorSubmitting(reviewEditorSessionKey, editorId, true);
-    setEditorError(reviewEditorSessionKey, editorId, "");
+    setEditorError(reviewEditorSessionKey, editorId, '');
 
     try {
       await createCommentMutation.mutateAsync({
@@ -2201,15 +2203,15 @@ function PatchViewerMain({
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
         body,
-        path: target.type === "global" ? "" : target.path,
+        path: target.type === 'global' ? '' : target.path,
         oldPath:
-          target.type === "global" ? "" : target.type === "file" ? target.oldPath : target.path,
+          target.type === 'global' ? '' : target.type === 'file' ? target.oldPath : target.path,
         newPath:
-          target.type === "global" ? "" : target.type === "file" ? target.newPath : target.path,
-        line: target.type === "line" ? target.line : null,
-        side: target.type === "line" ? target.side : null,
-        startLine: target.type === "line" ? target.startLine : null,
-        startSide: target.type === "line" ? target.startSide : null,
+          target.type === 'global' ? '' : target.type === 'file' ? target.newPath : target.path,
+        line: target.type === 'line' ? target.line : null,
+        side: target.type === 'line' ? target.side : null,
+        startLine: target.type === 'line' ? target.startLine : null,
+        startSide: target.type === 'line' ? target.startSide : null,
         subjectType: target.type,
       });
       closeEditor(reviewEditorSessionKey, editorId);
@@ -2242,20 +2244,20 @@ function PatchViewerMain({
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
         body,
-        path: "",
-        oldPath: "",
-        newPath: "",
+        path: '',
+        oldPath: '',
+        newPath: '',
         line: null,
         side: null,
         startLine: null,
         startSide: null,
-        subjectType: "global",
+        subjectType: 'global',
       });
       return;
     }
 
     if (!thread.id) {
-      throw new Error("This thread cannot be replied to from the app.");
+      throw new Error('This thread cannot be replied to from the app.');
     }
 
     await replyCommentMutation.mutateAsync({
@@ -2269,13 +2271,13 @@ function PatchViewerMain({
 
   async function handleEditComment(comment: ReviewComment, body: string) {
     if (!selectedPatch || !comment.id) {
-      throw new Error("This comment cannot be edited from the app.");
+      throw new Error('This comment cannot be edited from the app.');
     }
     const parentThread = reviewThreads.find((thread) =>
       thread.comments.some((item) => item.id === comment.id),
     );
     if (!parentThread?.id) {
-      throw new Error("This comment cannot be edited from the app.");
+      throw new Error('This comment cannot be edited from the app.');
     }
 
     await updateCommentMutation.mutateAsync({
@@ -2286,10 +2288,10 @@ function PatchViewerMain({
       commentId: comment.id,
       body,
       subjectType: isGlobalReviewThread(parentThread)
-        ? "global"
+        ? 'global'
         : isFileReviewThread(parentThread)
-          ? "file"
-          : "line",
+          ? 'file'
+          : 'line',
     });
   }
 
@@ -2416,12 +2418,12 @@ function PatchViewerMain({
                           useReviewCommentEditorStore
                             .getState()
                             .openNewEditor(reviewEditorSessionKey, {
-                              type: "global",
+                              type: 'global',
                             });
                           globalCommentsSectionNodeRef.current?.scrollIntoView({
-                            behavior: "auto",
-                            block: "start",
-                            inline: "nearest",
+                            behavior: 'auto',
+                            block: 'start',
+                            inline: 'nearest',
                           });
                         }}
                         onReplyToThread={handleReplyToThread}
@@ -2460,14 +2462,14 @@ function PatchViewerMain({
           <div className="min-h-0 w-1/3 min-w-[15%] shrink-0">
             <div
               className={cx(
-                "flex h-full min-h-0 min-w-0 flex-col",
-                shouldShowCommentsPanel && "divide-y divide-ink-200",
+                'flex h-full min-h-0 min-w-0 flex-col',
+                shouldShowCommentsPanel && 'divide-y divide-ink-200',
               )}
             >
               <div
                 className={cx(
-                  "min-h-0 overflow-hidden",
-                  shouldShowCommentsPanel ? "flex-[3]" : "flex-1",
+                  'min-h-0 overflow-hidden',
+                  shouldShowCommentsPanel ? 'flex-[3]' : 'flex-1',
                 )}
               >
                 <ChangedFilesTree

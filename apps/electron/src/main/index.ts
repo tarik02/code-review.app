@@ -1,27 +1,27 @@
-import { app, BrowserWindow } from "electron";
-import { Effect } from "effect";
-import { SettingsService } from "@code-review-app/backend";
-import { applyNativeThemePreference, createMainWindow } from "./window";
-import { configureUpdater } from "./updater";
-import { backendRuntime } from "./backend-runtime";
+import { app, BrowserWindow } from 'electron';
+import { Effect } from 'effect';
+import { SettingsService } from '@code-review-app/backend';
+import { applyNativeThemePreference, createMainWindow } from './window';
+import { configureUpdater } from './updater';
+import { backendRuntime } from './backend-runtime';
 import {
   emitDeepLink,
   emitOAuthCallback,
   isDeepLinkUrl,
   isOAuthCallbackUrl,
-} from "./oauth-callback";
+} from './oauth-callback';
 
-app.setName("code-review.app");
+app.setName('code-review.app');
 
-if (process.platform === "linux" && process.env.APPIMAGE) {
-  app.commandLine.appendSwitch("no-sandbox");
-  app.commandLine.appendSwitch("disable-setuid-sandbox");
+if (process.platform === 'linux' && process.env.APPIMAGE) {
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-setuid-sandbox');
 }
 
 if (process.defaultApp && process.argv.length >= 2) {
-  app.setAsDefaultProtocolClient("code-review.app", process.execPath, [process.argv[1]]);
+  app.setAsDefaultProtocolClient('code-review.app', process.execPath, [process.argv[1]]);
 } else {
-  app.setAsDefaultProtocolClient("code-review.app");
+  app.setAsDefaultProtocolClient('code-review.app');
 }
 
 const singleInstanceLock = app.requestSingleInstanceLock();
@@ -39,14 +39,14 @@ function handlePotentialAppUrl(url: string) {
   return emitOAuthCallback(url, window) || emitDeepLink(url, window);
 }
 
-app.on("open-url", (event, url) => {
+app.on('open-url', (event, url) => {
   if (isOAuthCallbackUrl(url) || isDeepLinkUrl(url)) {
     event.preventDefault();
     handlePotentialAppUrl(url);
   }
 });
 
-app.on("second-instance", (_event, argv) => {
+app.on('second-instance', (_event, argv) => {
   for (const item of argv) {
     if (handlePotentialAppUrl(item)) {
       return;
@@ -76,7 +76,7 @@ async function syncNativeThemeFromSettings() {
     );
     applyNativeThemePreference(preference);
   } catch (error) {
-    console.error("Failed to sync native theme from settings.", error);
+    console.error('Failed to sync native theme from settings.', error);
   }
 }
 
@@ -86,19 +86,19 @@ app.whenReady().then(async () => {
   await createMainWindow();
   handleStartupProtocolUrls();
 
-  app.on("activate", async () => {
+  app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       await createMainWindow();
     }
   });
 });
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-app.on("before-quit", () => {
+app.on('before-quit', () => {
   void backendRuntime.dispose();
 });

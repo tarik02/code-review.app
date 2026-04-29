@@ -1,6 +1,6 @@
-"use no memo";
+'use no memo';
 
-import type { EditorView } from "@codemirror/view";
+import type { EditorView } from '@codemirror/view';
 import {
   MDXEditor,
   codeBlockPlugin,
@@ -15,30 +15,30 @@ import {
   toolbarPlugin,
   type MDXEditorMethods,
   type RealmPlugin,
-} from "@mdxeditor/editor";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ensureCodeMirrorStyles } from "../../../lib/ensure-codemirror-styles";
-import { buildSuggestionBlock } from "../review-comment-editor-actions";
+} from '@mdxeditor/editor';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ensureCodeMirrorStyles } from '../../../lib/ensure-codemirror-styles';
+import { buildSuggestionBlock } from '../review-comment-editor-actions';
 import {
   commentCodeMirrorDescriptor,
   commentCodeMirrorTheme,
   sourceCodeFormattingKeymap,
-} from "./code-block-editor";
-import { ReviewCommentEditorFooter } from "./footer";
-import { getLanguageFromPath } from "./language";
-import { ReviewCommentLinkDialog } from "./link-dialog";
-import { createSourceEditorViewBridge } from "./source-editor-bridge";
-import { suggestionCodeBlockDescriptor } from "./suggestion-code-block-editor";
-import { SuggestionEditorContext } from "./suggestion-context";
-import { ReviewCommentToolbar } from "./toolbar";
-import type { ReviewCommentEditorProps, SuggestionEditorContextValue } from "./types";
-import "../comment-markdown.css";
-import "./styles.css";
+} from './code-block-editor';
+import { ReviewCommentEditorFooter } from './footer';
+import { getLanguageFromPath } from './language';
+import { ReviewCommentLinkDialog } from './link-dialog';
+import { createSourceEditorViewBridge } from './source-editor-bridge';
+import { suggestionCodeBlockDescriptor } from './suggestion-code-block-editor';
+import { SuggestionEditorContext } from './suggestion-context';
+import { ReviewCommentToolbar } from './toolbar';
+import type { ReviewCommentEditorProps, SuggestionEditorContextValue } from './types';
+import '../comment-markdown.css';
+import './styles.css';
 
-type SerializedCursorPosition = NonNullable<ReviewCommentEditorProps["cursorPosition"]>;
+type SerializedCursorPosition = NonNullable<ReviewCommentEditorProps['cursorPosition']>;
 
 function getEditorContentElement(host: HTMLDivElement | null) {
-  return host?.querySelector<HTMLElement>(".comment-editor-content") ?? null;
+  return host?.querySelector<HTMLElement>('.comment-editor-content') ?? null;
 }
 
 function getNodePath(root: Node, node: Node) {
@@ -73,7 +73,7 @@ function getNodeFromPath(root: Node, path: number[]) {
 
 function clampNodeOffset(node: Node, offset: number) {
   const maxOffset =
-    node.nodeType === Node.TEXT_NODE ? (node.textContent ?? "").length : node.childNodes.length;
+    node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '').length : node.childNodes.length;
 
   return Math.min(Math.max(offset, 0), maxOffset);
 }
@@ -126,19 +126,19 @@ function restoreCursorPosition(root: HTMLElement, cursorPosition: SerializedCurs
 }
 
 function ReviewCommentEditorInner({
-  defaultMode = "rich-text",
-  initialValue = "",
+  defaultMode = 'rich-text',
+  initialValue = '',
   value,
   cursorPosition = null,
-  placeholder = "Leave a comment",
+  placeholder = 'Leave a comment',
   provider,
   suggestionContext = null,
   target = null,
-  selectedText = "",
+  selectedText = '',
   submitLabel,
-  cancelLabel = "Cancel",
+  cancelLabel = 'Cancel',
   isPending = false,
-  error = "",
+  error = '',
   autoFocus = true,
   onChange,
   onCursorPositionChange,
@@ -160,12 +160,12 @@ function ReviewCommentEditorInner({
     [provider, selectedText, target],
   );
   const suggestionHighlightLanguage = useMemo(
-    () => (target?.type === "line" ? getLanguageFromPath(target.path) : ""),
+    () => (target?.type === 'line' ? getLanguageFromPath(target.path) : ''),
     [target],
   );
   const suggestionEditorContext = useMemo<SuggestionEditorContextValue | null>(
     () =>
-      target?.type === "line"
+      target?.type === 'line'
         ? {
             anchorLine: target.line,
             endLine: Math.max(target.startLine ?? target.line, target.line),
@@ -178,7 +178,7 @@ function ReviewCommentEditorInner({
         : null,
     [provider, suggestionContext?.lines, suggestionHighlightLanguage, target],
   );
-  const suggestionError = target?.type === "line" && suggestion.error ? suggestion.error : "";
+  const suggestionError = target?.type === 'line' && suggestion.error ? suggestion.error : '';
   const canInsertSuggestion = !isPending && suggestion.block.length > 0;
 
   useLayoutEffect(() => {
@@ -202,7 +202,7 @@ function ReviewCommentEditorInner({
   }, [onCursorPositionChange]);
 
   const scheduleCursorPositionCapture = useCallback(() => {
-    if (!onCursorPositionChange || typeof window === "undefined") {
+    if (!onCursorPositionChange || typeof window === 'undefined') {
       return;
     }
 
@@ -231,9 +231,9 @@ function ReviewCommentEditorInner({
       return;
     }
 
-    document.addEventListener("selectionchange", scheduleCursorPositionCapture);
+    document.addEventListener('selectionchange', scheduleCursorPositionCapture);
     return () => {
-      document.removeEventListener("selectionchange", scheduleCursorPositionCapture);
+      document.removeEventListener('selectionchange', scheduleCursorPositionCapture);
     };
   }, [onCursorPositionChange, scheduleCursorPositionCapture]);
 
@@ -242,13 +242,13 @@ function ReviewCommentEditorInner({
       return;
     }
 
-    const nextValue = value ?? "";
+    const nextValue = value ?? '';
     lastMarkdownRef.current = nextValue;
     editorRef.current?.setMarkdown(nextValue);
   }, [isControlled, value]);
 
   useEffect(() => {
-    if (!cursorPosition || hasRestoredCursorPositionRef.current || typeof window === "undefined") {
+    if (!cursorPosition || hasRestoredCursorPositionRef.current || typeof window === 'undefined') {
       return;
     }
 
@@ -292,7 +292,7 @@ function ReviewCommentEditorInner({
       () => {
         editorRef.current?.insertMarkdown(suggestion.block);
       },
-      { defaultSelection: "rootEnd" },
+      { defaultSelection: 'rootEnd' },
     );
   }, [isPending, suggestion.block]);
 
@@ -313,21 +313,21 @@ function ReviewCommentEditorInner({
       }),
       codeBlockPlugin({
         codeBlockEditorDescriptors: [suggestionCodeBlockDescriptor, commentCodeMirrorDescriptor],
-        defaultCodeBlockLanguage: "",
+        defaultCodeBlockLanguage: '',
       }),
       codeMirrorPlugin({
         codeBlockLanguages: {
-          "": "Plain text",
-          bash: "Bash",
-          css: "CSS",
-          diff: "Diff",
-          html: "HTML",
-          js: "JavaScript",
-          json: "JSON",
-          md: "Markdown",
-          sh: "Shell",
-          ts: "TypeScript",
-          tsx: "TSX",
+          '': 'Plain text',
+          bash: 'Bash',
+          css: 'CSS',
+          diff: 'Diff',
+          html: 'HTML',
+          js: 'JavaScript',
+          json: 'JSON',
+          md: 'Markdown',
+          sh: 'Shell',
+          ts: 'TypeScript',
+          tsx: 'TSX',
         },
         codeMirrorExtensions: [commentCodeMirrorTheme],
       }),
@@ -341,7 +341,7 @@ function ReviewCommentEditorInner({
         ],
       }),
       toolbarPlugin({
-        toolbarClassName: "comment-editor-toolbar",
+        toolbarClassName: 'comment-editor-toolbar',
         toolbarContents: () => (
           <ReviewCommentToolbar
             canInsertSuggestion={canInsertSuggestion}
@@ -396,7 +396,7 @@ function ReviewCommentEditorInner({
         <SuggestionEditorContext.Provider value={suggestionEditorContext}>
           <MDXEditor
             ref={editorRef}
-            autoFocus={autoFocus ? { defaultSelection: "rootEnd", preventScroll: true } : false}
+            autoFocus={autoFocus ? { defaultSelection: 'rootEnd', preventScroll: true } : false}
             className="comment-editor"
             contentEditableClassName="comment-editor-content comment-markdown"
             markdown={value ?? initialValue}
@@ -425,7 +425,8 @@ function ReviewCommentEditorInner({
 }
 
 function ReviewCommentEditor(props: ReviewCommentEditorProps) {
-  const editorInstanceKey = props.value !== undefined ? "__controlled__" : props.initialValue ?? "";
+  const editorInstanceKey =
+    props.value !== undefined ? '__controlled__' : (props.initialValue ?? '');
   return <ReviewCommentEditorInner key={editorInstanceKey} {...props} />;
 }
 

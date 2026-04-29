@@ -1,6 +1,6 @@
-import type { EditorView } from "@codemirror/view";
+import type { EditorView } from '@codemirror/view';
 
-type MarkdownListType = "bullet" | "number" | "check";
+type MarkdownListType = 'bullet' | 'number' | 'check';
 
 function selectedSourceRange(view: EditorView) {
   const selection = view.state.selection.main;
@@ -39,8 +39,8 @@ function toggleSourceInlineMarker(view: EditorView, marker: string) {
   if (selectedText && before === marker && after === marker) {
     view.dispatch({
       changes: [
-        { from: range.to, to: range.to + marker.length, insert: "" },
-        { from: range.from - marker.length, to: range.from, insert: "" },
+        { from: range.to, to: range.to + marker.length, insert: '' },
+        { from: range.from - marker.length, to: range.from, insert: '' },
       ],
       selection: {
         anchor: range.from - marker.length,
@@ -81,7 +81,7 @@ function toggleSourceInlineMarker(view: EditorView, marker: string) {
 function insertSourceLink(view: EditorView) {
   const range = selectedSourceRange(view);
   const selectedText = view.state.doc.sliceString(range.from, range.to);
-  const label = selectedText || "link";
+  const label = selectedText || 'link';
   const nextText = `[${label}]()`;
   const urlStart = range.from + label.length + 3;
 
@@ -103,27 +103,27 @@ function lineRangeForSelection(view: EditorView) {
 }
 
 function stripKnownListPrefix(line: string) {
-  return line.replace(/^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+)/, "$1");
+  return line.replace(/^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+)/, '$1');
 }
 
 function listPrefixFor(type: MarkdownListType, index: number) {
   switch (type) {
-    case "bullet":
-      return "- ";
-    case "number":
+    case 'bullet':
+      return '- ';
+    case 'number':
       return `${index + 1}. `;
-    case "check":
-      return "- [ ] ";
+    case 'check':
+      return '- [ ] ';
   }
 }
 
 function listPrefixPattern(type: MarkdownListType) {
   switch (type) {
-    case "bullet":
+    case 'bullet':
       return /^(\s*)[-*+]\s+/;
-    case "number":
+    case 'number':
       return /^(\s*)\d+[.)]\s+/;
-    case "check":
+    case 'check':
       return /^(\s*)[-*+]\s+\[[ xX]\]\s+/;
   }
 }
@@ -148,10 +148,10 @@ function toggleSourceList(view: EditorView, type: MarkdownListType) {
       }
 
       return shouldRemove
-        ? line.replace(prefixPattern, "$1")
+        ? line.replace(prefixPattern, '$1')
         : stripKnownListPrefix(line).replace(/^(\s*)/, `$1${listPrefixFor(type, index)}`);
     })
-    .join("\n");
+    .join('\n');
 
   view.dispatch({
     changes: { from: fromLine.from, to: toLine.to, insert: nextText },
@@ -166,7 +166,7 @@ function insertSourceCodeBlock(view: EditorView) {
   const selectedText = view.state.doc.sliceString(range.from, range.to);
 
   if (selectedText.length === 0) {
-    const nextText = "```\n\n```";
+    const nextText = '```\n\n```';
     view.dispatch({
       changes: { from: range.from, to: range.to, insert: nextText },
       selection: { anchor: range.from + 4 },

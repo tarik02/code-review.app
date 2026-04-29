@@ -1,10 +1,10 @@
-import { asc, eq } from "drizzle-orm";
-import { Effect, Layer } from "effect";
-import { EncryptionService } from "./encryption.ts";
-import { DatabaseService } from "../db/client.ts";
-import { authTokens } from "../db/schema.ts";
-import { normalizeHost } from "../repo-id.ts";
-import type { ForgeProviderKind, ProviderAccount } from "@code-review-app/shared";
+import { asc, eq } from 'drizzle-orm';
+import { Effect, Layer } from 'effect';
+import { EncryptionService } from './encryption.ts';
+import { DatabaseService } from '../db/client.ts';
+import { authTokens } from '../db/schema.ts';
+import { normalizeHost } from '../repo-id.ts';
+import type { ForgeProviderKind, ProviderAccount } from '@code-review-app/shared';
 
 type StoredAuthToken = {
   id: string;
@@ -26,7 +26,7 @@ type AuthTokenStoreShape = {
   delete(accountId: string): Effect.Effect<void, Error>;
 };
 
-class AuthTokenStore extends Effect.Tag("AuthTokenStore")<AuthTokenStore, AuthTokenStoreShape>() {}
+class AuthTokenStore extends Effect.Tag('AuthTokenStore')<AuthTokenStore, AuthTokenStoreShape>() {}
 
 type AuthTokenRow = typeof authTokens.$inferSelect;
 
@@ -34,7 +34,7 @@ function parseScopes(value: string) {
   try {
     const parsed = JSON.parse(value) as unknown;
     return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
+      ? parsed.filter((item): item is string => typeof item === 'string')
       : [];
   } catch {
     return [];
@@ -58,7 +58,7 @@ const makeAuthTokenStore = Effect.gen(function* () {
   const database = yield* DatabaseService;
   const encryption = yield* EncryptionService;
 
-  const get: AuthTokenStoreShape["get"] = Effect.fn("AuthTokenStore.get")(function* (accountId) {
+  const get: AuthTokenStoreShape['get'] = Effect.fn('AuthTokenStore.get')(function* (accountId) {
     const row = yield* database.query(async (db) => {
       const [record] = await db
         .select()
@@ -88,8 +88,8 @@ const makeAuthTokenStore = Effect.gen(function* () {
     };
   });
 
-  const listAccounts: AuthTokenStoreShape["listAccounts"] = Effect.fn(
-    "AuthTokenStore.listAccounts",
+  const listAccounts: AuthTokenStoreShape['listAccounts'] = Effect.fn(
+    'AuthTokenStore.listAccounts',
   )(() =>
     database.query(async (db) => {
       const rows = await db.select().from(authTokens).orderBy(asc(authTokens.createdAt));
@@ -97,7 +97,7 @@ const makeAuthTokenStore = Effect.gen(function* () {
     }),
   );
 
-  const save: AuthTokenStoreShape["save"] = Effect.fn("AuthTokenStore.save")(function* (token) {
+  const save: AuthTokenStoreShape['save'] = Effect.fn('AuthTokenStore.save')(function* (token) {
     const normalizedHost = normalizeHost(token.host);
     const accessToken = yield* encryption.encryptString(token.accessToken);
     const refreshToken = token.refreshToken
@@ -138,7 +138,7 @@ const makeAuthTokenStore = Effect.gen(function* () {
     });
   });
 
-  const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn("AuthTokenStore.delete")(
+  const deleteToken: AuthTokenStoreShape['delete'] = Effect.fn('AuthTokenStore.delete')(
     function* (accountId) {
       yield* database.transaction(async (tx) => {
         await tx.delete(authTokens).where(eq(authTokens.accountId, accountId));

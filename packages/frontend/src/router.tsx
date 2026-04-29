@@ -6,15 +6,15 @@ import {
   createRouter,
   redirect,
   useLocation,
-} from "@tanstack/react-router";
-import { useEffect } from "react";
-import { AuthRoute } from "./routes/auth-route";
-import { AppearanceRoute } from "./routes/appearance-route";
-import { HomeRoute } from "./routes/home-route";
-import { ProfilesRoute } from "./routes/profiles-route";
-import { ReviewRoute } from "./routes/review-route";
-import { SettingsLayout } from "./routes/settings-layout";
-import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "./lib/settings-return-location";
+} from '@tanstack/react-router';
+import { useEffect } from 'react';
+import { AuthRoute } from './routes/auth-route';
+import { AppearanceRoute } from './routes/appearance-route';
+import { HomeRoute } from './routes/home-route';
+import { ProfilesRoute } from './routes/profiles-route';
+import { ReviewRoute } from './routes/review-route';
+import { SettingsLayout } from './routes/settings-layout';
+import { SETTINGS_RETURN_HREF_STORAGE_KEY } from './lib/settings-return-location';
 
 type HomeRouteSearch = {
   providerId?: string;
@@ -24,18 +24,18 @@ type HomeRouteSearch = {
 
 function parsePositiveInteger(value: unknown) {
   const parsed =
-    typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function validateHomeRouteSearch(search: Record<string, unknown>): HomeRouteSearch {
   const providerId =
-    typeof search.providerId === "string" && search.providerId.trim().length > 0
+    typeof search.providerId === 'string' && search.providerId.trim().length > 0
       ? search.providerId
       : undefined;
   const repoKey =
-    typeof search.repoKey === "string" && search.repoKey.trim().length > 0
+    typeof search.repoKey === 'string' && search.repoKey.trim().length > 0
       ? search.repoKey
       : undefined;
   const pr = parsePositiveInteger(search.pr);
@@ -48,7 +48,7 @@ const rootRoute = createRootRoute({
 });
 
 function isSettingsPath(pathname: string) {
-  return pathname === "/settings" || pathname.startsWith("/settings/");
+  return pathname === '/settings' || pathname.startsWith('/settings/');
 }
 
 function RootRoute() {
@@ -67,43 +67,43 @@ function RootRoute() {
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/",
+  path: '/',
   validateSearch: validateHomeRouteSearch,
   component: HomeRoute,
 });
 
 const authRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "auth",
+  path: 'auth',
   component: AuthRoute,
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "settings",
+  path: 'settings',
   component: SettingsLayout,
   beforeLoad: ({ location }) => {
-    if (location.pathname === "/settings") {
-      throw redirect({ to: "/settings/appearance" });
+    if (location.pathname === '/settings') {
+      throw redirect({ to: '/settings/appearance' });
     }
   },
 });
 
 const appearanceRoute = createRoute({
   getParentRoute: () => settingsRoute,
-  path: "appearance",
+  path: 'appearance',
   component: AppearanceRoute,
 });
 
 const profilesRoute = createRoute({
   getParentRoute: () => settingsRoute,
-  path: "profiles",
+  path: 'profiles',
   component: ProfilesRoute,
 });
 
 const reviewRoute = createRoute({
   getParentRoute: () => settingsRoute,
-  path: "review",
+  path: 'review',
   component: ReviewRoute,
 });
 
@@ -118,7 +118,7 @@ const router = createRouter({
   history: createHashHistory(),
 });
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
   }

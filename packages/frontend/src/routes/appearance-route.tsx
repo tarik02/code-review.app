@@ -1,31 +1,31 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppearanceBackground } from "../components/ui/appearance-background";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
-import { useTheme } from "../hooks/use-theme";
-import type { ThemePreference } from "../hooks/use-theme";
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AppearanceBackground } from '../components/ui/appearance-background';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
+import { useTheme } from '../hooks/use-theme';
+import type { ThemePreference } from '../hooks/use-theme';
 import {
   appearanceBackgroundQueryOptions,
   setAppearanceBackground,
   selectCustomBackgroundFile,
-} from "../queries/forge";
-import type { AppearanceBackgroundInput, AppearanceBackgroundSettings } from "../types/forge";
+} from '../queries/forge';
+import type { AppearanceBackgroundInput, AppearanceBackgroundSettings } from '../types/forge';
 
 const themeOptions: { value: ThemePreference; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+  { value: 'auto', label: 'Auto' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
 ];
 
 const backgroundOptions: {
-  value: AppearanceBackgroundSettings["kind"];
+  value: AppearanceBackgroundSettings['kind'];
   label: string;
 }[] = [
-  { value: "default", label: "Default" },
-  { value: "solid", label: "Solid color" },
-  { value: "customFile", label: "Custom file" },
+  { value: 'default', label: 'Default' },
+  { value: 'solid', label: 'Solid color' },
+  { value: 'customFile', label: 'Custom file' },
 ];
 
 function AppearanceRoute() {
@@ -33,9 +33,9 @@ function AppearanceRoute() {
   const { theme, preference, setPreference } = useTheme();
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const background = backgroundQuery.data;
-  const [draftSolidColor, setDraftSolidColor] = useState("#18181b");
+  const [draftSolidColor, setDraftSolidColor] = useState('#18181b');
   const backgroundQueryKey = appearanceBackgroundQueryOptions().queryKey;
-  const solidColor = background?.kind === "solid" ? background.color : draftSolidColor;
+  const solidColor = background?.kind === 'solid' ? background.color : draftSolidColor;
 
   const backgroundMutation = useMutation({
     mutationFn: setAppearanceBackground,
@@ -54,7 +54,7 @@ function AppearanceRoute() {
     backgroundMutation.mutate(input);
   }
 
-  const activeBackgroundKind = background?.kind ?? "default";
+  const activeBackgroundKind = background?.kind ?? 'default';
   const isSavingBackground = backgroundMutation.isPending || customFileMutation.isPending;
   const backgroundError =
     backgroundMutation.error ?? customFileMutation.error ?? backgroundQuery.error;
@@ -87,7 +87,7 @@ function AppearanceRoute() {
           })}
         </ToggleGroup>
         <p className="mt-3 text-sm text-ink-500">
-          {preference === "auto"
+          {preference === 'auto'
             ? `Auto uses your system appearance. Current theme: ${theme}.`
             : `Current theme: ${theme}.`}
         </p>
@@ -97,18 +97,18 @@ function AppearanceRoute() {
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
           <div>
             <h3 className="text-sm font-semibold text-ink-900">Background</h3>
-            <ToggleGroup<AppearanceBackgroundSettings["kind"]>
+            <ToggleGroup<AppearanceBackgroundSettings['kind']>
               className="mt-3 grid max-w-xl grid-cols-3 bg-canvasDark"
               disabled={isSavingBackground}
               value={[activeBackgroundKind]}
               onValueChange={(nextBackgroundKind) => {
                 const selectedBackgroundKind = nextBackgroundKind[0];
-                if (selectedBackgroundKind === "default") {
-                  updateBackground({ kind: "default" });
-                } else if (selectedBackgroundKind === "solid") {
+                if (selectedBackgroundKind === 'default') {
+                  updateBackground({ kind: 'default' });
+                } else if (selectedBackgroundKind === 'solid') {
                   setDraftSolidColor(solidColor);
-                  updateBackground({ kind: "solid", color: solidColor });
-                } else if (selectedBackgroundKind === "customFile") {
+                  updateBackground({ kind: 'solid', color: solidColor });
+                } else if (selectedBackgroundKind === 'customFile') {
                   customFileMutation.mutate();
                 }
               }}
@@ -122,7 +122,7 @@ function AppearanceRoute() {
               })}
             </ToggleGroup>
 
-            {activeBackgroundKind === "solid" ? (
+            {activeBackgroundKind === 'solid' ? (
               <label className="mt-4 flex max-w-sm items-center gap-3 text-sm text-ink-700">
                 <span className="shrink-0 font-medium text-ink-600">Color</span>
                 <Input
@@ -131,7 +131,7 @@ function AppearanceRoute() {
                   onChange={(event) => {
                     const nextColor = event.currentTarget.value;
                     setDraftSolidColor(nextColor);
-                    updateBackground({ kind: "solid", color: nextColor });
+                    updateBackground({ kind: 'solid', color: nextColor });
                   }}
                   type="color"
                   value={solidColor}
@@ -140,15 +140,15 @@ function AppearanceRoute() {
               </label>
             ) : null}
 
-            {activeBackgroundKind === "customFile" ? (
+            {activeBackgroundKind === 'customFile' ? (
               <div className="mt-4 flex flex-col items-start gap-2">
-                {background?.kind === "customFile" ? (
+                {background?.kind === 'customFile' ? (
                   <p className="text-sm text-ink-600">
-                    Selected image:{" "}
+                    Selected image:{' '}
                     <span className="font-medium text-ink-900">{background.fileName}</span>
                   </p>
                 ) : null}
-                {background?.kind === "customFile" && !background.dataUrl ? (
+                {background?.kind === 'customFile' && !background.dataUrl ? (
                   <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
                     The selected image could not be loaded. Choose another image or switch
                     backgrounds.
@@ -159,7 +159,7 @@ function AppearanceRoute() {
                   onClick={() => customFileMutation.mutate()}
                   type="button"
                 >
-                  {customFileMutation.isPending ? "Choosing..." : "Choose image..."}
+                  {customFileMutation.isPending ? 'Choosing...' : 'Choose image...'}
                 </Button>
               </div>
             ) : null}
@@ -168,7 +168,7 @@ function AppearanceRoute() {
               <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-danger-600 dark:border-red-900/40 dark:bg-red-950/30">
                 {backgroundError instanceof Error
                   ? backgroundError.message
-                  : "Could not update background."}
+                  : 'Could not update background.'}
               </p>
             ) : null}
           </div>

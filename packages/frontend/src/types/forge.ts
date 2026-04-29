@@ -1,5 +1,5 @@
-import type { GitStatusEntry } from "@pierre/trees";
-import { PullRequestBadgeStatus } from "@code-review-app/shared";
+import type { GitStatusEntry } from '@pierre/trees';
+import { PullRequestBadgeStatus } from '@code-review-app/shared';
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -40,12 +40,12 @@ import type {
   TrackedPullRequestOrderEntry,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type FileStatsEntry = {
   additions: number;
   deletions: number;
-  status: GitStatusEntry["status"];
+  status: GitStatusEntry['status'];
 };
 
 export { PullRequestBadgeStatus };

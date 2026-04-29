@@ -1,14 +1,14 @@
-import { createClient, type Client } from "@libsql/client/sqlite3";
-import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import { Effect, Layer } from "effect";
-import { pathToFileURL } from "node:url";
-import { BackendConfig, type BackendRuntimeConfig } from "../config.ts";
-import { CacheError } from "../errors.ts";
-import * as schema from "./schema.ts";
+import { createClient, type Client } from '@libsql/client/sqlite3';
+import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
+import { migrate } from 'drizzle-orm/libsql/migrator';
+import { Effect, Layer } from 'effect';
+import { pathToFileURL } from 'node:url';
+import { BackendConfig, type BackendRuntimeConfig } from '../config.ts';
+import { CacheError } from '../errors.ts';
+import * as schema from './schema.ts';
 
 type Database = LibSQLDatabase<typeof schema>;
-type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 type DatabaseHandle = {
   client: Client;
@@ -22,7 +22,7 @@ type DatabaseServiceShape = {
   ): Effect.Effect<A, CacheError>;
 };
 
-class DatabaseService extends Effect.Tag("DatabaseService")<
+class DatabaseService extends Effect.Tag('DatabaseService')<
   DatabaseService,
   DatabaseServiceShape
 >() {}
@@ -36,9 +36,9 @@ async function initializeDatabase(config: BackendRuntimeConfig): Promise<Databas
   const db = drizzle(client, { schema });
 
   try {
-    await client.execute("PRAGMA journal_mode = WAL");
-    await client.execute("PRAGMA synchronous = NORMAL");
-    await client.execute("PRAGMA busy_timeout = 5000");
+    await client.execute('PRAGMA journal_mode = WAL');
+    await client.execute('PRAGMA synchronous = NORMAL');
+    await client.execute('PRAGMA busy_timeout = 5000');
     await migrate(db, {
       migrationsFolder: config.migrationsPath,
     });

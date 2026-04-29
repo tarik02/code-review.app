@@ -1,16 +1,16 @@
-import { app, dialog, ipcMain } from "electron";
-import type { BrowserWindow, OpenDialogOptions } from "electron";
-import { applyWSSHandler } from "@trpc/server/adapters/ws";
-import { createElectronServer } from "@hadeeb/trpc-worker/adapter";
-import { createAppRouter, type BackendRouterPlatform } from "@code-review-app/backend";
-import { backendRuntime } from "./backend-runtime";
-import { checkForUpdate, installUpdate, subscribeToUpdateEvents } from "./updater";
+import { app, dialog, ipcMain } from 'electron';
+import type { BrowserWindow, OpenDialogOptions } from 'electron';
+import { applyWSSHandler } from '@trpc/server/adapters/ws';
+import { createElectronServer } from '@hadeeb/trpc-worker/adapter';
+import { createAppRouter, type BackendRouterPlatform } from '@code-review-app/backend';
+import { backendRuntime } from './backend-runtime';
+import { checkForUpdate, installUpdate, subscribeToUpdateEvents } from './updater';
 import {
   getLatestOAuthCallback,
   subscribeToDeepLinks,
   subscribeToOAuthCallbacks,
-} from "./oauth-callback";
-import { applyNativeThemePreference } from "./window";
+} from './oauth-callback';
+import { applyNativeThemePreference } from './window';
 
 type ElectronTrpcServer = ReturnType<typeof createElectronServer>;
 type ConnectionListener = (client: any, request: any) => void;
@@ -21,7 +21,7 @@ function createCompatibleElectronServer(): ElectronTrpcServer {
   return {
     ...wss,
     on(event, listener) {
-      if (event !== "connection") {
+      if (event !== 'connection') {
         return wss.on(event, listener);
       }
 
@@ -29,14 +29,14 @@ function createCompatibleElectronServer(): ElectronTrpcServer {
         const originalOn = client.on.bind(client);
 
         client.on = ((clientEvent: string, clientListener: (...args: unknown[]) => void) => {
-          if (clientEvent !== "message") {
+          if (clientEvent !== 'message') {
             return originalOn(clientEvent, clientListener);
           }
 
-          return originalOn("message", (data: unknown) => {
+          return originalOn('message', (data: unknown) => {
             // Current @trpc/server WS handling expects Node Buffer payloads.
             // The MessagePort bridge delivers decoded strings from the renderer.
-            const rawData = typeof data === "string" ? Buffer.from(data, "utf8") : data;
+            const rawData = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
             return clientListener(rawData, false);
           });
         }) as typeof client.on;
@@ -54,11 +54,11 @@ function createElectronRouterPlatform(window: BrowserWindow): BackendRouterPlatf
     getCurrentVersion: () => app.getVersion(),
     selectCustomBackgroundFile: async () => {
       const openDialogOptions = {
-        properties: ["openFile"],
+        properties: ['openFile'],
         filters: [
           {
-            name: "Images",
-            extensions: ["png", "jpg", "jpeg", "webp", "gif", "avif"],
+            name: 'Images',
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'],
           },
         ],
       } satisfies OpenDialogOptions;
@@ -88,13 +88,13 @@ function createElectronRouterPlatform(window: BrowserWindow): BackendRouterPlatf
       };
 
       emitStatus();
-      window.on("enter-full-screen", emitStatus);
-      window.on("leave-full-screen", emitStatus);
+      window.on('enter-full-screen', emitStatus);
+      window.on('leave-full-screen', emitStatus);
 
       return () => {
         if (window.isDestroyed()) return;
-        window.off("enter-full-screen", emitStatus);
-        window.off("leave-full-screen", emitStatus);
+        window.off('enter-full-screen', emitStatus);
+        window.off('leave-full-screen', emitStatus);
       };
     },
     setNativeTheme: applyNativeThemePreference,

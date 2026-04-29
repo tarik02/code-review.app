@@ -3,12 +3,12 @@ import {
   HttpClientError,
   HttpClientRequest,
   HttpClientResponse,
-} from "@effect/platform";
-import { Effect, ParseResult, Schema } from "effect";
-import { ProviderError } from "../errors.ts";
-import { parseOwnerRepo } from "../repo-id.ts";
-import { createRepoIdentity } from "../repo-id.ts";
-import { getValidAccessToken, updateViewerLogin } from "../auth/provider-auth.ts";
+} from '@effect/platform';
+import { Effect, ParseResult, Schema } from 'effect';
+import { ProviderError } from '../errors.ts';
+import { parseOwnerRepo } from '../repo-id.ts';
+import { createRepoIdentity } from '../repo-id.ts';
+import { getValidAccessToken, updateViewerLogin } from '../auth/provider-auth.ts';
 import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
@@ -19,13 +19,13 @@ import type {
   RepoSummary,
   ReviewComment,
   ReviewThread,
-} from "@code-review-app/shared";
-import type { ForgeProvider, PullRequestQualityReportInput, ReviewThreadInput } from "./types.ts";
-import type { RepoIdentity } from "../repo-id.ts";
-import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
+} from '@code-review-app/shared';
+import type { ForgeProvider, PullRequestQualityReportInput, ReviewThreadInput } from './types.ts';
+import type { RepoIdentity } from '../repo-id.ts';
+import { AuthTokenStore, type StoredAuthToken } from '../auth/token-store.ts';
 
 type GitHubRequestOptions = {
-  method?: "GET" | "POST" | "PUT";
+  method?: 'GET' | 'POST' | 'PUT';
   accept?: string;
   body?: unknown;
 };
@@ -42,7 +42,7 @@ type UserContext = {
   fetchedAt: number;
 };
 
-const API_REQUEST_TIMEOUT = "30 seconds";
+const API_REQUEST_TIMEOUT = '30 seconds';
 const USER_CONTEXT_TTL_MS = 60 * 60 * 1000;
 
 const NullableString = Schema.NullOr(Schema.String);
@@ -152,30 +152,30 @@ function toChangedFile(item: GhChangedFile): PrChangedFile {
   const filename = item.filename.trim();
   const previousFilename = item.previous_filename?.trim() || filename;
 
-  if (item.status === "added") {
+  if (item.status === 'added') {
     return {
       path: filename,
-      oldPath: "",
+      oldPath: '',
       newPath: filename,
-      changeType: "new",
+      changeType: 'new',
     };
   }
 
-  if (item.status === "removed") {
+  if (item.status === 'removed') {
     return {
       path: filename,
       oldPath: filename,
-      newPath: "",
-      changeType: "deleted",
+      newPath: '',
+      changeType: 'deleted',
     };
   }
 
-  if (item.status === "renamed") {
+  if (item.status === 'renamed') {
     return {
       path: filename,
       oldPath: previousFilename,
       newPath: filename,
-      changeType: item.changes === 0 ? "rename-pure" : "rename-changed",
+      changeType: item.changes === 0 ? 'rename-pure' : 'rename-changed',
     };
   }
 
@@ -183,7 +183,7 @@ function toChangedFile(item: GhChangedFile): PrChangedFile {
     path: filename,
     oldPath: filename,
     newPath: filename,
-    changeType: "change",
+    changeType: 'change',
   };
 }
 
@@ -370,7 +370,7 @@ function requireStoredToken(
 ): Effect.Effect<StoredAuthToken, ProviderError, AuthTokenStore> {
   return Effect.gen(function* () {
     const token = yield* storedToken(accountId);
-    if (!token) return yield* Effect.fail(new ProviderError("GitHub is not signed in."));
+    if (!token) return yield* Effect.fail(new ProviderError('GitHub is not signed in.'));
     return token;
   });
 }
@@ -397,25 +397,25 @@ function parseOwnerRepoEffect(value: string): Effect.Effect<[string, string], Pr
 
 function encodePath(path: string) {
   return path
-    .split("/")
+    .split('/')
     .map((segment) => encodeURIComponent(segment))
-    .join("/");
+    .join('/');
 }
 
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
-    normalized.includes("not logged") ||
-    normalized.includes("bad credentials") ||
-    normalized.includes("401") ||
-    normalized.includes("unauthorized") ||
-    normalized.includes("authenticate") ||
-    (normalized.includes("github.com") && normalized.includes("login"))
+    normalized.includes('not logged') ||
+    normalized.includes('bad credentials') ||
+    normalized.includes('401') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('authenticate') ||
+    (normalized.includes('github.com') && normalized.includes('login'))
   );
 }
 
 function parseGitHubErrorBody(text: string) {
-  if (!text) return "";
+  if (!text) return '';
   try {
     const parsed = Schema.decodeUnknownSync(GitHubErrorBodySchema)(JSON.parse(text));
     return parsed.message ?? text;
@@ -433,7 +433,7 @@ function parseErrorMessage(error: ParseResult.ParseError) {
 
 function responseErrorMessage(error: HttpClientError.ResponseError) {
   return Effect.gen(function* () {
-    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed("")));
+    const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed('')));
     return parseGitHubErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
   });
 }
@@ -455,35 +455,35 @@ function mapHttpError(error: unknown) {
 
 function graphqlErrors<T>(response: GraphQlResponse<T>): Effect.Effect<void, ProviderError> {
   if (!response.errors?.length) return Effect.void;
-  const message = response.errors.map((error) => error.message).join("\n");
-  return Effect.fail(new ProviderError(message || "GitHub returned an unknown GraphQL error"));
+  const message = response.errors.map((error) => error.message).join('\n');
+  return Effect.fail(new ProviderError(message || 'GitHub returned an unknown GraphQL error'));
 }
 
 function githubApiBase(host: string) {
-  return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
+  return host === 'github.com' ? 'https://api.github.com' : `https://${host}/api/v3`;
 }
 
 function githubGraphqlUrl(host: string) {
-  return host === "github.com" ? "https://api.github.com/graphql" : `https://${host}/api/graphql`;
+  return host === 'github.com' ? 'https://api.github.com/graphql' : `https://${host}/api/graphql`;
 }
 
 function githubApiUrl(host: string, pathOrUrl: string) {
-  return pathOrUrl.startsWith("http") ? pathOrUrl : `${githubApiBase(host)}${pathOrUrl}`;
+  return pathOrUrl.startsWith('http') ? pathOrUrl : `${githubApiBase(host)}${pathOrUrl}`;
 }
 
 function requestFor(url: string, token: string, options: GitHubRequestOptions = {}) {
   const request =
-    options.method === "POST"
+    options.method === 'POST'
       ? HttpClientRequest.post(url)
-      : options.method === "PUT"
+      : options.method === 'PUT'
         ? HttpClientRequest.put(url)
         : HttpClientRequest.get(url);
 
   return request.pipe(
-    HttpClientRequest.accept(options.accept ?? "application/json"),
+    HttpClientRequest.accept(options.accept ?? 'application/json'),
     HttpClientRequest.bearerToken(token),
-    HttpClientRequest.setHeader("User-Agent", "code-review.app"),
-    HttpClientRequest.setHeader("X-GitHub-Api-Version", "2022-11-28"),
+    HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+    HttpClientRequest.setHeader('X-GitHub-Api-Version', '2022-11-28'),
   );
 }
 
@@ -500,7 +500,7 @@ function githubResponse(
     let request = requestFor(url, token, options);
     if (options?.body !== undefined) {
       request = yield* request.pipe(
-        HttpClientRequest.setHeader("Content-Type", "application/json"),
+        HttpClientRequest.setHeader('Content-Type', 'application/json'),
         HttpClientRequest.bodyJson(options.body),
         Effect.mapError(toProviderError),
       );
@@ -562,7 +562,7 @@ function githubGraphql<A, I, R>(
       githubGraphqlUrl(host),
       graphQlResponseSchema(schema),
       {
-        method: "POST",
+        method: 'POST',
         body: { query, variables },
       },
     );
@@ -584,13 +584,13 @@ function ensureUserContext(
       return userContext.owners;
     }
 
-    const user = yield* githubJson(accountId, host, "/user", GhRestUserSchema);
+    const user = yield* githubJson(accountId, host, '/user', GhRestUserSchema);
     const owners = [user.login];
 
     const orgs = yield* githubJson(
       accountId,
       host,
-      "/user/orgs?per_page=100",
+      '/user/orgs?per_page=100',
       Schema.Array(GhRestUserSchema),
     ).pipe(Effect.catchAll(() => Effect.succeed([])));
     for (const org of orgs) {
@@ -611,7 +611,7 @@ function githubViewerLogin(
     yield* ensureUserContext(accountId, token.host);
     const login = userContext?.login;
     if (!login) {
-      return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
+      return yield* Effect.fail(new ProviderError('Unable to determine GitHub viewer login'));
     }
     return login;
   });
@@ -647,7 +647,7 @@ query($owner: String!, $name: String!, $number: Int!) {
 
     const id = response.data?.repository?.pullRequest?.id?.trim();
     if (!id) {
-      return yield* Effect.fail(new ProviderError("Pull request not found"));
+      return yield* Effect.fail(new ProviderError('Pull request not found'));
     }
     return id;
   });
@@ -659,14 +659,14 @@ function toGitHubReviewComment(
   return {
     id: comment.id,
     databaseId: comment.databaseId ?? null,
-    authorLogin: comment.author?.login ?? "unknown",
+    authorLogin: comment.author?.login ?? 'unknown',
     authorAvatarUrl: comment.author?.avatarUrl ?? comment.author?.avatar_url ?? null,
     authorAssociation: comment.authorAssociation ?? null,
     body: comment.body,
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
     url: comment.url,
-    replyToId: "replyTo" in comment ? (comment.replyTo?.id ?? null) : null,
+    replyToId: 'replyTo' in comment ? (comment.replyTo?.id ?? null) : null,
   };
 }
 
@@ -677,8 +677,8 @@ function repoSummaryFromSearch(
   repo: GhSearchRepo,
 ): RepoSummary {
   return {
-    ...createRepoIdentity("github", host, accountId, repo.full_name),
-    provider: "github",
+    ...createRepoIdentity('github', host, accountId, repo.full_name),
+    provider: 'github',
     host,
     providerAccountId: accountId,
     providerAccountLabel: label,
@@ -697,8 +697,8 @@ function repoSummaryFromRest(
   repo: GhRestRepo,
 ): RepoSummary {
   return {
-    ...createRepoIdentity("github", host, accountId, repo.full_name),
-    provider: "github",
+    ...createRepoIdentity('github', host, accountId, repo.full_name),
+    provider: 'github',
     host,
     providerAccountId: accountId,
     providerAccountLabel: label,
@@ -717,8 +717,8 @@ function repoSummaryFromGraphql(
   repo: GhGraphqlRepo,
 ): RepoSummary {
   return {
-    ...createRepoIdentity("github", host, accountId, repo.nameWithOwner),
-    provider: "github",
+    ...createRepoIdentity('github', host, accountId, repo.nameWithOwner),
+    provider: 'github',
     host,
     providerAccountId: accountId,
     providerAccountLabel: label,
@@ -739,14 +739,14 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
   return {
     number: pullRequest.number,
     title: pullRequest.title,
-    state: merged ? "MERGED" : pullRequest.state,
+    state: merged ? 'MERGED' : pullRequest.state,
     isDraft: pullRequest.isDraft,
-    mergeStateStatus: pullRequest.mergeStateStatus ?? "UNKNOWN",
-    mergeable: pullRequest.mergeable ?? "UNKNOWN",
+    mergeStateStatus: pullRequest.mergeStateStatus ?? 'UNKNOWN',
+    mergeable: pullRequest.mergeable ?? 'UNKNOWN',
     additions: pullRequest.additions ?? null,
     deletions: pullRequest.deletions ?? null,
     changeCount: null,
-    authorLogin: pullRequest.author?.login ?? "unknown",
+    authorLogin: pullRequest.author?.login ?? 'unknown',
     updatedAt: pullRequest.updatedAt,
     url: pullRequest.url,
     headSha: pullRequest.headRefOid,
@@ -756,12 +756,12 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
 
 function toApprovalActor(review: GhPullRequestReview) {
   return {
-    login: review.user?.login ?? "unknown",
-    name: review.user?.login ?? "unknown",
+    login: review.user?.login ?? 'unknown',
+    name: review.user?.login ?? 'unknown',
     avatarUrl: review.user?.avatarUrl ?? review.user?.avatar_url ?? null,
     url: review.user?.html_url ?? review.user?.url ?? null,
     approvedAt: review.submitted_at ?? null,
-  } satisfies PullRequestApprovalState["approvedBy"][number];
+  } satisfies PullRequestApprovalState['approvedBy'][number];
 }
 
 function latestReviewsByLogin(reviews: GhPullRequestReview[]) {
@@ -789,45 +789,45 @@ function latestReviewsByLogin(reviews: GhPullRequestReview[]) {
   return latestByLogin;
 }
 
-function githubQualitySeverity(level: string): PullRequestQualityFinding["severity"] {
+function githubQualitySeverity(level: string): PullRequestQualityFinding['severity'] {
   switch (level.toLowerCase()) {
-    case "failure":
-      return "major";
-    case "warning":
-      return "warning";
-    case "notice":
-      return "info";
+    case 'failure':
+      return 'major';
+    case 'warning':
+      return 'warning';
+    case 'notice':
+      return 'info';
     default:
-      return "unknown";
+      return 'unknown';
   }
 }
 
 function githubQualityStatus(checkRuns: GhCheckRun[]) {
-  if (checkRuns.some((checkRun) => checkRun.status !== "completed")) {
-    return "pending" as const;
+  if (checkRuns.some((checkRun) => checkRun.status !== 'completed')) {
+    return 'pending' as const;
   }
 
   const conclusions = checkRuns
-    .map((checkRun) => checkRun.conclusion?.toLowerCase() ?? "")
+    .map((checkRun) => checkRun.conclusion?.toLowerCase() ?? '')
     .filter((conclusion) => conclusion.length > 0);
 
   if (
     conclusions.some((conclusion) =>
-      ["action_required", "failure", "startup_failure", "timed_out"].includes(conclusion),
+      ['action_required', 'failure', 'startup_failure', 'timed_out'].includes(conclusion),
     )
   ) {
-    return "failed" as const;
+    return 'failed' as const;
   }
 
   if (
     conclusions.some((conclusion) =>
-      ["cancelled", "neutral", "skipped", "stale"].includes(conclusion),
+      ['cancelled', 'neutral', 'skipped', 'stale'].includes(conclusion),
     )
   ) {
-    return "warning" as const;
+    return 'warning' as const;
   }
 
-  return "ok" as const;
+  return 'ok' as const;
 }
 
 function githubCheckRunStatusCounts(checkRuns: GhCheckRun[]) {
@@ -858,49 +858,49 @@ function toGitHubQualityFinding(
 
   return {
     id: `${checkRun.id}:${index}:${annotation.path}:${annotation.start_line}`,
-    sourceType: "github-check",
+    sourceType: 'github-check',
     sourceName: githubCheckRunSourceName(checkRun),
     severity: githubQualitySeverity(annotation.annotation_level),
-    status: "unknown",
+    status: 'unknown',
     title,
     message,
     path: annotation.path,
     line: annotation.start_line,
     endLine: annotation.end_line ?? null,
-    anchorState: annotation.path.trim() ? "inline" : "unmapped",
+    anchorState: annotation.path.trim() ? 'inline' : 'unmapped',
     externalUrl: checkRun.details_url ?? checkRun.html_url ?? undefined,
     rawCategory: annotation.annotation_level,
   };
 }
 
 class GitHubProvider implements ForgeProvider {
-  authStatus(accountId: string): ReturnType<ForgeProvider["authStatus"]> {
+  authStatus(accountId: string): ReturnType<ForgeProvider['authStatus']> {
     const viewerLogin = this.viewerLogin.bind(this);
     return Effect.gen(function* () {
       const token = yield* storedToken(accountId);
       if (!token) {
         return {
-          status: "not_authenticated",
-          message: "Sign in with GitHub to load repositories.",
+          status: 'not_authenticated',
+          message: 'Sign in with GitHub to load repositories.',
         } satisfies ProviderAuthStatus;
       }
       yield* viewerLogin(accountId);
-      return { status: "ready", message: null } satisfies ProviderAuthStatus;
+      return { status: 'ready', message: null } satisfies ProviderAuthStatus;
     }).pipe(
       Effect.catchAll((error) => {
         const message = error instanceof Error ? error.message : String(error);
         const status: ProviderAuthStatus = isNotAuthenticatedMessage(message)
           ? {
-              status: "not_authenticated",
-              message: "Sign in with GitHub again.",
+              status: 'not_authenticated',
+              message: 'Sign in with GitHub again.',
             }
           : {
-              status: "unknown_error",
+              status: 'unknown_error',
               message,
             };
         return Effect.succeed(status);
       }),
-    ) as ReturnType<ForgeProvider["authStatus"]>;
+    ) as ReturnType<ForgeProvider['authStatus']>;
   }
 
   viewerLogin(accountId: string) {
@@ -933,7 +933,7 @@ class GitHubProvider implements ForgeProvider {
       const owners = yield* ensureUserContext(accountId, token.host);
       const repos: GhSearchRepo[] = [];
       for (const owner of owners) {
-        const qualifier = owner === userContext?.login ? "user" : "org";
+        const qualifier = owner === userContext?.login ? 'user' : 'org';
         const response = yield* githubJson(
           accountId,
           token.host,
@@ -957,8 +957,8 @@ class GitHubProvider implements ForgeProvider {
       const token = yield* requireStoredToken(accountId);
       const label = labelForToken(token);
       const repo = input.trim();
-      if (repo.split("/").length !== 2 || repo.startsWith("/") || repo.endsWith("/")) {
-        return yield* Effect.fail(new ProviderError("Enter a repo as owner/name"));
+      if (repo.split('/').length !== 2 || repo.startsWith('/') || repo.endsWith('/')) {
+        return yield* Effect.fail(new ProviderError('Enter a repo as owner/name'));
       }
       const [owner, name] = yield* parseOwnerRepoEffect(repo);
       const details = yield* githubJson(
@@ -978,7 +978,7 @@ class GitHubProvider implements ForgeProvider {
       yield* ensureUserContext(accountId, token.host);
       const login = userContext?.login;
       if (!login) {
-        return yield* Effect.fail(new ProviderError("Unable to determine GitHub viewer login"));
+        return yield* Effect.fail(new ProviderError('Unable to determine GitHub viewer login'));
       }
 
       const query = `
@@ -1119,7 +1119,7 @@ query($owner: String!, $name: String!, $number: Int!) {
   getPullRequestApprovalState(
     repo: RepoIdentity,
     number: number,
-  ): ReturnType<ForgeProvider["getPullRequestApprovalState"]> {
+  ): ReturnType<ForgeProvider['getPullRequestApprovalState']> {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const viewerLogin = yield* githubViewerLogin(repo.accountId);
@@ -1148,19 +1148,19 @@ query($owner: String!, $name: String!, $number: Int!) {
 
       const latestByLogin = latestReviewsByLogin(reviews);
       const approvedBy = [...latestByLogin.values()]
-        .filter((review) => review.state.toUpperCase() === "APPROVED")
+        .filter((review) => review.state.toUpperCase() === 'APPROVED')
         .sort((left, right) => {
-          const leftApprovedAt = left.submitted_at ?? "";
-          const rightApprovedAt = right.submitted_at ?? "";
+          const leftApprovedAt = left.submitted_at ?? '';
+          const rightApprovedAt = right.submitted_at ?? '';
           return Date.parse(rightApprovedAt) - Date.parse(leftApprovedAt);
         })
         .map(toApprovalActor);
 
       return {
-        provider: "github",
+        provider: 'github',
         approvedBy,
         viewerApproved: approvedBy.some((approval) => approval.login === viewerLogin),
-        viewerRemoveStrategy: "dismiss",
+        viewerRemoveStrategy: 'dismiss',
         approvalsRequired: null,
         approvalsLeft: null,
       } satisfies PullRequestApprovalState;
@@ -1171,12 +1171,12 @@ query($owner: String!, $name: String!, $number: Int!) {
     repo: RepoIdentity,
     number: number,
     headSha: string,
-  ): ReturnType<ForgeProvider["approvePullRequest"]> {
+  ): ReturnType<ForgeProvider['approvePullRequest']> {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const trimmedHeadSha = headSha.trim();
       if (!trimmedHeadSha) {
-        return yield* Effect.fail(new ProviderError("Head SHA is required"));
+        return yield* Effect.fail(new ProviderError('Head SHA is required'));
       }
 
       yield* githubJson(
@@ -1185,10 +1185,10 @@ query($owner: String!, $name: String!, $number: Int!) {
         `/repos/${owner}/${name}/pulls/${number}/reviews`,
         Schema.Unknown,
         {
-          method: "POST",
+          method: 'POST',
           body: {
             commit_id: trimmedHeadSha,
-            event: "APPROVE",
+            event: 'APPROVE',
           },
         },
       );
@@ -1198,7 +1198,7 @@ query($owner: String!, $name: String!, $number: Int!) {
   removePullRequestApproval(
     repo: RepoIdentity,
     number: number,
-  ): ReturnType<ForgeProvider["removePullRequestApproval"]> {
+  ): ReturnType<ForgeProvider['removePullRequestApproval']> {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const viewerLogin = yield* githubViewerLogin(repo.accountId);
@@ -1226,8 +1226,8 @@ query($owner: String!, $name: String!, $number: Int!) {
       }
 
       const latestViewerReview = latestReviewsByLogin(reviews).get(viewerLogin);
-      if (!latestViewerReview || latestViewerReview.state.toUpperCase() !== "APPROVED") {
-        return yield* Effect.fail(new ProviderError("No viewer approval to remove."));
+      if (!latestViewerReview || latestViewerReview.state.toUpperCase() !== 'APPROVED') {
+        return yield* Effect.fail(new ProviderError('No viewer approval to remove.'));
       }
 
       yield* githubJson(
@@ -1236,10 +1236,10 @@ query($owner: String!, $name: String!, $number: Int!) {
         `/repos/${owner}/${name}/pulls/${number}/reviews/${latestViewerReview.id}/dismissals`,
         Schema.Unknown,
         {
-          method: "PUT",
+          method: 'PUT',
           body: {
-            event: "DISMISS",
-            message: "Approval removed from desktop review app.",
+            event: 'DISMISS',
+            message: 'Approval removed from desktop review app.',
           },
         },
       );
@@ -1284,19 +1284,19 @@ query($owner: String!, $name: String!, $number: Int!) {
         repo.accountId,
         repo.host,
         `/repos/${owner}/${name}/pulls/${number}`,
-        "application/vnd.github.diff",
+        'application/vnd.github.diff',
       );
     });
   }
 
   fetchPullRequestRefs(repo: RepoIdentity, number: number) {
-    console.info("[github] fetching pull request refs", {
+    console.info('[github] fetching pull request refs', {
       repo: repo.path,
       number,
     });
     return this.getPullRequest(repo, number).pipe(
       Effect.map((pullRequest) => {
-        console.info("[github] fetched pull request refs", {
+        console.info('[github] fetched pull request refs', {
           repo: repo.path,
           number,
           baseSha: pullRequest.baseSha,
@@ -1313,7 +1313,7 @@ query($owner: String!, $name: String!, $number: Int!) {
   fetchFileContent(repo: RepoIdentity, path: string, ref: string) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
-      console.info("[github] fetching file content", {
+      console.info('[github] fetching file content', {
         repo: repo.path,
         path,
         ref,
@@ -1322,9 +1322,9 @@ query($owner: String!, $name: String!, $number: Int!) {
         repo.accountId,
         repo.host,
         `/repos/${owner}/${name}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`,
-        "application/vnd.github.raw",
+        'application/vnd.github.raw',
       );
-      console.info("[github] fetched file content", {
+      console.info('[github] fetched file content', {
         repo: repo.path,
         path,
         ref,
@@ -1414,16 +1414,16 @@ query($owner: String!, $name: String!, $number: Int!) {
       const statusCounts = githubCheckRunStatusCounts(checkRuns);
       const detailsUrl =
         checkRuns.find((checkRun) =>
-          ["action_required", "failure", "startup_failure", "timed_out"].includes(
-            checkRun.conclusion?.toLowerCase() ?? "",
+          ['action_required', 'failure', 'startup_failure', 'timed_out'].includes(
+            checkRun.conclusion?.toLowerCase() ?? '',
           ),
         )?.details_url ??
-        checkRuns.find((checkRun) => checkRun.status !== "completed")?.details_url ??
+        checkRuns.find((checkRun) => checkRun.status !== 'completed')?.details_url ??
         checkRuns[0]?.details_url ??
         undefined;
 
       return {
-        provider: "github",
+        provider: 'github',
         repoKey: repo.repoKey,
         number,
         headSha,
@@ -1431,11 +1431,11 @@ query($owner: String!, $name: String!, $number: Int!) {
         summary: {
           totalFindings: findings.length,
           inlineFindings: findings.filter(
-            (finding) => finding.anchorState === "inline" && finding.line !== null,
+            (finding) => finding.anchorState === 'inline' && finding.line !== null,
           ).length,
-          fileOnlyFindings: findings.filter((finding) => finding.anchorState === "file").length,
+          fileOnlyFindings: findings.filter((finding) => finding.anchorState === 'file').length,
           statusCounts,
-          providerLabel: "GitHub checks",
+          providerLabel: 'GitHub checks',
           detailsUrl,
           notes: notes.length > 0 ? notes : undefined,
         },
@@ -1547,18 +1547,18 @@ query($owner: String!, $name: String!, $number: Int!) {
           return [
             {
               id: thread.id,
-              provider: "github",
+              provider: 'github',
               path: thread.path,
               isResolved: thread.isResolved,
               isOutdated: thread.isOutdated,
               line: thread.line ?? thread.originalLine ?? null,
               startLine: thread.startLine ?? thread.originalStartLine ?? null,
-              side: thread.diffSide === "LEFT" ? "LEFT" : "RIGHT",
+              side: thread.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT',
               startSide:
-                thread.startDiffSide === "LEFT" || thread.startDiffSide === "RIGHT"
+                thread.startDiffSide === 'LEFT' || thread.startDiffSide === 'RIGHT'
                   ? thread.startDiffSide
                   : null,
-              subjectType: thread.subjectType.toLowerCase() === "file" ? "file" : "line",
+              subjectType: thread.subjectType.toLowerCase() === 'file' ? 'file' : 'line',
               comments,
             },
           ];
@@ -1567,15 +1567,15 @@ query($owner: String!, $name: String!, $number: Int!) {
       const globalThreads = (pullRequest?.comments.nodes ?? []).map(
         (comment): ReviewThread => ({
           id: comment.id,
-          provider: "github",
-          path: "",
+          provider: 'github',
+          path: '',
           isResolved: false,
           isOutdated: false,
           line: null,
           startLine: null,
           side: null,
           startSide: null,
-          subjectType: "global",
+          subjectType: 'global',
           comments: [toGitHubReviewComment(comment)],
         }),
       );
@@ -1587,17 +1587,17 @@ query($owner: String!, $name: String!, $number: Int!) {
   createReviewThread(repo: RepoIdentity, number: number, input: ReviewThreadInput) {
     return Effect.gen(function* () {
       const body = input.body.trim();
-      if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
+      if (!body) return yield* Effect.fail(new ProviderError('Comment body is required'));
       const targetPath = input.path.trim();
-      if (input.subjectType !== "global" && !targetPath) {
-        return yield* Effect.fail(new ProviderError("File path is required"));
+      if (input.subjectType !== 'global' && !targetPath) {
+        return yield* Effect.fail(new ProviderError('File path is required'));
       }
-      if (input.subjectType === "line" && input.line == null) {
-        return yield* Effect.fail(new ProviderError("Line comments require a target line"));
+      if (input.subjectType === 'line' && input.line == null) {
+        return yield* Effect.fail(new ProviderError('Line comments require a target line'));
       }
 
       const pullRequestId = yield* getPullRequestNodeId(repo, number);
-      if (input.subjectType === "global") {
+      if (input.subjectType === 'global') {
         const query = `
 mutation($pullRequestId: ID!, $body: String!) {
   addComment(input: { subjectId: $pullRequestId, body: $body }) {
@@ -1673,8 +1673,8 @@ mutation(
   replyToReviewThread(repo: RepoIdentity, number: number, threadId: string, body: string) {
     return Effect.gen(function* () {
       const trimmedBody = body.trim();
-      if (!threadId.trim()) return yield* Effect.fail(new ProviderError("Thread id is required"));
-      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Reply body is required"));
+      if (!threadId.trim()) return yield* Effect.fail(new ProviderError('Thread id is required'));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Reply body is required'));
       const query = `
 mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
   addPullRequestReviewThreadReply(
@@ -1709,17 +1709,17 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
     threadId: string,
     commentId: string,
     body: string,
-    subjectType: ReviewThreadInput["subjectType"],
+    subjectType: ReviewThreadInput['subjectType'],
   ) {
     return Effect.gen(function* () {
       const trimmedBody = body.trim();
-      if (!commentId.trim()) return yield* Effect.fail(new ProviderError("Comment id is required"));
-      if (!trimmedBody) return yield* Effect.fail(new ProviderError("Comment body is required"));
-      if (subjectType !== "global" && !threadId.trim()) {
-        return yield* Effect.fail(new ProviderError("Thread id is required"));
+      if (!commentId.trim()) return yield* Effect.fail(new ProviderError('Comment id is required'));
+      if (!trimmedBody) return yield* Effect.fail(new ProviderError('Comment body is required'));
+      if (subjectType !== 'global' && !threadId.trim()) {
+        return yield* Effect.fail(new ProviderError('Thread id is required'));
       }
 
-      if (subjectType === "global") {
+      if (subjectType === 'global') {
         const query = `
 mutation($id: ID!, $body: String!) {
   updateIssueComment(input: { id: $id, body: $body }) {

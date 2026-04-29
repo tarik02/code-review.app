@@ -1,18 +1,18 @@
-import { Command, FileSystem } from "@effect/platform";
-import { NodeContext, NodeRuntime } from "@effect/platform-node";
-import { Data, Effect, ParseResult, Schema } from "effect";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
+import { Command, FileSystem } from '@effect/platform';
+import { NodeContext, NodeRuntime } from '@effect/platform-node';
+import { Data, Effect, ParseResult, Schema } from 'effect';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
-const iconPath = path.join(repoRoot, "apps/electron/build/icons/128x128.png");
-const builderConfigPath = path.join(repoRoot, "apps/electron/electron-builder.yml");
-const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local/share");
-const desktopDir = path.join(dataHome, "applications");
-const desktopPath = path.join(desktopDir, "code-review.app-dev.desktop");
+const repoRoot = path.resolve(scriptDir, '..');
+const iconPath = path.join(repoRoot, 'apps/electron/build/icons/128x128.png');
+const builderConfigPath = path.join(repoRoot, 'apps/electron/electron-builder.yml');
+const dataHome = process.env.XDG_DATA_HOME ?? path.join(os.homedir(), '.local/share');
+const desktopDir = path.join(dataHome, 'applications');
+const desktopPath = path.join(desktopDir, 'code-review.app-dev.desktop');
 
 const DesktopEntrySchema = Schema.Record({
   key: Schema.String,
@@ -36,7 +36,7 @@ type DesktopEntry = Schema.Schema.Type<typeof DesktopEntrySchema>;
 type ElectronBuilderConfig = Schema.Schema.Type<typeof ElectronBuilderConfigSchema>;
 
 class InstallLinuxDevDesktopFileSystemError extends Data.TaggedError(
-  "InstallLinuxDevDesktopFileSystemError",
+  'InstallLinuxDevDesktopFileSystemError',
 )<{
   operation: string;
   path: string;
@@ -44,27 +44,27 @@ class InstallLinuxDevDesktopFileSystemError extends Data.TaggedError(
 }> {}
 
 class InstallLinuxDevDesktopParseError extends Data.TaggedError(
-  "InstallLinuxDevDesktopParseError",
+  'InstallLinuxDevDesktopParseError',
 )<{
   path: string;
   cause: unknown;
 }> {}
 
 class InstallLinuxDevDesktopConfigError extends Data.TaggedError(
-  "InstallLinuxDevDesktopConfigError",
+  'InstallLinuxDevDesktopConfigError',
 )<{
   path: string;
   message: string;
 }> {}
 
 class InstallLinuxDevDesktopElectronNotFoundError extends Data.TaggedError(
-  "InstallLinuxDevDesktopElectronNotFoundError",
+  'InstallLinuxDevDesktopElectronNotFoundError',
 )<{
   candidates: ReadonlyArray<string>;
 }> {}
 
 class InstallLinuxDevDesktopUpdateDesktopDatabaseError extends Data.TaggedError(
-  "InstallLinuxDevDesktopUpdateDesktopDatabaseError",
+  'InstallLinuxDevDesktopUpdateDesktopDatabaseError',
 )<{
   command: string;
   cause: unknown;
@@ -105,7 +105,7 @@ function readDesktopEntry() {
     const fileSystem = yield* FileSystem.FileSystem;
     const source = yield* fileSystem
       .readFileString(builderConfigPath)
-      .pipe(mapFsError("readFileString", builderConfigPath));
+      .pipe(mapFsError('readFileString', builderConfigPath));
     const config: ElectronBuilderConfig = yield* parseElectronBuilderConfig(source);
     const entry = config.linux?.desktop?.entry;
 
@@ -113,27 +113,27 @@ function readDesktopEntry() {
       return yield* Effect.fail(
         new InstallLinuxDevDesktopConfigError({
           path: builderConfigPath,
-          message: "Missing linux.desktop.entry in apps/electron/electron-builder.yml",
+          message: 'Missing linux.desktop.entry in apps/electron/electron-builder.yml',
         }),
       );
     }
 
     return {
       entry,
-      productName: config.productName ?? "code-review.app",
+      productName: config.productName ?? 'code-review.app',
     };
   });
 }
 
 function quoteDesktopExecArgument(value: string) {
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
 const electronCandidates = [
   process.env.ELECTRON_EXEC_PATH,
-  "/usr/lib/electron41/electron",
-  "/usr/bin/electron41",
-  "/usr/bin/electron",
+  '/usr/lib/electron41/electron',
+  '/usr/bin/electron41',
+  '/usr/bin/electron',
 ].filter((value): value is string => Boolean(value));
 type DesktopEnvironment = Record<string, string>;
 
@@ -147,7 +147,7 @@ function resolveSystemElectronPath() {
     const fileSystem = yield* FileSystem.FileSystem;
 
     for (const candidate of electronCandidates) {
-      const exists = yield* fileSystem.exists(candidate).pipe(mapFsError("exists", candidate));
+      const exists = yield* fileSystem.exists(candidate).pipe(mapFsError('exists', candidate));
 
       if (!exists) {
         continue;
@@ -182,12 +182,10 @@ function resolveMisePath() {
       }
     }
 
-    return yield* Command.make("which", "mise").pipe(
+    return yield* Command.make('which', 'mise').pipe(
       Command.string,
       Effect.map((value) => value.trim()),
-      Effect.flatMap((value) =>
-        value.length > 0 ? Effect.succeed(value) : Effect.fail(null),
-      ),
+      Effect.flatMap((value) => (value.length > 0 ? Effect.succeed(value) : Effect.fail(null))),
       Effect.catchAll(() => Effect.succeed(null)),
     );
   });
@@ -196,7 +194,7 @@ function resolveMisePath() {
 function buildDesktopEnvironment(electronExecPath: string): DesktopEnvironment {
   const majorVersion = inferElectronMajorVersion(electronExecPath);
   const environment: DesktopEnvironment = {
-    CODE_REVIEW_APP_DISABLE_UPDATER: "1",
+    CODE_REVIEW_APP_DISABLE_UPDATER: '1',
     ELECTRON_EXEC_PATH: electronExecPath,
   };
 
@@ -215,46 +213,46 @@ function renderDesktopEnvironment(environment: DesktopEnvironment) {
 
 function buildDesktopExec(electronExecPath: string, misePath: string | null) {
   const args = [
-    "/usr/bin/env",
-    "-u",
-    "ELECTRON_RUN_AS_NODE",
+    '/usr/bin/env',
+    '-u',
+    'ELECTRON_RUN_AS_NODE',
     ...renderDesktopEnvironment(buildDesktopEnvironment(electronExecPath)),
   ];
 
   if (misePath) {
     args.push(
       quoteDesktopExecArgument(misePath),
-      "x",
-      "--cd",
+      'x',
+      '--cd',
       quoteDesktopExecArgument(repoRoot),
-      "--",
+      '--',
     );
   }
 
   args.push(
-    "pnpm",
-    "--filter",
-    "@code-review-app/electron",
-    "exec",
-    "electron-vite",
-    "dev",
-    "--",
-    "%U",
+    'pnpm',
+    '--filter',
+    '@code-review-app/electron',
+    'exec',
+    'electron-vite',
+    'dev',
+    '--',
+    '%U',
   );
 
-  return args.join(" ");
+  return args.join(' ');
 }
 
 function renderDesktopEntry(entry: DesktopEntry) {
-  const lines = ["[Desktop Entry]"];
+  const lines = ['[Desktop Entry]'];
   for (const [key, value] of Object.entries(entry)) {
     lines.push(`${key}=${String(value)}`);
   }
-  return `${lines.join("\n")}\n`;
+  return `${lines.join('\n')}\n`;
 }
 
 function updateDesktopDatabase() {
-  return Command.make("update-desktop-database", desktopDir).pipe(
+  return Command.make('update-desktop-database', desktopDir).pipe(
     Command.exitCode,
     Effect.catchAll((cause) =>
       Effect.fail(
@@ -292,24 +290,24 @@ const program = Effect.gen(function* () {
 
   yield* fileSystem
     .makeDirectory(desktopDir, { recursive: true })
-    .pipe(mapFsError("makeDirectory", desktopDir));
+    .pipe(mapFsError('makeDirectory', desktopDir));
   yield* fileSystem
     .writeFileString(desktopPath, renderDesktopEntry(devEntry))
-    .pipe(mapFsError("writeFileString", desktopPath));
+    .pipe(mapFsError('writeFileString', desktopPath));
 
   yield* updateDesktopDatabase().pipe(
-    Effect.tapErrorTag("InstallLinuxDevDesktopUpdateDesktopDatabaseError", (error) =>
+    Effect.tapErrorTag('InstallLinuxDevDesktopUpdateDesktopDatabaseError', (error) =>
       Effect.logWarning(`Failed to run ${error.command}: ${String(error.cause)}`),
     ),
-    Effect.catchTag("InstallLinuxDevDesktopUpdateDesktopDatabaseError", () => Effect.void),
+    Effect.catchTag('InstallLinuxDevDesktopUpdateDesktopDatabaseError', () => Effect.void),
   );
 
   yield* Effect.logInfo(`installed ${desktopPath}`);
 }).pipe(
-  Effect.tapErrorTag("InstallLinuxDevDesktopFileSystemError", (error) =>
+  Effect.tapErrorTag('InstallLinuxDevDesktopFileSystemError', (error) =>
     Effect.logError(`${error.operation} failed for ${error.path}: ${String(error.cause)}`),
   ),
-  Effect.tapErrorTag("InstallLinuxDevDesktopParseError", (error) =>
+  Effect.tapErrorTag('InstallLinuxDevDesktopParseError', (error) =>
     Effect.logError(
       `Failed to parse ${error.path}: ${
         ParseResult.isParseError(error.cause)
@@ -318,12 +316,12 @@ const program = Effect.gen(function* () {
       }`,
     ),
   ),
-  Effect.tapErrorTag("InstallLinuxDevDesktopConfigError", (error) =>
+  Effect.tapErrorTag('InstallLinuxDevDesktopConfigError', (error) =>
     Effect.logError(error.message),
   ),
-  Effect.tapErrorTag("InstallLinuxDevDesktopElectronNotFoundError", (error) =>
+  Effect.tapErrorTag('InstallLinuxDevDesktopElectronNotFoundError', (error) =>
     Effect.logError(
-      `No system Electron binary found. Checked: ${error.candidates.join(", ")}. Set ELECTRON_EXEC_PATH before running install-linux-dev-desktop.ts.`,
+      `No system Electron binary found. Checked: ${error.candidates.join(', ')}. Set ELECTRON_EXEC_PATH before running install-linux-dev-desktop.ts.`,
     ),
   ),
   Effect.provide(NodeContext.layer),

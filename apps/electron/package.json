@@ -2,17 +2,17 @@
   "name": "@code-review-app/electron",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Browse GitHub and GitLab pull requests locally",
   "homepage": "https://github.com/tarik02/code-review.app",
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:tarik02/code-review.app.git"
-  },
   "author": {
     "name": "Taras Fomin",
     "email": "Taras.Fomin@gmail.com"
   },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:tarik02/code-review.app.git"
+  },
+  "type": "module",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "dotenv -- electron-vite dev --watch",
@@ -22,28 +22,17 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "@neon-rs/load": "catalog:",
     "@code-review-app/backend": "workspace:*",
     "@code-review-app/frontend": "workspace:*",
     "@code-review-app/shared": "workspace:*",
     "@hadeeb/trpc-worker": "catalog:",
     "@libsql/client": "catalog:",
+    "@neon-rs/load": "catalog:",
     "@trpc/server": "catalog:",
     "detect-libc": "catalog:",
     "effect": "catalog:",
     "electron-updater": "^6.8.3",
     "libsql": "catalog:"
-  },
-  "optionalDependencies": {
-    "@libsql/darwin-arm64": "catalog:",
-    "@libsql/darwin-x64": "catalog:",
-    "@libsql/linux-arm-gnueabihf": "catalog:",
-    "@libsql/linux-arm-musleabihf": "catalog:",
-    "@libsql/linux-arm64-gnu": "catalog:",
-    "@libsql/linux-arm64-musl": "catalog:",
-    "@libsql/linux-x64-gnu": "catalog:",
-    "@libsql/linux-x64-musl": "catalog:",
-    "@libsql/win32-x64-msvc": "catalog:"
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "catalog:",
@@ -59,5 +48,16 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
+  },
+  "optionalDependencies": {
+    "@libsql/darwin-arm64": "catalog:",
+    "@libsql/darwin-x64": "catalog:",
+    "@libsql/linux-arm-gnueabihf": "catalog:",
+    "@libsql/linux-arm-musleabihf": "catalog:",
+    "@libsql/linux-arm64-gnu": "catalog:",
+    "@libsql/linux-arm64-musl": "catalog:",
+    "@libsql/linux-x64-gnu": "catalog:",
+    "@libsql/linux-x64-musl": "catalog:",
+    "@libsql/win32-x64-msvc": "catalog:"
   }
 }

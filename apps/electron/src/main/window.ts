@@ -1,15 +1,15 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme, shell } from "electron";
-import type { ThemePreference } from "@code-review-app/shared";
-import { registerTrpc } from "./trpc";
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme, shell } from 'electron';
+import type { ThemePreference } from '@code-review-app/shared';
+import { registerTrpc } from './trpc';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 function isSafeExternalUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {
     return false;
   }
@@ -19,30 +19,30 @@ function isAllowedNavigation(url: string) {
   if (process.env.ELECTRON_RENDERER_URL && url.startsWith(process.env.ELECTRON_RENDERER_URL)) {
     return true;
   }
-  return url.startsWith("file:");
+  return url.startsWith('file:');
 }
 
 const TITLEBAR_HEIGHT = 40;
 const TRAFFIC_LIGHT_SIZE = 12;
-const TITLEBAR_COLOR = "#01000000"; // #00000000 does not work correctly on Linux
-const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
-const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
+const TITLEBAR_COLOR = '#01000000'; // #00000000 does not work correctly on Linux
+const TITLEBAR_LIGHT_SYMBOL_COLOR = '#1f2937';
+const TITLEBAR_DARK_SYMBOL_COLOR = '#f8fafc';
 
 type WindowTitleBarOptions = Pick<
   BrowserWindowConstructorOptions,
-  "titleBarOverlay" | "titleBarStyle" | "trafficLightPosition"
+  'titleBarOverlay' | 'titleBarStyle' | 'trafficLightPosition'
 >;
 
 function getWindowTitleBarOptions(): WindowTitleBarOptions {
-  if (process.platform === "darwin") {
+  if (process.platform === 'darwin') {
     return {
-      titleBarStyle: "hiddenInset",
+      titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 16, y: (TITLEBAR_HEIGHT - TRAFFIC_LIGHT_SIZE) / 2 },
     };
   }
 
   return {
-    titleBarStyle: "hidden",
+    titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: TITLEBAR_COLOR,
       height: TITLEBAR_HEIGHT,
@@ -54,11 +54,11 @@ function getWindowTitleBarOptions(): WindowTitleBarOptions {
 }
 
 function getInitialWindowBackgroundColor(): string {
-  return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
+  return nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff';
 }
 
 function applyNativeThemePreference(preference: ThemePreference): void {
-  nativeTheme.themeSource = preference === "auto" ? "system" : preference;
+  nativeTheme.themeSource = preference === 'auto' ? 'system' : preference;
   syncAllWindowAppearance();
 }
 
@@ -69,7 +69,7 @@ function syncWindowAppearance(window: BrowserWindow): void {
 
   window.setBackgroundColor(getInitialWindowBackgroundColor());
   const { titleBarOverlay } = getWindowTitleBarOptions();
-  if (typeof titleBarOverlay === "object") {
+  if (typeof titleBarOverlay === 'object') {
     window.setTitleBarOverlay(titleBarOverlay);
   }
 }
@@ -80,11 +80,11 @@ function syncAllWindowAppearance(): void {
   }
 }
 
-nativeTheme.on("updated", syncAllWindowAppearance);
+nativeTheme.on('updated', syncAllWindowAppearance);
 
 function forwardRendererConsole(window: BrowserWindow): void {
-  window.webContents.on("console-message", (details) => {
-    const source = details.sourceId ? ` ${details.sourceId}:${details.lineNumber}` : "";
+  window.webContents.on('console-message', (details) => {
+    const source = details.sourceId ? ` ${details.sourceId}:${details.lineNumber}` : '';
     console.log(`[renderer:${details.level}] ${details.message}${source}`);
   });
 }
@@ -95,11 +95,11 @@ async function createMainWindow() {
     height: 600,
     minWidth: 800,
     minHeight: 400,
-    title: "code-review.app",
+    title: 'code-review.app',
     backgroundColor: getInitialWindowBackgroundColor(),
     ...getWindowTitleBarOptions(),
     webPreferences: {
-      preload: path.join(currentDirectory, "../preload/index.mjs"),
+      preload: path.join(currentDirectory, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -113,10 +113,10 @@ async function createMainWindow() {
     if (isSafeExternalUrl(url)) {
       void shell.openExternal(url);
     }
-    return { action: "deny" };
+    return { action: 'deny' };
   });
 
-  window.webContents.on("will-navigate", (event, url) => {
+  window.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedNavigation(url)) {
       event.preventDefault();
       if (isSafeExternalUrl(url)) {
@@ -128,7 +128,7 @@ async function createMainWindow() {
   if (process.env.ELECTRON_RENDERER_URL) {
     await window.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    await window.loadFile(path.join(currentDirectory, "../renderer/index.html"));
+    await window.loadFile(path.join(currentDirectory, '../renderer/index.html'));
   }
 
   return window;

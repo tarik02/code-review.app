@@ -1,20 +1,20 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { FileDiffMetadata } from '@pierre/diffs';
 
-type ForgeProviderKind = "github" | "gitlab";
+type ForgeProviderKind = 'github' | 'gitlab';
 
-type DiffDataMode = "provider-api" | "git";
+type DiffDataMode = 'provider-api' | 'git';
 
 type DiffDataSettings = {
   mode: DiffDataMode;
 };
 
-type ThemePreference = "auto" | "light" | "dark";
+type ThemePreference = 'auto' | 'light' | 'dark';
 
 type ThemePreferenceSettings = {
   preference: ThemePreference;
 };
 
-type ReviewEditorMode = "rich-text" | "source";
+type ReviewEditorMode = 'rich-text' | 'source';
 
 type ReviewEditorSettings = {
   defaultMode: ReviewEditorMode;
@@ -64,12 +64,12 @@ type TrackedPullRequestOrderEntry = RepoIdentity & {
 };
 
 export const PullRequestBadgeStatus = {
-  Merged: "merged",
-  Closed: "closed",
-  Draft: "draft",
-  Conflicting: "conflicting",
-  CanMerge: "can_merge",
-  Open: "open",
+  Merged: 'merged',
+  Closed: 'closed',
+  Draft: 'draft',
+  Conflicting: 'conflicting',
+  CanMerge: 'can_merge',
+  Open: 'open',
 } as const;
 
 export type PullRequestBadgeStatus =
@@ -89,7 +89,7 @@ type PrPatch = RepoIdentity & {
   fileDiffs: FileDiffMetadata[];
 };
 
-type PrFileChangeType = "change" | "rename-pure" | "rename-changed" | "new" | "deleted";
+type PrFileChangeType = 'change' | 'rename-pure' | 'rename-changed' | 'new' | 'deleted';
 
 type PrChangedFile = {
   path: string;
@@ -117,23 +117,23 @@ type AccountVisibilitySettings = {
 };
 
 type AppearanceBackgroundSettings =
-  | { kind: "default" }
-  | { kind: "solid"; color: string }
+  | { kind: 'default' }
+  | { kind: 'solid'; color: string }
   | {
-      kind: "customFile";
+      kind: 'customFile';
       fileName: string;
       mimeType: string;
       dataUrl: string | null;
     };
 
-type AppearanceBackgroundInput = { kind: "default" } | { kind: "solid"; color: string };
+type AppearanceBackgroundInput = { kind: 'default' } | { kind: 'solid'; color: string };
 
 type ProviderProfile = {
   accountId: string;
   login: string;
 };
 
-type ProviderAuthStatusKind = "ready" | "not_authenticated" | "unknown_error";
+type ProviderAuthStatusKind = 'ready' | 'not_authenticated' | 'unknown_error';
 
 type ProviderAuthStatus = {
   status: ProviderAuthStatusKind;
@@ -150,9 +150,9 @@ type ProviderAccount = {
   createdAt: number;
 };
 
-type ReviewCommentSide = "LEFT" | "RIGHT";
+type ReviewCommentSide = 'LEFT' | 'RIGHT';
 
-type PullRequestApprovalRemoveStrategy = "dismiss" | "unapprove";
+type PullRequestApprovalRemoveStrategy = 'dismiss' | 'unapprove';
 
 type PullRequestApprovalActor = {
   login: string;
@@ -196,27 +196,27 @@ type ReviewThread = {
   startLine: number | null;
   side: ReviewCommentSide | null;
   startSide: ReviewCommentSide | null;
-  subjectType: "file" | "line" | "global" | null;
+  subjectType: 'file' | 'line' | 'global' | null;
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
 };
 
-type PullRequestQualityReportStatus = "ok" | "warning" | "failed" | "pending" | "unavailable";
+type PullRequestQualityReportStatus = 'ok' | 'warning' | 'failed' | 'pending' | 'unavailable';
 
 type PullRequestQualityFindingSeverity =
-  | "info"
-  | "minor"
-  | "warning"
-  | "major"
-  | "critical"
-  | "unknown";
+  | 'info'
+  | 'minor'
+  | 'warning'
+  | 'major'
+  | 'critical'
+  | 'unknown';
 
-type PullRequestQualityFindingStatus = "new" | "existing" | "resolved" | "unknown";
+type PullRequestQualityFindingStatus = 'new' | 'existing' | 'resolved' | 'unknown';
 
-type PullRequestQualityFindingAnchorState = "inline" | "file" | "unmapped";
+type PullRequestQualityFindingAnchorState = 'inline' | 'file' | 'unmapped';
 
-type PullRequestQualityFindingSourceType = "github-check" | "gitlab-code-quality";
+type PullRequestQualityFindingSourceType = 'github-check' | 'gitlab-code-quality';
 
 type PullRequestQualitySummary = {
   totalFindings: number;
@@ -267,7 +267,7 @@ type CreatePullRequestReviewCommentInput = RepoIdentity & {
   side: ReviewCommentSide | null;
   startLine: number | null;
   startSide: ReviewCommentSide | null;
-  subjectType: "file" | "line" | "global";
+  subjectType: 'file' | 'line' | 'global';
 };
 
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
@@ -281,7 +281,7 @@ type UpdatePullRequestReviewCommentInput = RepoIdentity & {
   threadId: string;
   commentId: string;
   body: string;
-  subjectType: "file" | "line" | "global";
+  subjectType: 'file' | 'line' | 'global';
 };
 
 type AvailableUpdate = {
@@ -290,12 +290,12 @@ type AvailableUpdate = {
 };
 
 type UpdateEvent =
-  | { type: "checking" }
-  | { type: "available"; update: AvailableUpdate }
-  | { type: "not_available" }
-  | { type: "progress"; downloaded: number; contentLength: number | null }
-  | { type: "downloaded"; update: AvailableUpdate }
-  | { type: "error"; message: string };
+  | { type: 'checking' }
+  | { type: 'available'; update: AvailableUpdate }
+  | { type: 'not_available' }
+  | { type: 'progress'; downloaded: number; contentLength: number | null }
+  | { type: 'downloaded'; update: AvailableUpdate }
+  | { type: 'error'; message: string };
 
 export type {
   AccountVisibilitySettings,

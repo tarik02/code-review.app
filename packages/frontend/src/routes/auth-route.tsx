@@ -1,6 +1,6 @@
-import { Navigate } from "@tanstack/react-router";
-import { useAuthSession } from "../app/auth-session";
-import { AuthGateScreen } from "../components/ui/auth-gate-screen";
+import { Navigate } from '@tanstack/react-router';
+import { useAuthSession } from '../app/auth-session';
+import { AuthGateScreen } from '../components/ui/auth-gate-screen';
 
 function AuthRoute() {
   const {

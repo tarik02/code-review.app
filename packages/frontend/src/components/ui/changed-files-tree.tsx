@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { GitStatusEntry } from "@pierre/trees";
-import { FileTree, useFileTree } from "@pierre/trees/react";
-import type { FileStatsEntry } from "../../types/forge";
-import { TopBar } from "./top-bar";
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { GitStatusEntry } from '@pierre/trees';
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import type { FileStatsEntry } from '../../types/forge';
+import { TopBar } from './top-bar';
 
 type ChangedFilesTreeProps = {
   files: string[];
@@ -18,7 +18,7 @@ type ChangedFilesTreeProps = {
 };
 
 function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`;
   return String(n);
 }
 
@@ -38,9 +38,9 @@ function ChangedFilesTree({
     const expandedDirs = new Set<string>();
 
     for (const file of files) {
-      const parts = file.split("/");
+      const parts = file.split('/');
       for (let i = 1; i < parts.length; i += 1) {
-        expandedDirs.add(parts.slice(0, i).join("/"));
+        expandedDirs.add(parts.slice(0, i).join('/'));
       }
     }
 
@@ -91,14 +91,14 @@ function ChangedFilesTree({
   );
 
   const { model } = useFileTree({
-    id: "icon-set-tree",
+    id: 'icon-set-tree',
     flattenEmptyDirectories: true,
     initialExpandedPaths,
     initialSelectedPaths: selectedTreePaths,
     gitStatus,
     onSelectionChange: handleSelectionChange,
     paths: files,
-    density: "compact",
+    density: 'compact',
   });
 
   useEffect(() => {
@@ -132,11 +132,11 @@ function ChangedFilesTree({
 
   const fileTreeStyle = useMemo(
     () => ({
-      height: "100%",
-      colorScheme: (isDark ? "dark" : "light") as "dark" | "light",
-      "--trees-bg-override": isDark ? "#18181b" : "#F7F7F3",
-      "--trees-bg-muted-override": isDark ? "#27272a" : "#E6E4DD",
-      "--trees-selected-bg-override": isDark ? "#27272a" : "#E6E4DD",
+      height: '100%',
+      colorScheme: (isDark ? 'dark' : 'light') as 'dark' | 'light',
+      '--trees-bg-override': isDark ? '#18181b' : '#F7F7F3',
+      '--trees-bg-muted-override': isDark ? '#27272a' : '#E6E4DD',
+      '--trees-selected-bg-override': isDark ? '#27272a' : '#E6E4DD',
     }),
     [isDark],
   );
@@ -145,8 +145,8 @@ function ChangedFilesTree({
     <section
       className={
         showContainer
-          ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-ink-200"
-          : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+          ? 'flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-ink-200'
+          : 'flex h-full min-h-0 min-w-0 flex-col overflow-hidden'
       }
     >
       <TopBar

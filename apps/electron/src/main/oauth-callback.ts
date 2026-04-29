@@ -1,5 +1,5 @@
-import { EventEmitter } from "node:events";
-import type { BrowserWindow } from "electron";
+import { EventEmitter } from 'node:events';
+import type { BrowserWindow } from 'electron';
 
 const oauthCallbacks = new EventEmitter();
 const pendingOAuthCallbacks: string[] = [];
@@ -12,9 +12,9 @@ function isOAuthCallbackUrl(url: string) {
   try {
     const parsed = new URL(url);
     return (
-      parsed.protocol === "code-review.app:" &&
-      parsed.hostname === "oauth" &&
-      parsed.pathname === "/callback"
+      parsed.protocol === 'code-review.app:' &&
+      parsed.hostname === 'oauth' &&
+      parsed.pathname === '/callback'
     );
   } catch {
     return false;
@@ -24,10 +24,10 @@ function isOAuthCallbackUrl(url: string) {
 function emitOAuthCallback(url: string, window: BrowserWindow | null) {
   if (!isOAuthCallbackUrl(url)) return false;
   latestOAuthCallback = { url, emittedAt: Date.now() };
-  if (oauthCallbacks.listenerCount("callback") === 0) {
+  if (oauthCallbacks.listenerCount('callback') === 0) {
     pendingOAuthCallbacks.push(url);
   }
-  oauthCallbacks.emit("callback", url);
+  oauthCallbacks.emit('callback', url);
   if (window && !window.isDestroyed()) {
     if (window.isMinimized()) window.restore();
     window.focus();
@@ -45,20 +45,20 @@ function getLatestOAuthCallback() {
 }
 
 function subscribeToOAuthCallbacks(listener: (url: string) => void) {
-  oauthCallbacks.on("callback", listener);
+  oauthCallbacks.on('callback', listener);
   while (pendingOAuthCallbacks.length > 0) {
     const url = pendingOAuthCallbacks.shift();
     if (url) listener(url);
   }
   return () => {
-    oauthCallbacks.off("callback", listener);
+    oauthCallbacks.off('callback', listener);
   };
 }
 
 function isDeepLinkUrl(url: string) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === "code-review.app:" && parsed.hostname === "open";
+    return parsed.protocol === 'code-review.app:' && parsed.hostname === 'open';
   } catch {
     return false;
   }
@@ -66,10 +66,10 @@ function isDeepLinkUrl(url: string) {
 
 function emitDeepLink(url: string, window: BrowserWindow | null) {
   if (!isDeepLinkUrl(url)) return false;
-  if (deepLinkCallbacks.listenerCount("callback") === 0) {
+  if (deepLinkCallbacks.listenerCount('callback') === 0) {
     pendingDeepLinks.push(url);
   }
-  deepLinkCallbacks.emit("callback", url);
+  deepLinkCallbacks.emit('callback', url);
   if (window && !window.isDestroyed()) {
     if (window.isMinimized()) window.restore();
     window.focus();
@@ -78,13 +78,13 @@ function emitDeepLink(url: string, window: BrowserWindow | null) {
 }
 
 function subscribeToDeepLinks(listener: (url: string) => void) {
-  deepLinkCallbacks.on("callback", listener);
+  deepLinkCallbacks.on('callback', listener);
   while (pendingDeepLinks.length > 0) {
     const url = pendingDeepLinks.shift();
     if (url) listener(url);
   }
   return () => {
-    deepLinkCallbacks.off("callback", listener);
+    deepLinkCallbacks.off('callback', listener);
   };
 }
 

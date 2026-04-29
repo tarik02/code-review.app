@@ -1,19 +1,19 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 import {
   PullRequestBadgeStatus,
   type PullRequestSummary,
   type RepoSummary,
-} from "../../types/forge";
-import { cx } from "../../lib/cx";
-import { repoIdentityKey } from "../../lib/repo-identity";
+} from '../../types/forge';
+import { cx } from '../../lib/cx';
+import { repoIdentityKey } from '../../lib/repo-identity';
 import {
   formatPullRequestDisplayTitle,
   getDraftIndicatorLabel,
-} from "../../lib/pull-request-display";
-import LucideGitBranch from "../../assets/icons/LucideGitBranch";
-import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestArrow";
-import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
-import LucideGitMerge from "../../assets/icons/LucideGitMerge";
+} from '../../lib/pull-request-display';
+import LucideGitBranch from '../../assets/icons/LucideGitBranch';
+import LucideGitPullRequestArrow from '../../assets/icons/LucideGitPullRequestArrow';
+import LucideGitPullRequestClosed from '../../assets/icons/LucideGitPullRequestClosed';
+import LucideGitMerge from '../../assets/icons/LucideGitMerge';
 
 type PullRequestListCardProps = {
   repo: RepoSummary;
@@ -31,7 +31,7 @@ type PullRequestStatusViewModel = {
 };
 
 function getRepoLabel(repo: RepoSummary) {
-  if (repo.host === "github.com") {
+  if (repo.host === 'github.com') {
     return repo.nameWithOwner;
   }
 
@@ -39,13 +39,13 @@ function getRepoLabel(repo: RepoSummary) {
 }
 
 function getPullRequestStatus(pullRequest: PullRequestSummary): PullRequestStatusViewModel {
-  if (pullRequest.state === "MERGED") {
+  if (pullRequest.state === 'MERGED') {
     return {
       status: PullRequestBadgeStatus.Merged,
     };
   }
 
-  if (pullRequest.state !== "OPEN") {
+  if (pullRequest.state !== 'OPEN') {
     return {
       status: PullRequestBadgeStatus.Closed,
     };
@@ -57,13 +57,13 @@ function getPullRequestStatus(pullRequest: PullRequestSummary): PullRequestStatu
     };
   }
 
-  if (pullRequest.mergeable === "CONFLICTING" || pullRequest.mergeStateStatus === "DIRTY") {
+  if (pullRequest.mergeable === 'CONFLICTING' || pullRequest.mergeStateStatus === 'DIRTY') {
     return {
       status: PullRequestBadgeStatus.Conflicting,
     };
   }
 
-  if (pullRequest.mergeable === "MERGEABLE") {
+  if (pullRequest.mergeable === 'MERGEABLE') {
     return {
       status: PullRequestBadgeStatus.CanMerge,
     };
@@ -105,7 +105,7 @@ function formatChangeSummary(pullRequest: PullRequestSummary) {
   if (pullRequest.additions !== null && pullRequest.deletions !== null) {
     return (
       <>
-        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{" "}
+        <span className="text-green-600 dark:text-green-300">+{pullRequest.additions}</span>{' '}
         <span className="text-red-600 dark:text-red-300">-{pullRequest.deletions}</span>
       </>
     );
@@ -135,11 +135,11 @@ function PullRequestListCard({
   const isSelected = selectedPrKey === `${lookupKey}#${pullRequest.number}@${pullRequest.headSha}`;
 
   return (
-    <div className={cx("group relative", isDimmed && "opacity-60")}>
+    <div className={cx('group relative', isDimmed && 'opacity-60')}>
       <div
         className={cx(
-          "flex items-stretch bg-canvas transition hover:bg-canvasDark focus-within:bg-surface",
-          isSelected && "bg-canvasDark",
+          'flex items-stretch bg-canvas transition hover:bg-canvasDark focus-within:bg-surface',
+          isSelected && 'bg-canvasDark',
         )}
       >
         {leadingActions ? (
@@ -151,7 +151,7 @@ function PullRequestListCard({
           type="button"
         >
           <p className="truncate text-xs text-ink-500">
-            {repoLabel ? `${repoLabel} · ` : ""}
+            {repoLabel ? `${repoLabel} · ` : ''}
             {pullRequest.authorLogin}
           </p>
 
@@ -174,11 +174,9 @@ function PullRequestListCard({
         {trailingActions ? (
           <div
             className={cx(
-              "pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center pl-1 pr-2 opacity-0 transition group-hover:opacity-100",
-              "shadow-[-24px_0_32px_-12px_rgba(15,23,42,0.5)]",
-              isSelected
-                ? "bg-canvasDark"
-                : "bg-canvas group-hover:bg-canvasDark",
+              'pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center pl-1 pr-2 opacity-0 transition group-hover:opacity-100',
+              'shadow-[-24px_0_32px_-12px_rgba(15,23,42,0.5)]',
+              isSelected ? 'bg-canvasDark' : 'bg-canvas group-hover:bg-canvasDark',
             )}
           >
             <div className="pointer-events-auto">{trailingActions}</div>

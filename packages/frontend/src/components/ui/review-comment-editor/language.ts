@@ -1,12 +1,12 @@
 const filenameLanguageOverrides: Record<string, string> = {
-  dockerfile: "dockerfile",
-  makefile: "makefile",
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
 };
 
 function getLanguageFromPath(path: string | null | undefined) {
-  const filename = path?.split(/[\\/]/).pop()?.toLowerCase() ?? "";
+  const filename = path?.split(/[\\/]/).pop()?.toLowerCase() ?? '';
   if (!filename) {
-    return "";
+    return '';
   }
 
   const override = filenameLanguageOverrides[filename];
@@ -14,8 +14,8 @@ function getLanguageFromPath(path: string | null | undefined) {
     return override;
   }
 
-  const extension = filename.includes(".") ? filename.split(".").pop() : "";
-  return extension ?? "";
+  const extension = filename.includes('.') ? filename.split('.').pop() : '';
+  return extension ?? '';
 }
 
 export { getLanguageFromPath };

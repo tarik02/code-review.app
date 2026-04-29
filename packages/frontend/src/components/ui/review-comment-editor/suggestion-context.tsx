@@ -1,5 +1,5 @@
-import { createContext } from "react";
-import type { SuggestionEditorContextValue } from "./types";
+import { createContext } from 'react';
+import type { SuggestionEditorContextValue } from './types';
 
 const SuggestionEditorContext = createContext<SuggestionEditorContextValue | null>(null);
 

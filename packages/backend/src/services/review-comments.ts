@@ -1,8 +1,8 @@
-import { HttpClient } from "@effect/platform";
-import { Effect, Layer } from "effect";
-import { createRepoIdentityFromParts } from "../repo-id.ts";
-import { providerFor } from "../providers/registry.ts";
-import { AuthTokenStore } from "../auth/token-store.ts";
+import { HttpClient } from '@effect/platform';
+import { Effect, Layer } from 'effect';
+import { createRepoIdentityFromParts } from '../repo-id.ts';
+import { providerFor } from '../providers/registry.ts';
+import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   CreatePullRequestReviewCommentInput,
   PullRequestApprovalState,
@@ -11,7 +11,7 @@ import type {
   ReviewThread,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
-} from "@code-review-app/shared";
+} from '@code-review-app/shared';
 
 type ReviewCommentServiceShape = {
   getViewerLogin(accountId: string): Effect.Effect<ViewerLogin, Error>;
@@ -27,7 +27,7 @@ type ReviewCommentServiceShape = {
   update(input: UpdatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
 };
 
-class ReviewCommentService extends Effect.Tag("ReviewCommentService")<
+class ReviewCommentService extends Effect.Tag('ReviewCommentService')<
   ReviewCommentService,
   ReviewCommentServiceShape
 >() {}
@@ -44,24 +44,24 @@ const makeReviewCommentService = Effect.gen(function* () {
       Effect.provideService(HttpClient.HttpClient, httpClient),
     );
 
-  const getViewerLogin: ReviewCommentServiceShape["getViewerLogin"] = Effect.fn(
-    "ReviewCommentService.getViewerLogin",
+  const getViewerLogin: ReviewCommentServiceShape['getViewerLogin'] = Effect.fn(
+    'ReviewCommentService.getViewerLogin',
   )(function* (accountId) {
     const account = yield* tokenStore.get(accountId);
-    if (!account) throw new Error("Provider account is not signed in.");
+    if (!account) throw new Error('Provider account is not signed in.');
     const login = yield* provideProviderDeps(providerFor(account.provider).viewerLogin(accountId));
     return { login };
   });
 
-  const listThreads: ReviewCommentServiceShape["listThreads"] = Effect.fn(
-    "ReviewCommentService.listThreads",
+  const listThreads: ReviewCommentServiceShape['listThreads'] = Effect.fn(
+    'ReviewCommentService.listThreads',
   )(function* (repoInput, number) {
     const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
     return yield* provideProviderDeps(providerFor(repo.provider).listReviewThreads(repo, number));
   });
 
-  const getApprovalState: ReviewCommentServiceShape["getApprovalState"] = Effect.fn(
-    "ReviewCommentService.getApprovalState",
+  const getApprovalState: ReviewCommentServiceShape['getApprovalState'] = Effect.fn(
+    'ReviewCommentService.getApprovalState',
   )(function* (repoInput, number) {
     const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
     return yield* provideProviderDeps(
@@ -69,21 +69,23 @@ const makeReviewCommentService = Effect.gen(function* () {
     );
   });
 
-  const approve: ReviewCommentServiceShape["approve"] = Effect.fn("ReviewCommentService.approve")(
+  const approve: ReviewCommentServiceShape['approve'] = Effect.fn('ReviewCommentService.approve')(
     function* (repoInput, number, headSha) {
       const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
-      yield* provideProviderDeps(providerFor(repo.provider).approvePullRequest(repo, number, headSha));
+      yield* provideProviderDeps(
+        providerFor(repo.provider).approvePullRequest(repo, number, headSha),
+      );
     },
   );
 
-  const removeApproval: ReviewCommentServiceShape["removeApproval"] = Effect.fn(
-    "ReviewCommentService.removeApproval",
+  const removeApproval: ReviewCommentServiceShape['removeApproval'] = Effect.fn(
+    'ReviewCommentService.removeApproval',
   )(function* (repoInput, number) {
     const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
     yield* provideProviderDeps(providerFor(repo.provider).removePullRequestApproval(repo, number));
   });
 
-  const create: ReviewCommentServiceShape["create"] = Effect.fn("ReviewCommentService.create")(
+  const create: ReviewCommentServiceShape['create'] = Effect.fn('ReviewCommentService.create')(
     function* (input) {
       const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
       yield* provideProviderDeps(
@@ -102,7 +104,7 @@ const makeReviewCommentService = Effect.gen(function* () {
     },
   );
 
-  const reply: ReviewCommentServiceShape["reply"] = Effect.fn("ReviewCommentService.reply")(
+  const reply: ReviewCommentServiceShape['reply'] = Effect.fn('ReviewCommentService.reply')(
     function* (input) {
       const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
       yield* provideProviderDeps(
@@ -116,7 +118,7 @@ const makeReviewCommentService = Effect.gen(function* () {
     },
   );
 
-  const update: ReviewCommentServiceShape["update"] = Effect.fn("ReviewCommentService.update")(
+  const update: ReviewCommentServiceShape['update'] = Effect.fn('ReviewCommentService.update')(
     function* (input) {
       const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
       yield* provideProviderDeps(

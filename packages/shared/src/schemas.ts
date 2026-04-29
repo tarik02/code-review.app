@@ -1,29 +1,29 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-const forgeProviderKindSchema = z.enum(["github", "gitlab"]);
-const diffDataModeSchema = z.enum(["provider-api", "git"]);
-const themePreferenceSchema = z.enum(["auto", "light", "dark"]);
-const reviewEditorModeSchema = z.enum(["rich-text", "source"]);
-const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
-const pullRequestApprovalRemoveStrategySchema = z.enum(["dismiss", "unapprove"]);
+const forgeProviderKindSchema = z.enum(['github', 'gitlab']);
+const diffDataModeSchema = z.enum(['provider-api', 'git']);
+const themePreferenceSchema = z.enum(['auto', 'light', 'dark']);
+const reviewEditorModeSchema = z.enum(['rich-text', 'source']);
+const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
+const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
-  "ok",
-  "warning",
-  "failed",
-  "pending",
-  "unavailable",
+  'ok',
+  'warning',
+  'failed',
+  'pending',
+  'unavailable',
 ]);
 const pullRequestQualityFindingSeveritySchema = z.enum([
-  "info",
-  "minor",
-  "warning",
-  "major",
-  "critical",
-  "unknown",
+  'info',
+  'minor',
+  'warning',
+  'major',
+  'critical',
+  'unknown',
 ]);
-const pullRequestQualityFindingStatusSchema = z.enum(["new", "existing", "resolved", "unknown"]);
-const pullRequestQualityFindingAnchorStateSchema = z.enum(["inline", "file", "unmapped"]);
-const pullRequestQualityFindingSourceTypeSchema = z.enum(["github-check", "gitlab-code-quality"]);
+const pullRequestQualityFindingStatusSchema = z.enum(['new', 'existing', 'resolved', 'unknown']);
+const pullRequestQualityFindingAnchorStateSchema = z.enum(['inline', 'file', 'unmapped']);
+const pullRequestQualityFindingSourceTypeSchema = z.enum(['github-check', 'gitlab-code-quality']);
 
 const repoSummarySchema = z.object({
   providerId: z.string(),
@@ -64,8 +64,8 @@ const overviewPullRequestSummarySchema = z.object({
 const providerHostSchema = z.object({
   provider: forgeProviderKindSchema,
   host: z.string(),
-  clientId: z.string().optional().default(""),
-  clientSecret: z.string().optional().default(""),
+  clientId: z.string().optional().default(''),
+  clientSecret: z.string().optional().default(''),
 });
 
 const completeOAuthSchema = z.object({
@@ -93,10 +93,10 @@ const reviewEditorSettingsSchema = z.object({
   defaultMode: reviewEditorModeSchema,
 });
 
-const appearanceBackgroundInputSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("default") }),
+const appearanceBackgroundInputSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('default') }),
   z.object({
-    kind: z.literal("solid"),
+    kind: z.literal('solid'),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   }),
 ]);
@@ -178,11 +178,11 @@ const pullRequestQualityReportSchema = z.object({
 });
 
 const prFileChangeTypeSchema = z.enum([
-  "change",
-  "rename-pure",
-  "rename-changed",
-  "new",
-  "deleted",
+  'change',
+  'rename-pure',
+  'rename-changed',
+  'new',
+  'deleted',
 ]);
 
 const pullRequestFileContentsInputSchema = repoIdentitySchema.extend({
@@ -203,7 +203,7 @@ const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
   side: reviewCommentSideSchema.nullable(),
   startLine: z.number().int().nonnegative().nullable(),
   startSide: reviewCommentSideSchema.nullable(),
-  subjectType: z.enum(["file", "line", "global"]),
+  subjectType: z.enum(['file', 'line', 'global']),
 });
 
 const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
@@ -214,7 +214,7 @@ const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend
 const updatePullRequestReviewCommentInputSchema = replyToPullRequestReviewCommentInputSchema.extend(
   {
     commentId: z.string(),
-    subjectType: z.enum(["file", "line", "global"]),
+    subjectType: z.enum(['file', 'line', 'global']),
   },
 );
 

@@ -1,7 +1,7 @@
-import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
+import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox';
+import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
 type ComboboxOption = {
   label: string;
@@ -9,7 +9,7 @@ type ComboboxOption = {
 };
 
 type ComboboxProps = {
-  "aria-label"?: string;
+  'aria-label'?: string;
   className?: string;
   contentClassName?: string;
   disabled?: boolean;
@@ -21,7 +21,7 @@ type ComboboxProps = {
 };
 
 function Combobox({
-  "aria-label": ariaLabel,
+  'aria-label': ariaLabel,
   className,
   contentClassName,
   disabled,
@@ -47,7 +47,7 @@ function Combobox({
     >
       <ComboboxPrimitive.InputGroup
         className={cn(
-          "flex h-7 w-fit min-w-32 items-center rounded-[min(var(--radius-md),10px)] border border-input bg-transparent text-sm text-foreground transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-open:bg-accent",
+          'flex h-7 w-fit min-w-32 items-center rounded-[min(var(--radius-md),10px)] border border-input bg-transparent text-sm text-foreground transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-open:bg-accent',
           className,
         )}
       >
@@ -71,7 +71,7 @@ function Combobox({
         <ComboboxPrimitive.Positioner align="start" className="isolate z-50" sideOffset={4}>
           <ComboboxPrimitive.Popup
             className={cn(
-              "relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+              'relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) overflow-x-hidden overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
               contentClassName,
             )}
             initialFocus={false}
