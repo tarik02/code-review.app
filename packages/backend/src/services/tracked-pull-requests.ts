@@ -5,10 +5,24 @@ import { ValidationError } from "../errors.ts";
 import { createRepoIdentityFromParts } from "../repo-id.ts";
 import { providerFor } from "../providers/registry.ts";
 import { AuthTokenStore } from "../auth/token-store.ts";
-import type { PullRequestSummary, RepoIdentity } from "@code-review-app/shared";
+import { AppSettingsService } from "./app-settings.ts";
+import { trackedPullRequestOrderEntrySchema } from "@code-review-app/shared";
+import type {
+  PullRequestSummary,
+  RepoIdentity,
+  RepoSummary,
+  TrackedPullRequestOrderEntry,
+} from "@code-review-app/shared";
+
+const TRACKED_PULL_REQUEST_ORDER_KEY = "tracked.pull_request_order";
 
 type TrackedPullRequestServiceShape = {
   list(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
+  listRepos(): Effect.Effect<RepoSummary[], Error>;
+  getOrder(): Effect.Effect<TrackedPullRequestOrderEntry[], Error>;
+  setOrder(
+    entries: TrackedPullRequestOrderEntry[],
+  ): Effect.Effect<TrackedPullRequestOrderEntry[], Error>;
   track(
     repo: RepoIdentity,
     pullRequest: PullRequestSummary,
@@ -29,10 +43,45 @@ function requireRepo(repo: RepoIdentity) {
   return repo;
 }
 
+function trackedPullRequestOrderEntryKey(entry: TrackedPullRequestOrderEntry) {
+  return `${entry.providerId}:${entry.repoKey}#${entry.number}`;
+}
+
+function normalizeTrackedPullRequestOrder(
+  entries: TrackedPullRequestOrderEntry[],
+): TrackedPullRequestOrderEntry[] {
+  const deduped = new Map<string, TrackedPullRequestOrderEntry>();
+
+  for (const entry of entries) {
+    const normalized = {
+      providerId: entry.providerId.trim(),
+      repoKey: entry.repoKey.trim(),
+      number: entry.number,
+    } satisfies TrackedPullRequestOrderEntry;
+
+    if (!normalized.providerId || !normalized.repoKey) {
+      continue;
+    }
+
+    const parsed = trackedPullRequestOrderEntrySchema.safeParse(normalized);
+    if (!parsed.success) {
+      continue;
+    }
+
+    const key = trackedPullRequestOrderEntryKey(parsed.data);
+    if (!deduped.has(key)) {
+      deduped.set(key, parsed.data);
+    }
+  }
+
+  return [...deduped.values()];
+}
+
 const makeTrackedPullRequestService = Effect.gen(function* () {
   const cache = yield* CacheService;
   const tokenStore = yield* AuthTokenStore;
   const httpClient = yield* HttpClient.HttpClient;
+  const appSettings = yield* AppSettingsService;
 
   const provideProviderDeps = <A, E>(
     effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
@@ -48,10 +97,36 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
     },
   );
 
+  const listRepos: TrackedPullRequestServiceShape["listRepos"] = Effect.fn(
+    "TrackedPullRequestService.listRepos",
+  )(function* () {
+    return yield* cache.listTrackedRepos();
+  });
+
+  const getOrder: TrackedPullRequestServiceShape["getOrder"] = Effect.fn(
+    "TrackedPullRequestService.getOrder",
+  )(function* () {
+    const persisted =
+      (yield* appSettings.read<TrackedPullRequestOrderEntry[]>(TRACKED_PULL_REQUEST_ORDER_KEY)) ??
+      [];
+
+    return normalizeTrackedPullRequestOrder(persisted);
+  });
+
+  const setOrder: TrackedPullRequestServiceShape["setOrder"] = Effect.fn(
+    "TrackedPullRequestService.setOrder",
+  )(function* (entries) {
+    const normalized = normalizeTrackedPullRequestOrder(entries);
+    yield* appSettings.write(TRACKED_PULL_REQUEST_ORDER_KEY, normalized);
+    return normalized;
+  });
+
   const track: TrackedPullRequestServiceShape["track"] = Effect.fn(
     "TrackedPullRequestService.track",
   )(function* (repo, pullRequest) {
-    yield* cache.trackPullRequest(requireRepo(repo), pullRequest);
+    const repoIdentity = requireRepo(repo);
+    yield* cache.ensureRepo(repoIdentity);
+    yield* cache.trackPullRequest(repoIdentity, pullRequest);
     return pullRequest;
   });
 
@@ -97,10 +172,13 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
   });
 
   return {
+    getOrder,
     list,
-    track,
-    remove,
+    listRepos,
     refresh,
+    remove,
+    setOrder,
+    track,
   } satisfies TrackedPullRequestServiceShape;
 });
 

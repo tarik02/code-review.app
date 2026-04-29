@@ -11,6 +11,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "catalog:",
+    "@atlaskit/pragmatic-drag-and-drop-hitbox": "catalog:",
     "@base-ui/react": "catalog:",
     "@code-review-app/backend": "workspace:*",
     "@code-review-app/shared": "workspace:*",

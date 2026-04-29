@@ -59,6 +59,10 @@ type OverviewPullRequestSummary = {
   pullRequest: PullRequestSummary;
 };
 
+type TrackedPullRequestOrderEntry = RepoIdentity & {
+  number: number;
+};
+
 export const PullRequestBadgeStatus = {
   Merged: "merged",
   Closed: "closed",
@@ -312,6 +316,7 @@ export type {
   SelectedPullRequest,
   ThemePreference,
   ThemePreferenceSettings,
+  TrackedPullRequestOrderEntry,
   UpdateEvent,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,

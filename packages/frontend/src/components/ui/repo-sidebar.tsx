@@ -1,38 +1,35 @@
 import { Link } from "@tanstack/react-router";
 import { Cog6ToothIcon, PlusIcon } from "@heroicons/react/20/solid";
-import { Accordion } from "./accordion";
-import { AppUpdater } from "./app-updater";
-import {
-  PullRequestSidebarRow,
-  RepoSidebarItem,
-  type PullRequestSummary,
-  type SidebarPullRequestView,
-} from "./repo-sidebar-item";
-import type { OverviewPullRequestSummary, RepoIdentity, RepoSummary } from "../../types/forge";
+import { PlusIcon as OutlinePlusIcon } from "@heroicons/react/24/outline";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
+import { repoIdentityKey } from "../../lib/repo-identity";
+import type { OverviewPullRequestSummary, PullRequestSummary, RepoSummary } from "../../types/forge";
+import { AppUpdater } from "./app-updater";
+import { PullRequestListCard, getRepoLabel } from "./pull-request-list-card";
 import { TopBar } from "./top-bar";
-import { repoIdentity, repoIdentityKey } from "../../lib/repo-identity";
+import { TrackedPullRequestList } from "./tracked-pull-request-list";
+
+type SidebarPullRequestView = "overview" | "tracked";
 
 type RepoSidebarProps = {
   repos: RepoSummary[];
-  prsByRepo: Record<string, PullRequestSummary[]>;
   repoErrors: Record<string, string>;
   overviewPullRequests: OverviewPullRequestSummary[];
+  trackedPullRequests: OverviewPullRequestSummary[];
   overviewErrors: string[];
   isOverviewLoading: boolean;
   overviewStatusMessage: string | null;
-  openValues: string[];
   view: SidebarPullRequestView;
   selectedPrKey: string | null;
+  trackedRepoCount: number;
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   emptyState?: ReactNode;
-  onAddRepo: () => void;
-  onAddPr: (repo: RepoIdentity) => void;
+  onAddAction: () => void;
   onViewChange: (view: SidebarPullRequestView) => void;
-  onSelectPr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
-  onTrackPr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
-  onRemovePr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
-  onRepoOpenChange: (repo: RepoIdentity, open: boolean) => void;
+  onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
+  onTrackPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
+  onRemovePr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
+  onReorderTrackedPullRequests: (entries: OverviewPullRequestSummary[]) => void | Promise<void>;
 };
 
 function toTimestamp(value: string) {
@@ -40,33 +37,25 @@ function toTimestamp(value: string) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function getRepoLabel(repo: RepoSummary) {
-  if (repo.host === "github.com") {
-    return repo.nameWithOwner;
-  }
-  return `${repo.nameWithOwner} · ${repo.host}`;
-}
-
 function RepoSidebar({
   repos,
-  prsByRepo,
   repoErrors,
   overviewPullRequests,
+  trackedPullRequests,
   overviewErrors,
   isOverviewLoading,
   overviewStatusMessage,
-  openValues,
   view,
   selectedPrKey,
+  trackedRepoCount,
   trackedPullRequestNumbersByRepo,
   emptyState,
-  onAddRepo,
-  onAddPr,
+  onAddAction,
   onViewChange,
   onSelectPr,
   onTrackPr,
   onRemovePr,
-  onRepoOpenChange,
+  onReorderTrackedPullRequests,
 }: RepoSidebarProps) {
   const noDragRegionStyle = {
     WebkitAppRegion: "no-drag",
@@ -109,7 +98,7 @@ function RepoSidebar({
         </TopBar>
 
         <div className="flex items-center gap-2.5 border-b border-neutral-300 dark:border-neutral-700 bg-canvas px-3 py-2.5 text-sm font-medium">
-          {isOverview ? "Pull requests" : "Repositories"}
+          {isOverview ? "Pull requests" : "Tracked items"}
           <div className="ml-auto flex items-center gap-1.5">
             <AppUpdater
               buttonClassName="rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium hover:bg-canvasDark dark:bg-transparent dark:hover:bg-canvasDark"
@@ -119,9 +108,9 @@ function RepoSidebar({
             />
           </div>
           <button
-            aria-label="Add repo"
+            aria-label={isOverview ? "Add repo" : "Add tracked PR or MR"}
             className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-            onClick={onAddRepo}
+            onClick={onAddAction}
             style={noDragRegionStyle}
             type="button"
           >
@@ -157,7 +146,7 @@ function RepoSidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
-        {!isOverview && repos.length === 0 ? (
+        {!isOverview && trackedRepoCount === 0 && trackedPullRequests.length === 0 ? (
           (emptyState ?? null)
         ) : isOverview ? (
           <div className="flex flex-col">
@@ -173,21 +162,25 @@ function RepoSidebar({
               <div className="px-3 py-2.5 text-sm text-ink-500">Loading pull requests...</div>
             ) : null}
             {sortedOverviewPullRequests.map(({ repo, pullRequest }) => (
-              <PullRequestSidebarRow
+              <PullRequestListCard
                 key={`${repoIdentityKey(repo)}#${pullRequest.number}`}
-                repo={repoIdentity(repo)}
-                provider={repo.provider}
+                repo={repo}
                 pullRequest={pullRequest}
                 selectedPrKey={selectedPrKey}
-                isTrackedView={false}
-                isTracked={
-                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(pullRequest.number) ??
-                  false
-                }
                 repoLabel={getRepoLabel(repo)}
                 onSelectPr={onSelectPr}
-                onTrackPr={onTrackPr}
-                onRemovePr={onRemovePr}
+                trailingActions={
+                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(pullRequest.number) ? null : (
+                    <button
+                      aria-label={`Track PR #${pullRequest.number}`}
+                      className="rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100 group-focus-within:opacity-100"
+                      onClick={() => onTrackPr(repo, pullRequest)}
+                      type="button"
+                    >
+                      <OutlinePlusIcon className="size-4 shrink-0" />
+                    </button>
+                  )
+                }
               />
             ))}
             {overviewErrors.map((error, index) => (
@@ -202,29 +195,14 @@ function RepoSidebar({
             ))}
           </div>
         ) : (
-          <Accordion multiple value={openValues}>
-            {repos.map((repo) => (
-              <RepoSidebarItem
-                key={repoIdentityKey(repo)}
-                value={repoIdentityKey(repo)}
-                repo={repoIdentity(repo)}
-                provider={repo.provider}
-                avatarUrl={repo.avatarUrl}
-                host={repo.host}
-                nameWithOwner={repo.nameWithOwner}
-                pullRequests={prsByRepo[repoIdentityKey(repo)]}
-                error={repoErrors[repoIdentityKey(repo)]}
-                view={view}
-                selectedPrKey={selectedPrKey}
-                trackedPullRequestNumbers={trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]}
-                onSelectPr={(identity, pr) => onSelectPr(identity, pr)}
-                onAddPr={(identity) => onAddPr(identity)}
-                onTrackPr={(identity, pr) => onTrackPr(identity, pr)}
-                onRemovePr={(identity, pr) => onRemovePr(identity, pr)}
-                onOpenChange={(open) => onRepoOpenChange(repo, open)}
-              />
-            ))}
-          </Accordion>
+          <TrackedPullRequestList
+            entries={trackedPullRequests}
+            repoErrors={repoErrorEntries}
+            selectedPrKey={selectedPrKey}
+            onRemovePr={onRemovePr}
+            onReorder={onReorderTrackedPullRequests}
+            onSelectPr={onSelectPr}
+          />
         )}
       </div>
     </aside>

@@ -17,8 +17,16 @@ import {
 import { useTheme } from "../hooks/use-theme";
 import { useAuthSession } from "./auth-session";
 import { sortByFileTreePathOrder } from "../lib/file-tree-order";
+import { normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl } from "../lib/forge-links";
 import { buildReviewThreadsByFile, getGlobalReviewThreads } from "../lib/review-threads";
 import { buildPullRequestQualityView } from "../lib/pull-request-quality";
+import {
+  mergeTrackedVisibleSubsetIntoOrder,
+  prependTrackedPullRequestOrderEntry,
+  removeTrackedPullRequestOrderEntry,
+  sortTrackedPullRequestEntries,
+  toTrackedPullRequestOrderEntry,
+} from "../lib/tracked-pull-request-order";
 import { repoIdentity, repoIdentityKey, sameRepoIdentity } from "../lib/repo-identity";
 import { trpc } from "../lib/trpc";
 import {
@@ -27,90 +35,23 @@ import {
   forgeKeys,
   pullRequestListQueryOptions,
   savedReposQueryOptions,
+  setTrackedPullRequestOrder,
+  trackedReposQueryOptions,
+  trackedPullRequestOrderQueryOptions,
 } from "../queries/forge";
 import type {
   DiffDataMode,
   FileStatsEntry,
-  ForgeProviderKind,
+  OverviewPullRequestSummary,
   PullRequestSummary,
   RepoIdentity,
   RepoSummary,
   SelectedPullRequest,
+  TrackedPullRequestOrderEntry,
 } from "../types/forge";
 
-type PullRequestPickerMode = "repo-then-pr" | "pr-only";
+type PullRequestPickerMode = "repo-then-pr" | "pr-only" | "track-repo-then-pr";
 type PullRequestPickerStep = "repo" | "pull-request";
-
-function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "")
-    .toLowerCase();
-}
-
-type ParsedForgePullRequestUrl = {
-  provider: ForgeProviderKind;
-  host: string;
-  repoPath: string;
-  number: number;
-};
-
-function parseForgePullRequestUrl(value: string): ParsedForgePullRequestUrl | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return null;
-  }
-
-  const host = normalizeHostInput(parsed.host);
-  const segments = parsed.pathname.split("/").filter(Boolean);
-  const githubPullIndex = segments.indexOf("pull");
-  if (githubPullIndex === 2) {
-    const number = Number.parseInt(segments[3] ?? "", 10);
-    if (Number.isInteger(number) && number > 0) {
-      return {
-        provider: "github",
-        host,
-        repoPath: `${segments[0]}/${segments[1]}`,
-        number,
-      };
-    }
-  }
-
-  const gitlabDashIndex = segments.indexOf("-");
-  if (gitlabDashIndex > 0 && segments[gitlabDashIndex + 1] === "merge_requests") {
-    const number = Number.parseInt(segments[gitlabDashIndex + 2] ?? "", 10);
-    const repoPath = segments.slice(0, gitlabDashIndex).join("/");
-    if (Number.isInteger(number) && number > 0 && repoPath) {
-      return {
-        provider: "gitlab",
-        host,
-        repoPath,
-        number,
-      };
-    }
-  }
-
-  return null;
-}
-
-function parseAppOpenUrl(value: string) {
-  try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== "code-review.app:" || parsed.hostname !== "open") {
-      return null;
-    }
-    return parsed.searchParams.get("url");
-  } catch {
-    return null;
-  }
-}
 
 function MainApp() {
   const { providerAccounts, providerStatuses } = useAuthSession();
@@ -141,11 +82,9 @@ function MainApp() {
   const [isSavingRepo, setIsSavingRepo] = useState(false);
   const [isTrackingPullRequest, setIsTrackingPullRequest] = useState(false);
   const [deepLinkMessage, setDeepLinkMessage] = useState<string | null>(null);
-  const [openRepoValues, setOpenRepoValues] = useState<string[]>([]);
   const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>("overview");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refreshedReposRef = useRef<Set<string>>(new Set());
-  const previousRepoNamesRef = useRef<string[]>([]);
 
   const updateSearch = useCallback((value: string) => {
     setSearchQuery(value);
@@ -155,7 +94,8 @@ function MainApp() {
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-  const { repos = [] } = useSavedRepos();
+  const { repos: savedRepos = [] } = useSavedRepos();
+  const trackedRepos = useQuery(trackedReposQueryOptions()).data ?? [];
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
   const readyProviderAccounts = useMemo(
     () => providerAccounts.filter((account) => providerStatuses[account.id]?.status === "ready"),
@@ -187,6 +127,10 @@ function MainApp() {
     () => readyProviderAccounts.filter((account) => enabledAccountIdSet.has(account.id)),
     [enabledAccountIdSet, readyProviderAccounts],
   );
+  const refreshableTrackedRepos = useMemo(
+    () => trackedRepos.filter((repo) => readyAccountIds.has(repo.providerAccountId)),
+    [readyAccountIds, trackedRepos],
+  );
   const canLoadPickerRepos = isPickerOpen && pickerStep === "repo";
   const { availableRepos, availableReposError, isLoadingRepos } = useRepoPickerReposForAccounts(
     pickerAccounts,
@@ -217,7 +161,8 @@ function MainApp() {
     prsByRepo: trackedPrsByRepo,
     repoErrors: trackedRepoErrors,
     refreshTrackedPullRequests,
-  } = useTrackedPullRequests({ repos });
+  } = useTrackedPullRequests({ repos: refreshableTrackedRepos });
+  const trackedPullRequestOrderQuery = useQuery(trackedPullRequestOrderQueryOptions());
   const activeOverviewEntry = useMemo(() => {
     if (!activeRepoIdentity || activePullRequestNumber === null) {
       return null;
@@ -261,7 +206,8 @@ function MainApp() {
     };
   }, [activeOverviewEntry, activePullRequestNumber, activeRepoIdentity, activeTrackedPullRequest]);
   const selectedRepo = activeRepoIdentity
-    ? (repos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
+    ? (savedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
+      trackedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
       activeOverviewEntry?.repo ??
       null)
     : null;
@@ -269,7 +215,7 @@ function MainApp() {
     Boolean(selectedPr && selectedRepo) &&
     !enabledAccountIdSet.has(selectedRepo?.providerAccountId ?? "");
   const sidebarRepos = useMemo(() => {
-    const visibleSavedRepos = repos.filter((repo) =>
+    const visibleSavedRepos = savedRepos.filter((repo) =>
       enabledAccountIdSet.has(repo.providerAccountId),
     );
     const visibleRepos = visibleSavedRepos;
@@ -281,7 +227,26 @@ function MainApp() {
       return visibleRepos;
     }
     return [...visibleRepos, selectedRepo];
-  }, [enabledAccountIdSet, isSelectedRepoHidden, repos, selectedRepo]);
+  }, [enabledAccountIdSet, isSelectedRepoHidden, savedRepos, selectedRepo]);
+  const trackedSidebarRepos = useMemo(() => {
+    const visibleTrackedRepos = trackedRepos.filter((repo) =>
+      enabledAccountIdSet.has(repo.providerAccountId),
+    );
+
+    if (!selectedRepo || !isSelectedRepoHidden || !activeTrackedPullRequest) {
+      return visibleTrackedRepos;
+    }
+    if (visibleTrackedRepos.some((repo) => sameRepoIdentity(repo, selectedRepo))) {
+      return visibleTrackedRepos;
+    }
+    return [...visibleTrackedRepos, selectedRepo];
+  }, [
+    activeTrackedPullRequest,
+    enabledAccountIdSet,
+    isSelectedRepoHidden,
+    selectedRepo,
+    trackedRepos,
+  ]);
   const trackedPullRequestNumbersByRepo = useMemo(() => {
     const entries: Array<[string, Set<number>]> = [];
     for (const [lookupKey, pullRequests] of Object.entries(trackedPrsByRepo)) {
@@ -289,23 +254,18 @@ function MainApp() {
     }
     return Object.fromEntries(entries);
   }, [trackedPrsByRepo]);
-  const trackedSidebarPrsByRepo = useMemo(() => {
-    if (!selectedPr || !selectedRepo || !isSelectedRepoHidden) {
-      return trackedPrsByRepo;
+  const trackedPullRequestEntries = useMemo(() => {
+    const entries: OverviewPullRequestSummary[] = [];
+    for (const repo of trackedSidebarRepos) {
+      const lookupKey = repoIdentityKey(repo);
+      const pullRequests = trackedPrsByRepo[lookupKey] ?? [];
+      for (const pullRequest of pullRequests) {
+        entries.push({ repo, pullRequest });
+      }
     }
 
-    const selectedRepoLookupKey = repoIdentityKey(selectedRepo);
-    const selectedPullRequest = (trackedPrsByRepo[selectedRepoLookupKey] ?? []).find(
-      (pullRequest) =>
-        pullRequest.number === selectedPr.number && pullRequest.headSha === selectedPr.headSha,
-    );
-    return {
-      ...trackedPrsByRepo,
-      [selectedRepoLookupKey]: selectedPullRequest ? [selectedPullRequest] : [],
-    };
-  }, [isSelectedRepoHidden, selectedPr, selectedRepo, trackedPrsByRepo]);
-  const sidebarPrsByRepo = sidebarView === "overview" ? {} : trackedSidebarPrsByRepo;
-  const sidebarErrors = sidebarView === "overview" ? {} : trackedRepoErrors;
+    return sortTrackedPullRequestEntries(entries, trackedPullRequestOrderQuery.data ?? []);
+  }, [trackedSidebarRepos, trackedPrsByRepo, trackedPullRequestOrderQuery.data]);
 
   const selectedPrKey = selectedPr
     ? `${repoIdentityKey(selectedPr)}#${selectedPr.number}@${selectedPr.headSha}`
@@ -345,16 +305,65 @@ function MainApp() {
     [selectedPatch],
   );
 
-  const addedRepoKeys = useMemo(() => new Set(repos.map((repo) => repoIdentityKey(repo))), [repos]);
+  const pickerRepos = availableRepos;
+  const parsedPickerDirectLink = useMemo(
+    () => parseForgeResourceUrl(searchQuery.trim()),
+    [searchQuery],
+  );
+  const pickerDirectLinkAccount = useMemo(() => {
+    if (!parsedPickerDirectLink || parsedPickerDirectLink.number === null) {
+      return null;
+    }
 
-  const filteredRepos = useMemo(
-    () => availableRepos.filter((repo) => !addedRepoKeys.has(repoIdentityKey(repo))),
-    [availableRepos, addedRepoKeys],
-  );
-  const repoNames = useMemo(
-    () => sidebarRepos.map((repo) => repoIdentityKey(repo)),
-    [sidebarRepos],
-  );
+    return (
+      pickerAccounts.find(
+        (account) =>
+          account.provider === parsedPickerDirectLink.provider &&
+          normalizeHostInput(account.host) === parsedPickerDirectLink.host,
+      ) ?? null
+    );
+  }, [parsedPickerDirectLink, pickerAccounts]);
+  const pickerDirectLinkPullRequestQuery = useQuery({
+    queryKey: [
+      ...forgeKeys.trackedPullRequests(),
+      "direct-link",
+      pickerDirectLinkAccount?.id ?? "__idle__",
+      parsedPickerDirectLink?.host ?? "__idle__",
+      parsedPickerDirectLink?.repoPath ?? "__idle__",
+      parsedPickerDirectLink?.number ?? "__idle__",
+    ],
+    queryFn: async () => {
+      if (
+        !pickerDirectLinkAccount ||
+        !parsedPickerDirectLink ||
+        parsedPickerDirectLink.number === null
+      ) {
+        throw new Error("No direct link to resolve.");
+      }
+
+      const repo = await trpc.repos.validate.query({
+        accountId: pickerDirectLinkAccount.id,
+        repo: parsedPickerDirectLink.repoPath,
+      });
+      const pullRequest = await trpc.pullRequests.get.query({
+        ...repoIdentity(repo),
+        number: parsedPickerDirectLink.number,
+      });
+
+      return { repo, pullRequest };
+    },
+    enabled:
+      isPickerOpen &&
+      pickerStep === "repo" &&
+      parsedPickerDirectLink !== null &&
+      parsedPickerDirectLink.number !== null &&
+      pickerDirectLinkAccount !== null,
+  });
+  const pickerDirectLinkPullRequestOption = pickerDirectLinkPullRequestQuery.data ?? null;
+  const pickerDirectLinkPullRequestError =
+    parsedPickerDirectLink && parsedPickerDirectLink.number !== null && pickerDirectLinkAccount === null
+      ? `No signed-in ${parsedPickerDirectLink.provider === "github" ? "GitHub" : "GitLab"} account for ${parsedPickerDirectLink.host}.`
+      : getErrorMessage(pickerDirectLinkPullRequestQuery.error);
   const pickerRepoIdentity = pickerRepo ? repoIdentity(pickerRepo) : null;
   const pickerRepoLookupKey = pickerRepo ? repoIdentityKey(pickerRepo) : null;
   const pickerOpenPullRequestsQuery = useQuery({
@@ -390,33 +399,7 @@ function MainApp() {
   }, [isDark, workerPool]);
 
   useEffect(() => {
-    const previousRepoNames = previousRepoNamesRef.current;
-    const addedRepoNames = repoNames.filter((repoName) => !previousRepoNames.includes(repoName));
-
-    setOpenRepoValues((current) => {
-      const nextOpenRepos = current.filter((repoName) => repoNames.includes(repoName));
-
-      for (const repoName of addedRepoNames) {
-        if (!nextOpenRepos.includes(repoName)) {
-          nextOpenRepos.push(repoName);
-        }
-      }
-
-      if (
-        nextOpenRepos.length === current.length &&
-        nextOpenRepos.every((repoName, index) => repoName === current[index])
-      ) {
-        return current;
-      }
-
-      return nextOpenRepos;
-    });
-
-    previousRepoNamesRef.current = repoNames;
-  }, [repoNames]);
-
-  useEffect(() => {
-    for (const repo of repos) {
+    for (const repo of refreshableTrackedRepos) {
       const lookupKey = repoIdentityKey(repo);
       if (refreshedReposRef.current.has(lookupKey)) {
         continue;
@@ -425,7 +408,7 @@ function MainApp() {
       refreshedReposRef.current.add(lookupKey);
       void refreshTrackedPullRequests(repo);
     }
-  }, [refreshTrackedPullRequests, repos]);
+  }, [refreshTrackedPullRequests, refreshableTrackedRepos]);
 
   const isPatchPreparing = isPatchLoading;
 
@@ -474,17 +457,6 @@ function MainApp() {
     });
   }, [navigate]);
 
-  async function handleRepoOpenChange(repo: RepoIdentity, open: boolean) {
-    const lookupKey = repoIdentityKey(repo);
-    setOpenRepoValues((current) => {
-      if (open) {
-        return current.includes(lookupKey) ? current : [...current, lookupKey];
-      }
-
-      return current.filter((value) => value !== lookupKey);
-    });
-  }
-
   function handleSelectPr(repo: RepoIdentity, pullRequest: PullRequestSummary) {
     setActivePullRequest(repo, pullRequest);
 
@@ -503,29 +475,22 @@ function MainApp() {
     setSearchQuery("");
     setDebouncedQuery("");
     setPickerStep(pickerMode === "pr-only" ? "pull-request" : "repo");
-    if (pickerMode === "repo-then-pr") {
+    if (pickerMode !== "pr-only") {
       setPickerRepo(null);
     }
   }
 
-  function openRepoPicker() {
+  function openOverviewRepoPicker() {
     setPickerMode("repo-then-pr");
     setPickerStep("repo");
     setPickerRepo(null);
     setIsPickerOpen(true);
   }
 
-  async function openRepoPullRequestPicker(repo: RepoIdentity) {
-    const savedOrVisibleRepo = sidebarRepos.find((candidate) => sameRepoIdentity(candidate, repo));
-    if (!savedOrVisibleRepo) return;
-    const savedRepo = repos.some((candidate) => sameRepoIdentity(candidate, savedOrVisibleRepo))
-      ? savedOrVisibleRepo
-      : await trpc.repos.save.mutate({ repo: savedOrVisibleRepo });
-
-    cacheSavedRepo(savedRepo);
-    setPickerMode("pr-only");
-    setPickerStep("pull-request");
-    setPickerRepo(savedRepo);
+  function openTrackedPullRequestPicker() {
+    setPickerMode("track-repo-then-pr");
+    setPickerStep("repo");
+    setPickerRepo(null);
     setIsPickerOpen(true);
   }
 
@@ -539,21 +504,127 @@ function MainApp() {
     });
   }, [queryClient]);
 
+  const cacheTrackedRepo = useCallback((trackedRepo: RepoSummary) => {
+    queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
+      if (!current) return [trackedRepo];
+      if (current.some((item) => sameRepoIdentity(item, trackedRepo))) {
+        return current;
+      }
+      return [...current, trackedRepo];
+    });
+  }, [queryClient]);
+
+  const removeTrackedRepo = useCallback((repo: RepoIdentity) => {
+    queryClient.setQueryData<RepoSummary[]>(
+      forgeKeys.trackedRepos(),
+      (current) => (current ?? []).filter((item) => !sameRepoIdentity(item, repo)),
+    );
+  }, [queryClient]);
+
   const cacheTrackedPullRequest = useCallback(
     (repo: RepoIdentity, trackedPullRequest: PullRequestSummary) => {
-    queryClient.setQueryData<PullRequestSummary[]>(
-      forgeKeys.trackedPullRequestList(repo),
-      (current) => {
-        const list = current ?? [];
-        const withoutCurrent = list.filter((item) => item.number !== trackedPullRequest.number);
-        return [trackedPullRequest, ...withoutCurrent];
-      },
-    );
+      queryClient.setQueryData<PullRequestSummary[]>(
+        forgeKeys.trackedPullRequestList(repo),
+        (current) => {
+          const list = current ?? [];
+          const withoutCurrent = list.filter((item) => item.number !== trackedPullRequest.number);
+          return [trackedPullRequest, ...withoutCurrent];
+        },
+      );
     },
     [queryClient],
   );
 
+  const getTrackedPullRequestOrder = useCallback(async () => {
+    const cachedOrder = queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(
+      forgeKeys.trackedPullRequestOrder(),
+    );
+    if (cachedOrder !== undefined) {
+      return cachedOrder;
+    }
+
+    const loadedOrder = await trpc.tracked.getOrder.query();
+    queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), loadedOrder);
+    return loadedOrder;
+  }, [queryClient]);
+
+  const persistTrackedPullRequestOrder = useCallback(
+    async (nextOrder: TrackedPullRequestOrderEntry[]) => {
+      const previousOrder =
+        queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(forgeKeys.trackedPullRequestOrder()) ??
+        [];
+
+      queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), nextOrder);
+
+      try {
+        const persisted = await setTrackedPullRequestOrder(nextOrder);
+        queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), persisted);
+        return persisted;
+      } catch (error) {
+        queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), previousOrder);
+        throw error;
+      }
+    },
+    [queryClient],
+  );
+
+  const moveTrackedPullRequestToTop = useCallback(
+    async (repo: RepoIdentity, pullRequest: PullRequestSummary) => {
+      const currentOrder = await getTrackedPullRequestOrder();
+      const nextOrder = prependTrackedPullRequestOrderEntry(
+        currentOrder,
+        toTrackedPullRequestOrderEntry({ repo, pullRequest }),
+      );
+
+      await persistTrackedPullRequestOrder(nextOrder);
+    },
+    [getTrackedPullRequestOrder, persistTrackedPullRequestOrder],
+  );
+
+  const removeTrackedPullRequestFromOrder = useCallback(
+    async (repo: RepoIdentity, pullRequest: PullRequestSummary) => {
+      const currentOrder = await getTrackedPullRequestOrder();
+      const nextOrder = removeTrackedPullRequestOrderEntry(
+        currentOrder,
+        toTrackedPullRequestOrderEntry({ repo, pullRequest }),
+      );
+
+      await persistTrackedPullRequestOrder(nextOrder);
+    },
+    [getTrackedPullRequestOrder, persistTrackedPullRequestOrder],
+  );
+
+  const handleReorderTrackedPullRequests = useCallback(
+    async (reorderedVisibleEntries: OverviewPullRequestSummary[]) => {
+      const currentOrder = await getTrackedPullRequestOrder();
+      const nextOrder = mergeTrackedVisibleSubsetIntoOrder({
+        currentOrder,
+        visibleEntries: trackedPullRequestEntries,
+        reorderedVisibleEntries,
+      });
+
+      await persistTrackedPullRequestOrder(nextOrder);
+    },
+    [getTrackedPullRequestOrder, persistTrackedPullRequestOrder, trackedPullRequestEntries],
+  );
+
   async function handlePickRepo(repo: RepoSummary) {
+    const parsedUrl = parseForgeResourceUrl(searchQuery.trim(), repo.provider);
+    const shouldKeepSearchQuery =
+      parsedUrl &&
+      parsedUrl.host === normalizeHostInput(repo.host) &&
+      parsedUrl.repoPath === repo.repoKey;
+
+    if (pickerMode === "track-repo-then-pr") {
+      if (!shouldKeepSearchQuery) {
+        setSearchQuery("");
+        setDebouncedQuery("");
+      }
+      setPickerRepo(repo);
+      setPickerStep("pull-request");
+      return;
+    }
+
     setIsSavingRepo(true);
     try {
       const savedRepo = await trpc.repos.save.mutate({ repo });
@@ -561,32 +632,56 @@ function MainApp() {
 
       setPickerRepo(savedRepo);
       setPickerStep("pull-request");
-      const lookupKey = repoIdentityKey(savedRepo);
-      setOpenRepoValues((current) =>
-        current.includes(lookupKey) ? current : [...current, lookupKey],
-      );
+      if (!shouldKeepSearchQuery) {
+        setSearchQuery("");
+        setDebouncedQuery("");
+      }
     } finally {
       setIsSavingRepo(false);
     }
   }
 
-  async function handleTrackPullRequest(pullRequest: PullRequestSummary) {
-    if (!pickerRepoIdentity) return;
-
+  async function trackPullRequestForRepo(repo: RepoSummary, pullRequest: PullRequestSummary) {
+    const repoInput = repoIdentity(repo);
     setIsTrackingPullRequest(true);
     try {
       const trackedPullRequest = await trpc.tracked.track.mutate({
-        ...pickerRepoIdentity,
+        ...repoInput,
         pullRequest,
       });
-      cacheTrackedPullRequest(pickerRepoIdentity, trackedPullRequest);
+      cacheTrackedRepo(repo);
+      cacheTrackedPullRequest(repoInput, trackedPullRequest);
+      await moveTrackedPullRequestToTop(repoInput, trackedPullRequest);
 
-      setActivePullRequest(pickerRepoIdentity, trackedPullRequest);
+      setActivePullRequest(repoInput, trackedPullRequest);
       setIsPickerOpen(false);
       resetPickerState();
     } finally {
       setIsTrackingPullRequest(false);
     }
+  }
+
+  async function handleTrackPullRequest(pullRequest: PullRequestSummary) {
+    if (!pickerRepo) return;
+
+    await trackPullRequestForRepo(pickerRepo, pullRequest);
+  }
+
+  async function handlePickDirectLinkPullRequest(repo: RepoSummary, pullRequest: PullRequestSummary) {
+    if (pickerMode === "track-repo-then-pr") {
+      await trackPullRequestForRepo(repo, pullRequest);
+      return;
+    }
+
+    const savedRepo =
+      savedRepos.find((candidate) => sameRepoIdentity(candidate, repo)) ??
+      (await trpc.repos.save.mutate({ repo }));
+    if (!savedRepos.some((candidate) => sameRepoIdentity(candidate, savedRepo))) {
+      cacheSavedRepo(savedRepo);
+    }
+
+    setPickerRepo(savedRepo);
+    setPickerStep("pull-request");
   }
 
   useEffect(() => {
@@ -596,13 +691,15 @@ function MainApp() {
         throw new Error("Deep link is missing a target URL.");
       }
 
-      const parsed = parseForgePullRequestUrl(targetUrl);
-      if (!parsed) {
+      const parsed = parseForgeResourceUrl(targetUrl);
+      if (!parsed || parsed.number === null) {
         throw new Error("Only GitHub pull request and GitLab merge request URLs are supported.");
       }
 
       const matchingAccounts = readyProviderAccounts.filter(
-        (account) => account.provider === parsed.provider && account.host === parsed.host,
+        (account) =>
+          account.provider === parsed.provider &&
+          normalizeHostInput(account.host) === parsed.host,
       );
       const account =
         matchingAccounts.find((candidate) => enabledAccountIdSet.has(candidate.id)) ??
@@ -630,13 +727,11 @@ function MainApp() {
         ...repoIdentity(savedRepo),
         pullRequest,
       });
+      cacheTrackedRepo(savedRepo);
       cacheTrackedPullRequest(savedRepo, trackedPullRequest);
+      await moveTrackedPullRequestToTop(savedRepo, trackedPullRequest);
 
       setActivePullRequest(savedRepo, trackedPullRequest);
-      const lookupKey = repoIdentityKey(savedRepo);
-      setOpenRepoValues((current) =>
-        current.includes(lookupKey) ? current : [...current, lookupKey],
-      );
       setIsPickerOpen(false);
       setPickerRepo(null);
       setPickerStep("repo");
@@ -657,8 +752,10 @@ function MainApp() {
     return () => subscription.unsubscribe();
   }, [
     cacheSavedRepo,
+    cacheTrackedRepo,
     cacheTrackedPullRequest,
     enabledAccountIdSet,
+    moveTrackedPullRequestToTop,
     readyProviderAccounts,
     setActivePullRequest,
   ]);
@@ -671,10 +768,17 @@ function MainApp() {
       ...repo,
       number: pullRequest.number,
     });
+    const nextTrackedPullRequests = (
+      queryClient.getQueryData<PullRequestSummary[]>(forgeKeys.trackedPullRequestList(repo)) ?? []
+    ).filter((item) => item.number !== pullRequest.number);
     queryClient.setQueryData<PullRequestSummary[]>(
       forgeKeys.trackedPullRequestList(repo),
-      (current) => (current ?? []).filter((item) => item.number !== pullRequest.number),
+      nextTrackedPullRequests,
     );
+    if (nextTrackedPullRequests.length === 0) {
+      removeTrackedRepo(repo);
+    }
+    await removeTrackedPullRequestFromOrder(repo, pullRequest);
 
     if (
       activeRepoIdentity &&
@@ -692,7 +796,7 @@ function MainApp() {
     const repo =
       sidebarRepos.find((candidate) => sameRepoIdentity(candidate, repoIdentityInput)) ??
       overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))?.repo;
-    if (repo && !repos.some((candidate) => sameRepoIdentity(candidate, repo))) {
+    if (repo && !savedRepos.some((candidate) => sameRepoIdentity(candidate, repo))) {
       const savedRepo = await trpc.repos.save.mutate({ repo });
       cacheSavedRepo(savedRepo);
     }
@@ -701,7 +805,11 @@ function MainApp() {
       ...repoIdentityInput,
       pullRequest,
     });
+    if (repo) {
+      cacheTrackedRepo(repo);
+    }
     cacheTrackedPullRequest(repoIdentityInput, trackedPullRequest);
+    await moveTrackedPullRequestToTop(repoIdentityInput, trackedPullRequest);
   }
 
   return (
@@ -710,30 +818,29 @@ function MainApp() {
         <div className="min-h-0 w-1/4 min-w-[300px] shrink-0">
           <RepoSidebar
             repos={sidebarRepos}
-            prsByRepo={sidebarPrsByRepo}
-            repoErrors={sidebarErrors}
+            repoErrors={sidebarView === "tracked" ? trackedRepoErrors : {}}
             overviewPullRequests={overviewPullRequests}
+            trackedPullRequests={trackedPullRequestEntries}
             overviewErrors={overviewErrors}
             isOverviewLoading={isOverviewLoading}
             overviewStatusMessage={overviewStatusMessage}
-            openValues={openRepoValues}
             view={sidebarView}
             selectedPrKey={selectedPrKey}
+            trackedRepoCount={trackedSidebarRepos.length}
             trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
             emptyState={
               <div className="px-3 py-8 text-center text-sm text-ink-500">
                 No repos visible for the selected accounts.
               </div>
             }
-            onAddRepo={openRepoPicker}
-            onAddPr={(repo) => void openRepoPullRequestPicker(repo)}
+            onAddAction={sidebarView === "tracked" ? openTrackedPullRequestPicker : openOverviewRepoPicker}
             onViewChange={setSidebarView}
             onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
             onTrackPr={(repo, pullRequest) => void handleTrackFromOverview(repo, pullRequest)}
             onRemovePr={(repo, pullRequest) =>
               void handleRemoveTrackedPullRequest(repo, pullRequest)
             }
-            onRepoOpenChange={(repo, open) => void handleRepoOpenChange(repo, open)}
+            onReorderTrackedPullRequests={(entries) => void handleReorderTrackedPullRequests(entries)}
           />
         </div>
         <div className="min-h-0 min-w-[30%] flex-1">
@@ -789,9 +896,15 @@ function MainApp() {
         isLoadingRepos={isLoadingRepos}
         availableReposError={availableReposError}
         hasRepoSources={pickerAccounts.length > 0}
-        filteredRepos={filteredRepos}
+        repos={pickerRepos}
+        directLinkPullRequestOption={pickerDirectLinkPullRequestOption}
+        directLinkPullRequestError={pickerDirectLinkPullRequestError}
+        isLoadingDirectLinkPullRequest={pickerDirectLinkPullRequestQuery.isLoading}
         isSavingRepo={isSavingRepo}
         onPickRepo={(repo) => void handlePickRepo(repo)}
+        onPickDirectLinkPullRequest={(repo, pullRequest) =>
+          void handlePickDirectLinkPullRequest(repo, pullRequest)
+        }
         pullRequests={addablePullRequests}
         isLoadingPullRequests={
           isPickerOpen &&

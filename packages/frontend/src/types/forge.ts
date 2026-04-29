@@ -34,6 +34,7 @@ import type {
   SelectedPullRequest,
   ThemePreference,
   ThemePreferenceSettings,
+  TrackedPullRequestOrderEntry,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
 } from "@code-review-app/shared";
@@ -80,6 +81,7 @@ export type {
   SelectedPullRequest,
   ThemePreference,
   ThemePreferenceSettings,
+  TrackedPullRequestOrderEntry,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
 };

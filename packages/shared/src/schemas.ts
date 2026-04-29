@@ -114,6 +114,8 @@ const pullRequestInputSchema = repoIdentitySchema.extend({
   number: z.number().int().nonnegative(),
 });
 
+const trackedPullRequestOrderEntrySchema = pullRequestInputSchema;
+
 const pullRequestVersionedInputSchema = pullRequestInputSchema.extend({
   headSha: z.string().min(1),
 });
@@ -229,5 +231,6 @@ export {
   repoSummarySchema,
   themePreferenceSchema,
   themePreferenceSettingsSchema,
+  trackedPullRequestOrderEntrySchema,
   updatePullRequestReviewCommentInputSchema,
 };

@@ -29,6 +29,7 @@ import {
   themePreferenceSettingsSchema,
   reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
+  trackedPullRequestOrderEntrySchema,
 } from "@code-review-app/shared";
 import { z } from "zod";
 import { completeOAuth, pollDeviceOAuth, startOAuth } from "./auth/oauth.ts";
@@ -417,6 +418,22 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     }),
 
     tracked: t.router({
+      getOrder: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* TrackedPullRequestService;
+            return yield* service.getOrder();
+          }),
+        ),
+      ),
+      listRepos: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* TrackedPullRequestService;
+            return yield* service.listRepos();
+          }),
+        ),
+      ),
       list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -443,6 +460,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
+      setOrder: t.procedure
+        .input(z.array(trackedPullRequestOrderEntrySchema))
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* TrackedPullRequestService;
+              return yield* service.setOrder(input);
+            }),
+          ),
+        ),
       refresh: t.procedure.input(repoIdentitySchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {

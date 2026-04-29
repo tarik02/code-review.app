@@ -135,6 +135,7 @@ function useRepoPickerRepos(
   debouncedQuery: string,
   accountId: string,
   provider: ForgeProviderKind,
+  host: string,
   enabled = true,
 ) {
   const queryClient = useQueryClient();
@@ -150,7 +151,7 @@ function useRepoPickerRepos(
     error: searchError,
     isPending: isSearchLoading,
   } = useQuery({
-    ...searchReposQueryOptions(debouncedQuery, accountId, provider),
+    ...searchReposQueryOptions(debouncedQuery, accountId, provider, host),
     enabled: enabled && trimmedQuery.length > 0,
   });
 
@@ -196,7 +197,7 @@ function useRepoPickerReposForAccounts(
   });
   const searchRepoQueries = useQueries({
     queries: activeAccounts.map((account) => ({
-      ...searchReposQueryOptions(debouncedQuery, account.id, account.provider),
+      ...searchReposQueryOptions(debouncedQuery, account.id, account.provider, account.host),
       enabled: shouldQuery && isSearching,
     })),
   });

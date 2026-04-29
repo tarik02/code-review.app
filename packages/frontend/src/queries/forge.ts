@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { trpc } from "../lib/trpc";
+import { normalizeHostInput, parseForgeResourceUrl } from "../lib/forge-links";
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -16,6 +17,7 @@ import type {
   RepoIdentity,
   SelectedPullRequest,
   ThemePreferenceSettings,
+  TrackedPullRequestOrderEntry,
   UpdatePullRequestReviewCommentInput,
 } from "../types/forge";
 
@@ -49,6 +51,8 @@ const forgeKeys = {
   pullRequestCachedList: (repo: RepoIdentity) =>
     [...forgeKeys.pullRequests(), "list", repo.providerId, repo.repoKey, "cached"] as const,
   trackedPullRequests: () => [...forgeKeys.pullRequests(), "tracked"] as const,
+  trackedRepos: () => [...forgeKeys.trackedPullRequests(), "repos"] as const,
+  trackedPullRequestOrder: () => [...forgeKeys.trackedPullRequests(), "order"] as const,
   trackedPullRequestList: (repo: RepoIdentity) =>
     [...forgeKeys.trackedPullRequests(), "list", repo.providerId, repo.repoKey] as const,
   pullRequestPatch: (pr: SelectedPullRequest) =>
@@ -247,11 +251,26 @@ function initialReposQueryOptions(accountId: string) {
   });
 }
 
-function searchReposQueryOptions(query: string, accountId: string, provider: string) {
+function searchReposQueryOptions(query: string, accountId: string, provider: string, host: string) {
   return queryOptions({
     queryKey: forgeKeys.searchRepos(accountId, query),
     queryFn: async () => {
       const trimmedQuery = query.trim();
+      const parsedUrl = parseForgeResourceUrl(trimmedQuery, provider === "gitlab" ? "gitlab" : "github");
+      const normalizedHost = normalizeHostInput(host);
+
+      if (parsedUrl?.number !== null) {
+        return [];
+      }
+
+      if (parsedUrl && parsedUrl.host === normalizedHost) {
+        const repo = await trpc.repos.validate.query({
+          accountId,
+          repo: parsedUrl.repoPath,
+        });
+        return [repo];
+      }
+
       if (provider === "gitlab" && trimmedQuery.includes("/")) {
         const repo = await trpc.repos.validate.query({
           accountId,
@@ -300,6 +319,26 @@ function trackedPullRequestListQueryOptions(repo: RepoIdentity) {
     queryFn: () => trpc.tracked.list.query(repo),
     staleTime: Infinity,
   });
+}
+
+function trackedReposQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.trackedRepos(),
+    queryFn: () => trpc.tracked.listRepos.query(),
+    staleTime: Infinity,
+  });
+}
+
+function trackedPullRequestOrderQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.trackedPullRequestOrder(),
+    queryFn: (): Promise<TrackedPullRequestOrderEntry[]> => trpc.tracked.getOrder.query(),
+    staleTime: Infinity,
+  });
+}
+
+async function setTrackedPullRequestOrder(order: TrackedPullRequestOrderEntry[]) {
+  return trpc.tracked.setOrder.mutate(order);
 }
 
 function pullRequestPatchQueryOptions(pr: SelectedPullRequest) {
@@ -430,6 +469,7 @@ export {
   pullRequestQualityReportQueryOptions,
   pullRequestReviewThreadsQueryOptions,
   trackedPullRequestListQueryOptions,
+  trackedReposQueryOptions,
   replyToPullRequestReviewComment,
   reviewEditorSettingsQueryOptions,
   savedReposQueryOptions,
@@ -437,10 +477,12 @@ export {
   setAccountVisibility,
   setAppearanceBackground,
   setDiffDataMode,
+  setTrackedPullRequestOrder,
   setThemePreference,
   setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
   themePreferenceQueryOptions,
+  trackedPullRequestOrderQueryOptions,
   updatePullRequestReviewComment,
   viewerLoginQueryOptions,
 };

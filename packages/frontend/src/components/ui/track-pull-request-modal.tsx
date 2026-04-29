@@ -1,7 +1,9 @@
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "@heroicons/react/20/solid";
-import { AlertDialog, AlertDialogContent } from "./alert-dialog";
-import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
+import { Dialog, DialogContent } from "./dialog";
+import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from "../../lib/forge-owner";
+import { normalizeHostInput, parseForgeResourceUrl } from "../../lib/forge-links";
 import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
@@ -18,7 +20,7 @@ import LucideGitMerge from "../../assets/icons/LucideGitMerge";
 import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestArrow";
 import { repoIdentityKey } from "../../lib/repo-identity";
 
-type TrackPullRequestModalMode = "repo-then-pr" | "pr-only";
+type TrackPullRequestModalMode = "repo-then-pr" | "pr-only" | "track-repo-then-pr";
 type TrackPullRequestModalStep = "repo" | "pull-request";
 
 type TrackPullRequestModalProps = {
@@ -32,9 +34,13 @@ type TrackPullRequestModalProps = {
   isLoadingRepos: boolean;
   availableReposError: unknown;
   hasRepoSources: boolean;
-  filteredRepos: RepoSummary[];
+  repos: RepoSummary[];
+  directLinkPullRequestOption: { repo: RepoSummary; pullRequest: PullRequestSummary } | null;
+  directLinkPullRequestError: string;
+  isLoadingDirectLinkPullRequest: boolean;
   isSavingRepo: boolean;
   onPickRepo: (repo: RepoSummary) => void;
+  onPickDirectLinkPullRequest: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
   pullRequests: PullRequestSummary[];
   isLoadingPullRequests: boolean;
   pullRequestsError: string;
@@ -44,122 +50,153 @@ type TrackPullRequestModalProps = {
 };
 
 type RepoSelectionStepProps = {
-  searchQuery: string;
-  onSearchChange: (value: string) => void;
   isLoadingRepos: boolean;
   availableReposError: unknown;
   hasRepoSources: boolean;
-  filteredRepos: RepoSummary[];
+  repos: RepoSummary[];
+  directLinkPullRequestOption: { repo: RepoSummary; pullRequest: PullRequestSummary } | null;
+  directLinkPullRequestError: string;
+  isLoadingDirectLinkPullRequest: boolean;
   isSavingRepo: boolean;
   onPickRepo: (repo: RepoSummary) => void;
+  onPickDirectLinkPullRequest: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
 };
 
 function getRepoProviderLabel(repo: RepoSummary) {
   return `${repo.provider === "github" ? "GitHub" : "GitLab"} · ${repo.providerAccountLabel}`;
 }
 
+function RepoAvatar({ repo }: { repo: RepoSummary }) {
+  const avatarUrl = repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner, repo.provider, repo.host);
+  if (!avatarUrl) {
+    return (
+      <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
+        {getOwnerInitials(repo.nameWithOwner)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      alt={`${getOwnerLogin(repo.nameWithOwner)} avatar`}
+      className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
+      loading="lazy"
+      src={avatarUrl}
+    />
+  );
+}
+
 function RepoSelectionStep({
-  searchQuery,
-  onSearchChange,
   isLoadingRepos,
   availableReposError,
   hasRepoSources,
-  filteredRepos,
+  repos,
+  directLinkPullRequestOption,
+  directLinkPullRequestError,
+  isLoadingDirectLinkPullRequest,
   isSavingRepo,
   onPickRepo,
+  onPickDirectLinkPullRequest,
 }: RepoSelectionStepProps) {
+  const showDirectLinkOption =
+    directLinkPullRequestOption !== null ||
+    isLoadingDirectLinkPullRequest ||
+    Boolean(directLinkPullRequestError);
+
   return (
-    <>
-      {/*<AlertDialogHeader>
-        <AlertDialogTitle>Add a repo</AlertDialogTitle>
-        <AlertDialogDescription>
-          Pick a repo first, then choose one PR to track.
-        </AlertDialogDescription>
-      </AlertDialogHeader>*/}
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
+      <p className="px-4 font-sans text-xs text-neutral-500">
+        {showDirectLinkOption ? "Pull requests" : "Repositories"}
+      </p>
 
-      <div className="mb-4 flex min-h-0 flex-col gap-2.5">
-        <input
-          autoFocus
-          className="w-full border-b border-neutral-200 dark:border-neutral-700 bg-surface px-4 py-3 outline-hidden transition placeholder:text-neutral-400"
-          disabled={isLoadingRepos || isSavingRepo}
-          onChange={(event) => onSearchChange(event.currentTarget.value)}
-          placeholder="Search repositories or paste a GitLab project path"
-          value={searchQuery}
-        />
+      {showDirectLinkOption && isLoadingDirectLinkPullRequest ? (
+        <div className="px-4 py-3 text-sm text-ink-500">Loading pull request...</div>
+      ) : null}
 
-        <p className="font-sans text-xs text-neutral-500 px-4">Repositories</p>
+      {!showDirectLinkOption && isLoadingRepos ? (
+        <div className="px-4 py-3 text-sm text-ink-500">Loading repositories...</div>
+      ) : null}
 
-        {isLoadingRepos ? (
-          <div className="px-4 py-3 text-sm text-ink-500">Loading repositories...</div>
-        ) : null}
+      {showDirectLinkOption && directLinkPullRequestError ? (
+        <div className="px-4 py-3 text-sm text-danger-600">{directLinkPullRequestError}</div>
+      ) : null}
 
-        {availableReposError ? (
-          <div className="text-sm text-danger-600 px-4 py-3">
-            {availableReposError instanceof Error
-              ? availableReposError.message
-              : String(availableReposError)}
-          </div>
-        ) : null}
+      {!showDirectLinkOption && availableReposError ? (
+        <div className="px-4 py-3 text-sm text-danger-600">
+          {availableReposError instanceof Error
+            ? availableReposError.message
+            : String(availableReposError)}
+        </div>
+      ) : null}
 
-        {!isLoadingRepos && !availableReposError ? (
-          <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
-            {filteredRepos.length === 0 ? (
-              <div className="px-0 py-2 text-sm text-ink-500">
-                {hasRepoSources ? (
-                  "No repos to add."
-                ) : (
-                  <>
-                    No enabled accounts.{" "}
-                    <Link
-                      className="font-medium text-ink-700 underline-offset-2 hover:underline"
-                      to="/settings/profiles"
-                    >
-                      Open settings
-                    </Link>
-                    .
-                  </>
-                )}
-              </div>
-            ) : (
-              filteredRepos.map((repo) => (
-                <button
-                  className="w-full rounded-lg  bg-surface py-2.5 px-2 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
-                  disabled={isSavingRepo}
-                  key={repoIdentityKey(repo)}
-                  onClick={() => onPickRepo(repo)}
-                  type="button"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <img
-                      alt={`${getOwnerLogin(repo.nameWithOwner)} avatar`}
-                      className="mt-0.5 size-7 shrink-0 rounded-full object-cover"
-                      loading="lazy"
-                      src={repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner)}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="truncate">{repo.nameWithOwner}</span>
+      {showDirectLinkOption && directLinkPullRequestOption ? (
+        <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
+          <PullRequestOptionButton
+            pullRequest={directLinkPullRequestOption.pullRequest}
+            repo={directLinkPullRequestOption.repo}
+            onPick={() =>
+              onPickDirectLinkPullRequest(
+                directLinkPullRequestOption.repo,
+                directLinkPullRequestOption.pullRequest,
+              )
+            }
+          />
+        </div>
+      ) : null}
+
+      {!showDirectLinkOption && !isLoadingRepos && !availableReposError ? (
+        <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
+          {repos.length === 0 ? (
+            <div className="px-0 py-2 text-sm text-ink-500">
+              {hasRepoSources ? (
+                "No repositories found."
+              ) : (
+                <>
+                  No enabled accounts.{" "}
+                  <Link
+                    className="font-medium text-ink-700 underline-offset-2 hover:underline"
+                    to="/settings/profiles"
+                  >
+                    Open settings
+                  </Link>
+                  .
+                </>
+              )}
+            </div>
+          ) : (
+            repos.map((repo) => (
+              <button
+                className="w-full rounded-lg bg-surface px-2 py-2.5 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
+                disabled={isSavingRepo}
+                key={repoIdentityKey(repo)}
+                onClick={() => onPickRepo(repo)}
+                type="button"
+              >
+                <div className="flex items-center gap-2.5">
+                  <RepoAvatar repo={repo} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="truncate">{repo.nameWithOwner}</span>
+                    </div>
+                    {repo.description ? (
+                      <div className="mt-1 truncate text-xs text-neutral-500">
+                        {repo.description}
                       </div>
-                      {repo.description ? (
-                        <div className="mt-1 truncate text-xs text-neutral-500">
-                          {repo.description}
-                        </div>
-                      ) : null}
-                      <div className="mt-1 truncate text-[11px] text-neutral-500">
-                        {getRepoProviderLabel(repo)}
-                        {repo.host === "github.com" || repo.host === "gitlab.com"
-                          ? ""
-                          : ` · ${repo.host}`}
-                      </div>
+                    ) : null}
+                    <div className="mt-1 truncate text-[11px] text-neutral-500">
+                      {getRepoProviderLabel(repo)}
+                      {repo.host === "github.com" || repo.host === "gitlab.com"
+                        ? ""
+                        : ` · ${repo.host}`}
                     </div>
                   </div>
-                </button>
-              ))
-            )}
-          </div>
-        ) : null}
-      </div>
-    </>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -172,6 +209,7 @@ type PullRequestSelectionStepProps = {
   isTrackingPullRequest: boolean;
   onPickPullRequest: (pullRequest: PullRequestSummary) => void;
   onBack: () => void;
+  searchQuery: string;
 };
 
 type PullRequestStatusViewModel = {
@@ -275,6 +313,86 @@ function formatChangeSummary(pullRequest: PullRequestSummary) {
   return <span className="text-ink-600">changes</span>;
 }
 
+function PullRequestOptionButton({
+  repo,
+  pullRequest,
+  onPick,
+}: {
+  repo: RepoSummary;
+  pullRequest: PullRequestSummary;
+  onPick: () => void;
+}) {
+  const status = getPullRequestStatus(pullRequest);
+  const title = formatPullRequestDisplayTitle(pullRequest.title);
+
+  return (
+    <button
+      className="w-full rounded-lg bg-surface px-2 py-2.5 text-left transition hover:border-zinc-400 hover:bg-canvas"
+      onClick={onPick}
+      type="button"
+    >
+      <p className="truncate text-xs text-neutral-500">
+        {repo.nameWithOwner} · {pullRequest.authorLogin}
+      </p>
+      <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="shrink-0">
+            <PullRequestStatusIcon status={status.status} />
+          </div>
+          {pullRequest.isDraft ? <DraftIndicator provider={repo.provider} /> : null}
+          <p className="min-w-0 flex-1 truncate text-sm text-ink-700">{title}</p>
+        </div>
+        <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">
+          {formatChangeSummary(pullRequest)}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function filterPullRequests(
+  pullRequests: PullRequestSummary[],
+  selectedRepo: RepoSummary | null,
+  searchQuery: string,
+) {
+  const trimmedQuery = searchQuery.trim();
+  if (!trimmedQuery) {
+    return pullRequests;
+  }
+
+  const parsedUrl = parseForgeResourceUrl(trimmedQuery, selectedRepo?.provider);
+  if (parsedUrl && selectedRepo) {
+    const isSameRepo =
+      parsedUrl.provider === selectedRepo.provider &&
+      parsedUrl.host === normalizeHostInput(selectedRepo.host) &&
+      parsedUrl.repoPath === selectedRepo.repoKey;
+
+    if (isSameRepo && parsedUrl.number !== null) {
+      return pullRequests.filter((pullRequest) => pullRequest.number === parsedUrl.number);
+    }
+
+    if (isSameRepo) {
+      return pullRequests;
+    }
+  }
+
+  const normalizedQuery = trimmedQuery.toLowerCase();
+  const normalizedNumberQuery = normalizedQuery.startsWith("#")
+    ? normalizedQuery.slice(1)
+    : normalizedQuery;
+
+  return pullRequests.filter((pullRequest) => {
+    const numberText = String(pullRequest.number);
+    return (
+      numberText === normalizedNumberQuery ||
+      `#${numberText}`.includes(normalizedQuery) ||
+      pullRequest.title.toLowerCase().includes(normalizedQuery) ||
+      pullRequest.authorLogin.toLowerCase().includes(normalizedQuery) ||
+      pullRequest.url.toLowerCase().includes(normalizedQuery)
+    );
+  });
+}
+
 function PullRequestSelectionStep({
   mode,
   selectedRepo,
@@ -284,74 +402,70 @@ function PullRequestSelectionStep({
   isTrackingPullRequest,
   onPickPullRequest,
   onBack,
+  searchQuery,
 }: PullRequestSelectionStepProps) {
   const provider = selectedRepo?.provider ?? "github";
+  const filteredPullRequests = filterPullRequests(pullRequests, selectedRepo, searchQuery);
 
   return (
-    <>
-      <div className="mb-4 flex min-h-0 flex-col gap-2.5">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
-          {mode === "repo-then-pr" ? (
-            <button
-              aria-label="Back to repo list"
-              className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvas hover:text-ink-700"
-              onClick={onBack}
-              type="button"
-            >
-              <ArrowLeftIcon className="size-4 shrink-0" />
-            </button>
-          ) : null}
-          <p className="font-sans text-xs text-neutral-500">
-            {selectedRepo ? `Pull Requests in ${selectedRepo.nameWithOwner}` : "Pull Requests"}
-          </p>
-        </div>
-
-        {isLoadingPullRequests ? (
-          <div className="text-sm text-ink-500 px-4 py-3">Loading...</div>
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
+      <div className="flex items-center gap-2 px-4 font-sans text-xs text-neutral-500">
+        {mode !== "pr-only" ? (
+          <button
+            aria-label="Back to repo list"
+            className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvas hover:text-ink-700"
+            onClick={onBack}
+            type="button"
+          >
+            <ArrowLeftIcon className="size-4 shrink-0" />
+          </button>
         ) : null}
-
-        {pullRequestsError ? (
-          <div className="text-sm text-danger-600 px-4 py-3">{pullRequestsError}</div>
-        ) : null}
-
-        {!isLoadingPullRequests && !pullRequestsError ? (
-          <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
-            {pullRequests.length === 0 ? (
-              <div className="px-0 py-2 text-sm text-ink-500">No PRs to add.</div>
-            ) : (
-              pullRequests.map((pullRequest) => {
-                const prKey = `modal-pr-${pullRequest.number}`;
-                const status = getPullRequestStatus(pullRequest);
-                const title = formatPullRequestDisplayTitle(pullRequest.title);
-                return (
-                  <button
-                    className="w-full rounded-lg bg-surface py-2.5 px-2 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
-                    disabled={isTrackingPullRequest}
-                    key={prKey}
-                    onClick={() => onPickPullRequest(pullRequest)}
-                    type="button"
-                  >
-                    <p className="text-xs text-neutral-500">{pullRequest.authorLogin}</p>
-                    <div className="flex items-center gap-3">
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <div className="shrink-0">
-                          <PullRequestStatusIcon status={status.status} />
-                        </div>
-                        {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
-                        <p className="min-w-0 flex-1 truncate text-sm text-ink-700">{title}</p>
-                      </div>
-                      <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">
-                        {formatChangeSummary(pullRequest)}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        ) : null}
+        <p>{selectedRepo ? `Pull requests in ${selectedRepo.nameWithOwner}` : "Pull requests"}</p>
       </div>
-    </>
+
+      {isLoadingPullRequests ? <div className="px-4 py-3 text-sm text-ink-500">Loading...</div> : null}
+
+      {pullRequestsError ? (
+        <div className="px-4 py-3 text-sm text-danger-600">{pullRequestsError}</div>
+      ) : null}
+
+      {!isLoadingPullRequests && !pullRequestsError ? (
+        <div className="flex max-h-[340px] flex-col gap-1 overflow-y-auto px-2">
+          {filteredPullRequests.length === 0 ? (
+            <div className="px-0 py-2 text-sm text-ink-500">No pull requests or merge requests found.</div>
+          ) : (
+            filteredPullRequests.map((pullRequest) => {
+              const prKey = `modal-pr-${pullRequest.number}`;
+              const status = getPullRequestStatus(pullRequest);
+              const title = formatPullRequestDisplayTitle(pullRequest.title);
+              return (
+                <button
+                  className="w-full rounded-lg bg-surface px-2 py-2.5 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
+                  disabled={isTrackingPullRequest}
+                  key={prKey}
+                  onClick={() => onPickPullRequest(pullRequest)}
+                  type="button"
+                >
+                  <p className="text-xs text-neutral-500">{pullRequest.authorLogin}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <div className="shrink-0">
+                        <PullRequestStatusIcon status={status.status} />
+                      </div>
+                      {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
+                      <p className="min-w-0 flex-1 truncate text-sm text-ink-700">{title}</p>
+                    </div>
+                    <p className="shrink-0 whitespace-nowrap text-xs font-mono font-semibold">
+                      {formatChangeSummary(pullRequest)}
+                    </p>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -366,9 +480,13 @@ function TrackPullRequestModal({
   isLoadingRepos,
   availableReposError,
   hasRepoSources,
-  filteredRepos,
+  repos,
+  directLinkPullRequestOption,
+  directLinkPullRequestError,
+  isLoadingDirectLinkPullRequest,
   isSavingRepo,
   onPickRepo,
+  onPickDirectLinkPullRequest,
   pullRequests,
   isLoadingPullRequests,
   pullRequestsError,
@@ -376,22 +494,50 @@ function TrackPullRequestModal({
   onPickPullRequest,
   onBack,
 }: TrackPullRequestModalProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const showRepoStep = step === "repo";
   const showPullRequestStep = step === "pull-request";
+  const inputPlaceholder = showRepoStep
+    ? "Search repositories, repo paths, or PR/MR links"
+    : selectedRepo
+      ? `Search ${selectedRepo.nameWithOwner} or paste a PR/MR link`
+      : "Search pull requests or paste a PR/MR link";
+  const isInputDisabled = isSavingRepo || isTrackingPullRequest;
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    inputRef.current?.focus();
+  }, [open, step, selectedRepo?.repoKey]);
 
   return (
-    <AlertDialog onOpenChange={onOpenChange} open={open}>
-      <AlertDialogContent className="overflow-hidden border border-neutral-400 dark:border-neutral-700">
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogContent className="overflow-hidden border border-neutral-400 dark:border-neutral-700">
+        <div className="border-b border-neutral-200 dark:border-neutral-700">
+          <input
+            className="w-full bg-surface px-4 py-3 outline-hidden transition placeholder:text-neutral-400"
+            disabled={isInputDisabled}
+            onChange={(event) => onSearchChange(event.currentTarget.value)}
+            placeholder={inputPlaceholder}
+            ref={inputRef}
+            value={searchQuery}
+          />
+        </div>
+
         {showRepoStep ? (
           <RepoSelectionStep
             availableReposError={availableReposError}
-            filteredRepos={filteredRepos}
+            repos={repos}
             hasRepoSources={hasRepoSources}
+            directLinkPullRequestOption={directLinkPullRequestOption}
+            directLinkPullRequestError={directLinkPullRequestError}
+            isLoadingDirectLinkPullRequest={isLoadingDirectLinkPullRequest}
             isLoadingRepos={isLoadingRepos}
             isSavingRepo={isSavingRepo}
             onPickRepo={onPickRepo}
-            onSearchChange={onSearchChange}
-            searchQuery={searchQuery}
+            onPickDirectLinkPullRequest={onPickDirectLinkPullRequest}
           />
         ) : null}
 
@@ -404,11 +550,12 @@ function TrackPullRequestModal({
             onPickPullRequest={onPickPullRequest}
             pullRequests={pullRequests}
             pullRequestsError={pullRequestsError}
+            searchQuery={searchQuery}
             selectedRepo={selectedRepo}
           />
         ) : null}
-      </AlertDialogContent>
-    </AlertDialog>
+      </DialogContent>
+    </Dialog>
   );
 }
 

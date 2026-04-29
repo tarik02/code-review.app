@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer } from "effect";
 import { DatabaseService, type Database, type DatabaseTransaction } from "./db/client.ts";
 import {
@@ -9,6 +9,7 @@ import {
   repos,
 } from "./db/schema.ts";
 import { CacheError } from "./errors.ts";
+import { createRepoIdentityFromParts } from "./repo-id.ts";
 import type {
   ForgeProviderKind,
   ProviderProfile,
@@ -19,7 +20,9 @@ import type {
 
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;
+  listTrackedRepos(): Effect.Effect<RepoSummary[], CacheError>;
   saveRepo(repo: RepoSummary): Effect.Effect<void, CacheError>;
+  ensureRepo(repo: RepoIdentity): Effect.Effect<void, CacheError>;
   readCachedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], CacheError>;
   writePullRequestsCache(
     repo: RepoIdentity,
@@ -103,6 +106,11 @@ function repoIdentityFromSummary(repo: RepoSummary) {
     providerId: repo.providerId,
     repoKey: repo.repoKey,
   };
+}
+
+function repoNameFromKey(repoKey: string) {
+  const segments = repoKey.split("/").filter(Boolean);
+  return segments.at(-1) ?? repoKey;
 }
 
 async function getProviderProfileRowId(
@@ -219,7 +227,34 @@ const makeCacheService = Effect.gen(function* () {
         })
         .from(repos)
         .leftJoin(providerProfiles, eq(providerProfiles.id, repos.providerProfileId))
+        .where(gt(repos.addedAt, 0))
         .orderBy(asc(repos.addedAt));
+
+      return rows.map((row) => rowToRepo(row.repo, row.profileAccountId, row.profileLogin));
+    }),
+  );
+
+  const listTrackedRepos: CacheServiceShape["listTrackedRepos"] = Effect.fn(
+    "CacheService.listTrackedRepos",
+  )(() =>
+    database.query(async (db) => {
+      const trackedRepoRows = db
+        .select({ repoRowId: pullRequests.repoRowId })
+        .from(pullRequests)
+        .where(eq(pullRequests.isTracked, true))
+        .groupBy(pullRequests.repoRowId)
+        .as("tracked_repo_rows");
+
+      const rows = await db
+        .select({
+          repo: repos,
+          profileAccountId: providerProfiles.accountId,
+          profileLogin: providerProfiles.login,
+        })
+        .from(repos)
+        .innerJoin(trackedRepoRows, eq(trackedRepoRows.repoRowId, repos.id))
+        .leftJoin(providerProfiles, eq(providerProfiles.id, repos.providerProfileId))
+        .orderBy(asc(repos.nameWithOwner));
 
       return rows.map((row) => rowToRepo(row.repo, row.profileAccountId, row.profileLogin));
     }),
@@ -262,6 +297,42 @@ const makeCacheService = Effect.gen(function* () {
             description: repo.description,
             isPrivate: repo.isPrivate,
             avatarUrl: repo.avatarUrl,
+            addedAt: sql<number>`case when ${repos.addedAt} = 0 then ${timestamp} else ${repos.addedAt} end`,
+            lastOpenedAt: timestamp,
+          },
+        });
+    }),
+  );
+
+  const ensureRepo: CacheServiceShape["ensureRepo"] = Effect.fn("CacheService.ensureRepo")((repo) =>
+    database.transaction(async (tx) => {
+      const timestamp = nowUnixTimestamp();
+      const identity = createRepoIdentityFromParts(repo.providerId, repo.repoKey);
+      const providerProfileId = await getProviderProfileRowId(tx, identity.accountId, timestamp);
+
+      await tx
+        .insert(repos)
+        .values({
+          providerId: identity.providerId,
+          repoKey: identity.repoKey,
+          provider: identity.provider,
+          host: identity.host,
+          providerProfileId,
+          name: repoNameFromKey(identity.repoKey),
+          nameWithOwner: identity.repoKey,
+          description: null,
+          isPrivate: null,
+          avatarUrl: null,
+          addedAt: 0,
+          lastOpenedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [repos.providerId, repos.repoKey],
+          set: {
+            provider: identity.provider,
+            host: identity.host,
+            providerProfileId,
+            lastOpenedAt: timestamp,
           },
         });
     }),
@@ -609,7 +680,9 @@ const makeCacheService = Effect.gen(function* () {
 
   return {
     listSavedRepos,
+    listTrackedRepos,
     saveRepo,
+    ensureRepo,
     readCachedPullRequests,
     writePullRequestsCache,
     readTrackedPullRequests,
