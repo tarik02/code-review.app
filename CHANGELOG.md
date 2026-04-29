@@ -4,6 +4,12 @@
 
 ### Minor Changes
 
+- 4be9249: prepare the first tagged app release
+
+## 0.1.0
+
+### Minor Changes
+
 - 60b0760: Prepare the first tagged release.
   - switch tests to Vite+ test projects
   - make qg typecheck forwarding safe in CI
