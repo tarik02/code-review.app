@@ -410,8 +410,7 @@ function ReviewThreadCard({
             (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
           const canEdit =
-            (comment.isPending ||
-              (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
+            (comment.isPending || (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
             comment.id.length > 0 &&
             thread.id.length > 0 &&
             reviewEditorSessionKey != null &&

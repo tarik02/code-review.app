@@ -1780,8 +1780,7 @@ mutation($pullRequestId: ID!, $commitOID: GitObjectID!) {
         },
         AddPullRequestReviewDataSchema,
       );
-      const providerReviewId =
-        response.data?.addPullRequestReview?.pullRequestReview?.id ?? null;
+      const providerReviewId = response.data?.addPullRequestReview?.pullRequestReview?.id ?? null;
       if (!providerReviewId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
@@ -1919,8 +1918,7 @@ mutation($pullRequestReviewId: ID!, $pullRequestReviewThreadId: ID!, $body: Stri
         },
         AddPullRequestReviewThreadReplyDataSchema,
       );
-      const providerCommentId =
-        response.data?.addPullRequestReviewThreadReply?.comment?.id ?? null;
+      const providerCommentId = response.data?.addPullRequestReviewThreadReply?.comment?.id ?? null;
       if (!providerCommentId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(

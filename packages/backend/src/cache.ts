@@ -1062,9 +1062,7 @@ const makeCacheService = Effect.gen(function* () {
 
       if (!session) return;
 
-      await tx
-        .delete(pendingReviewComments)
-        .where(eq(pendingReviewComments.sessionId, session.id));
+      await tx.delete(pendingReviewComments).where(eq(pendingReviewComments.sessionId, session.id));
       await tx.delete(pendingReviewSessions).where(eq(pendingReviewSessions.id, session.id));
     }),
   );

@@ -1884,8 +1884,7 @@ query($fullPath: ID!, $iid: String!) {
   ) {
     return Effect.forEach(
       comments.filter((comment) => comment.providerCommentId != null),
-      (comment) =>
-        this.deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
+      (comment) => this.deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
       { discard: true },
     );
   }

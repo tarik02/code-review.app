@@ -111,10 +111,7 @@ const makeReviewCommentService = Effect.gen(function* () {
     };
   }
 
-  function pendingToReviewThread(
-    pending: PendingReviewComment,
-    viewerLogin: string,
-  ): ReviewThread {
+  function pendingToReviewThread(pending: PendingReviewComment, viewerLogin: string): ReviewThread {
     return {
       id: pendingThreadId(pending.id),
       provider: createRepoIdentityFromParts(pending.providerId, pending.repoKey).provider,
@@ -172,10 +169,7 @@ const makeReviewCommentService = Effect.gen(function* () {
     );
   }
 
-  function findPendingComment(
-    pendingComments: PendingReviewComment[],
-    pendingCommentId: number,
-  ) {
+  function findPendingComment(pendingComments: PendingReviewComment[], pendingCommentId: number) {
     return pendingComments.find((comment) => comment.id === pendingCommentId) ?? null;
   }
 

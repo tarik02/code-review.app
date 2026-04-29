@@ -344,9 +344,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           runEffect(
             Effect.gen(function* () {
               const service = yield* RepoService;
-              return yield* service.validateRepo(input.accountId, input.repo).pipe(
-                Effect.catchAll(() => Effect.succeed(null)),
-              );
+              return yield* service
+                .validateRepo(input.accountId, input.repo)
+                .pipe(Effect.catchAll(() => Effect.succeed(null)));
             }),
           ),
         ),
@@ -407,9 +407,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         runEffect(
           Effect.gen(function* () {
             const service = yield* PullRequestService;
-            return yield* service.get(input, input.number).pipe(
-              Effect.catchAll(() => Effect.succeed(null)),
-            );
+            return yield* service
+              .get(input, input.number)
+              .pipe(Effect.catchAll(() => Effect.succeed(null)));
           }),
         ),
       ),

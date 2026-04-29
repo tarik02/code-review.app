@@ -145,32 +145,52 @@ type ForgeProvider = {
     repo: RepoIdentity,
     number: number,
     headSha: string,
-  ): Effect.Effect<PendingReviewSessionResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    PendingReviewSessionResult,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   createPendingReviewThread(
     repo: RepoIdentity,
     number: number,
     session: PendingReviewSession,
     input: ReviewThreadInput,
-  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    PendingReviewCommentResult,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   createPendingReviewReply(
     repo: RepoIdentity,
     number: number,
     session: PendingReviewSession,
     threadId: string,
     body: string,
-  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    PendingReviewCommentResult,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   createPendingGlobalComment(
     repo: RepoIdentity,
     number: number,
     session: PendingReviewSession,
     body: string,
-  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    PendingReviewCommentResult,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   updatePendingReviewComment(
     repo: RepoIdentity,
     number: number,
     providerCommentId: string,
     body: string,
-  ): Effect.Effect<PendingReviewCommentResult, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<
+    PendingReviewCommentResult,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   deletePendingReviewComment(
     repo: RepoIdentity,
     number: number,

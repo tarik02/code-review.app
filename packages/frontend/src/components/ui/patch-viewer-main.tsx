@@ -1004,9 +1004,7 @@ function GlobalCommentsSection({
               setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
             }
             onSecondarySubmit={
-              provider === 'gitlab'
-                ? (body) => onSubmitDraftCommentNow(editor.id, body)
-                : undefined
+              provider === 'gitlab' ? (body) => onSubmitDraftCommentNow(editor.id, body) : undefined
             }
             onSubmit={(body) => onSubmitDraftComment(editor.id, body)}
           />
@@ -1976,6 +1974,7 @@ function PatchViewerMain({
     deletePendingCommentMutation,
     discardPendingReviewMutation,
     publishPendingReviewMutation,
+    replyCommentMutation,
     updatePendingCommentMutation,
     updateCommentMutation,
     viewerLogin,
@@ -2737,9 +2736,7 @@ function PatchViewerMain({
                 ) : null}
 
                 {!isPatchLoading && !patchError && reviewThreadsError ? (
-                  <div className="px-4 pb-2 pt-1 text-sm text-danger-600">
-                    {reviewThreadsError}
-                  </div>
+                  <div className="px-4 pb-2 pt-1 text-sm text-danger-600">{reviewThreadsError}</div>
                 ) : null}
 
                 {!isPatchLoading && !patchError && selectedPatch ? (

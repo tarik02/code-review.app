@@ -77,7 +77,10 @@ function filterAccountsForRepoSearch(accounts: ProviderAccount[], query: string)
   const trimmedQuery = query.trim();
   const parsedUrl = parseForgeResourceUrl(trimmedQuery);
   if (!parsedUrl) {
-    const pathSegments = trimmedQuery.replace(/\.git$/, '').split('/').filter(Boolean);
+    const pathSegments = trimmedQuery
+      .replace(/\.git$/, '')
+      .split('/')
+      .filter(Boolean);
     const repoOwner = pathSegments.length >= 2 ? pathSegments[0]?.toLowerCase() : '';
     if (!repoOwner) {
       return accounts;
@@ -130,7 +133,10 @@ function repoNameFromPath(repoPath: string) {
 }
 
 function createSearchRepoFallback(account: ProviderAccount, repoPath: string, host: string) {
-  const normalizedRepoPath = repoPath.trim().replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
+  const normalizedRepoPath = repoPath
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\.git$/, '');
   return {
     providerId: createProviderId(account, host),
     repoKey: normalizedRepoPath,
@@ -730,11 +736,10 @@ function useSelectedPullRequestData(
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
   const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
-  const pendingReview =
-    (pendingReviewQuery.data as PendingReviewState | undefined) ?? {
-      session: null,
-      comments: [],
-    };
+  const pendingReview = (pendingReviewQuery.data as PendingReviewState | undefined) ?? {
+    session: null,
+    comments: [],
+  };
   const qualityReport = (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
   const approvalState = (approvalStateQuery.data as PullRequestApprovalState | undefined) ?? null;
 
