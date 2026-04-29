@@ -13,9 +13,5 @@
     "@code-review-app/backend",
     "@code-review-app/shared",
     "@code-review-app/scripts"
-  ],
-  "privatePackages": {
-    "version": true,
-    "tag": false
-  }
+  ]
 }

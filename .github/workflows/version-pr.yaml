@@ -17,6 +17,16 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - uses: actions/create-github-app-token@v3.1.1
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: setup mise
         uses: jdx/mise-action@v4.0.1
@@ -24,12 +34,14 @@ jobs:
       - name: install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: create version pr
+      - name: create version pr or publish release tag
         uses: changesets/action@v1.7.0
         with:
           version: pnpm run version:release
+          publish: bash .github/scripts/changesets-publish.sh
           commit: version packages
           title: version packages
+          commitMode: github-api
           createGithubReleases: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

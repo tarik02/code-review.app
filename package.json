@@ -1,8 +1,10 @@
 {
   "name": "code-review.app",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.0",
   "type": "module",
+  "publishConfig": {
+    "registry": "https://registry.invalid"
+  },
   "scripts": {
     "changeset": "changeset",
     "dev": "pnpm --filter @code-review-app/electron dev",

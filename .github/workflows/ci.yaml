@@ -68,7 +68,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
-          ROOT_VERSION="$(node -p "require('./package.json').version")"
+          ROOT_VERSION="$(jq -r '.version' package.json)"
           OUTPUT_DIR="$GITHUB_WORKSPACE/release/${{ matrix.platform }}-${{ matrix.arch }}"
 
           rm -rf "$OUTPUT_DIR"
@@ -106,7 +106,7 @@ jobs:
 
       - name: validate tag version
         run: |
-          ROOT_VERSION="$(node -p "require('./package.json').version")"
+          ROOT_VERSION="$(jq -r '.version' package.json)"
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           if [ "$ROOT_VERSION" != "$TAG_VERSION" ]; then
             echo "Tag $GITHUB_REF_NAME does not match root version $ROOT_VERSION"
