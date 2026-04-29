@@ -6,6 +6,7 @@ import type { AuthTokenStore } from "../auth/token-store.ts";
 import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
+  PullRequestQualityReport,
   ProviderAuthStatus,
   PrChangedFile,
   RepoSummary,
@@ -27,6 +28,12 @@ type ReviewThreadInput = {
 type PullRequestRefs = {
   baseSha: string | null;
   headSha: string | null;
+};
+
+type PullRequestQualityReportInput = {
+  repo: RepoIdentity;
+  number: number;
+  headSha: string;
 };
 
 type GitRemoteAuth = {
@@ -85,6 +92,13 @@ type ForgeProvider = {
     path: string,
     ref: string,
   ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  getPullRequestQualityReport(
+    input: PullRequestQualityReportInput,
+  ): Effect.Effect<
+    PullRequestQualityReport,
+    ProviderError,
+    AuthTokenStore | HttpClient.HttpClient
+  >;
   gitRemote(
     repo: RepoIdentity,
   ): Effect.Effect<GitRemoteSpec, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
@@ -117,6 +131,7 @@ export type {
   ForgeProvider,
   GitRemoteAuth,
   GitRemoteSpec,
+  PullRequestQualityReportInput,
   PullRequestRefs,
   ReviewThreadInput,
 };

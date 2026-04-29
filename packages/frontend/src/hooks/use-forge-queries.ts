@@ -33,6 +33,7 @@ import type {
   OverviewPullRequestSummary,
   PrPatch,
   ProviderAccount,
+  PullRequestQualityReport,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoIdentity,
@@ -568,10 +569,33 @@ function useSelectedPullRequestData(
     enabled: selectedPr !== null,
   });
 
+  const qualityReportQuery = useQuery({
+    queryKey: selectedPr
+      ? forgeKeys.pullRequestQualityReport(selectedPr)
+      : forgeKeys.pullRequestQualityReportIdle(),
+    queryFn: () => {
+      if (!selectedPr) {
+        throw new Error("No pull request selected");
+      }
+
+      return trpc.pullRequests.getQualityReport.query({
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
+        number: selectedPr.number,
+        headSha: selectedPr.headSha,
+      });
+    },
+    enabled: selectedPr !== null,
+    staleTime: 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
   const reviewThreads =
     (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
+  const qualityReport =
+    (qualityReportQuery.data as PullRequestQualityReport | undefined) ?? null;
 
   const isPatchLoading =
     selectedPr !== null &&
@@ -585,14 +609,21 @@ function useSelectedPullRequestData(
     selectedPr !== null &&
     (reviewThreadsQuery.isPending ||
       (reviewThreadsQuery.isFetching && !reviewThreadsQuery.data));
+  const isQualityReportLoading =
+    selectedPr !== null &&
+    (qualityReportQuery.isPending ||
+      (qualityReportQuery.isFetching && !qualityReportQuery.data));
 
   return {
     changedFiles,
     changedFilesError: getErrorMessage(changedFilesQuery.error),
     isChangedFilesLoading,
     isPatchLoading,
+    isQualityReportLoading,
     isReviewThreadsLoading,
     patchError: getErrorMessage(selectedPatchQuery.error),
+    qualityReport,
+    qualityReportError: getErrorMessage(qualityReportQuery.error),
     reviewThreads,
     reviewThreadsError: getErrorMessage(reviewThreadsQuery.error),
     selectedPatch,

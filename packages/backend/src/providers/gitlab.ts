@@ -13,6 +13,8 @@ import {
 } from "../auth/provider-auth.ts";
 import type {
   OverviewPullRequestSummary,
+  PullRequestQualityFinding,
+  PullRequestQualityReport,
   ProviderAuthStatus,
   PrChangedFile,
   PullRequestSummary,
@@ -20,7 +22,12 @@ import type {
   ReviewComment,
   ReviewThread,
 } from "@code-review-app/shared";
-import type { ForgeProvider, PullRequestRefs, ReviewThreadInput } from "./types.ts";
+import type {
+  ForgeProvider,
+  PullRequestQualityReportInput,
+  PullRequestRefs,
+  ReviewThreadInput,
+} from "./types.ts";
 import type { RepoIdentity } from "../repo-id.ts";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
 
@@ -28,6 +35,7 @@ type GitLabRequestOptions = {
   method?: "GET" | "POST" | "PUT";
   accept?: string;
   form?: Array<[string, string]>;
+  body?: unknown;
 };
 
 const API_REQUEST_TIMEOUT = "30 seconds";
@@ -131,12 +139,70 @@ const GitLabErrorBodySchema = Schema.Struct({
   message: Schema.optional(Schema.String),
 });
 
+const GitLabGraphQlErrorSchema = Schema.Struct({
+  message: Schema.String,
+});
+
+const GitLabCodeQualityFindingSchema = Schema.Struct({
+  description: Schema.String,
+  fingerprint: OptionalNullableString,
+  severity: OptionalNullableString,
+  filePath: OptionalNullableString,
+  line: OptionalNullableNumber,
+  webUrl: OptionalNullableString,
+  engineName: OptionalNullableString,
+});
+
+const GitLabCodeQualitySummarySchema = Schema.Struct({
+  errored: OptionalNullableNumber,
+  resolved: OptionalNullableNumber,
+  total: OptionalNullableNumber,
+});
+
+const GitLabCodeQualityReportSchema = Schema.Struct({
+  status: OptionalNullableString,
+  newErrors: Schema.optional(
+    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
+  ),
+  resolvedErrors: Schema.optional(
+    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
+  ),
+  existingErrors: Schema.optional(
+    Schema.NullOr(Schema.Array(GitLabCodeQualityFindingSchema)),
+  ),
+  summary: Schema.optional(Schema.NullOr(GitLabCodeQualitySummarySchema)),
+});
+
+const GitLabCodeQualityComparerSchema = Schema.Struct({
+  status: OptionalNullableString,
+  report: Schema.optional(Schema.NullOr(GitLabCodeQualityReportSchema)),
+});
+
+const GitLabCodeQualityGraphqlQueryDataSchema = Schema.Struct({
+  project: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        mergeRequest: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              codequalityReportsComparer: Schema.optional(
+                Schema.NullOr(GitLabCodeQualityComparerSchema),
+              ),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
+});
+
 type GitLabProject = typeof GitLabProjectSchema.Type;
 type GitLabMergeRequest = typeof GitLabMergeRequestSchema.Type;
 type GitLabMrVersion = typeof GitLabMrVersionSchema.Type;
 type GitLabPosition = typeof GitLabPositionSchema.Type;
 type GitLabDiscussion = typeof GitLabDiscussionSchema.Type;
 type GitLabDiff = typeof GitLabDiffSchema.Type;
+type GitLabCodeQualityFinding = typeof GitLabCodeQualityFindingSchema.Type;
 
 function toChangedFile(diff: GitLabDiff): PrChangedFile {
   const oldPath = diff.old_path.trim();
@@ -249,6 +315,18 @@ function gitlabApiUrl(host: string, endpoint: string) {
   return `https://${normalizeHost(host)}/api/v4/${endpoint}`;
 }
 
+function gitlabGraphqlUrl(host: string) {
+  return `https://${normalizeHost(host)}/api/graphql`;
+}
+
+function gitlabWebUrl(host: string, path: string) {
+  return `https://${normalizeHost(host)}${path}`;
+}
+
+function mergeRequestWebUrl(repo: RepoIdentity, number: number) {
+  return gitlabWebUrl(repo.host, `/${repo.path}/-/merge_requests/${number}`);
+}
+
 function overviewMergeRequestsEndpoint(
   scope: (typeof OVERVIEW_MERGE_REQUEST_SCOPES)[number],
 ) {
@@ -278,6 +356,15 @@ function parseErrorMessage(error: ParseResult.ParseError) {
     ParseResult.TreeFormatter.formatError(error),
     (message) => new ProviderError(message),
   );
+}
+
+function graphQlResponseSchema<A, I, R>(dataSchema: Schema.Schema<A, I, R>) {
+  return Schema.Struct({
+    data: Schema.optional(Schema.NullOr(dataSchema)),
+    errors: Schema.optional(
+      Schema.NullOr(Schema.Array(GitLabGraphQlErrorSchema)),
+    ),
+  });
 }
 
 function responseErrorMessage(error: HttpClientError.ResponseError) {
@@ -383,18 +470,31 @@ function requestFor(url: string, token: string, options: GitLabRequestOptions = 
     HttpClientRequest.setHeader("User-Agent", "code-review.app"),
   );
 
-  return options.form
-    ? authorizedRequest.pipe(HttpClientRequest.bodyUrlParams(options.form))
-    : authorizedRequest;
+  if (options.form) {
+    return authorizedRequest.pipe(HttpClientRequest.bodyUrlParams(options.form));
+  }
+
+  if (options.body !== undefined) {
+    return authorizedRequest.pipe(
+      HttpClientRequest.setHeader("Content-Type", "application/json"),
+      HttpClientRequest.bodyJson(options.body),
+      Effect.mapError(toProviderError),
+      Effect.runSync,
+    );
+  }
+
+  return authorizedRequest;
 }
 
-function gitlabResponse(
+function gitlabExecute(
   accountId: string,
-  host: string,
-  endpoint: string,
+  url: string,
   options?: GitLabRequestOptions,
+  logContext?: {
+    host: string;
+    endpoint: string;
+  },
 ) {
-  const url = gitlabApiUrl(host, endpoint);
   const method = options?.method ?? "GET";
   return Effect.gen(function* () {
     const token = yield* validAccessToken(accountId);
@@ -411,23 +511,37 @@ function gitlabResponse(
       Effect.flatMap(mapHttpError(error), (providerError) =>
         Effect.gen(function* () {
           yield* Effect.sync(() => {
-            console.error("[gitlab] request failed", {
-              accountId,
-              host,
-              endpoint,
-              method,
-              url,
-              accept: options?.accept ?? "application/json",
-              formData: summarizeGitLabFormData(options?.form),
-              providerError: providerError.message,
-              rawError: summarizeGitLabError(error),
-            });
+            if (logContext) {
+              console.error("[gitlab] request failed", {
+                accountId,
+                host: logContext.host,
+                endpoint: logContext.endpoint,
+                method,
+                url,
+                accept: options?.accept ?? "application/json",
+                formData: summarizeGitLabFormData(options?.form),
+                providerError: providerError.message,
+                rawError: summarizeGitLabError(error),
+              });
+            }
           });
           return yield* Effect.fail(providerError);
         }),
       ),
     ),
   );
+}
+
+function gitlabResponse(
+  accountId: string,
+  host: string,
+  endpoint: string,
+  options?: GitLabRequestOptions,
+) {
+  return gitlabExecute(accountId, gitlabApiUrl(host, endpoint), options, {
+    host,
+    endpoint,
+  }).pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
 }
 
 function gitlabJson<A, I, R>(
@@ -460,6 +574,53 @@ function gitlabText(
       Effect.flatMap(mapHttpError(error), (providerError) => Effect.fail(providerError)),
     ),
   );
+}
+
+function gitlabGraphql<A, I, R>(
+  accountId: string,
+  host: string,
+  query: string,
+  variables: Record<string, string | number | boolean | null>,
+  schema: Schema.Schema<A, I, R>,
+): Effect.Effect<
+  { data?: A | null; errors?: ReadonlyArray<{ message: string }> | null },
+  ProviderError,
+  AuthTokenStore | HttpClient.HttpClient | R
+> {
+  return Effect.gen(function* () {
+    const response = yield* gitlabExecute(
+      accountId,
+      gitlabGraphqlUrl(host),
+      {
+        method: "POST",
+        body: { query, variables },
+      },
+      {
+        host,
+        endpoint: "/api/graphql",
+      },
+    ).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.flatMap(
+        HttpClientResponse.schemaBodyJson(graphQlResponseSchema(schema)),
+      ),
+      Effect.catchAll((error) =>
+        Effect.flatMap(mapHttpError(error), (providerError) =>
+          Effect.fail(providerError),
+        ),
+      ),
+    );
+
+    if (response.errors?.length) {
+      return yield* Effect.fail(
+        new ProviderError(
+          response.errors.map((error) => error.message).join("\n"),
+        ),
+      );
+    }
+
+    return response;
+  });
 }
 
 function gitlabForm(
@@ -563,6 +724,91 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     headSha: mr.sha ?? diffRefs?.head_sha ?? "",
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
   };
+}
+
+function gitlabQualitySeverity(
+  severity: string | null | undefined,
+): PullRequestQualityFinding["severity"] {
+  switch ((severity ?? "").toLowerCase()) {
+    case "info":
+      return "info";
+    case "minor":
+      return "minor";
+    case "major":
+      return "major";
+    case "critical":
+      return "critical";
+    case "warning":
+      return "warning";
+    default:
+      return "unknown";
+  }
+}
+
+function gitlabQualityAnchorState(path: string, line: number | null) {
+  if (!path.trim()) {
+    return "unmapped" as const;
+  }
+
+  if (line == null) {
+    return "file" as const;
+  }
+
+  return "inline" as const;
+}
+
+function toGitLabQualityFinding(input: {
+    idPrefix: string;
+    sourceName: string;
+    path: string;
+    externalUrl?: string | null;
+    status: PullRequestQualityFinding["status"];
+    severity: string | null | undefined;
+    line: number | null;
+    description: string;
+    fingerprint?: string | null;
+}): PullRequestQualityFinding {
+  const anchorState = gitlabQualityAnchorState(input.path, input.line);
+  return {
+    id: `${input.idPrefix}:${input.path}:${input.line ?? "file"}:${input.fingerprint ?? input.description}`,
+    sourceType: "gitlab-code-quality",
+    sourceName: input.sourceName,
+    severity: gitlabQualitySeverity(input.severity),
+    status: input.status,
+    title: input.description,
+    path: input.path,
+    line: input.line,
+    anchorState,
+    externalUrl: input.externalUrl ?? undefined,
+    fingerprint: input.fingerprint ?? undefined,
+    rawCategory: input.severity ?? undefined,
+  };
+}
+
+function gitlabQualityPending(status: string | null | undefined) {
+  return ["parsing", "pending"].includes((status ?? "").toLowerCase());
+}
+
+function gitlabQualityUnavailable(status: string | null | undefined) {
+  return ["failed", "error", "not_found"].includes((status ?? "").toLowerCase());
+}
+
+function gitlabQualityReportUsable(input: {
+  comparerStatus: string | null | undefined;
+  reportStatus: string | null | undefined;
+  hasReport: boolean;
+}) {
+  if (!input.hasReport) {
+    return false;
+  }
+
+  const normalizedComparerStatus = (input.comparerStatus ?? "").toLowerCase();
+  if (normalizedComparerStatus === "parsed") {
+    return true;
+  }
+
+  const normalizedReportStatus = (input.reportStatus ?? "").toLowerCase();
+  return normalizedReportStatus === "parsed";
 }
 
 function fetchGitLabPullRequestRefsByProject(
@@ -1046,6 +1292,219 @@ class GitLabProvider implements ForgeProvider {
         }),
       ),
     );
+  }
+
+  getPullRequestQualityReport(input: PullRequestQualityReportInput) {
+    return Effect.gen(function* () {
+      const { repo, number, headSha } = input;
+      const graphqlQuery = `
+query($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      codequalityReportsComparer {
+        status
+        report {
+          status
+          newErrors {
+            description
+            fingerprint
+            severity
+            filePath
+            line
+            webUrl
+            engineName
+          }
+          resolvedErrors {
+            description
+            fingerprint
+            severity
+            filePath
+            line
+            webUrl
+            engineName
+          }
+          existingErrors {
+            description
+            fingerprint
+            severity
+            filePath
+            line
+            webUrl
+            engineName
+          }
+          summary {
+            errored
+            resolved
+            total
+          }
+        }
+      }
+    }
+  }
+}
+`;
+
+      const graphqlResponse = yield* gitlabGraphql(
+        repo.accountId,
+        repo.host,
+        graphqlQuery,
+        {
+          fullPath: repo.path,
+          iid: String(number),
+        },
+        GitLabCodeQualityGraphqlQueryDataSchema,
+      ).pipe(
+        Effect.catchAll((error) => {
+          console.warn("[gitlab] GraphQL code quality query failed", {
+            repo: repo.path,
+            number,
+            message: error.message,
+          });
+          return Effect.succeed(null);
+        }),
+      );
+
+      const graphqlResult =
+        graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ??
+        null;
+
+      console.info("[gitlab] GraphQL code quality response", {
+        repo: repo.path,
+        number,
+        comparer: graphqlResult,
+      });
+
+      if (graphqlResult) {
+        const comparerStatus = graphqlResult.status ?? null;
+        const reportStatus = graphqlResult.report?.status ?? null;
+
+        if (
+          gitlabQualityPending(comparerStatus) ||
+          gitlabQualityPending(reportStatus)
+        ) {
+          return {
+            provider: "gitlab",
+            repoKey: repo.repoKey,
+            number,
+            headSha,
+            status: "pending",
+            summary: {
+              totalFindings: 0,
+              inlineFindings: 0,
+              fileOnlyFindings: 0,
+              statusCounts: {},
+              providerLabel: "GitLab code quality",
+              detailsUrl: mergeRequestWebUrl(repo, number),
+              notes: ["Code quality report is still processing."],
+            },
+            findings: [],
+            fetchedAt: new Date().toISOString(),
+            sourceMetadata: {
+              source: "graphql",
+              comparerStatus,
+              reportStatus,
+            },
+          } satisfies PullRequestQualityReport;
+        }
+
+        if (
+          gitlabQualityReportUsable({
+            comparerStatus,
+            reportStatus,
+            hasReport: Boolean(graphqlResult.report),
+          }) &&
+          graphqlResult.report
+        ) {
+          const newErrors = graphqlResult.report.newErrors ?? [];
+          const resolvedErrors = graphqlResult.report.resolvedErrors ?? [];
+          const existingErrors = graphqlResult.report.existingErrors ?? [];
+          const findings = newErrors.map((finding, index) =>
+            toGitLabQualityFinding({
+              idPrefix: `graphql:${index}`,
+              sourceName: finding.engineName?.trim() || "GitLab Code Quality",
+              path: finding.filePath?.trim() ?? "",
+              externalUrl: finding.webUrl,
+              status: "new",
+              severity: finding.severity,
+              line: finding.line ?? null,
+              description: finding.description,
+              fingerprint: finding.fingerprint,
+            }),
+          );
+
+          return {
+            provider: "gitlab",
+            repoKey: repo.repoKey,
+            number,
+            headSha,
+            status: findings.length > 0 ? "warning" : "ok",
+            summary: {
+              totalFindings:
+                graphqlResult.report.summary?.total ??
+                newErrors.length + resolvedErrors.length + existingErrors.length,
+              inlineFindings: findings.filter(
+                (finding) => finding.anchorState === "inline",
+              ).length,
+              fileOnlyFindings: findings.filter(
+                (finding) => finding.anchorState === "file",
+              ).length,
+              statusCounts: {
+                new: newErrors.length,
+                existing: existingErrors.length,
+                resolved: resolvedErrors.length,
+              },
+              providerLabel: "GitLab code quality",
+              detailsUrl: mergeRequestWebUrl(repo, number),
+              notes:
+                gitlabQualityUnavailable(reportStatus)
+                  ? [
+                      `GitLab reported code quality status ${reportStatus}, but returned findings.`,
+                    ]
+                  : undefined,
+            },
+            findings,
+            fetchedAt: new Date().toISOString(),
+            sourceMetadata: {
+              source: "graphql",
+              comparerStatus,
+              reportStatus,
+              resolvedCount:
+                graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
+              existingCount: existingErrors.length,
+            },
+          } satisfies PullRequestQualityReport;
+        }
+      }
+
+      return {
+        provider: "gitlab",
+        repoKey: repo.repoKey,
+        number,
+        headSha,
+        status: "unavailable",
+        summary: {
+          totalFindings: 0,
+          inlineFindings: 0,
+          fileOnlyFindings: 0,
+          statusCounts: {},
+          providerLabel: "GitLab code quality",
+          detailsUrl: mergeRequestWebUrl(repo, number),
+          notes: [
+            graphqlResponse
+              ? "GitLab GraphQL returned no usable code quality report for this merge request."
+              : "GitLab GraphQL code quality query failed for this merge request.",
+          ],
+        },
+        findings: [],
+        fetchedAt: new Date().toISOString(),
+        sourceMetadata: {
+          source: "graphql",
+          comparerStatus: graphqlResult?.status ?? null,
+          reportStatus: graphqlResult?.report?.status ?? null,
+          graphqlAvailable: graphqlResponse !== null,
+        },
+      } satisfies PullRequestQualityReport;
+    });
   }
 
   gitRemote(repo: RepoIdentity) {

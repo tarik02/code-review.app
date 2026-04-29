@@ -13,6 +13,8 @@ import {
   updateViewerLogin,
 } from "../auth/provider-auth.ts";
 import type {
+  PullRequestQualityFinding,
+  PullRequestQualityReport,
   ProviderAuthStatus,
   PrChangedFile,
   PullRequestSummary,
@@ -20,7 +22,11 @@ import type {
   ReviewComment,
   ReviewThread,
 } from "@code-review-app/shared";
-import type { ForgeProvider, ReviewThreadInput } from "./types.ts";
+import type {
+  ForgeProvider,
+  PullRequestQualityReportInput,
+  ReviewThreadInput,
+} from "./types.ts";
 import type { RepoIdentity } from "../repo-id.ts";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store.ts";
 
@@ -94,7 +100,48 @@ const GhChangedFileSchema = Schema.Struct({
   changes: OptionalNullableNumber,
 });
 
+const GhCheckRunOutputSchema = Schema.Struct({
+  title: OptionalNullableString,
+  summary: OptionalNullableString,
+  text: OptionalNullableString,
+  annotations_count: OptionalNullableNumber,
+});
+
+const GhCheckRunSchema = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  status: Schema.String,
+  conclusion: OptionalNullableString,
+  details_url: OptionalNullableString,
+  html_url: OptionalNullableString,
+  app: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        name: Schema.String,
+      }),
+    ),
+  ),
+  output: Schema.optional(Schema.NullOr(GhCheckRunOutputSchema)),
+});
+
+const GhCheckRunsResponseSchema = Schema.Struct({
+  total_count: OptionalNullableNumber,
+  check_runs: Schema.Array(GhCheckRunSchema),
+});
+
+const GhCheckRunAnnotationSchema = Schema.Struct({
+  path: Schema.String,
+  start_line: Schema.Number,
+  end_line: OptionalNullableNumber,
+  annotation_level: Schema.String,
+  message: Schema.String,
+  title: OptionalNullableString,
+  raw_details: OptionalNullableString,
+});
+
 type GhChangedFile = typeof GhChangedFileSchema.Type;
+type GhCheckRun = typeof GhCheckRunSchema.Type;
+type GhCheckRunAnnotation = typeof GhCheckRunAnnotationSchema.Type;
 
 function toChangedFile(item: GhChangedFile): PrChangedFile {
   const filename = item.filename.trim();
@@ -685,6 +732,96 @@ function toPullRequestSummary(pullRequest: GhPullRequest): PullRequestSummary {
   };
 }
 
+function githubQualitySeverity(
+  level: string,
+): PullRequestQualityFinding["severity"] {
+  switch (level.toLowerCase()) {
+    case "failure":
+      return "major";
+    case "warning":
+      return "warning";
+    case "notice":
+      return "info";
+    default:
+      return "unknown";
+  }
+}
+
+function githubQualityStatus(checkRuns: GhCheckRun[]) {
+  if (checkRuns.some((checkRun) => checkRun.status !== "completed")) {
+    return "pending" as const;
+  }
+
+  const conclusions = checkRuns
+    .map((checkRun) => checkRun.conclusion?.toLowerCase() ?? "")
+    .filter((conclusion) => conclusion.length > 0);
+
+  if (
+    conclusions.some((conclusion) =>
+      ["action_required", "failure", "startup_failure", "timed_out"].includes(
+        conclusion,
+      ),
+    )
+  ) {
+    return "failed" as const;
+  }
+
+  if (
+    conclusions.some((conclusion) =>
+      ["cancelled", "neutral", "skipped", "stale"].includes(conclusion),
+    )
+  ) {
+    return "warning" as const;
+  }
+
+  return "ok" as const;
+}
+
+function githubCheckRunStatusCounts(checkRuns: GhCheckRun[]) {
+  const statusCounts: Record<string, number> = {};
+
+  for (const checkRun of checkRuns) {
+    const key = (checkRun.conclusion ?? checkRun.status).toLowerCase();
+    statusCounts[key] = (statusCounts[key] ?? 0) + 1;
+  }
+
+  return statusCounts;
+}
+
+function githubCheckRunSourceName(checkRun: GhCheckRun) {
+  const appName = checkRun.app?.name?.trim();
+  return appName && appName !== checkRun.name
+    ? `${appName} · ${checkRun.name}`
+    : checkRun.name;
+}
+
+function toGitHubQualityFinding(
+  checkRun: GhCheckRun,
+  annotation: GhCheckRunAnnotation,
+  index: number,
+): PullRequestQualityFinding {
+  const title = annotation.title?.trim() || annotation.message.trim();
+  const message =
+    annotation.raw_details?.trim() ||
+    (annotation.title?.trim() ? annotation.message.trim() : undefined);
+
+  return {
+    id: `${checkRun.id}:${index}:${annotation.path}:${annotation.start_line}`,
+    sourceType: "github-check",
+    sourceName: githubCheckRunSourceName(checkRun),
+    severity: githubQualitySeverity(annotation.annotation_level),
+    status: "unknown",
+    title,
+    message,
+    path: annotation.path,
+    line: annotation.start_line,
+    endLine: annotation.end_line ?? null,
+    anchorState: annotation.path.trim() ? "inline" : "unmapped",
+    externalUrl: checkRun.details_url ?? checkRun.html_url ?? undefined,
+    rawCategory: annotation.annotation_level,
+  };
+}
+
 class GitHubProvider implements ForgeProvider {
   authStatus(accountId: string): ReturnType<ForgeProvider["authStatus"]> {
     const provider = this;
@@ -1027,6 +1164,127 @@ query($owner: String!, $name: String!, $number: Int!) {
         length: content.length,
       });
       return content;
+    });
+  }
+
+  getPullRequestQualityReport(input: PullRequestQualityReportInput) {
+    return Effect.gen(function* () {
+      const { repo, number, headSha } = input;
+      const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      const checkRuns: GhCheckRun[] = [];
+      let page = 1;
+
+      while (true) {
+        const response = yield* githubJson(
+          repo.accountId,
+          repo.host,
+          `/repos/${owner}/${name}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100&page=${page}`,
+          GhCheckRunsResponseSchema,
+        );
+        if (response.check_runs.length === 0) {
+          break;
+        }
+
+        checkRuns.push(...response.check_runs);
+        if (response.check_runs.length < 100) {
+          break;
+        }
+
+        page += 1;
+      }
+
+      const findings: PullRequestQualityFinding[] = [];
+      const notes: string[] = [];
+      const maxFindings = 500;
+
+      for (const checkRun of checkRuns) {
+        const expectedAnnotations = checkRun.output?.annotations_count ?? 0;
+        if (expectedAnnotations <= 0 || findings.length >= maxFindings) {
+          continue;
+        }
+
+        let annotationPage = 1;
+        let shouldContinue = true;
+
+        while (shouldContinue && findings.length < maxFindings) {
+          const annotations = yield* githubJson(
+            repo.accountId,
+            repo.host,
+            `/repos/${owner}/${name}/check-runs/${checkRun.id}/annotations?per_page=100&page=${annotationPage}`,
+            Schema.Array(GhCheckRunAnnotationSchema),
+          ).pipe(
+            Effect.catchAll((error) => {
+              notes.push(
+                `Could not load annotations for ${githubCheckRunSourceName(checkRun)}: ${error.message}`,
+              );
+              return Effect.succeed([]);
+            }),
+          );
+
+          if (annotations.length === 0) {
+            shouldContinue = false;
+            continue;
+          }
+
+          const remainingCapacity = maxFindings - findings.length;
+          findings.push(
+            ...annotations
+              .slice(0, remainingCapacity)
+              .map((annotation, index) =>
+                toGitHubQualityFinding(
+                  checkRun,
+                  annotation,
+                  (annotationPage - 1) * 100 + index,
+                ),
+              ),
+          );
+
+          shouldContinue = annotations.length === 100;
+          annotationPage += 1;
+        }
+      }
+
+      if (findings.length >= maxFindings) {
+        notes.push(`Showing the first ${maxFindings} check annotations.`);
+      }
+
+      const statusCounts = githubCheckRunStatusCounts(checkRuns);
+      const detailsUrl =
+        checkRuns.find((checkRun) =>
+          ["action_required", "failure", "startup_failure", "timed_out"].includes(
+            checkRun.conclusion?.toLowerCase() ?? "",
+          ),
+        )?.details_url ??
+        checkRuns.find((checkRun) => checkRun.status !== "completed")?.details_url ??
+        checkRuns[0]?.details_url ??
+        undefined;
+
+      return {
+        provider: "github",
+        repoKey: repo.repoKey,
+        number,
+        headSha,
+        status: githubQualityStatus(checkRuns),
+        summary: {
+          totalFindings: findings.length,
+          inlineFindings: findings.filter(
+            (finding) => finding.anchorState === "inline" && finding.line !== null,
+          ).length,
+          fileOnlyFindings: findings.filter(
+            (finding) => finding.anchorState === "file",
+          ).length,
+          statusCounts,
+          providerLabel: "GitHub checks",
+          detailsUrl,
+          notes: notes.length > 0 ? notes : undefined,
+        },
+        findings,
+        fetchedAt: new Date().toISOString(),
+        sourceMetadata: {
+          checkRunCount: checkRuns.length,
+          headSha,
+        },
+      } satisfies PullRequestQualityReport;
     });
   }
 

@@ -34,6 +34,7 @@ import { FileDiff, VirtualizerContext } from "@pierre/diffs/react";
 import { ChangedFilesTree } from "./changed-files-tree";
 import { AppearanceBackground } from "./appearance-background";
 import { PatchScrollVirtualizer } from "./patch-scroll-virtualizer";
+import { PullRequestQualitySummary } from "./pull-request-quality-summary";
 import {
   ReviewCommentEditor,
   type CommentEditorMode,
@@ -60,11 +61,18 @@ import {
   type ReviewThread,
   type ReviewThreadAnnotation,
 } from "../../lib/review-threads";
+import {
+  getFileQualityFindings,
+  type FileQualityFindings,
+  type QualityFindingAnnotation,
+} from "../../lib/pull-request-quality";
 import type {
   FileStatsEntry,
   ForgeProviderKind,
   PrFileChangeType,
   PrFileContents,
+  PullRequestQualityFinding,
+  PullRequestQualityReport,
   RepoIdentity,
   ReviewCommentSide,
 } from "../../types/forge";
@@ -85,7 +93,7 @@ import {
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
-  resizeDebugging: import.meta.env.DEV,
+  resizeDebugging: false,
 };
 
 const VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
@@ -135,8 +143,13 @@ type ReviewThreadLineAnnotation = ReviewThreadAnnotation & {
   portalRootId?: string;
 };
 
+type QualityFindingLineAnnotation = QualityFindingAnnotation & {
+  kind: "quality";
+};
+
 type PatchLineAnnotation =
   | ReviewThreadLineAnnotation
+  | QualityFindingLineAnnotation
   | DraftReviewCommentAnnotation;
 
 type PatchViewerMainProps = {
@@ -154,6 +167,13 @@ type PatchViewerMainProps = {
   reviewThreads: ReviewThread[];
   isReviewThreadsLoading: boolean;
   reviewThreadsError: string;
+  qualityReport: PullRequestQualityReport | null;
+  isQualityReportLoading: boolean;
+  qualityReportError: string;
+  qualityFindingsByFile: Map<string, FileQualityFindings>;
+  displayedQualityInlineCount: number;
+  displayedQualityFileCount: number;
+  unmappedQualityFindings: PullRequestQualityFinding[];
   parsedPatch: {
     fileDiffs: FileDiffMetadata[];
     parseError: string;
@@ -177,6 +197,7 @@ type PatchFileDiffItemContextValue = {
     node: HTMLDivElement | null,
   ) => void;
   reviewEditorSessionKey: string | null;
+  qualityFindingsByFile: Map<string, FileQualityFindings>;
   reviewThreadsByFile: Map<string, FileReviewThreads>;
   scrollToFileCommentsSection: (filePath: string) => void;
   selectedBaseSha: string | null;
@@ -264,6 +285,118 @@ function getFileDiffLineCounts(fileDiff: FileDiffMetadata) {
   }
 
   return { additions, deletions };
+}
+
+function getFileChangeTypePresentation(changeType: PrFileChangeType): {
+  iconClassName: string;
+  label: string;
+} {
+  switch (changeType) {
+    case "new":
+      return {
+        iconClassName:
+          "text-emerald-600 dark:text-emerald-400",
+        label: "Added file",
+      };
+    case "deleted":
+      return {
+        iconClassName:
+          "text-red-600 dark:text-red-400",
+        label: "Deleted file",
+      };
+    case "rename-pure":
+      return {
+        iconClassName:
+          "text-sky-600 dark:text-sky-400",
+        label: "Renamed file",
+      };
+    case "rename-changed":
+      return {
+        iconClassName:
+          "text-amber-600 dark:text-amber-400",
+        label: "Renamed and changed file",
+      };
+    case "change":
+    default:
+      return {
+        iconClassName:
+          "text-ink-500 dark:text-ink-400",
+        label: "Modified file",
+      };
+  }
+}
+
+function PierreChangeTypeIcon({
+  changeType,
+  className,
+}: {
+  changeType: PrFileChangeType;
+  className?: string;
+}) {
+  switch (changeType) {
+    case "new":
+      return (
+        <svg
+          aria-hidden
+          className={className}
+          fill="currentColor"
+          viewBox="0 0 16 16"
+        >
+          <path d="M8 4a.75.75 0 0 1 .75.75v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5A.75.75 0 0 1 8 4" />
+          <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
+        </svg>
+      );
+    case "deleted":
+      return (
+        <svg
+          aria-hidden
+          className={className}
+          fill="currentColor"
+          viewBox="0 0 16 16"
+        >
+          <path d="M4 8a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 4 8" />
+          <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
+        </svg>
+      );
+    case "rename-pure":
+    case "rename-changed":
+      return (
+        <svg
+          aria-hidden
+          className={className}
+          fill="currentColor"
+          viewBox="0 0 16 16"
+        >
+          <path d="M1.788 4.296c.196-.88.478-1.381.802-1.706s.826-.606 1.706-.802C5.194 1.588 6.387 1.5 8 1.5s2.806.088 3.704.288c.88.196 1.381.478 1.706.802s.607.826.802 1.706c.2.898.288 2.091.288 3.704s-.088 2.806-.288 3.704c-.195.88-.478 1.381-.802 1.706s-.826.607-1.706.802c-.898.2-2.091.288-3.704.288s-2.806-.088-3.704-.288c-.88-.195-1.381-.478-1.706-.802s-.606-.826-.802-1.706C1.588 10.806 1.5 9.613 1.5 8s.088-2.806.288-3.704M8 0C1.412 0 0 1.412 0 8s1.412 8 8 8 8-1.412 8-8-1.412-8-8-8" />
+          <path d="M8.495 4.695a.75.75 0 0 0-.05 1.06L10.486 8l-2.041 2.246a.75.75 0 0 0 1.11 1.008l2.5-2.75a.75.75 0 0 0 0-1.008l-2.5-2.75a.75.75 0 0 0-1.06-.051m-4 0a.75.75 0 0 0-.05 1.06l2.044 2.248-1.796 1.995a.75.75 0 0 0 1.114 1.004l2.25-2.5a.75.75 0 0 0-.002-1.007l-2.5-2.75a.75.75 0 0 0-1.06-.05" />
+        </svg>
+      );
+    case "change":
+    default:
+      return (
+        <svg
+          aria-hidden
+          className={className}
+          fill="currentColor"
+          viewBox="0 0 16 16"
+        >
+          <path d="M1.5 8c0 1.613.088 2.806.288 3.704.196.88.478 1.381.802 1.706s.826.607 1.706.802c.898.2 2.091.288 3.704.288s2.806-.088 3.704-.288c.88-.195 1.381-.478 1.706-.802s.607-.826.802-1.706c.2-.898.288-2.091.288-3.704s-.088-2.806-.288-3.704c-.195-.88-.478-1.381-.802-1.706s-.826-.606-1.706-.802C10.806 1.588 9.613 1.5 8 1.5s-2.806.088-3.704.288c-.88.196-1.381.478-1.706.802s-.606.826-.802 1.706C1.588 5.194 1.5 6.387 1.5 8M0 8c0-6.588 1.412-8 8-8s8 1.412 8 8-1.412 8-8 8-8-1.412-8-8m8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6" />
+        </svg>
+      );
+  }
+}
+
+function PierreRenameArrowIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 16 16"
+    >
+      <path d="M8.47 4.22a.75.75 0 0 0 0 1.06l1.97 1.97H3.75a.75.75 0 0 0 0 1.5h6.69l-1.97 1.97a.75.75 0 1 0 1.06 1.06l3.25-3.25a.75.75 0 0 0 0-1.06L9.53 4.22a.75.75 0 0 0-1.06 0" />
+    </svg>
+  );
 }
 
 function scheduleNextFrame(callback: () => void) {
@@ -1113,6 +1246,7 @@ function PatchFileDiffItem({
     diffNavigator,
     isInactiveFileCommentsExpanded,
     parsedFileDiffs,
+    qualityFindingsByFile,
     registerFileCommentsSection,
     registerThreadAnchor,
     reviewEditorSessionKey,
@@ -1157,6 +1291,10 @@ function PatchFileDiffItem({
     reviewThreadsByFile,
     fileDiff.name,
   );
+  const fileQualityFindings = getFileQualityFindings(
+    qualityFindingsByFile,
+    fileDiff.name,
+  );
   const normalizedFilePath = normalizePath(fileDiff.name);
   const inactiveFileCommentsExpanded =
     isInactiveFileCommentsExpanded(normalizedFilePath);
@@ -1171,6 +1309,14 @@ function PatchFileDiffItem({
       metadata: {
         ...annotation.metadata,
         portalRootId: lineDraftPortalRootId,
+      },
+    }));
+  const lineQualityAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
+    fileQualityFindings.inlineAnnotations.map((annotation) => ({
+      ...annotation,
+      metadata: {
+        ...annotation.metadata,
+        kind: "quality" as const,
       },
     }));
   const lineDraftEditors = newCommentEditors.filter(
@@ -1198,6 +1344,7 @@ function PatchFileDiffItem({
     lineDraftEditors.length > 0
       ? [
           ...lineThreadAnnotations,
+          ...lineQualityAnnotations,
           ...lineDraftEditors.map((editor) => ({
             side: toSelectionSide(editor.target.side),
             lineNumber: editor.target.line,
@@ -1208,7 +1355,7 @@ function PatchFileDiffItem({
             },
           })),
         ]
-      : lineThreadAnnotations;
+      : [...lineThreadAnnotations, ...lineQualityAnnotations];
   const selectedLines: SelectedLineRange | null = lineDraft
     ? {
         start: lineDraft.startLine ?? lineDraft.line,
@@ -1220,6 +1367,10 @@ function PatchFileDiffItem({
   const lineAnnotationKey = lineAnnotations
     .map((annotation) => {
       if ("kind" in annotation.metadata) {
+        if (annotation.metadata.kind === "quality") {
+          return `${annotation.side}:${annotation.lineNumber}:quality:${annotation.metadata.finding.id}`;
+        }
+
         return `${annotation.side}:${annotation.lineNumber}:draft:${annotation.metadata.editorId}`;
       }
 
@@ -1227,8 +1378,15 @@ function PatchFileDiffItem({
     })
     .join("|");
   const shouldRenderFileCommentsInHeader =
-    fileReviewThreads.fileThreadCount > 0 || fileDraftEditors.length > 0;
+    fileReviewThreads.fileThreadCount > 0 ||
+    fileDraftEditors.length > 0 ||
+    fileQualityFindings.fileFindings.length > 0;
   const { additions, deletions } = getFileDiffLineCounts(fileDiff);
+  const changeType = fileDiff.type as PrFileChangeType;
+  const {
+    iconClassName: fileChangeIconClassName,
+    label: fileChangeLabel,
+  } = getFileChangeTypePresentation(changeType);
 
   function openFileCommentDraft() {
     openNewEditor(reviewEditorSessionKey, createFileDraftTarget(fileDiff));
@@ -1296,6 +1454,11 @@ function PatchFileDiffItem({
             {fileReviewThreads.fileThreadCount} file comments
           </span>
         ) : null}
+        {fileQualityFindings.totalCount > 0 ? (
+          <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
+            {fileQualityFindings.totalCount} findings
+          </span>
+        ) : null}
         <button
           className="font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
           onClick={openFileCommentDraft}
@@ -1342,6 +1505,39 @@ function PatchFileDiffItem({
             onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
           />
         ))}
+        {fileQualityFindings.fileFindings.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {fileQualityFindings.fileFindings.map((finding) => (
+              <div
+                className="rounded-lg border border-ink-200 bg-canvas px-3 py-2"
+                key={finding.id}
+              >
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-medium text-ink-900">
+                    {finding.title}
+                  </span>
+                  <span className="text-ink-500">{finding.sourceName}</span>
+                  {finding.line !== null ? (
+                    <span className="text-ink-500">L{finding.line}</span>
+                  ) : null}
+                  {finding.externalUrl ? (
+                    <a
+                      className="font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                      href={finding.externalUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Open
+                    </a>
+                  ) : null}
+                </div>
+                {finding.message ? (
+                  <p className="mt-1 text-xs text-ink-600">{finding.message}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {fileReviewThreads.activeFileThreads.map((thread) => (
           <ReviewThreadCard
             key={getThreadRefKey(thread)}
@@ -1395,13 +1591,21 @@ function PatchFileDiffItem({
     return (
       <div className="w-full">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2 text-sm text-ink-900">
+          <div className="flex min-w-0 items-center gap-3 text-sm text-ink-900">
+            <span
+              aria-label={fileChangeLabel}
+              className={cx(
+                "inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-canvas",
+                fileChangeIconClassName,
+              )}
+              title={fileChangeLabel}
+            >
+              <PierreChangeTypeIcon changeType={changeType} className="size-4" />
+            </span>
             {fileDiff.prevName ? (
               <>
                 <span className="truncate text-ink-500">{fileDiff.prevName}</span>
-                <span aria-hidden className="text-ink-400">
-                  →
-                </span>
+                <PierreRenameArrowIcon className="size-4 shrink-0 text-ink-400" />
               </>
             ) : null}
             <span className="truncate font-medium">{fileDiff.name}</span>
@@ -1532,6 +1736,32 @@ function PatchFileDiffItem({
             handleSubmitDraftComment(draftAnnotation.editorId, body)
           }
         />
+      );
+    }
+
+    if ("kind" in annotation.metadata && annotation.metadata.kind === "quality") {
+      const finding = annotation.metadata.finding;
+
+      return (
+        <div className="rounded-lg border border-ink-200 bg-canvas px-3 py-2 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-ink-900">{finding.title}</span>
+            <span className="text-ink-500">{finding.sourceName}</span>
+            {finding.externalUrl ? (
+              <a
+                className="font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                href={finding.externalUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Open
+              </a>
+            ) : null}
+          </div>
+          {finding.message ? (
+            <p className="mt-1 text-xs text-ink-600">{finding.message}</p>
+          ) : null}
+        </div>
       );
     }
 
@@ -1687,6 +1917,13 @@ function PatchViewerMain({
   reviewThreads,
   isReviewThreadsLoading,
   reviewThreadsError,
+  qualityReport,
+  isQualityReportLoading,
+  qualityReportError,
+  qualityFindingsByFile,
+  displayedQualityInlineCount,
+  displayedQualityFileCount,
+  unmappedQualityFindings,
   parsedPatch,
   fileStats,
   gitStatus,
@@ -2135,6 +2372,7 @@ function PatchViewerMain({
   }, [
     navigator.actions,
     parsedPatch.fileDiffs,
+    qualityFindingsByFile,
     reviewThreadsByFile,
   ]);
 
@@ -2303,6 +2541,17 @@ function PatchViewerMain({
                 </div>
               ) : null}
 
+              {hasSelection && !isPatchLoading ? (
+                <PullRequestQualitySummary
+                  displayedFileCount={displayedQualityFileCount}
+                  displayedInlineCount={displayedQualityInlineCount}
+                  error={qualityReportError}
+                  isLoading={isQualityReportLoading}
+                  report={qualityReport}
+                  unmappedFindings={unmappedQualityFindings}
+                />
+              ) : null}
+
               {!isPatchLoading && !patchError && isReviewThreadsLoading ? (
                 <div className="px-4 pb-2 pt-1 text-sm text-ink-500">
                   Loading review threads...
@@ -2323,6 +2572,7 @@ function PatchViewerMain({
                       diffNavigator: navigator.diff,
                       isInactiveFileCommentsExpanded,
                       parsedFileDiffs: parsedPatch.fileDiffs,
+                      qualityFindingsByFile,
                       registerFileCommentsSection,
                       registerThreadAnchor,
                       reviewEditorSessionKey,

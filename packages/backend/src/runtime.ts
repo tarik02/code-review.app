@@ -13,6 +13,7 @@ import { AppSettingsServiceLive } from "./services/app-settings.ts";
 import { DiffDataServiceLive } from "./services/diff-data.ts";
 import { GitServiceLive } from "./git/service.ts";
 import { PullRequestServiceLive } from "./services/pull-requests.ts";
+import { PullRequestQualityServiceLive } from "./services/pull-request-quality.ts";
 import { RepoServiceLive } from "./services/repos.ts";
 import { ReviewCommentServiceLive } from "./services/review-comments.ts";
 import { SettingsServiceLive } from "./services/settings.ts";
@@ -68,7 +69,7 @@ function createAppLayer(options: BackendRuntimeOptions) {
   );
 
   const AppLayer = Layer.provideMerge(
-    PullRequestServiceLive,
+    Layer.mergeAll(PullRequestServiceLive, PullRequestQualityServiceLive),
     BaseAndServiceLayer,
   );
 

@@ -5,6 +5,36 @@ const diffDataModeSchema = z.enum(["provider-api", "git"]);
 const themePreferenceSchema = z.enum(["auto", "light", "dark"]);
 const reviewEditorModeSchema = z.enum(["rich-text", "source"]);
 const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
+const pullRequestQualityReportStatusSchema = z.enum([
+  "ok",
+  "warning",
+  "failed",
+  "pending",
+  "unavailable",
+]);
+const pullRequestQualityFindingSeveritySchema = z.enum([
+  "info",
+  "minor",
+  "warning",
+  "major",
+  "critical",
+  "unknown",
+]);
+const pullRequestQualityFindingStatusSchema = z.enum([
+  "new",
+  "existing",
+  "resolved",
+  "unknown",
+]);
+const pullRequestQualityFindingAnchorStateSchema = z.enum([
+  "inline",
+  "file",
+  "unmapped",
+]);
+const pullRequestQualityFindingSourceTypeSchema = z.enum([
+  "github-check",
+  "gitlab-code-quality",
+]);
 
 const repoSummarySchema = z.object({
   providerId: z.string(),
@@ -100,6 +130,45 @@ const pullRequestVersionedInputSchema = pullRequestInputSchema.extend({
   headSha: z.string().min(1),
 });
 
+const pullRequestQualitySummarySchema = z.object({
+  totalFindings: z.number().int().nonnegative(),
+  inlineFindings: z.number().int().nonnegative(),
+  fileOnlyFindings: z.number().int().nonnegative(),
+  statusCounts: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  providerLabel: z.string(),
+  detailsUrl: z.string().optional(),
+  notes: z.array(z.string()).optional(),
+});
+
+const pullRequestQualityFindingSchema = z.object({
+  id: z.string(),
+  sourceType: pullRequestQualityFindingSourceTypeSchema,
+  sourceName: z.string(),
+  severity: pullRequestQualityFindingSeveritySchema,
+  status: pullRequestQualityFindingStatusSchema.optional(),
+  title: z.string(),
+  message: z.string().optional(),
+  path: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  endLine: z.number().int().nonnegative().nullable().optional(),
+  anchorState: pullRequestQualityFindingAnchorStateSchema,
+  externalUrl: z.string().optional(),
+  rawCategory: z.string().optional(),
+  fingerprint: z.string().optional(),
+});
+
+const pullRequestQualityReportSchema = z.object({
+  provider: forgeProviderKindSchema,
+  repoKey: z.string().min(1),
+  number: z.number().int().nonnegative(),
+  headSha: z.string().nullable(),
+  status: pullRequestQualityReportStatusSchema,
+  summary: pullRequestQualitySummarySchema,
+  findings: z.array(pullRequestQualityFindingSchema),
+  fetchedAt: z.string(),
+  sourceMetadata: z.record(z.string(), z.unknown()).optional(),
+});
+
 const prFileChangeTypeSchema = z.enum([
   "change",
   "rename-pure",
@@ -154,6 +223,14 @@ export {
   providerHostSchema,
   pullRequestInputSchema,
   pullRequestFileContentsInputSchema,
+  pullRequestQualityFindingAnchorStateSchema,
+  pullRequestQualityFindingSchema,
+  pullRequestQualityFindingSeveritySchema,
+  pullRequestQualityFindingSourceTypeSchema,
+  pullRequestQualityFindingStatusSchema,
+  pullRequestQualityReportSchema,
+  pullRequestQualityReportStatusSchema,
+  pullRequestQualitySummarySchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
   replyToPullRequestReviewCommentInputSchema,

@@ -9,6 +9,7 @@ import type {
   DiffDataSettings,
   PrFileChangeType,
   ProviderProfile,
+  PullRequestQualityReport,
   ReplyToPullRequestReviewCommentInput,
   ReviewEditorMode,
   ReviewEditorSettings,
@@ -58,6 +59,15 @@ const forgeKeys = {
     [...forgeKeys.pullRequests(), "patch", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
   pullRequestFiles: (pr: SelectedPullRequest) =>
     [...forgeKeys.pullRequests(), "files", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
+  pullRequestQualityReport: (pr: SelectedPullRequest) =>
+    [
+      ...forgeKeys.pullRequests(),
+      "quality-report",
+      pr.providerId,
+      pr.repoKey,
+      pr.number,
+      pr.headSha,
+    ] as const,
   pullRequestFileContents: (input: {
     providerId: string;
     repoKey: string;
@@ -86,6 +96,8 @@ const forgeKeys = {
   pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), "files", "idle"] as const,
   pullRequestReviewThreadsIdle: () =>
     [...forgeKeys.pullRequests(), "review-threads", "idle"] as const,
+  pullRequestQualityReportIdle: () =>
+    [...forgeKeys.pullRequests(), "quality-report", "idle"] as const,
 };
 
 function savedReposQueryOptions() {
@@ -303,6 +315,21 @@ function pullRequestFilesQueryOptions(pr: SelectedPullRequest) {
   });
 }
 
+function pullRequestQualityReportQueryOptions(pr: SelectedPullRequest) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestQualityReport(pr),
+    queryFn: (): Promise<PullRequestQualityReport> =>
+      trpc.pullRequests.getQualityReport.query({
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
+        number: pr.number,
+        headSha: pr.headSha,
+      }),
+    staleTime: 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+}
+
 function pullRequestFileContentsQueryOptions(input: {
   providerId: string;
   repoKey: string;
@@ -393,6 +420,7 @@ export {
   pullRequestListQueryOptions,
   pullRequestOverviewQueryOptions,
   pullRequestPatchQueryOptions,
+  pullRequestQualityReportQueryOptions,
   pullRequestReviewThreadsQueryOptions,
   trackedPullRequestListQueryOptions,
   replyToPullRequestReviewComment,

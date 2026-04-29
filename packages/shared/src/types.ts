@@ -189,6 +189,72 @@ type ReviewThread = {
   isOptimistic?: boolean;
 };
 
+type PullRequestQualityReportStatus =
+  | "ok"
+  | "warning"
+  | "failed"
+  | "pending"
+  | "unavailable";
+
+type PullRequestQualityFindingSeverity =
+  | "info"
+  | "minor"
+  | "warning"
+  | "major"
+  | "critical"
+  | "unknown";
+
+type PullRequestQualityFindingStatus =
+  | "new"
+  | "existing"
+  | "resolved"
+  | "unknown";
+
+type PullRequestQualityFindingAnchorState = "inline" | "file" | "unmapped";
+
+type PullRequestQualityFindingSourceType =
+  | "github-check"
+  | "gitlab-code-quality";
+
+type PullRequestQualitySummary = {
+  totalFindings: number;
+  inlineFindings: number;
+  fileOnlyFindings: number;
+  statusCounts?: Record<string, number>;
+  providerLabel: string;
+  detailsUrl?: string;
+  notes?: string[];
+};
+
+type PullRequestQualityFinding = {
+  id: string;
+  sourceType: PullRequestQualityFindingSourceType;
+  sourceName: string;
+  severity: PullRequestQualityFindingSeverity;
+  status?: PullRequestQualityFindingStatus;
+  title: string;
+  message?: string;
+  path: string;
+  line: number | null;
+  endLine?: number | null;
+  anchorState: PullRequestQualityFindingAnchorState;
+  externalUrl?: string;
+  rawCategory?: string;
+  fingerprint?: string;
+};
+
+type PullRequestQualityReport = {
+  provider: ForgeProviderKind;
+  repoKey: string;
+  number: number;
+  headSha: string | null;
+  status: PullRequestQualityReportStatus;
+  summary: PullRequestQualitySummary;
+  findings: PullRequestQualityFinding[];
+  fetchedAt: string;
+  sourceMetadata?: Record<string, unknown>;
+};
+
 type CreatePullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   body: string;
@@ -247,6 +313,14 @@ export type {
   ProviderAuthStatus,
   ProviderAuthStatusKind,
   ProviderProfile,
+  PullRequestQualityFinding,
+  PullRequestQualityFindingAnchorState,
+  PullRequestQualityFindingSeverity,
+  PullRequestQualityFindingSourceType,
+  PullRequestQualityFindingStatus,
+  PullRequestQualityReport,
+  PullRequestQualityReportStatus,
+  PullRequestQualitySummary,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoIdentity,

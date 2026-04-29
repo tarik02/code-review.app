@@ -24,6 +24,7 @@ import {
   buildReviewThreadsByFile,
   getGlobalReviewThreads,
 } from "../lib/review-threads";
+import { buildPullRequestQualityView } from "../lib/pull-request-quality";
 import {
   repoIdentity,
   repoIdentityKey,
@@ -366,8 +367,11 @@ function MainApp() {
     changedFilesError,
     isChangedFilesLoading,
     isPatchLoading,
+    isQualityReportLoading,
     isReviewThreadsLoading,
     patchError,
+    qualityReport,
+    qualityReportError,
     reviewThreads,
     reviewThreadsError,
     selectedPatch,
@@ -379,6 +383,14 @@ function MainApp() {
   const globalReviewThreads = useMemo(
     () => getGlobalReviewThreads(reviewThreads),
     [reviewThreads],
+  );
+  const qualityView = useMemo(
+    () =>
+      buildPullRequestQualityView(
+        qualityReport,
+        selectedPatch?.fileDiffs ?? [],
+      ),
+    [qualityReport, selectedPatch?.fileDiffs],
   );
   const parsedPatch = useMemo(
     () => ({
@@ -825,6 +837,13 @@ function MainApp() {
             reviewThreads={reviewThreads}
             isReviewThreadsLoading={isReviewThreadsLoading}
             reviewThreadsError={reviewThreadsError}
+            qualityReport={qualityReport}
+            isQualityReportLoading={isQualityReportLoading}
+            qualityReportError={qualityReportError}
+            qualityFindingsByFile={qualityView.byFile}
+            displayedQualityInlineCount={qualityView.displayedInlineCount}
+            displayedQualityFileCount={qualityView.displayedFileCount}
+            unmappedQualityFindings={qualityView.unmappedFindings}
             parsedPatch={parsedPatch}
             fileStats={fileStats}
             gitStatus={gitStatus}

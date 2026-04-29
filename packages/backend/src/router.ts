@@ -3,6 +3,7 @@ import { observable } from "@trpc/server/observable";
 import { Effect } from "effect";
 import { BackendError, getErrorMessage } from "./errors.ts";
 import { PullRequestService } from "./services/pull-requests.ts";
+import { PullRequestQualityService } from "./services/pull-request-quality.ts";
 import { RepoService } from "./services/repos.ts";
 import { ReviewCommentService } from "./services/review-comments.ts";
 import { SettingsService } from "./services/settings.ts";
@@ -18,6 +19,7 @@ import {
   providerHostSchema,
   providerProfileSchema,
   pullRequestFileContentsInputSchema,
+  pullRequestQualityReportSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
@@ -417,6 +419,21 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
               input.number,
               input.headSha,
             );
+          }),
+        ),
+      ),
+    getQualityReport: t.procedure
+      .input(pullRequestVersionedInputSchema)
+      .query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestQualityService;
+            const report = yield* service.get(
+              input,
+              input.number,
+              input.headSha,
+            );
+            return pullRequestQualityReportSchema.parse(report);
           }),
         ),
       ),
