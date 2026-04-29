@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { DurationInput } from "effect/Duration";
 import type { GitRemoteSpec } from "../providers/types";
-import type { RepoId } from "../repo-id";
+import { repoIdentityCacheKey, type RepoIdentity } from "../repo-id";
 import type { PrChangedFile, PrFileChangeType } from "../../shared/types";
 import {
   GitAuthenticationFailed,
@@ -42,12 +42,12 @@ type GitCommandOutput = {
 };
 
 type GitRepoHandle = {
-  repo: RepoId;
+  repo: RepoIdentity;
   path: string;
 };
 
 type GitServiceShape = {
-  ensureRepo(repo: RepoId, remoteSpec: GitRemoteSpec): Effect.Effect<GitRepoHandle, GitError>;
+  ensureRepo(repo: RepoIdentity, remoteSpec: GitRemoteSpec): Effect.Effect<GitRepoHandle, GitError>;
   fetchRefs(
     handle: GitRepoHandle,
     baseSha: string,
@@ -93,8 +93,8 @@ const COMMAND_TIMEOUT = "45 seconds";
 const FULL_DIFF_CONTEXT_LINES = "1000000";
 const decoder = new TextDecoder();
 
-function gitCachePath(repo: RepoId) {
-  const hash = createHash("sha256").update(repo.key).digest("hex");
+function gitCachePath(repo: RepoIdentity) {
+  const hash = createHash("sha256").update(repoIdentityCacheKey(repo)).digest("hex");
   return path.join(app.getPath("userData"), "git-cache", `${hash}.git`);
 }
 
@@ -451,7 +451,7 @@ const makeGitService = Effect.gen(function* () {
     yield* ensureDirectory(fileSystem, path.dirname(cachePath));
 
     console.info("[git] ensure repo", {
-      repoId: repo.key,
+      repo: repoIdentityCacheKey(repo),
       cachePath,
       exists,
     });
@@ -523,7 +523,7 @@ const makeGitService = Effect.gen(function* () {
     "GitService.fetchRefs",
   )(function* (handle, baseSha, headSha, remoteSpec) {
     console.info("[git] fetch refs start", {
-      repoId: handle.repo.key,
+      repo: repoIdentityCacheKey(handle.repo),
       cachePath: handle.path,
       baseSha,
       headSha,
@@ -546,7 +546,7 @@ const makeGitService = Effect.gen(function* () {
       ref: headSha,
     });
     console.info("[git] fetch refs finished", {
-      repoId: handle.repo.key,
+      repo: repoIdentityCacheKey(handle.repo),
       cachePath: handle.path,
       baseSha,
       headSha,

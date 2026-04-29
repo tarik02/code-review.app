@@ -20,7 +20,7 @@ import { providerFor } from "../../providers/registry";
 import { AuthTokenStore } from "../../auth/token-store";
 import type { PrFileContents } from "../../../shared/types";
 import type { GitRemoteSpec, PullRequestRefs } from "../../providers/types";
-import type { RepoId } from "../../repo-id";
+import { repoIdentityCacheKey, type RepoIdentity } from "../../repo-id";
 import type {
   DiffBackendFileContentsInput,
   DiffBackendInput,
@@ -86,7 +86,7 @@ function logGitError(context: string, error: GitError) {
 }
 
 function resolveRefs(
-  repo: RepoId,
+  repo: RepoIdentity,
   number: number,
   baseSha: string | null,
   headSha: string,
@@ -105,7 +105,7 @@ function resolveRefs(
     }
 
     console.info("[diff-data] git base sha missing; fetching refs", {
-      repoId: repo.key,
+      repo: repoIdentityCacheKey(repo),
       number,
       provider: repo.provider,
     });
@@ -140,7 +140,7 @@ function prepareGitDiff(
       provideProviderDeps,
     );
     console.info("[diff-data] git refs resolved", {
-      repoId: input.repo.key,
+      repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       source: refs.source,
       baseSha: refs.baseSha,
@@ -206,7 +206,7 @@ function makeGitDiffBackend(
       Effect.mapError(gitErrorToProviderError),
     );
     console.info("[diff-data] git patch generated", {
-      repoId: input.repo.key,
+      repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       headSha: prepared.headSha,
       cachePath: prepared.cachePath,
@@ -232,7 +232,7 @@ function makeGitDiffBackend(
       Effect.mapError(gitErrorToProviderError),
     );
     console.info("[diff-data] git changed files generated", {
-      repoId: input.repo.key,
+      repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       headSha: prepared.headSha,
       cachePath: prepared.cachePath,
@@ -288,7 +288,7 @@ function makeGitDiffBackend(
     }
 
     console.info("[diff-data] git file contents generated", {
-      repoId: input.repo.key,
+      repo: repoIdentityCacheKey(input.repo),
       number: input.number,
       oldPath,
       newPath,
@@ -300,7 +300,8 @@ function makeGitDiffBackend(
     });
 
     return {
-      repoId: input.repo.key,
+      providerId: input.repo.providerId,
+      repoKey: input.repo.repoKey,
       oldPath,
       newPath,
       baseSha: prepared.diffBaseSha,

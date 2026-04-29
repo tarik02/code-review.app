@@ -1,11 +1,12 @@
 import { HttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
-import { parseRepoId } from "../repo-id";
+import { createRepoIdentityFromParts } from "../repo-id";
 import { providerFor } from "../providers/registry";
 import { AuthTokenStore } from "../auth/token-store";
 import type {
   CreatePullRequestReviewCommentInput,
   ReplyToPullRequestReviewCommentInput,
+  RepoIdentity,
   ReviewThread,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
@@ -13,7 +14,7 @@ import type {
 
 type ReviewCommentServiceShape = {
   getViewerLogin(accountId: string): Effect.Effect<ViewerLogin, Error>;
-  listThreads(repoId: string, number: number): Effect.Effect<ReviewThread[], Error>;
+  listThreads(repo: RepoIdentity, number: number): Effect.Effect<ReviewThread[], Error>;
   create(input: CreatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
   reply(input: ReplyToPullRequestReviewCommentInput): Effect.Effect<void, Error>;
   update(input: UpdatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
@@ -49,8 +50,8 @@ const makeReviewCommentService = Effect.gen(function* () {
 
   const listThreads: ReviewCommentServiceShape["listThreads"] = Effect.fn(
     "ReviewCommentService.listThreads",
-  )(function* (repoId, number) {
-    const repo = parseRepoId(repoId);
+  )(function* (repoInput, number) {
+    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
     return yield* provideProviderDeps(
       providerFor(repo.provider).listReviewThreads(repo, number),
     );
@@ -59,7 +60,7 @@ const makeReviewCommentService = Effect.gen(function* () {
   const create: ReviewCommentServiceShape["create"] = Effect.fn(
     "ReviewCommentService.create",
   )(function* (input) {
-    const repo = parseRepoId(input.repoId);
+    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
     yield* provideProviderDeps(
       providerFor(repo.provider).createReviewThread(repo, input.number, {
         body: input.body,
@@ -78,7 +79,7 @@ const makeReviewCommentService = Effect.gen(function* () {
   const reply: ReviewCommentServiceShape["reply"] = Effect.fn(
     "ReviewCommentService.reply",
   )(function* (input) {
-    const repo = parseRepoId(input.repoId);
+    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
     yield* provideProviderDeps(
       providerFor(repo.provider).replyToReviewThread(
         repo,
@@ -92,7 +93,7 @@ const makeReviewCommentService = Effect.gen(function* () {
   const update: ReviewCommentServiceShape["update"] = Effect.fn(
     "ReviewCommentService.update",
   )(function* (input) {
-    const repo = parseRepoId(input.repoId);
+    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
     yield* provideProviderDeps(
       providerFor(repo.provider).updateReviewComment(
         repo,

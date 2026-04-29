@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { ProviderError, ValidationError } from "../../errors";
 import { providerFor } from "../../providers/registry";
 import { AuthTokenStore } from "../../auth/token-store";
+import { repoIdentityCacheKey } from "../../repo-id";
 import type { PrChangedFile, PrFileContents } from "../../../shared/types";
 import type { DiffDataBackend } from "./types";
 
@@ -63,7 +64,7 @@ function makeProviderApiDiffBackend(
 
       if (!baseSha && input.changeType !== "new") {
         console.info("[diff-data] provider api base sha missing; fetching refs", {
-          repoId: input.repo.key,
+          repo: repoIdentityCacheKey(input.repo),
           number: input.number,
           provider: input.repo.provider,
         });
@@ -72,7 +73,7 @@ function makeProviderApiDiffBackend(
         );
         baseSha = refs.baseSha;
         console.info("[diff-data] provider api resolved refs", {
-          repoId: input.repo.key,
+          repo: repoIdentityCacheKey(input.repo),
           number: input.number,
           baseSha,
           headSha: refs.headSha,
@@ -98,7 +99,8 @@ function makeProviderApiDiffBackend(
       }
 
       return {
-        repoId: input.repo.key,
+        providerId: input.repo.providerId,
+        repoKey: input.repo.repoKey,
         oldPath,
         newPath,
         baseSha,

@@ -14,8 +14,12 @@ type ReviewEditorSettings = {
   defaultMode: ReviewEditorMode;
 };
 
-type RepoSummary = {
-  id: string;
+type RepoIdentity = {
+  providerId: string;
+  repoKey: string;
+};
+
+type RepoSummary = RepoIdentity & {
   provider: ForgeProviderKind;
   host: string;
   providerAccountId: string;
@@ -59,14 +63,14 @@ enum PullRequestBadgeStatus {
 }
 
 type SelectedPullRequest = {
-  repoId: string;
+  providerId: string;
+  repoKey: string;
   number: number;
   headSha: string;
   baseSha?: string | null;
 };
 
-type PrPatch = {
-  repoId: string;
+type PrPatch = RepoIdentity & {
   number: number;
   headSha: string;
   fileDiffs: FileDiffMetadata[];
@@ -86,8 +90,7 @@ type PrChangedFile = {
   changeType: PrFileChangeType;
 };
 
-type PrFileContents = {
-  repoId: string;
+type PrFileContents = RepoIdentity & {
   oldPath: string;
   newPath: string;
   baseSha: string | null;
@@ -177,8 +180,7 @@ type ReviewThread = {
   isOptimistic?: boolean;
 };
 
-type CreatePullRequestReviewCommentInput = {
-  repoId: string;
+type CreatePullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   body: string;
   path: string;
@@ -191,15 +193,13 @@ type CreatePullRequestReviewCommentInput = {
   subjectType: "file" | "line";
 };
 
-type ReplyToPullRequestReviewCommentInput = {
-  repoId: string;
+type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   threadId: string;
   body: string;
 };
 
-type UpdatePullRequestReviewCommentInput = {
-  repoId: string;
+type UpdatePullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   threadId: string;
   commentId: string;
@@ -240,6 +240,7 @@ export type {
   ProviderProfile,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
+  RepoIdentity,
   RepoSummary,
   ReviewComment,
   ReviewEditorMode,

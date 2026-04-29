@@ -29,9 +29,9 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 - File tree can be hidden; hidden state uses Base UI Popover to access the tree.
 
 ## Backend Contract
-- `pullRequests.list(repoId)` returns PR/MR summaries and refreshes the repo cache.
-- `pullRequests.getPatch(repoId, number, headSha)` returns patch text for rendering.
-- `pullRequests.listChangedFiles(repoId, number, headSha)` returns changed file paths.
+- `pullRequests.list(providerId, repoKey)` returns PR/MR summaries and refreshes the repo cache.
+- `pullRequests.getPatch(providerId, repoKey, number, headSha)` returns patch text for rendering.
+- `pullRequests.listChangedFiles(providerId, repoKey, number, headSha)` returns changed file paths.
 - `tracked.*` owns tracked PR persistence.
 - `reviewComments.*` owns viewer login, review thread loading, creation, replies, and updates.
 - `preflight.getCliStatuses(gitlabHost)` reports provider CLI readiness.

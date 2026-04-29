@@ -12,6 +12,7 @@ import type {
   ReplyToPullRequestReviewCommentInput,
   ReviewEditorMode,
   ReviewEditorSettings,
+  RepoIdentity,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
 } from "../types/forge";
@@ -44,18 +45,20 @@ const forgeKeys = {
   pullRequests: () => [...forgeKeys.all, "pull-requests"] as const,
   pullRequestOverview: (accountId: string) =>
     [...forgeKeys.pullRequests(), "overview", accountId] as const,
-  pullRequestList: (repoId: string) => [...forgeKeys.pullRequests(), "list", repoId] as const,
-  pullRequestCachedList: (repoId: string) =>
-    [...forgeKeys.pullRequests(), "list", repoId, "cached"] as const,
+  pullRequestList: (repo: RepoIdentity) =>
+    [...forgeKeys.pullRequests(), "list", repo.providerId, repo.repoKey] as const,
+  pullRequestCachedList: (repo: RepoIdentity) =>
+    [...forgeKeys.pullRequests(), "list", repo.providerId, repo.repoKey, "cached"] as const,
   trackedPullRequests: () => [...forgeKeys.pullRequests(), "tracked"] as const,
-  trackedPullRequestList: (repoId: string) =>
-    [...forgeKeys.trackedPullRequests(), "list", repoId] as const,
+  trackedPullRequestList: (repo: RepoIdentity) =>
+    [...forgeKeys.trackedPullRequests(), "list", repo.providerId, repo.repoKey] as const,
   pullRequestPatch: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "patch", pr.repoId, pr.number, pr.headSha] as const,
+    [...forgeKeys.pullRequests(), "patch", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
   pullRequestFiles: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "files", pr.repoId, pr.number, pr.headSha] as const,
+    [...forgeKeys.pullRequests(), "files", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
   pullRequestFileContents: (input: {
-    repoId: string;
+    providerId: string;
+    repoKey: string;
     number: number;
     oldPath: string;
     newPath: string;
@@ -66,7 +69,8 @@ const forgeKeys = {
     [
       ...forgeKeys.pullRequests(),
       "file-contents",
-      input.repoId,
+      input.providerId,
+      input.repoKey,
       input.number,
       input.oldPath,
       input.newPath,
@@ -75,7 +79,7 @@ const forgeKeys = {
       input.changeType,
     ] as const,
   pullRequestReviewThreads: (pr: SelectedPullRequest) =>
-    [...forgeKeys.pullRequests(), "review-threads", pr.repoId, pr.number, pr.headSha] as const,
+    [...forgeKeys.pullRequests(), "review-threads", pr.providerId, pr.repoKey, pr.number, pr.headSha] as const,
   pullRequestPatchIdle: () => [...forgeKeys.pullRequests(), "patch", "idle"] as const,
   pullRequestFilesIdle: () => [...forgeKeys.pullRequests(), "files", "idle"] as const,
   pullRequestReviewThreadsIdle: () =>
@@ -225,10 +229,10 @@ function searchReposQueryOptions(
   });
 }
 
-function pullRequestCachedListQueryOptions(repoId: string) {
+function pullRequestCachedListQueryOptions(repo: RepoIdentity) {
   return queryOptions({
-    queryKey: forgeKeys.pullRequestCachedList(repoId),
-    queryFn: () => trpc.pullRequests.listCached.query({ repoId }),
+    queryKey: forgeKeys.pullRequestCachedList(repo),
+    queryFn: () => trpc.pullRequests.listCached.query(repo),
     staleTime: 0,
   });
 }
@@ -241,18 +245,18 @@ function pullRequestOverviewQueryOptions(accountId: string) {
   });
 }
 
-function pullRequestListQueryOptions(repoId: string) {
+function pullRequestListQueryOptions(repo: RepoIdentity) {
   return queryOptions({
-    queryKey: forgeKeys.pullRequestList(repoId),
-    queryFn: () => trpc.pullRequests.list.query({ repoId }),
+    queryKey: forgeKeys.pullRequestList(repo),
+    queryFn: () => trpc.pullRequests.list.query(repo),
     staleTime: 0,
   });
 }
 
-function trackedPullRequestListQueryOptions(repoId: string) {
+function trackedPullRequestListQueryOptions(repo: RepoIdentity) {
   return queryOptions({
-    queryKey: forgeKeys.trackedPullRequestList(repoId),
-    queryFn: () => trpc.tracked.list.query({ repoId }),
+    queryKey: forgeKeys.trackedPullRequestList(repo),
+    queryFn: () => trpc.tracked.list.query(repo),
     staleTime: Infinity,
   });
 }
@@ -262,7 +266,8 @@ function pullRequestPatchQueryOptions(pr: SelectedPullRequest) {
     queryKey: forgeKeys.pullRequestPatch(pr),
     queryFn: () =>
       trpc.pullRequests.getPatch.query({
-        repoId: pr.repoId,
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
         number: pr.number,
         headSha: pr.headSha,
       }),
@@ -274,7 +279,8 @@ function pullRequestFilesQueryOptions(pr: SelectedPullRequest) {
     queryKey: forgeKeys.pullRequestFiles(pr),
     queryFn: () =>
       trpc.pullRequests.listChangedFiles.query({
-        repoId: pr.repoId,
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
         number: pr.number,
         headSha: pr.headSha,
       }),
@@ -282,7 +288,8 @@ function pullRequestFilesQueryOptions(pr: SelectedPullRequest) {
 }
 
 function pullRequestFileContentsQueryOptions(input: {
-  repoId: string;
+  providerId: string;
+  repoKey: string;
   number: number;
   oldPath: string;
   newPath: string;
@@ -302,7 +309,8 @@ function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
     queryKey: forgeKeys.pullRequestReviewThreads(pr),
     queryFn: () =>
       trpc.reviewComments.listThreads.query({
-        repoId: pr.repoId,
+        providerId: pr.providerId,
+        repoKey: pr.repoKey,
         number: pr.number,
       }),
   });
@@ -312,7 +320,8 @@ async function createPullRequestReviewComment(
   input: CreatePullRequestReviewCommentInput,
 ) {
   await trpc.reviewComments.create.mutate({
-    repoId: input.repoId,
+    providerId: input.providerId,
+    repoKey: input.repoKey,
     number: input.number,
     body: input.body,
     path: input.path,
@@ -330,7 +339,8 @@ async function replyToPullRequestReviewComment(
   input: ReplyToPullRequestReviewCommentInput,
 ) {
   await trpc.reviewComments.reply.mutate({
-    repoId: input.repoId,
+    providerId: input.providerId,
+    repoKey: input.repoKey,
     number: input.number,
     threadId: input.threadId,
     body: input.body,
@@ -341,7 +351,8 @@ async function updatePullRequestReviewComment(
   input: UpdatePullRequestReviewCommentInput,
 ) {
   await trpc.reviewComments.update.mutate({
-    repoId: input.repoId,
+    providerId: input.providerId,
+    repoKey: input.repoKey,
     number: input.number,
     threadId: input.threadId,
     commentId: input.commentId,

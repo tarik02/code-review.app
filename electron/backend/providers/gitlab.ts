@@ -6,7 +6,7 @@ import {
 } from "@effect/platform";
 import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors";
-import { createRepoId, normalizeHost, normalizePath } from "../repo-id";
+import { createRepoIdentity, normalizeHost, normalizePath } from "../repo-id";
 import {
   getValidAccessToken,
   updateViewerLogin,
@@ -21,7 +21,7 @@ import type {
   ReviewThread,
 } from "../../shared/types";
 import type { ForgeProvider, PullRequestRefs, ReviewThreadInput } from "./types";
-import type { RepoId } from "../repo-id";
+import type { RepoIdentity } from "../repo-id";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store";
 
 type GitLabRequestOptions = {
@@ -232,7 +232,7 @@ function isNotAuthenticatedMessage(message: string) {
   );
 }
 
-function projectEndpoint(repo: RepoId, suffix: string) {
+function projectEndpoint(repo: RepoIdentity, suffix: string) {
   return `projects/${encodeURIComponent(repo.path)}/${suffix}`;
 }
 
@@ -421,7 +421,7 @@ function repoSummaryFromProject(
 ): RepoSummary {
   const normalizedHost = normalizeHost(host);
   return {
-    id: createRepoId("gitlab", normalizedHost, accountId, project.path_with_namespace).key,
+    ...createRepoIdentity("gitlab", normalizedHost, accountId, project.path_with_namespace),
     provider: "gitlab",
     host: normalizedHost,
     providerAccountId: accountId,
@@ -519,7 +519,7 @@ function fetchGitLabPullRequestRefsByProject(
   });
 }
 
-function fetchGitLabPullRequestRefs(repo: RepoId, number: number) {
+function fetchGitLabPullRequestRefs(repo: RepoIdentity, number: number) {
   return fetchGitLabPullRequestRefsByProject(
     repo.accountId,
     repo.host,
@@ -840,7 +840,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  listPullRequests(repo: RepoId) {
+  listPullRequests(repo: RepoIdentity) {
     return Effect.gen(function* () {
       const mergeRequests = yield* gitlabJson(
         repo.accountId,
@@ -858,7 +858,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  getPullRequest(repo: RepoId, number: number) {
+  getPullRequest(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const mergeRequest = yield* gitlabJson(
         repo.accountId,
@@ -870,7 +870,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  fetchChangedFiles(repo: RepoId, number: number) {
+  fetchChangedFiles(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const files: PrChangedFile[] = [];
       const seen = new Set<string>();
@@ -900,7 +900,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  fetchPatch(repo: RepoId, number: number) {
+  fetchPatch(repo: RepoIdentity, number: number) {
     return gitlabText(
       repo.accountId,
       repo.host,
@@ -908,11 +908,11 @@ class GitLabProvider implements ForgeProvider {
     );
   }
 
-  fetchPullRequestRefs(repo: RepoId, number: number) {
+  fetchPullRequestRefs(repo: RepoIdentity, number: number) {
     return fetchGitLabPullRequestRefs(repo, number);
   }
 
-  fetchFileContent(repo: RepoId, path: string, ref: string) {
+  fetchFileContent(repo: RepoIdentity, path: string, ref: string) {
     console.info("[gitlab] fetching file content", {
       repo: repo.path,
       path,
@@ -939,7 +939,7 @@ class GitLabProvider implements ForgeProvider {
     );
   }
 
-  gitRemote(repo: RepoId) {
+  gitRemote(repo: RepoIdentity) {
     return Effect.gen(function* () {
       const token = yield* validAccessToken(repo.accountId);
       return {
@@ -955,7 +955,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  listReviewThreads(repo: RepoId, number: number) {
+  listReviewThreads(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const threads: ReviewThread[] = [];
       let page = 1;
@@ -985,7 +985,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  createReviewThread(repo: RepoId, number: number, input: ReviewThreadInput) {
+  createReviewThread(repo: RepoIdentity, number: number, input: ReviewThreadInput) {
     return Effect.gen(function* () {
       const body = input.body.trim();
       if (!body) return yield* Effect.fail(new ProviderError("Comment body is required"));
@@ -1036,7 +1036,7 @@ class GitLabProvider implements ForgeProvider {
     });
   }
 
-  replyToReviewThread(repo: RepoId, number: number, threadId: string, body: string) {
+  replyToReviewThread(repo: RepoIdentity, number: number, threadId: string, body: string) {
     return Effect.gen(function* () {
       const trimmedThreadId = threadId.trim();
       const trimmedBody = body.trim();
@@ -1056,7 +1056,7 @@ class GitLabProvider implements ForgeProvider {
   }
 
   updateReviewComment(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
     threadId: string,
     commentId: string,

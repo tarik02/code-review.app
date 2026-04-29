@@ -10,10 +10,15 @@ import {
 } from "./repo-sidebar-item";
 import type {
   OverviewPullRequestSummary,
+  RepoIdentity,
   RepoSummary,
 } from "../../types/forge";
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { TopBar } from "./top-bar";
+import {
+  repoIdentity,
+  repoIdentityKey,
+} from "../../lib/repo-identity";
 
 type RepoSidebarProps = {
   repos: RepoSummary[];
@@ -29,12 +34,12 @@ type RepoSidebarProps = {
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   emptyState?: ReactNode;
   onAddRepo: () => void;
-  onAddPr: (repo: string) => void;
+  onAddPr: (repo: RepoIdentity) => void;
   onViewChange: (view: SidebarPullRequestView) => void;
-  onSelectPr: (repo: string, pullRequest: PullRequestSummary) => void;
-  onTrackPr: (repo: string, pullRequest: PullRequestSummary) => void;
-  onRemovePr: (repo: string, pullRequest: PullRequestSummary) => void;
-  onRepoOpenChange: (repo: string, open: boolean) => void;
+  onSelectPr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
+  onTrackPr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
+  onRemovePr: (repo: RepoIdentity, pullRequest: PullRequestSummary) => void;
+  onRepoOpenChange: (repo: RepoIdentity, open: boolean) => void;
 };
 
 function toTimestamp(value: string) {
@@ -85,7 +90,7 @@ function RepoSidebar({
   const repoErrorEntries = useMemo(
     () =>
       repos.flatMap((repo) => {
-        const error = repoErrors[repo.id];
+        const error = repoErrors[repoIdentityKey(repo)];
         return error ? [{ repo, error }] : [];
       }),
     [repoErrors, repos],
@@ -181,14 +186,14 @@ function RepoSidebar({
             ) : null}
             {sortedOverviewPullRequests.map(({ repo, pullRequest }) => (
               <PullRequestSidebarRow
-                key={`${repo.id}#${pullRequest.number}`}
-                repoId={repo.id}
+                key={`${repoIdentityKey(repo)}#${pullRequest.number}`}
+                repo={repoIdentity(repo)}
                 provider={repo.provider}
                 pullRequest={pullRequest}
                 selectedPrKey={selectedPrKey}
                 isTrackedView={false}
                 isTracked={
-                  trackedPullRequestNumbersByRepo[repo.id]?.has(
+                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
                     pullRequest.number,
                   ) ?? false
                 }
@@ -209,7 +214,7 @@ function RepoSidebar({
             {repoErrorEntries.map(({ repo, error }) => (
               <div
                 className="px-3 py-2.5 text-sm text-danger-600"
-                key={repo.id}
+                key={repoIdentityKey(repo)}
               >
                 {getRepoLabel(repo)}: {error}
               </div>
@@ -219,24 +224,25 @@ function RepoSidebar({
           <Accordion multiple value={openValues}>
             {repos.map((repo) => (
               <RepoSidebarItem
-                key={repo.id}
-                value={repo.id}
+                key={repoIdentityKey(repo)}
+                value={repoIdentityKey(repo)}
+                repo={repoIdentity(repo)}
                 provider={repo.provider}
                 avatarUrl={repo.avatarUrl}
                 host={repo.host}
                 nameWithOwner={repo.nameWithOwner}
-                pullRequests={prsByRepo[repo.id]}
-                error={repoErrors[repo.id]}
+                pullRequests={prsByRepo[repoIdentityKey(repo)]}
+                error={repoErrors[repoIdentityKey(repo)]}
                 view={view}
                 selectedPrKey={selectedPrKey}
                 trackedPullRequestNumbers={
-                  trackedPullRequestNumbersByRepo[repo.id]
+                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]
                 }
-                onSelectPr={(name, pr) => onSelectPr(name, pr)}
-                onAddPr={(name) => onAddPr(name)}
-                onTrackPr={(name, pr) => onTrackPr(name, pr)}
-                onRemovePr={(name, pr) => onRemovePr(name, pr)}
-                onOpenChange={(open) => onRepoOpenChange(repo.id, open)}
+                onSelectPr={(identity, pr) => onSelectPr(identity, pr)}
+                onAddPr={(identity) => onAddPr(identity)}
+                onTrackPr={(identity, pr) => onTrackPr(identity, pr)}
+                onRemovePr={(identity, pr) => onRemovePr(identity, pr)}
+                onOpenChange={(open) => onRepoOpenChange(repo, open)}
               />
             ))}
           </Accordion>

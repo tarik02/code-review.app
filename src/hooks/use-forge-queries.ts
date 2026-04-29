@@ -35,10 +35,17 @@ import type {
   ProviderAccount,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
+  RepoIdentity,
   RepoSummary,
   SelectedPullRequest,
   UpdatePullRequestReviewCommentInput,
 } from "../types/forge";
+import {
+  providerAccountIdFromProviderId,
+  providerFromProviderId,
+  repoIdentity,
+  repoIdentityKey,
+} from "../lib/repo-identity";
 
 function getErrorMessage(error: unknown): string {
   if (!error) return "";
@@ -130,17 +137,6 @@ function useSavedRepos() {
   };
 }
 
-function parseRepoId(repoId: string | null): {
-  accountId: string;
-} {
-  if (!repoId) {
-    return { accountId: "" };
-  }
-
-  const [, , encodedAccountId = ""] = repoId.split(":");
-  return { accountId: decodeURIComponent(encodedAccountId) };
-}
-
 function useRepoPickerRepos(
   debouncedQuery: string,
   accountId: string,
@@ -230,7 +226,7 @@ function useRepoPickerReposForAccounts(
     const byId = new Map<string, RepoSummary>();
     for (const query of activeQueries) {
       for (const repo of query.data ?? []) {
-        byId.set(repo.id, repo);
+        byId.set(repoIdentityKey(repo), repo);
       }
     }
     return [...byId.values()];
@@ -288,7 +284,7 @@ function useInitialReposForAccounts(
     const byId = new Map<string, RepoSummary>();
     for (const query of initialRepoQueries) {
       for (const repo of query.data ?? []) {
-        byId.set(repo.id, repo);
+        byId.set(repoIdentityKey(repo), repo);
       }
     }
     return [...byId.values()];
@@ -389,18 +385,22 @@ function useOverviewPullRequests({
   enabled,
 }: UseOverviewPullRequestsArgs) {
   const repoNames = useMemo(
-    () => repos.map((repo) => repo.id),
+    () => repos.map((repo) => repoIdentityKey(repo)),
+    [repos],
+  );
+  const repoIdentities = useMemo(
+    () => repos.map((repo) => repoIdentity(repo)),
     [repos],
   );
 
   const cachedPullRequestQueries = useQueries({
-    queries: repoNames.map((repo) => ({
+    queries: repoIdentities.map((repo) => ({
       ...pullRequestCachedListQueryOptions(repo),
       enabled,
     })),
   });
   const livePullRequestQueries = useQueries({
-    queries: repoNames.map((repo) => ({
+    queries: repoIdentities.map((repo) => ({
       ...pullRequestListQueryOptions(repo),
       enabled,
     })),
@@ -444,12 +444,16 @@ function useTrackedPullRequests({
 }: UseRepoPullRequestsArgs) {
   const queryClient = useQueryClient();
   const repoNames = useMemo(
-    () => repos.map((repo) => repo.id),
+    () => repos.map((repo) => repoIdentityKey(repo)),
+    [repos],
+  );
+  const repoIdentities = useMemo(
+    () => repos.map((repo) => repoIdentity(repo)),
     [repos],
   );
 
   const trackedPullRequestQueries = useQueries({
-    queries: repoNames.map((repo) => ({
+    queries: repoIdentities.map((repo) => ({
       ...trackedPullRequestListQueryOptions(repo),
       staleTime: Infinity,
     })),
@@ -478,19 +482,19 @@ function useTrackedPullRequests({
   }, [repoNames, trackedPullRequestQueries]);
 
   const refreshTrackedPullRequests = useCallback(
-    async (repoId: string) => {
+    async (repo: RepoIdentity) => {
       try {
-        const pullRequests = await trpc.tracked.refresh.mutate({ repoId });
+        const pullRequests = await trpc.tracked.refresh.mutate(repo);
 
         queryClient.setQueryData<PullRequestSummary[]>(
-          forgeKeys.trackedPullRequestList(repoId),
+          forgeKeys.trackedPullRequestList(repo),
           pullRequests,
         );
 
         return pullRequests;
       } catch {
         return queryClient.getQueryData<PullRequestSummary[]>(
-          forgeKeys.trackedPullRequestList(repoId),
+          forgeKeys.trackedPullRequestList(repo),
         ) ?? [];
       }
     },
@@ -518,7 +522,8 @@ function useSelectedPullRequestData(
       }
 
       return trpc.pullRequests.getPatch.query({
-        repoId: selectedPr.repoId,
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
         number: selectedPr.number,
         headSha: selectedPr.headSha,
       });
@@ -536,7 +541,8 @@ function useSelectedPullRequestData(
       }
 
       return trpc.pullRequests.listChangedFiles.query({
-        repoId: selectedPr.repoId,
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
         number: selectedPr.number,
         headSha: selectedPr.headSha,
       });
@@ -554,7 +560,8 @@ function useSelectedPullRequestData(
       }
 
       return trpc.reviewComments.listThreads.query({
-        repoId: selectedPr.repoId,
+        providerId: selectedPr.providerId,
+        repoKey: selectedPr.repoKey,
         number: selectedPr.number,
       });
     },
@@ -596,10 +603,11 @@ function usePullRequestReviewCommentMutations(
   selectedPr: SelectedPullRequest | null,
 ) {
   const queryClient = useQueryClient();
-  const selectedRepoId = selectedPr?.repoId ?? null;
-  const viewerProvider = parseRepoId(selectedRepoId);
+  const viewerAccountId = selectedPr
+    ? providerAccountIdFromProviderId(selectedPr.providerId)
+    : "";
   const viewerLoginQuery = useQuery({
-    ...viewerLoginQueryOptions(viewerProvider.accountId),
+    ...viewerLoginQueryOptions(viewerAccountId),
     enabled: selectedPr !== null,
   });
   const viewerLogin = viewerLoginQuery.data?.login ?? "You";
@@ -658,7 +666,7 @@ function usePullRequestReviewCommentMutations(
       const rootComment = createOptimisticComment(input.body, viewerLogin, null);
       const optimisticThread: ReviewThread = {
         id: createTemporaryId("temp-thread"),
-        provider: input.repoId.startsWith("gitlab:") ? "gitlab" : "github",
+        provider: providerFromProviderId(input.providerId),
         path: input.path,
         isResolved: false,
         isOutdated: false,

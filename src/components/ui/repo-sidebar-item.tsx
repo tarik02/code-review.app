@@ -11,7 +11,9 @@ import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
   type PullRequestSummary,
+  type RepoIdentity,
 } from "../../types/forge";
+import { repoIdentityKey } from "../../lib/repo-identity";
 import { getOwnerAvatarUrl, getOwnerLogin } from "../../lib/forge-owner";
 import {
   formatPullRequestDisplayTitle,
@@ -24,6 +26,7 @@ import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestAr
 
 type RepoSidebarItemProps = {
   value: string;
+  repo: RepoIdentity;
   provider: ForgeProviderKind;
   avatarUrl: string | null;
   host: string;
@@ -33,26 +36,26 @@ type RepoSidebarItemProps = {
   view: SidebarPullRequestView;
   selectedPrKey: string | null;
   trackedPullRequestNumbers?: Set<number>;
-  onSelectPr: (repo: string, pr: PullRequestSummary) => void;
-  onAddPr: (repo: string) => void;
-  onTrackPr?: (repo: string, pr: PullRequestSummary) => void;
-  onRemovePr: (repo: string, pr: PullRequestSummary) => void;
+  onSelectPr: (repo: RepoIdentity, pr: PullRequestSummary) => void;
+  onAddPr: (repo: RepoIdentity) => void;
+  onTrackPr?: (repo: RepoIdentity, pr: PullRequestSummary) => void;
+  onRemovePr: (repo: RepoIdentity, pr: PullRequestSummary) => void;
   onOpenChange: (open: boolean) => void;
 };
 
 type SidebarPullRequestView = "overview" | "tracked";
 
 type PullRequestSidebarRowProps = {
-  repoId: string;
+  repo: RepoIdentity;
   provider: ForgeProviderKind;
   pullRequest: PullRequestSummary;
   selectedPrKey: string | null;
   isTrackedView: boolean;
   isTracked: boolean;
   repoLabel?: string;
-  onSelectPr: (repo: string, pr: PullRequestSummary) => void;
-  onTrackPr?: (repo: string, pr: PullRequestSummary) => void;
-  onRemovePr: (repo: string, pr: PullRequestSummary) => void;
+  onSelectPr: (repo: RepoIdentity, pr: PullRequestSummary) => void;
+  onTrackPr?: (repo: RepoIdentity, pr: PullRequestSummary) => void;
+  onRemovePr: (repo: RepoIdentity, pr: PullRequestSummary) => void;
 };
 
 type PullRequestStatusViewModel = {
@@ -181,7 +184,7 @@ function ChevronIcon(props: React.ComponentProps<"svg">) {
 }
 
 function PullRequestSidebarRow({
-  repoId,
+  repo,
   provider,
   pullRequest,
   selectedPrKey,
@@ -194,9 +197,10 @@ function PullRequestSidebarRow({
 }: PullRequestSidebarRowProps) {
   const status = getPullRequestStatus(pullRequest);
   const title = formatPullRequestDisplayTitle(pullRequest.title);
+  const lookupKey = repoIdentityKey(repo);
   const isSelected =
     selectedPrKey ===
-    `${repoId}#${pullRequest.number}@${pullRequest.headSha}`;
+    `${lookupKey}#${pullRequest.number}@${pullRequest.headSha}`;
 
   return (
     <div className="group relative">
@@ -205,7 +209,7 @@ function PullRequestSidebarRow({
           "group relative flex w-full flex-col gap-1 bg-canvas px-3 py-2.5 text-left transition hover:bg-canvasDark focus-visible:bg-surface",
           isSelected ? "bg-canvasDark" : "",
         ].join(" ")}
-        onClick={() => onSelectPr(repoId, pullRequest)}
+        onClick={() => onSelectPr(repo, pullRequest)}
         type="button"
       >
         <p className="truncate text-xs text-ink-500">
@@ -232,7 +236,7 @@ function PullRequestSidebarRow({
         <button
           aria-label={`Remove PR #${pullRequest.number}`}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100"
-          onClick={() => onRemovePr(repoId, pullRequest)}
+          onClick={() => onRemovePr(repo, pullRequest)}
           type="button"
         >
           <ArchiveBoxXMarkIcon className="size-4 shrink-0" />
@@ -244,7 +248,7 @@ function PullRequestSidebarRow({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            onTrackPr(repoId, pullRequest);
+            onTrackPr(repo, pullRequest);
           }}
           type="button"
         >
@@ -257,6 +261,7 @@ function PullRequestSidebarRow({
 
 function RepoSidebarItem({
   value,
+  repo,
   provider,
   avatarUrl,
   host,
@@ -302,7 +307,7 @@ function RepoSidebarItem({
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            onAddPr(value);
+            onAddPr(repo);
           }}
           type="button"
         >
@@ -320,7 +325,7 @@ function RepoSidebarItem({
                 No tracked PRs yet.{" "}
                 <button
                   className="font-medium text-ink-700 underline-offset-2 hover:underline"
-                  onClick={() => onAddPr(value)}
+                  onClick={() => onAddPr(repo)}
                   type="button"
                 >
                   Add a PR
@@ -341,7 +346,7 @@ function RepoSidebarItem({
                   return (
                     <PullRequestSidebarRow
                       key={prKey}
-                      repoId={value}
+                      repo={repo}
                       provider={provider}
                       pullRequest={pullRequest}
                       selectedPrKey={selectedPrKey}

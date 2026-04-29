@@ -1,11 +1,22 @@
-import Database from "better-sqlite3";
-import path from "node:path";
+import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer } from "effect";
+import {
+  DatabaseService,
+  type Database,
+  type DatabaseTransaction,
+} from "./db/client";
+import {
+  prChangedFilesCache,
+  prPatchCache,
+  providerProfiles,
+  pullRequests,
+  repos,
+} from "./db/schema";
 import { CacheError } from "./errors";
-import { createRepoId } from "./repo-id";
-import { app } from "electron";
 import type {
   ForgeProviderKind,
+  ProviderProfile,
+  RepoIdentity,
   PullRequestSummary,
   RepoSummary,
 } from "../shared/types";
@@ -13,40 +24,40 @@ import type {
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;
   saveRepo(repo: RepoSummary): Effect.Effect<void, CacheError>;
-  readCachedPullRequests(repoId: string): Effect.Effect<PullRequestSummary[], CacheError>;
+  readCachedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], CacheError>;
   writePullRequestsCache(
-    repoId: string,
+    repo: RepoIdentity,
     pullRequests: PullRequestSummary[],
   ): Effect.Effect<void, CacheError>;
-  readTrackedPullRequests(repoId: string): Effect.Effect<PullRequestSummary[], CacheError>;
+  readTrackedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], CacheError>;
   trackPullRequest(
-    repoId: string,
+    repo: RepoIdentity,
     pullRequest: PullRequestSummary,
   ): Effect.Effect<void, CacheError>;
-  removeTrackedPullRequest(repoId: string, number: number): Effect.Effect<void, CacheError>;
+  removeTrackedPullRequest(repo: RepoIdentity, number: number): Effect.Effect<void, CacheError>;
   getCachedPatch(
-    repoId: string,
+    repo: RepoIdentity,
     number: number,
     headSha: string,
   ): Effect.Effect<string | null, CacheError>;
   storePatch(
-    repoId: string,
+    repo: RepoIdentity,
     number: number,
     headSha: string,
     patch: string,
   ): Effect.Effect<void, CacheError>;
   getCachedChangedFiles(
-    repoId: string,
+    repo: RepoIdentity,
     number: number,
     headSha: string,
   ): Effect.Effect<string[] | null, CacheError>;
   storeChangedFiles(
-    repoId: string,
+    repo: RepoIdentity,
     number: number,
     headSha: string,
     files: string[],
   ): Effect.Effect<void, CacheError>;
-  updateRepoAccessTimestamp(repoId: string): Effect.Effect<void, CacheError>;
+  updateRepoAccessTimestamp(repo: RepoIdentity): Effect.Effect<void, CacheError>;
   readProviderAccountVisibility(
     accountIds: string[],
   ): Effect.Effect<Record<string, boolean>, CacheError>;
@@ -54,11 +65,8 @@ type CacheServiceShape = {
     accountIds: string[],
     enabledAccountIds: string[],
   ): Effect.Effect<void, CacheError>;
-  readAppSetting<T>(key: string): Effect.Effect<T | null, CacheError>;
-  writeAppSetting<T>(
-    key: string,
-    value: T,
-  ): Effect.Effect<void, CacheError>;
+  readProviderProfile(accountId: string): Effect.Effect<ProviderProfile | null, CacheError>;
+  writeProviderProfile(profile: ProviderProfile): Effect.Effect<void, CacheError>;
 };
 
 class CacheService extends Effect.Tag("CacheService")<
@@ -66,598 +74,585 @@ class CacheService extends Effect.Tag("CacheService")<
   CacheServiceShape
 >() {}
 
-let db: Database.Database | null = null;
+type PullRequestCacheRow = typeof pullRequests.$inferSelect;
 
 function nowUnixTimestamp() {
   return Math.floor(Date.now() / 1000);
 }
 
-function boolToSql(value: boolean | null) {
-  if (value === null) return null;
-  return value ? 1 : 0;
+function sqlExcluded<T>(column: { name: string }) {
+  return sql.raw(`excluded.${column.name}`) as SQL<T>;
 }
 
-function sqlToBool(value: number | null) {
-  if (value === null) return null;
-  return value !== 0;
-}
-
-function getDatabase() {
-  if (db) return db;
-
-  const dbPath = path.join(app.getPath("userData"), "cache.sqlite");
-  db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("synchronous = NORMAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS repos (
-      repo_key TEXT PRIMARY KEY,
-      provider TEXT NOT NULL,
-      host TEXT NOT NULL,
-      provider_account_id TEXT NOT NULL DEFAULT '',
-      provider_account_label TEXT NOT NULL DEFAULT '',
-      name TEXT NOT NULL,
-      name_with_owner TEXT NOT NULL,
-      description TEXT,
-      is_private INTEGER,
-      avatar_url TEXT,
-      added_at INTEGER NOT NULL,
-      last_opened_at INTEGER
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_repos_provider_host
-      ON repos (provider, host, provider_account_id, name_with_owner);
-
-    CREATE TABLE IF NOT EXISTS repo_pull_requests (
-      repo_key TEXT NOT NULL,
-      pr_number INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      state TEXT NOT NULL,
-      is_draft INTEGER NOT NULL DEFAULT 0,
-      merge_state_status TEXT NOT NULL DEFAULT 'UNKNOWN',
-      mergeable TEXT NOT NULL DEFAULT 'UNKNOWN',
-      additions INTEGER,
-      deletions INTEGER,
-      change_count INTEGER,
-      author_login TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      url TEXT NOT NULL,
-      head_sha TEXT NOT NULL,
-      base_sha TEXT,
-      cached_at INTEGER NOT NULL,
-      last_seen_at INTEGER NOT NULL,
-      PRIMARY KEY (repo_key, pr_number)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_repo_pull_requests_repo_updated
-      ON repo_pull_requests (repo_key, updated_at DESC);
-
-    CREATE TABLE IF NOT EXISTS pr_patch_cache (
-      repo_key TEXT NOT NULL,
-      pr_number INTEGER NOT NULL,
-      head_sha TEXT NOT NULL,
-      patch_text TEXT NOT NULL,
-      cached_at INTEGER NOT NULL,
-      last_accessed_at INTEGER NOT NULL,
-      PRIMARY KEY (repo_key, pr_number, head_sha)
-    );
-
-    CREATE TABLE IF NOT EXISTS pr_changed_files_cache (
-      repo_key TEXT NOT NULL,
-      pr_number INTEGER NOT NULL,
-      head_sha TEXT NOT NULL,
-      files_json TEXT NOT NULL,
-      cached_at INTEGER NOT NULL,
-      last_accessed_at INTEGER NOT NULL,
-      PRIMARY KEY (repo_key, pr_number, head_sha)
-    );
-
-    CREATE TABLE IF NOT EXISTS tracked_pull_requests (
-      repo_key TEXT NOT NULL,
-      pr_number INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      state TEXT NOT NULL,
-      is_draft INTEGER NOT NULL DEFAULT 0,
-      merge_state_status TEXT NOT NULL DEFAULT 'UNKNOWN',
-      mergeable TEXT NOT NULL DEFAULT 'UNKNOWN',
-      additions INTEGER,
-      deletions INTEGER,
-      change_count INTEGER,
-      author_login TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      url TEXT NOT NULL,
-      head_sha TEXT NOT NULL,
-      base_sha TEXT,
-      added_at INTEGER NOT NULL,
-      last_refreshed_at INTEGER NOT NULL,
-      PRIMARY KEY (repo_key, pr_number)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_tracked_pull_requests_repo_added
-      ON tracked_pull_requests (repo_key, added_at DESC);
-
-    CREATE TABLE IF NOT EXISTS provider_account_visibility (
-      provider_account_id TEXT PRIMARY KEY,
-      is_enabled INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value_json TEXT NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-  `);
-  try {
-    db.exec("ALTER TABLE repos ADD COLUMN provider_account_id TEXT NOT NULL DEFAULT '';");
-  } catch {
-    // Column already exists.
-  }
-  try {
-    db.exec("ALTER TABLE repos ADD COLUMN provider_account_label TEXT NOT NULL DEFAULT '';");
-  } catch {
-    // Column already exists.
-  }
-
-  return db;
-}
-
-function rowToPullRequest(row: Record<string, unknown>): PullRequestSummary {
+function rowToRepo(
+  row: typeof repos.$inferSelect,
+  profileAccountId: string | null,
+  profileLogin: string | null,
+): RepoSummary {
+  const providerAccountId = profileAccountId ?? "";
   return {
-    number: Number(row.pr_number),
-    title: String(row.title),
-    state: String(row.state),
-    isDraft: Number(row.is_draft) !== 0,
-    mergeStateStatus: String(row.merge_state_status),
-    mergeable: String(row.mergeable),
-    additions: row.additions === null ? null : Number(row.additions),
-    deletions: row.deletions === null ? null : Number(row.deletions),
-    changeCount: row.change_count === null ? null : Number(row.change_count),
-    authorLogin: String(row.author_login),
-    updatedAt: String(row.updated_at),
-    url: String(row.url),
-    headSha: String(row.head_sha),
-    baseSha: row.base_sha === null ? null : String(row.base_sha),
+    providerId: row.providerId,
+    repoKey: row.repoKey,
+    provider: row.provider as ForgeProviderKind,
+    host: row.host,
+    providerAccountId,
+    providerAccountLabel: profileLogin ? `${profileLogin} @ ${row.host}` : row.host,
+    name: row.name,
+    nameWithOwner: row.nameWithOwner,
+    description: row.description,
+    isPrivate: row.isPrivate,
+    avatarUrl: row.avatarUrl,
   };
 }
 
-function pullRequestParams(repoId: string, pullRequest: PullRequestSummary, timestamp: number) {
+function repoIdentityFromSummary(repo: RepoSummary) {
   return {
-    repo_key: repoId,
-    pr_number: pullRequest.number,
+    providerId: repo.providerId,
+    repoKey: repo.repoKey,
+  };
+}
+
+async function getProviderProfileRowId(
+  database: DatabaseTransaction,
+  accountId: string,
+  timestamp: number,
+) {
+  await database
+    .insert(providerProfiles)
+    .values({
+      accountId,
+      isEnabled: true,
+      updatedAt: timestamp,
+    })
+    .onConflictDoUpdate({
+      target: providerProfiles.accountId,
+      set: { updatedAt: timestamp },
+    });
+
+  const [row] = await database
+    .select({ id: providerProfiles.id })
+    .from(providerProfiles)
+    .where(eq(providerProfiles.accountId, accountId))
+    .limit(1);
+
+  if (!row) {
+    throw new Error("Provider profile was not saved in the cache.");
+  }
+
+  return row.id;
+}
+
+async function findRepoRowId(
+  database: Database | DatabaseTransaction,
+  repo: RepoIdentity,
+) {
+  const [row] = await database
+    .select({ id: repos.id })
+    .from(repos)
+    .where(
+      and(
+        eq(repos.providerId, repo.providerId),
+        eq(repos.repoKey, repo.repoKey),
+      ),
+    )
+    .limit(1);
+
+  return row?.id ?? null;
+}
+
+function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
+  return {
+    number: row.prNumber,
+    title: row.title,
+    state: row.state,
+    isDraft: row.isDraft,
+    mergeStateStatus: row.mergeStateStatus,
+    mergeable: row.mergeable,
+    additions: row.additions,
+    deletions: row.deletions,
+    changeCount: row.changeCount,
+    authorLogin: row.authorLogin,
+    updatedAt: row.updatedAt,
+    url: row.url,
+    headSha: row.headSha,
+    baseSha: row.baseSha,
+  };
+}
+
+function pullRequestValues(repoRowId: number, pullRequest: PullRequestSummary) {
+  return {
+    repoRowId,
+    prNumber: pullRequest.number,
     title: pullRequest.title,
     state: pullRequest.state,
-    is_draft: pullRequest.isDraft ? 1 : 0,
-    merge_state_status: pullRequest.mergeStateStatus,
+    isDraft: pullRequest.isDraft,
+    mergeStateStatus: pullRequest.mergeStateStatus,
     mergeable: pullRequest.mergeable,
     additions: pullRequest.additions,
     deletions: pullRequest.deletions,
-    change_count: pullRequest.changeCount,
-    author_login: pullRequest.authorLogin,
-    updated_at: pullRequest.updatedAt,
+    changeCount: pullRequest.changeCount,
+    authorLogin: pullRequest.authorLogin,
+    updatedAt: pullRequest.updatedAt,
     url: pullRequest.url,
-    head_sha: pullRequest.headSha,
-    base_sha: pullRequest.baseSha,
-    timestamp,
+    headSha: pullRequest.headSha,
+    baseSha: pullRequest.baseSha,
   };
 }
 
-function wrap<A>(operation: () => A): Effect.Effect<A, CacheError> {
-  return Effect.try({
-    try: operation,
-    catch: (error) =>
-      new CacheError(error instanceof Error ? error.message : String(error)),
-  });
+function pullRequestCacheUpdateValues(timestamp: number) {
+  return {
+    title: sqlExcluded(pullRequests.title),
+    state: sqlExcluded(pullRequests.state),
+    isDraft: sqlExcluded(pullRequests.isDraft),
+    mergeStateStatus: sqlExcluded(pullRequests.mergeStateStatus),
+    mergeable: sqlExcluded(pullRequests.mergeable),
+    additions: sqlExcluded(pullRequests.additions),
+    deletions: sqlExcluded(pullRequests.deletions),
+    changeCount: sqlExcluded(pullRequests.changeCount),
+    authorLogin: sqlExcluded(pullRequests.authorLogin),
+    updatedAt: sqlExcluded(pullRequests.updatedAt),
+    url: sqlExcluded(pullRequests.url),
+    headSha: sqlExcluded(pullRequests.headSha),
+    baseSha: sqlExcluded(pullRequests.baseSha),
+    cachedAt: timestamp,
+    lastSeenAt: timestamp,
+  };
 }
 
 const makeCacheService = Effect.gen(function* () {
-  yield* Effect.addFinalizer(() =>
-    Effect.sync(() => {
-      db?.close();
-      db = null;
-    }),
-  );
+  const database = yield* DatabaseService;
 
   const listSavedRepos: CacheServiceShape["listSavedRepos"] = Effect.fn(
     "CacheService.listSavedRepos",
   )(() =>
-      wrap(() => {
-        const rows = getDatabase()
-          .prepare(
-            `
-            SELECT repo_key, provider, host, provider_account_id, provider_account_label,
-              name, name_with_owner, description, is_private, avatar_url
-            FROM repos
-            ORDER BY added_at ASC
-            `,
-          )
-          .all() as Record<string, unknown>[];
+    database.query(async (db) => {
+      const rows = await db
+        .select({
+          repo: repos,
+          profileAccountId: providerProfiles.accountId,
+          profileLogin: providerProfiles.login,
+        })
+        .from(repos)
+        .leftJoin(
+          providerProfiles,
+          eq(providerProfiles.id, repos.providerProfileId),
+        )
+        .orderBy(asc(repos.addedAt));
 
-        return rows.map((row) => ({
-          id: String(row.repo_key),
-          provider: String(row.provider) as ForgeProviderKind,
-          host: String(row.host),
-          providerAccountId: String(row.provider_account_id),
-          providerAccountLabel: String(row.provider_account_label),
-          name: String(row.name),
-          nameWithOwner: String(row.name_with_owner),
-          description: row.description === null ? null : String(row.description),
-          isPrivate: sqlToBool(row.is_private as number | null),
-          avatarUrl: row.avatar_url === null ? null : String(row.avatar_url),
-        }));
-      }),
+      return rows.map((row) =>
+        rowToRepo(row.repo, row.profileAccountId, row.profileLogin),
+      );
+    }),
   );
 
   const saveRepo: CacheServiceShape["saveRepo"] = Effect.fn(
     "CacheService.saveRepo",
   )((repo) =>
-      wrap(() => {
-        const timestamp = nowUnixTimestamp();
-        const repoKey =
-          repo.id.trim().length > 0
-            ? repo.id
-            : createRepoId(
-                repo.provider,
-                repo.host,
-                repo.providerAccountId,
-                repo.nameWithOwner,
-              ).key;
-        getDatabase()
-          .prepare(
-            `
-            INSERT INTO repos (
-              repo_key, provider, host, provider_account_id, provider_account_label,
-              name, name_with_owner, description, is_private, avatar_url, added_at,
-              last_opened_at
-            )
-            VALUES (
-              @repo_key, @provider, @host, @provider_account_id,
-              @provider_account_label, @name, @name_with_owner, @description,
-              @is_private, @avatar_url, @timestamp, @timestamp
-            )
-            ON CONFLICT(repo_key)
-            DO UPDATE SET
-              provider = excluded.provider,
-              host = excluded.host,
-              provider_account_id = excluded.provider_account_id,
-              provider_account_label = excluded.provider_account_label,
-              name = excluded.name,
-              name_with_owner = excluded.name_with_owner,
-              description = excluded.description,
-              is_private = excluded.is_private,
-              avatar_url = excluded.avatar_url
-            `,
-          )
-          .run({
-            repo_key: repoKey,
+    database.transaction(async (tx) => {
+      const timestamp = nowUnixTimestamp();
+      const identity = repoIdentityFromSummary(repo);
+      const providerProfileId = await getProviderProfileRowId(
+        tx,
+        repo.providerAccountId,
+        timestamp,
+      );
+
+      await tx
+        .insert(repos)
+        .values({
+          providerId: identity.providerId,
+          repoKey: identity.repoKey,
+          provider: repo.provider,
+          host: repo.host,
+          providerProfileId,
+          name: repo.name,
+          nameWithOwner: repo.nameWithOwner,
+          description: repo.description,
+          isPrivate: repo.isPrivate,
+          avatarUrl: repo.avatarUrl,
+          addedAt: timestamp,
+          lastOpenedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [repos.providerId, repos.repoKey],
+          set: {
             provider: repo.provider,
             host: repo.host,
-            provider_account_id: repo.providerAccountId,
-            provider_account_label: repo.providerAccountLabel,
+            providerProfileId,
             name: repo.name,
-            name_with_owner: repo.nameWithOwner,
+            nameWithOwner: repo.nameWithOwner,
             description: repo.description,
-            is_private: boolToSql(repo.isPrivate),
-            avatar_url: repo.avatarUrl,
-            timestamp,
-          });
-      }),
+            isPrivate: repo.isPrivate,
+            avatarUrl: repo.avatarUrl,
+          },
+        });
+    }),
   );
 
   const readCachedPullRequests: CacheServiceShape["readCachedPullRequests"] = Effect.fn(
     "CacheService.readCachedPullRequests",
-  )((repoId) =>
-      wrap(() => {
-        const rows = getDatabase()
-          .prepare(
-            `
-            SELECT pr_number, title, state, is_draft, merge_state_status, mergeable,
-              additions, deletions, change_count, author_login, updated_at, url,
-              head_sha, base_sha
-            FROM repo_pull_requests
-            WHERE repo_key = ?
-            ORDER BY updated_at DESC
-            `,
-          )
-          .all(repoId) as Record<string, unknown>[];
-        return rows.map(rowToPullRequest);
-      }),
+  )((repo) =>
+    database.query(async (db) => {
+      const repoRowId = await findRepoRowId(db, repo);
+      if (repoRowId === null) return [];
+
+      const rows = await db
+        .select()
+        .from(pullRequests)
+        .where(eq(pullRequests.repoRowId, repoRowId))
+        .orderBy(desc(pullRequests.updatedAt));
+
+      return rows.map(rowToPullRequest);
+    }),
   );
 
   const writePullRequestsCache: CacheServiceShape["writePullRequestsCache"] = Effect.fn(
     "CacheService.writePullRequestsCache",
-  )((repoId, pullRequests) =>
-      wrap(() => {
-        const database = getDatabase();
-        const timestamp = nowUnixTimestamp();
-        const insert = database.prepare(`
-          INSERT INTO repo_pull_requests (
-            repo_key, pr_number, title, state, is_draft, merge_state_status, mergeable,
-            additions, deletions, change_count, author_login, updated_at, url,
-            head_sha, base_sha, cached_at, last_seen_at
-          )
-          VALUES (
-            @repo_key, @pr_number, @title, @state, @is_draft, @merge_state_status,
-            @mergeable, @additions, @deletions, @change_count, @author_login,
-            @updated_at, @url, @head_sha, @base_sha, @timestamp, @timestamp
-          )
-        `);
-        database.transaction(() => {
-          database.prepare("DELETE FROM repo_pull_requests WHERE repo_key = ?").run(repoId);
-          for (const pullRequest of pullRequests) {
-            insert.run(pullRequestParams(repoId, pullRequest, timestamp));
-          }
-        })();
-      }),
+  )((repo, summaries) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      const timestamp = nowUnixTimestamp();
+
+      await tx
+        .delete(pullRequests)
+        .where(
+          and(
+            eq(pullRequests.repoRowId, repoRowId),
+            eq(pullRequests.isTracked, false),
+          ),
+        );
+
+      if (summaries.length === 0) return;
+
+      await tx.insert(pullRequests).values(
+        summaries.map((pullRequest) => ({
+          ...pullRequestValues(repoRowId, pullRequest),
+          isTracked: false,
+          cachedAt: timestamp,
+          lastSeenAt: timestamp,
+        })),
+      ).onConflictDoUpdate({
+        target: [pullRequests.repoRowId, pullRequests.prNumber],
+        set: pullRequestCacheUpdateValues(timestamp),
+      });
+    }),
   );
 
   const readTrackedPullRequests: CacheServiceShape["readTrackedPullRequests"] = Effect.fn(
     "CacheService.readTrackedPullRequests",
-  )((repoId) =>
-      wrap(() => {
-        const rows = getDatabase()
-          .prepare(
-            `
-            SELECT pr_number, title, state, is_draft, merge_state_status, mergeable,
-              additions, deletions, change_count, author_login, updated_at, url,
-              head_sha, base_sha
-            FROM tracked_pull_requests
-            WHERE repo_key = ?
-            ORDER BY added_at DESC
-            `,
-          )
-          .all(repoId) as Record<string, unknown>[];
-        return rows.map(rowToPullRequest);
-      }),
+  )((repo) =>
+    database.query(async (db) => {
+      const repoRowId = await findRepoRowId(db, repo);
+      if (repoRowId === null) return [];
+
+      const rows = await db
+        .select()
+        .from(pullRequests)
+        .where(
+          and(
+            eq(pullRequests.repoRowId, repoRowId),
+            eq(pullRequests.isTracked, true),
+          ),
+        )
+        .orderBy(desc(pullRequests.updatedAt));
+
+      return rows.map(rowToPullRequest);
+    }),
   );
 
   const trackPullRequest: CacheServiceShape["trackPullRequest"] = Effect.fn(
     "CacheService.trackPullRequest",
-  )((repoId, pullRequest) =>
-      wrap(() => {
-        const timestamp = nowUnixTimestamp();
-        getDatabase()
-          .prepare(
-            `
-            INSERT INTO tracked_pull_requests (
-              repo_key, pr_number, title, state, is_draft, merge_state_status, mergeable,
-              additions, deletions, change_count, author_login, updated_at, url,
-              head_sha, base_sha, added_at, last_refreshed_at
-            )
-            VALUES (
-              @repo_key, @pr_number, @title, @state, @is_draft, @merge_state_status,
-              @mergeable, @additions, @deletions, @change_count, @author_login,
-              @updated_at, @url, @head_sha, @base_sha, @timestamp, @timestamp
-            )
-            ON CONFLICT(repo_key, pr_number)
-            DO UPDATE SET
-              title = excluded.title,
-              state = excluded.state,
-              is_draft = excluded.is_draft,
-              merge_state_status = excluded.merge_state_status,
-              mergeable = excluded.mergeable,
-              additions = excluded.additions,
-              deletions = excluded.deletions,
-              change_count = excluded.change_count,
-              author_login = excluded.author_login,
-              updated_at = excluded.updated_at,
-              url = excluded.url,
-              head_sha = excluded.head_sha,
-              base_sha = excluded.base_sha,
-              last_refreshed_at = excluded.last_refreshed_at
-            `,
-          )
-          .run(pullRequestParams(repoId, pullRequest, timestamp));
-      }),
+  )((repo, pullRequest) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      const timestamp = nowUnixTimestamp();
+      const values = pullRequestValues(repoRowId, pullRequest);
+
+      await tx
+        .insert(pullRequests)
+        .values({
+          ...values,
+          isTracked: true,
+          cachedAt: timestamp,
+          lastSeenAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [pullRequests.repoRowId, pullRequests.prNumber],
+          set: {
+            ...pullRequestCacheUpdateValues(timestamp),
+            isTracked: true,
+          },
+        });
+    }),
   );
 
   const removeTrackedPullRequest: CacheServiceShape["removeTrackedPullRequest"] = Effect.fn(
     "CacheService.removeTrackedPullRequest",
-  )((repoId, number) =>
-      wrap(() => {
-        getDatabase()
-          .prepare(
-            `
-            DELETE FROM tracked_pull_requests
-            WHERE repo_key = ? AND pr_number = ?
-            `,
-          )
-          .run(repoId, number);
-      }),
+  )((repo, number) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      await tx
+        .update(pullRequests)
+        .set({ isTracked: false })
+        .where(
+          and(
+            eq(pullRequests.repoRowId, repoRowId),
+            eq(pullRequests.prNumber, number),
+          ),
+        );
+    }),
   );
 
   const getCachedPatch: CacheServiceShape["getCachedPatch"] = Effect.fn(
     "CacheService.getCachedPatch",
-  )((repoId, number, headSha) =>
-      wrap(() => {
-        const row = getDatabase()
-          .prepare(
-            `
-            SELECT patch_text
-            FROM pr_patch_cache
-            WHERE repo_key = ? AND pr_number = ? AND head_sha = ?
-            `,
-          )
-          .get(repoId, number, headSha) as { patch_text: string } | undefined;
-        if (!row) return null;
-        getDatabase()
-          .prepare(
-            `
-            UPDATE pr_patch_cache
-            SET last_accessed_at = ?
-            WHERE repo_key = ? AND pr_number = ? AND head_sha = ?
-            `,
-          )
-          .run(nowUnixTimestamp(), repoId, number, headSha);
-        return row.patch_text;
-      }),
+  )((repo, number, headSha) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return null;
+
+      const [row] = await tx
+        .select({ patchText: prPatchCache.patchText })
+        .from(prPatchCache)
+        .where(
+          and(
+            eq(prPatchCache.repoRowId, repoRowId),
+            eq(prPatchCache.prNumber, number),
+            eq(prPatchCache.headSha, headSha),
+          ),
+        )
+        .limit(1);
+
+      if (!row) return null;
+
+      await tx
+        .update(prPatchCache)
+        .set({ lastAccessedAt: nowUnixTimestamp() })
+        .where(
+          and(
+            eq(prPatchCache.repoRowId, repoRowId),
+            eq(prPatchCache.prNumber, number),
+            eq(prPatchCache.headSha, headSha),
+          ),
+        );
+
+      return row.patchText;
+    }),
   );
 
   const storePatch: CacheServiceShape["storePatch"] = Effect.fn(
     "CacheService.storePatch",
-  )((repoId, number, headSha, patch) =>
-      wrap(() => {
-        const timestamp = nowUnixTimestamp();
-        getDatabase()
-          .prepare(
-            `
-            INSERT INTO pr_patch_cache (
-              repo_key, pr_number, head_sha, patch_text, cached_at, last_accessed_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(repo_key, pr_number, head_sha)
-            DO UPDATE SET
-              patch_text = excluded.patch_text,
-              cached_at = excluded.cached_at,
-              last_accessed_at = excluded.last_accessed_at
-            `,
-          )
-          .run(repoId, number, headSha, patch, timestamp, timestamp);
-      }),
+  )((repo, number, headSha, patch) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      const timestamp = nowUnixTimestamp();
+
+      await tx
+        .insert(prPatchCache)
+        .values({
+          repoRowId,
+          prNumber: number,
+          headSha,
+          patchText: patch,
+          cachedAt: timestamp,
+          lastAccessedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [
+            prPatchCache.repoRowId,
+            prPatchCache.prNumber,
+            prPatchCache.headSha,
+          ],
+          set: {
+            patchText: patch,
+            cachedAt: timestamp,
+            lastAccessedAt: timestamp,
+          },
+        });
+    }),
   );
 
   const getCachedChangedFiles: CacheServiceShape["getCachedChangedFiles"] = Effect.fn(
     "CacheService.getCachedChangedFiles",
-  )((repoId, number, headSha) =>
-      wrap(() => {
-        const row = getDatabase()
-          .prepare(
-            `
-            SELECT files_json
-            FROM pr_changed_files_cache
-            WHERE repo_key = ? AND pr_number = ? AND head_sha = ?
-            `,
-          )
-          .get(repoId, number, headSha) as { files_json: string } | undefined;
-        if (!row) return null;
-        getDatabase()
-          .prepare(
-            `
-            UPDATE pr_changed_files_cache
-            SET last_accessed_at = ?
-            WHERE repo_key = ? AND pr_number = ? AND head_sha = ?
-            `,
-          )
-          .run(nowUnixTimestamp(), repoId, number, headSha);
-        return JSON.parse(row.files_json) as string[];
-      }),
+  )((repo, number, headSha) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return null;
+
+      const [row] = await tx
+        .select({ filesJson: prChangedFilesCache.filesJson })
+        .from(prChangedFilesCache)
+        .where(
+          and(
+            eq(prChangedFilesCache.repoRowId, repoRowId),
+            eq(prChangedFilesCache.prNumber, number),
+            eq(prChangedFilesCache.headSha, headSha),
+          ),
+        )
+        .limit(1);
+
+      if (!row) return null;
+
+      await tx
+        .update(prChangedFilesCache)
+        .set({ lastAccessedAt: nowUnixTimestamp() })
+        .where(
+          and(
+            eq(prChangedFilesCache.repoRowId, repoRowId),
+            eq(prChangedFilesCache.prNumber, number),
+            eq(prChangedFilesCache.headSha, headSha),
+          ),
+        );
+
+      return JSON.parse(row.filesJson) as string[];
+    }),
   );
 
   const storeChangedFiles: CacheServiceShape["storeChangedFiles"] = Effect.fn(
     "CacheService.storeChangedFiles",
-  )((repoId, number, headSha, files) =>
-      wrap(() => {
-        const timestamp = nowUnixTimestamp();
-        getDatabase()
-          .prepare(
-            `
-            INSERT INTO pr_changed_files_cache (
-              repo_key, pr_number, head_sha, files_json, cached_at, last_accessed_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(repo_key, pr_number, head_sha)
-            DO UPDATE SET
-              files_json = excluded.files_json,
-              cached_at = excluded.cached_at,
-              last_accessed_at = excluded.last_accessed_at
-            `,
-          )
-          .run(repoId, number, headSha, JSON.stringify(files), timestamp, timestamp);
-      }),
+  )((repo, number, headSha, files) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
+
+      const timestamp = nowUnixTimestamp();
+      const filesJson = JSON.stringify(files);
+
+      await tx
+        .insert(prChangedFilesCache)
+        .values({
+          repoRowId,
+          prNumber: number,
+          headSha,
+          filesJson,
+          cachedAt: timestamp,
+          lastAccessedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [
+            prChangedFilesCache.repoRowId,
+            prChangedFilesCache.prNumber,
+            prChangedFilesCache.headSha,
+          ],
+          set: {
+            filesJson,
+            cachedAt: timestamp,
+            lastAccessedAt: timestamp,
+          },
+        });
+    }),
   );
 
   const updateRepoAccessTimestamp: CacheServiceShape["updateRepoAccessTimestamp"] = Effect.fn(
     "CacheService.updateRepoAccessTimestamp",
-  )((repoId) =>
-      wrap(() => {
-        getDatabase()
-          .prepare("UPDATE repos SET last_opened_at = ? WHERE repo_key = ?")
-          .run(nowUnixTimestamp(), repoId);
-      }),
+  )((repo) =>
+    database.transaction(async (tx) => {
+      await tx
+        .update(repos)
+        .set({ lastOpenedAt: nowUnixTimestamp() })
+        .where(
+          and(
+            eq(repos.providerId, repo.providerId),
+            eq(repos.repoKey, repo.repoKey),
+          ),
+        );
+    }),
   );
 
   const readProviderAccountVisibility: CacheServiceShape["readProviderAccountVisibility"] = Effect.fn(
     "CacheService.readProviderAccountVisibility",
   )((accountIds) =>
-      wrap(() => {
-        if (accountIds.length === 0) {
-          return {};
-        }
+    accountIds.length === 0
+      ? Effect.succeed({})
+      : database.query(async (db) => {
+          const rows = await db
+            .select({
+              providerAccountId: providerProfiles.accountId,
+              isEnabled: providerProfiles.isEnabled,
+            })
+            .from(providerProfiles)
+            .where(inArray(providerProfiles.accountId, accountIds));
 
-        const rows = getDatabase()
-          .prepare(
-            `
-            SELECT provider_account_id, is_enabled
-            FROM provider_account_visibility
-            WHERE provider_account_id IN (${accountIds.map(() => "?").join(", ")})
-            `,
-          )
-          .all(...accountIds) as Record<string, unknown>[];
-
-        return Object.fromEntries(
-          rows.map((row) => [
-            String(row.provider_account_id),
-            Number(row.is_enabled) !== 0,
-          ]),
-        );
-      }),
+          return Object.fromEntries(
+            rows.map((row) => [row.providerAccountId, row.isEnabled]),
+          );
+        }),
   );
 
   const setProviderAccountVisibility: CacheServiceShape["setProviderAccountVisibility"] = Effect.fn(
     "CacheService.setProviderAccountVisibility",
   )((accountIds, enabledAccountIds) =>
-      wrap(() => {
-        const timestamp = nowUnixTimestamp();
-        const enabled = new Set(enabledAccountIds);
-        const insert = getDatabase().prepare(`
-          INSERT INTO provider_account_visibility (
-            provider_account_id, is_enabled, updated_at
-          )
-          VALUES (?, ?, ?)
-          ON CONFLICT(provider_account_id)
-          DO UPDATE SET
-            is_enabled = excluded.is_enabled,
-            updated_at = excluded.updated_at
-        `);
+    database.transaction(async (tx) => {
+      const timestamp = nowUnixTimestamp();
+      const enabled = new Set(enabledAccountIds);
 
-        getDatabase().transaction(() => {
-          for (const accountId of accountIds) {
-            insert.run(accountId, enabled.has(accountId) ? 1 : 0, timestamp);
-          }
-        })();
-      }),
+      for (const accountId of accountIds) {
+        const isEnabled = enabled.has(accountId);
+        await tx
+          .insert(providerProfiles)
+          .values({
+            accountId,
+            isEnabled,
+            updatedAt: timestamp,
+          })
+          .onConflictDoUpdate({
+            target: providerProfiles.accountId,
+            set: {
+              isEnabled,
+              updatedAt: timestamp,
+            },
+          });
+      }
+    }),
   );
 
-  const readAppSetting = (<T>(key: string) =>
-      wrap((): T | null => {
-        const row = getDatabase()
-          .prepare(
-            `
-            SELECT value_json
-            FROM app_settings
-            WHERE key = ?
-            `,
-          )
-          .get(key) as { value_json: string } | undefined;
+  const readProviderProfile: CacheServiceShape["readProviderProfile"] = Effect.fn(
+    "CacheService.readProviderProfile",
+  )((accountId) =>
+    database.query(async (db) => {
+      const [row] = await db
+        .select({
+          accountId: providerProfiles.accountId,
+          login: providerProfiles.login,
+        })
+        .from(providerProfiles)
+        .where(eq(providerProfiles.accountId, accountId))
+        .limit(1);
 
-        return row ? (JSON.parse(row.value_json) as T) : null;
-      })) satisfies CacheServiceShape["readAppSetting"];
+      return row?.login ? { accountId: row.accountId, login: row.login } : null;
+    }),
+  );
 
-  const writeAppSetting = (<T>(key: string, value: T) =>
-      wrap(() => {
-        getDatabase()
-          .prepare(
-            `
-            INSERT INTO app_settings (key, value_json, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(key)
-            DO UPDATE SET
-              value_json = excluded.value_json,
-              updated_at = excluded.updated_at
-            `,
-          )
-          .run(key, JSON.stringify(value), nowUnixTimestamp());
-      })) satisfies CacheServiceShape["writeAppSetting"];
+  const writeProviderProfile: CacheServiceShape["writeProviderProfile"] = Effect.fn(
+    "CacheService.writeProviderProfile",
+  )((profile) =>
+    database.transaction(async (tx) => {
+      const timestamp = nowUnixTimestamp();
+
+      await tx
+        .insert(providerProfiles)
+        .values({
+          accountId: profile.accountId,
+          login: profile.login,
+          isEnabled: true,
+          updatedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: providerProfiles.accountId,
+          set: {
+            login: profile.login,
+            updatedAt: timestamp,
+          },
+        });
+    }),
+  );
 
   return {
     listSavedRepos,
@@ -674,11 +669,11 @@ const makeCacheService = Effect.gen(function* () {
     updateRepoAccessTimestamp,
     readProviderAccountVisibility,
     setProviderAccountVisibility,
-    readAppSetting,
-    writeAppSetting,
+    readProviderProfile,
+    writeProviderProfile,
   } satisfies CacheServiceShape;
 });
 
-const CacheServiceLive = Layer.scoped(CacheService, makeCacheService);
+const CacheServiceLive = Layer.effect(CacheService, makeCacheService);
 
 export { CacheService, CacheServiceLive };

@@ -16,6 +16,7 @@ import LucideGitBranch from "../../assets/icons/LucideGitBranch";
 import LucideGitPullRequestClosed from "../../assets/icons/LucideGitPullRequestClosed";
 import LucideGitMerge from "../../assets/icons/LucideGitMerge";
 import LucideGitPullRequestArrow from "../../assets/icons/LucideGitPullRequestArrow";
+import { repoIdentityKey } from "../../lib/repo-identity";
 
 type TrackPullRequestModalMode = "repo-then-pr" | "pr-only";
 type TrackPullRequestModalStep = "repo" | "pull-request";
@@ -126,7 +127,7 @@ function RepoSelectionStep({
                 <button
                   className="w-full rounded-lg  bg-surface py-2.5 px-2 text-left transition hover:border-zinc-400 hover:bg-canvas disabled:cursor-default disabled:opacity-60"
                   disabled={isSavingRepo}
-                  key={repo.id}
+                  key={repoIdentityKey(repo)}
                   onClick={() => onPickRepo(repo)}
                   type="button"
                 >

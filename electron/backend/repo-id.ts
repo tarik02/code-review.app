@@ -1,12 +1,13 @@
 import { ValidationError } from "./errors";
 import type { ForgeProviderKind } from "../shared/types";
 
-type RepoId = {
+type RepoIdentity = {
   provider: ForgeProviderKind;
   host: string;
   accountId: string;
   path: string;
-  key: string;
+  providerId: string;
+  repoKey: string;
 };
 
 function providerKey(provider: ForgeProviderKind) {
@@ -47,50 +48,80 @@ function decodeKeyComponent(value: string) {
   }
 }
 
-function createRepoId(
+function createProviderId(
+  provider: ForgeProviderKind,
+  host: string,
+  accountId: string,
+) {
+  const normalizedHost = normalizeHost(host);
+  const normalizedAccountId = accountId.trim();
+  if (!normalizedAccountId) {
+    throw new ValidationError("Provider account is required");
+  }
+  return `${providerKey(provider)}:${encodeKeyComponent(normalizedHost)}:${encodeKeyComponent(normalizedAccountId)}`;
+}
+
+function parseProviderId(providerId: string) {
+  const trimmed = providerId.trim();
+  const firstSeparator = trimmed.indexOf(":");
+  const secondSeparator = firstSeparator === -1 ? -1 : trimmed.indexOf(":", firstSeparator + 1);
+  if (firstSeparator === -1 || secondSeparator === -1) {
+    throw new ValidationError("Provider id is missing provider, host, or account");
+  }
+
+  const provider = parseProviderKind(trimmed.slice(0, firstSeparator));
+  const host = decodeKeyComponent(trimmed.slice(firstSeparator + 1, secondSeparator));
+  const accountId = decodeKeyComponent(trimmed.slice(secondSeparator + 1));
+  if (!accountId) {
+    throw new ValidationError("Provider id account is required");
+  }
+
+  return {
+    provider,
+    host,
+    accountId,
+    providerId: createProviderId(provider, host, accountId),
+  };
+}
+
+function createRepoIdentity(
   provider: ForgeProviderKind,
   host: string,
   accountId: string,
   path: string,
-): RepoId {
+): RepoIdentity {
   const normalizedHost = normalizeHost(host);
   const normalizedAccountId = accountId.trim();
   const normalizedPath = normalizePath(path);
   if (!normalizedAccountId) {
-    throw new ValidationError("Repo id account is required");
+    throw new ValidationError("Repo account is required");
   }
-  const key = `${providerKey(provider)}:${encodeKeyComponent(normalizedHost)}:${encodeKeyComponent(normalizedAccountId)}:${normalizedPath}`;
+  if (!normalizedPath) {
+    throw new ValidationError("Repo key is required");
+  }
+  const providerId = createProviderId(provider, normalizedHost, normalizedAccountId);
   return {
     provider,
     host: normalizedHost,
     accountId: normalizedAccountId,
     path: normalizedPath,
-    key,
+    providerId,
+    repoKey: normalizedPath,
   };
 }
 
-function parseRepoId(key: string): RepoId {
-  const trimmed = key.trim();
-  const firstSeparator = trimmed.indexOf(":");
-  const secondSeparator = firstSeparator === -1 ? -1 : trimmed.indexOf(":", firstSeparator + 1);
-  const thirdSeparator = secondSeparator === -1 ? -1 : trimmed.indexOf(":", secondSeparator + 1);
-  if (firstSeparator === -1 || secondSeparator === -1 || thirdSeparator === -1) {
-    throw new ValidationError("Repo id is missing provider, host, or account");
-  }
+function createRepoIdentityFromParts(providerId: string, repoKey: string): RepoIdentity {
+  const provider = parseProviderId(providerId);
+  return createRepoIdentity(
+    provider.provider,
+    provider.host,
+    provider.accountId,
+    repoKey,
+  );
+}
 
-  const providerRaw = trimmed.slice(0, firstSeparator);
-  const encodedHost = trimmed.slice(firstSeparator + 1, secondSeparator);
-  const encodedAccountId = trimmed.slice(secondSeparator + 1, thirdSeparator);
-  const path = trimmed.slice(thirdSeparator + 1);
-  const provider = parseProviderKind(providerRaw);
-  const host = decodeKeyComponent(encodedHost);
-  const accountId = decodeKeyComponent(encodedAccountId);
-
-  if (path.trim().length === 0) {
-    throw new ValidationError("Repo id path is required");
-  }
-
-  return createRepoId(provider, host, accountId, path);
+function repoIdentityCacheKey(repo: { providerId: string; repoKey: string }) {
+  return `${repo.providerId}:${normalizePath(repo.repoKey)}`;
 }
 
 function parseOwnerRepo(repo: string): [string, string] {
@@ -103,14 +134,17 @@ function parseOwnerRepo(repo: string): [string, string] {
 }
 
 export {
-  createRepoId,
+  createRepoIdentity,
+  createRepoIdentityFromParts,
+  createProviderId,
   decodeKeyComponent,
   encodeKeyComponent,
   normalizeHost,
   normalizePath,
   parseOwnerRepo,
+  parseProviderId,
   parseProviderKind,
-  parseRepoId,
   providerKey,
+  repoIdentityCacheKey,
 };
-export type { RepoId };
+export type { RepoIdentity };

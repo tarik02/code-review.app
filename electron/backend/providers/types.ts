@@ -1,7 +1,7 @@
 import type { HttpClient } from "@effect/platform";
 import type { Effect } from "effect";
 import type { ProviderError } from "../errors";
-import type { RepoId } from "../repo-id";
+import type { RepoIdentity } from "../repo-id";
 import type { AuthTokenStore } from "../auth/token-store";
 import type {
   PullRequestSummary,
@@ -62,49 +62,49 @@ type ForgeProvider = {
     accountId: string,
   ): Effect.Effect<OverviewPullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   listPullRequests(
-    repo: RepoId,
+    repo: RepoIdentity,
   ): Effect.Effect<PullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   getPullRequest(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
   ): Effect.Effect<PullRequestSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchPatch(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
   ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchChangedFiles(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
   ): Effect.Effect<PrChangedFile[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchPullRequestRefs(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
   ): Effect.Effect<PullRequestRefs, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   fetchFileContent(
-    repo: RepoId,
+    repo: RepoIdentity,
     path: string,
     ref: string,
   ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   gitRemote(
-    repo: RepoId,
+    repo: RepoIdentity,
   ): Effect.Effect<GitRemoteSpec, ProviderError, AuthTokenStore>;
   listReviewThreads(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
   ): Effect.Effect<ReviewThread[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   createReviewThread(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
     input: ReviewThreadInput,
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   replyToReviewThread(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
     threadId: string,
     body: string,
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   updateReviewComment(
-    repo: RepoId,
+    repo: RepoIdentity,
     number: number,
     threadId: string,
     commentId: string,

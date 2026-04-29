@@ -2,19 +2,19 @@ import { HttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
 import { ValidationError } from "../errors";
-import { parseRepoId } from "../repo-id";
+import { createRepoIdentityFromParts } from "../repo-id";
 import { providerFor } from "../providers/registry";
 import { AuthTokenStore } from "../auth/token-store";
-import type { PullRequestSummary } from "../../shared/types";
+import type { PullRequestSummary, RepoIdentity } from "../../shared/types";
 
 type TrackedPullRequestServiceShape = {
-  list(repoId: string): Effect.Effect<PullRequestSummary[], Error>;
+  list(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
   track(
-    repoId: string,
+    repo: RepoIdentity,
     pullRequest: PullRequestSummary,
   ): Effect.Effect<PullRequestSummary, Error>;
-  remove(repoId: string, number: number): Effect.Effect<void, Error>;
-  refresh(repoId: string): Effect.Effect<PullRequestSummary[], Error>;
+  remove(repo: RepoIdentity, number: number): Effect.Effect<void, Error>;
+  refresh(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
 };
 
 class TrackedPullRequestService extends Effect.Tag("TrackedPullRequestService")<
@@ -22,10 +22,11 @@ class TrackedPullRequestService extends Effect.Tag("TrackedPullRequestService")<
   TrackedPullRequestServiceShape
 >() {}
 
-function requireRepoId(repoId: string) {
-  const trimmed = repoId.trim();
-  if (!trimmed) throw new ValidationError("Repo is required");
-  return trimmed;
+function requireRepo(repo: RepoIdentity) {
+  if (!repo.providerId.trim() || !repo.repoKey.trim()) {
+    throw new ValidationError("Repo is required");
+  }
+  return repo;
 }
 
 const makeTrackedPullRequestService = Effect.gen(function* () {
@@ -43,29 +44,29 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
 
   const list: TrackedPullRequestServiceShape["list"] = Effect.fn(
     "TrackedPullRequestService.list",
-  )(function* (repoId) {
-    return yield* cache.readTrackedPullRequests(requireRepoId(repoId));
+  )(function* (repo) {
+    return yield* cache.readTrackedPullRequests(requireRepo(repo));
   });
 
   const track: TrackedPullRequestServiceShape["track"] = Effect.fn(
     "TrackedPullRequestService.track",
-  )(function* (repoId, pullRequest) {
-        yield* cache.trackPullRequest(requireRepoId(repoId), pullRequest);
+  )(function* (repo, pullRequest) {
+        yield* cache.trackPullRequest(requireRepo(repo), pullRequest);
         return pullRequest;
   });
 
   const remove: TrackedPullRequestServiceShape["remove"] = Effect.fn(
     "TrackedPullRequestService.remove",
-  )(function* (repoId, number) {
-    yield* cache.removeTrackedPullRequest(requireRepoId(repoId), number);
+  )(function* (repo, number) {
+    yield* cache.removeTrackedPullRequest(requireRepo(repo), number);
   });
 
   const refresh: TrackedPullRequestServiceShape["refresh"] = Effect.fn(
     "TrackedPullRequestService.refresh",
-  )(function* (repoId) {
-        const trimmedRepoId = requireRepoId(repoId);
-        const repo = parseRepoId(trimmedRepoId);
-        const tracked = yield* cache.readTrackedPullRequests(trimmedRepoId);
+  )(function* (repoInput) {
+        const repoIdentity = requireRepo(repoInput);
+        const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
+        const tracked = yield* cache.readTrackedPullRequests(repoIdentity);
         if (tracked.length === 0) return [];
 
         const provider = providerFor(repo.provider);
@@ -77,7 +78,7 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
         for (const pullRequest of tracked) {
           const openPullRequest = openByNumber.get(pullRequest.number);
           if (openPullRequest) {
-            yield* cache.trackPullRequest(trimmedRepoId, openPullRequest);
+            yield* cache.trackPullRequest(repoIdentity, openPullRequest);
             continue;
           }
 
@@ -86,13 +87,13 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
               provider.getPullRequest(repo, pullRequest.number),
             ).pipe(Effect.catchAll(() => Effect.succeed(null)));
             if (verified) {
-              yield* cache.trackPullRequest(trimmedRepoId, verified);
+              yield* cache.trackPullRequest(repoIdentity, verified);
             }
           }
         }
 
-        yield* cache.updateRepoAccessTimestamp(trimmedRepoId);
-        return yield* cache.readTrackedPullRequests(trimmedRepoId);
+        yield* cache.updateRepoAccessTimestamp(repoIdentity);
+        return yield* cache.readTrackedPullRequests(repoIdentity);
   });
 
   return {

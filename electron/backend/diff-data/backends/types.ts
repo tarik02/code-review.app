@@ -4,17 +4,17 @@ import type {
   PrFileChangeType,
   PrFileContents,
 } from "../../../shared/types";
-import type { RepoId } from "../../repo-id";
+import type { RepoIdentity } from "../../repo-id";
 
 type DiffBackendInput = {
-  repo: RepoId;
+  repo: RepoIdentity;
   number: number;
   headSha: string;
   baseSha: string | null;
 };
 
 type DiffBackendFileContentsInput = {
-  repo: RepoId;
+  repo: RepoIdentity;
   number: number;
   oldPath: string;
   newPath: string;

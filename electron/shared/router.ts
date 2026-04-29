@@ -29,7 +29,7 @@ import {
   pullRequestSummarySchema,
   pullRequestVersionedInputSchema,
   replyToPullRequestReviewCommentInputSchema,
-  repoIdSchema,
+  repoIdentitySchema,
   repoSummarySchema,
   reviewEditorSettingsSchema,
   updatePullRequestReviewCommentInputSchema,
@@ -329,19 +329,19 @@ const router = t.router({
         }),
       ),
     ),
-    listCached: t.procedure.input(repoIdSchema).query(({ input }) =>
+    listCached: t.procedure.input(repoIdentitySchema).query(({ input }) =>
       runEffect(
         Effect.gen(function* () {
           const service = yield* PullRequestService;
-          return yield* service.listCached(input.repoId);
+          return yield* service.listCached(input);
         }),
       ),
     ),
-    list: t.procedure.input(repoIdSchema).query(({ input }) =>
+    list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
       runEffect(
         Effect.gen(function* () {
           const service = yield* PullRequestService;
-          return yield* service.list(input.repoId);
+          return yield* service.list(input);
         }),
       ),
     ),
@@ -349,7 +349,7 @@ const router = t.router({
       runEffect(
         Effect.gen(function* () {
           const service = yield* PullRequestService;
-          return yield* service.get(input.repoId, input.number);
+          return yield* service.get(input, input.number);
         }),
       ),
     ),
@@ -357,7 +357,7 @@ const router = t.router({
       runEffect(
         Effect.gen(function* () {
           const service = yield* PullRequestService;
-          return yield* service.getPatch(input.repoId, input.number, input.headSha);
+          return yield* service.getPatch(input, input.number, input.headSha);
         }),
       ),
     ),
@@ -368,7 +368,7 @@ const router = t.router({
           Effect.gen(function* () {
             const service = yield* PullRequestService;
             return yield* service.listChangedFiles(
-              input.repoId,
+              input,
               input.number,
               input.headSha,
             );
@@ -388,21 +388,21 @@ const router = t.router({
   }),
 
   tracked: t.router({
-    list: t.procedure.input(repoIdSchema).query(({ input }) =>
+    list: t.procedure.input(repoIdentitySchema).query(({ input }) =>
       runEffect(
         Effect.gen(function* () {
           const service = yield* TrackedPullRequestService;
-          return yield* service.list(input.repoId);
+          return yield* service.list(input);
         }),
       ),
     ),
     track: t.procedure
-      .input(z.object({ repoId: z.string(), pullRequest: pullRequestSummarySchema }))
+      .input(repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }))
       .mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* TrackedPullRequestService;
-            return yield* service.track(input.repoId, input.pullRequest);
+            return yield* service.track(input, input.pullRequest);
           }),
         ),
       ),
@@ -410,15 +410,15 @@ const router = t.router({
       runEffect(
         Effect.gen(function* () {
           const service = yield* TrackedPullRequestService;
-          return yield* service.remove(input.repoId, input.number);
+          return yield* service.remove(input, input.number);
         }),
       ),
     ),
-    refresh: t.procedure.input(repoIdSchema).mutation(({ input }) =>
+    refresh: t.procedure.input(repoIdentitySchema).mutation(({ input }) =>
       runEffect(
         Effect.gen(function* () {
           const service = yield* TrackedPullRequestService;
-          return yield* service.refresh(input.repoId);
+          return yield* service.refresh(input);
         }),
       ),
     ),
@@ -439,7 +439,7 @@ const router = t.router({
       runEffect(
         Effect.gen(function* () {
           const service = yield* ReviewCommentService;
-          return yield* service.listThreads(input.repoId, input.number);
+          return yield* service.listThreads(input, input.number);
         }),
       ),
     ),

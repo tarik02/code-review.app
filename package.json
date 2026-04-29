@@ -25,6 +25,7 @@
     "@fontsource/geist-mono": "^5.2.7",
     "@hadeeb/trpc-worker": "^0.1.0",
     "@heroicons/react": "^2.2.0",
+    "@libsql/client": "0.17.3",
     "@lexical/rich-text": "0.35.0",
     "@mdxeditor/editor": "^3.55.0",
     "@mdxeditor/gurx": "1.2.4",
@@ -38,10 +39,10 @@
     "@trpc/client": "^11.16.0",
     "@trpc/react-query": "^11.16.0",
     "@trpc/server": "^11.16.0",
-    "better-sqlite3": "^12.9.0",
     "class-variance-authority": "^0.7.1",
     "cm6-theme-basic-light": "0.2.0",
     "codemirror": "6.0.2",
+    "drizzle-orm": "0.45.2",
     "effect": "^3.21.2",
     "electron-updater": "^6.8.3",
     "fuse.js": "^7.3.0",
@@ -57,13 +58,13 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.17",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "dotenv-cli": "^11.0.0",
+    "drizzle-kit": "0.31.10",
     "electron": "^41.3.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "6.0.0-beta.1",
@@ -76,10 +77,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@parcel/watcher",
-      "better-sqlite3",
       "electron",
       "electron-winstaller",
       "esbuild",
+      "libsql",
       "msgpackr-extract"
     ]
   },
@@ -91,6 +92,7 @@
     },
     "files": [
       "out/**/*",
+      "drizzle/**/*",
       "node_modules/**/*",
       "package.json"
     ],

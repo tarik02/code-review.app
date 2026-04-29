@@ -3,6 +3,7 @@ import path from "node:path";
 import { app } from "electron";
 import { Effect, Layer } from "effect";
 import { CacheService } from "../cache";
+import { AppSettingsService } from "./app-settings";
 import { AuthTokenStore } from "../auth/token-store";
 import type {
   AccountVisibilitySettings,
@@ -216,6 +217,7 @@ function readBackgroundDataUrl(
 const makeSettingsService = Effect.gen(function* () {
   const tokenStore = yield* AuthTokenStore;
   const cache = yield* CacheService;
+  const appSettings = yield* AppSettingsService;
   const fileSystem = yield* FileSystem.FileSystem;
 
   const getAccountVisibility: SettingsServiceShape["getAccountVisibility"] = Effect.fn(
@@ -255,7 +257,7 @@ const makeSettingsService = Effect.gen(function* () {
   const getDiffDataSettings: SettingsServiceShape["getDiffDataSettings"] = Effect.fn(
     "SettingsService.getDiffDataSettings",
   )(function* () {
-        const persisted = yield* cache.readAppSetting<DiffDataSettings>(
+        const persisted = yield* appSettings.read<DiffDataSettings>(
           DIFF_DATA_SETTINGS_KEY,
         );
         return parseDiffDataSettings(persisted);
@@ -265,15 +267,15 @@ const makeSettingsService = Effect.gen(function* () {
     "SettingsService.setDiffDataSettings",
   )(function* (settings) {
         const validated = validateDiffDataSettings(settings);
-        yield* cache.writeAppSetting(DIFF_DATA_SETTINGS_KEY, validated);
+        yield* appSettings.write(DIFF_DATA_SETTINGS_KEY, validated);
         return validated;
   });
 
   const getReviewEditorSettings: SettingsServiceShape["getReviewEditorSettings"] = Effect.fn(
     "SettingsService.getReviewEditorSettings",
   )(function* () {
-        const persisted = yield* cache
-          .readAppSetting<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
+        const persisted = yield* appSettings
+          .read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
           .pipe(Effect.catchAll(() => Effect.succeed(null)));
         return parseReviewEditorSettings(persisted);
   });
@@ -282,14 +284,14 @@ const makeSettingsService = Effect.gen(function* () {
     "SettingsService.setReviewEditorSettings",
   )(function* (settings) {
         const validated = validateReviewEditorSettings(settings);
-        yield* cache.writeAppSetting(REVIEW_EDITOR_SETTINGS_KEY, validated);
+        yield* appSettings.write(REVIEW_EDITOR_SETTINGS_KEY, validated);
         return validated;
   });
 
   const getAppearanceBackground: SettingsServiceShape["getAppearanceBackground"] = Effect.fn(
     "SettingsService.getAppearanceBackground",
   )(function* () {
-        const persisted = yield* cache.readAppSetting<PersistedAppearanceBackgroundSettings>(
+        const persisted = yield* appSettings.read<PersistedAppearanceBackgroundSettings>(
           APPEARANCE_BACKGROUND_KEY,
         );
         return yield* readBackgroundDataUrl(
@@ -301,7 +303,7 @@ const makeSettingsService = Effect.gen(function* () {
   const setAppearanceBackground: SettingsServiceShape["setAppearanceBackground"] = Effect.fn(
     "SettingsService.setAppearanceBackground",
   )(function* (input) {
-        yield* cache.writeAppSetting(APPEARANCE_BACKGROUND_KEY, input);
+        yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, input);
         return yield* getAppearanceBackground();
   });
 
@@ -350,7 +352,7 @@ const makeSettingsService = Effect.gen(function* () {
           mimeType: backgroundMimeTypes[extension],
         };
 
-        yield* cache.writeAppSetting(APPEARANCE_BACKGROUND_KEY, persisted);
+        yield* appSettings.write(APPEARANCE_BACKGROUND_KEY, persisted);
         return yield* readBackgroundDataUrl(fileSystem, persisted);
   });
 

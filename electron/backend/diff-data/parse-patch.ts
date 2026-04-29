@@ -277,12 +277,13 @@ function parseGitPatch(patch: string, cacheKeyPrefix: string) {
 
 function parsePullRequestPatch(input: {
   patch: string;
-  repoId: string;
+  providerId: string;
+  repoKey: string;
   number: number;
   headSha: string;
   mode: DiffDataMode;
 }): FileDiffMetadata[] {
-  const cacheKeyPrefix = `${input.repoId}-${input.number}-${input.headSha}-${input.mode}`;
+  const cacheKeyPrefix = `${input.providerId}:${input.repoKey}-${input.number}-${input.headSha}-${input.mode}`;
 
   if (input.mode === "git") {
     return parseGitPatch(input.patch, `${cacheKeyPrefix}:git`);

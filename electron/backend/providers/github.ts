@@ -7,7 +7,7 @@ import {
 import { Effect, ParseResult, Schema } from "effect";
 import { ProviderError } from "../errors";
 import { parseOwnerRepo } from "../repo-id";
-import { createRepoId } from "../repo-id";
+import { createRepoIdentity } from "../repo-id";
 import {
   getValidAccessToken,
   updateViewerLogin,
@@ -21,7 +21,7 @@ import type {
   ReviewThread,
 } from "../../shared/types";
 import type { ForgeProvider, ReviewThreadInput } from "./types";
-import type { RepoId } from "../repo-id";
+import type { RepoIdentity } from "../repo-id";
 import { AuthTokenStore, type StoredAuthToken } from "../auth/token-store";
 
 type GitHubRequestOptions = {
@@ -540,7 +540,7 @@ function ensureUserContext(
 }
 
 function getPullRequestNodeId(
-  repo: RepoId,
+  repo: RepoIdentity,
   number: number,
 ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient> {
   const query = `
@@ -577,7 +577,7 @@ query($owner: String!, $name: String!, $number: Int!) {
 
 function repoSummaryFromSearch(accountId: string, host: string, label: string, repo: GhSearchRepo): RepoSummary {
   return {
-    id: createRepoId("github", host, accountId, repo.full_name).key,
+    ...createRepoIdentity("github", host, accountId, repo.full_name),
     provider: "github",
     host,
     providerAccountId: accountId,
@@ -592,7 +592,7 @@ function repoSummaryFromSearch(accountId: string, host: string, label: string, r
 
 function repoSummaryFromRest(accountId: string, host: string, label: string, repo: GhRestRepo): RepoSummary {
   return {
-    id: createRepoId("github", host, accountId, repo.full_name).key,
+    ...createRepoIdentity("github", host, accountId, repo.full_name),
     provider: "github",
     host,
     providerAccountId: accountId,
@@ -612,7 +612,7 @@ function repoSummaryFromGraphql(
   repo: GhGraphqlRepo,
 ): RepoSummary {
   return {
-    id: createRepoId("github", host, accountId, repo.nameWithOwner).key,
+    ...createRepoIdentity("github", host, accountId, repo.nameWithOwner),
     provider: "github",
     host,
     providerAccountId: accountId,
@@ -828,7 +828,7 @@ query($query: String!, $first: Int!) {
     });
   }
 
-  listPullRequests(repo: RepoId) {
+  listPullRequests(repo: RepoIdentity) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
@@ -867,7 +867,7 @@ query($owner: String!, $name: String!) {
     });
   }
 
-  getPullRequest(repo: RepoId, number: number) {
+  getPullRequest(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
@@ -907,7 +907,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  fetchChangedFiles(repo: RepoId, number: number) {
+  fetchChangedFiles(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const seen = new Set<string>();
@@ -938,7 +938,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  fetchPatch(repo: RepoId, number: number) {
+  fetchPatch(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       return yield* githubText(
@@ -950,7 +950,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  fetchPullRequestRefs(repo: RepoId, number: number) {
+  fetchPullRequestRefs(repo: RepoIdentity, number: number) {
     console.info("[github] fetching pull request refs", {
       repo: repo.path,
       number,
@@ -971,7 +971,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     );
   }
 
-  fetchFileContent(repo: RepoId, path: string, ref: string) {
+  fetchFileContent(repo: RepoIdentity, path: string, ref: string) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       console.info("[github] fetching file content", {
@@ -995,7 +995,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  gitRemote(repo: RepoId) {
+  gitRemote(repo: RepoIdentity) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const token = yield* validAccessToken(repo.accountId);
@@ -1013,7 +1013,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  listReviewThreads(repo: RepoId, number: number) {
+  listReviewThreads(repo: RepoIdentity, number: number) {
     return Effect.gen(function* () {
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const query = `
@@ -1109,7 +1109,7 @@ query($owner: String!, $name: String!, $number: Int!) {
     });
   }
 
-  createReviewThread(repo: RepoId, number: number, input: ReviewThreadInput) {
+  createReviewThread(repo: RepoIdentity, number: number, input: ReviewThreadInput) {
     return Effect.gen(function* () {
       const body = input.body.trim();
       const targetPath = input.path.trim();
@@ -1167,7 +1167,7 @@ mutation(
     });
   }
 
-  replyToReviewThread(repo: RepoId, number: number, threadId: string, body: string) {
+  replyToReviewThread(repo: RepoIdentity, number: number, threadId: string, body: string) {
     return Effect.gen(function* () {
       const trimmedBody = body.trim();
       if (!threadId.trim()) return yield* Effect.fail(new ProviderError("Thread id is required"));
@@ -1201,7 +1201,7 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
   }
 
   updateReviewComment(
-    repo: RepoId,
+    repo: RepoIdentity,
     _number: number,
     threadId: string,
     commentId: string,

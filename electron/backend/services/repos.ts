@@ -67,10 +67,17 @@ const makeRepoService = Effect.gen(function* () {
   )(function* (accountId) {
         const account = yield* tokenStore.get(accountId);
         if (!account) throw new Error("Provider account is not signed in.");
+        const cached = yield* cache
+          .readProviderProfile(accountId)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+        if (cached) return cached;
+
         const login = yield* provideProviderDeps(
           providerFor(account.provider).viewerLogin(accountId),
         );
-        return { accountId, login };
+        const profile = { accountId, login };
+        yield* cache.writeProviderProfile(profile);
+        return profile;
   });
 
   const listInitialRepos: RepoServiceShape["listInitialRepos"] = Effect.fn(
@@ -112,6 +119,13 @@ const makeRepoService = Effect.gen(function* () {
   const saveRepo: RepoServiceShape["saveRepo"] = Effect.fn(
     "RepoService.saveRepo",
   )(function* (repo) {
+    const account = yield* tokenStore.get(repo.providerAccountId);
+    if (account?.viewerLogin) {
+      yield* cache.writeProviderProfile({
+        accountId: repo.providerAccountId,
+        login: account.viewerLogin,
+      });
+    }
     yield* cache.saveRepo(repo);
     return repo;
   });

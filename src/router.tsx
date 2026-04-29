@@ -17,7 +17,8 @@ import { SettingsLayout } from "./routes/settings-layout";
 import { SETTINGS_RETURN_HREF_STORAGE_KEY } from "./lib/settings-return-location";
 
 type HomeRouteSearch = {
-  repo?: string;
+  providerId?: string;
+  repoKey?: string;
   pr?: number;
 };
 
@@ -35,13 +36,17 @@ function parsePositiveInteger(value: unknown) {
 function validateHomeRouteSearch(
   search: Record<string, unknown>,
 ): HomeRouteSearch {
-  const repo =
-    typeof search.repo === "string" && search.repo.trim().length > 0
-      ? search.repo
+  const providerId =
+    typeof search.providerId === "string" && search.providerId.trim().length > 0
+      ? search.providerId
+      : undefined;
+  const repoKey =
+    typeof search.repoKey === "string" && search.repoKey.trim().length > 0
+      ? search.repoKey
       : undefined;
   const pr = parsePositiveInteger(search.pr);
 
-  return { repo, pr };
+  return { providerId, repoKey, pr };
 }
 
 const rootRoute = createRootRoute({

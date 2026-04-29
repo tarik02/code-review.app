@@ -1,7 +1,8 @@
-import { FileSystem } from "@effect/platform";
-import path from "node:path";
-import { app, safeStorage } from "electron";
+import { asc, eq } from "drizzle-orm";
 import { Effect, Layer } from "effect";
+import { EncryptionService } from "./encryption";
+import { DatabaseService } from "../db/client";
+import { authTokens } from "../db/schema";
 import { normalizeHost } from "../repo-id";
 import type { ForgeProviderKind, ProviderAccount } from "../../shared/types";
 
@@ -18,11 +19,6 @@ type StoredAuthToken = {
   createdAt: number;
 };
 
-type StoredAuthTokenRecord = Omit<StoredAuthToken, "accessToken" | "refreshToken"> & {
-  accessToken: string;
-  refreshToken: string | null;
-};
-
 type AuthTokenStoreShape = {
   get(accountId: string): Effect.Effect<StoredAuthToken | null, Error>;
   listAccounts(): Effect.Effect<ProviderAccount[], Error>;
@@ -35,157 +31,129 @@ class AuthTokenStore extends Effect.Tag("AuthTokenStore")<
   AuthTokenStoreShape
 >() {}
 
-const TOKEN_FILE_NAME = "auth-tokens.json";
+type AuthTokenRow = typeof authTokens.$inferSelect;
 
-function toError(error: unknown) {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
-function tokenFilePath() {
-  return path.join(app.getPath("userData"), TOKEN_FILE_NAME);
-}
-
-function assertEncryptionAvailable() {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Secure credential storage is not available on this system.");
-  }
-
-  if (
-    process.platform === "linux" &&
-    safeStorage.getSelectedStorageBackend?.() === "basic_text"
-  ) {
-    throw new Error("Secure credential storage is not available for this Linux session.");
+function parseScopes(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
   }
 }
 
-function encryptValue(value: string): Effect.Effect<string, Error> {
-  return Effect.try({
-    try: () => {
-      assertEncryptionAvailable();
-      return safeStorage.encryptString(value).toString("base64");
-    },
-    catch: toError,
-  });
-}
-
-function decryptValue(value: string): Effect.Effect<string, Error> {
-  return Effect.try({
-    try: () => {
-      assertEncryptionAvailable();
-      return safeStorage.decryptString(Buffer.from(value, "base64"));
-    },
-    catch: toError,
-  });
-}
-
-function readTokenRecords(
-  fileSystem: FileSystem.FileSystem,
-): Effect.Effect<StoredAuthTokenRecord[], Error> {
-  return fileSystem.readFileString(tokenFilePath(), "utf8").pipe(
-    Effect.map((raw) => {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        return Array.isArray(parsed) ? (parsed as StoredAuthTokenRecord[]) : [];
-      } catch {
-        return [];
-      }
-    }),
-    Effect.catchAll(() => Effect.succeed([])),
-  );
-}
-
-function writeTokenRecords(
-  fileSystem: FileSystem.FileSystem,
-  records: StoredAuthTokenRecord[],
-): Effect.Effect<void, Error> {
-  const filePath = tokenFilePath();
-  return fileSystem.makeDirectory(path.dirname(filePath), { recursive: true }).pipe(
-    Effect.flatMap(() =>
-      fileSystem.writeFileString(
-        filePath,
-        `${JSON.stringify(records, null, 2)}\n`,
-      ),
-    ),
-    Effect.mapError(toError),
-  );
+function rowToProviderAccount(row: AuthTokenRow): ProviderAccount {
+  const host = normalizeHost(row.host);
+  return {
+    id: row.accountId,
+    provider: row.provider as ForgeProviderKind,
+    host,
+    clientId: row.clientId,
+    viewerLogin: row.viewerLogin,
+    label: row.viewerLogin ? `${row.viewerLogin} @ ${host}` : host,
+    createdAt: row.createdAt,
+  };
 }
 
 const makeAuthTokenStore = Effect.gen(function* () {
-  const fileSystem = yield* FileSystem.FileSystem;
+  const database = yield* DatabaseService;
+  const encryption = yield* EncryptionService;
 
   const get: AuthTokenStoreShape["get"] = Effect.fn(
     "AuthTokenStore.get",
   )(function* (accountId) {
-        const records = yield* readTokenRecords(fileSystem);
-        const record = records.find((item) => item.id === accountId);
-        if (!record) return null;
+    const row = yield* database.query(async (db) => {
+      const [record] = await db
+        .select()
+        .from(authTokens)
+        .where(eq(authTokens.accountId, accountId))
+        .limit(1);
+      return record ?? null;
+    });
+    if (!row) return null;
 
-        const accessToken = yield* decryptValue(record.accessToken);
-        const refreshToken = record.refreshToken
-          ? yield* decryptValue(record.refreshToken)
-          : null;
+    const accessToken = yield* encryption.decryptString(row.accessToken);
+    const refreshToken = row.refreshToken
+      ? yield* encryption.decryptString(row.refreshToken)
+      : null;
 
-        return {
-          ...record,
-          host: normalizeHost(record.host),
-          accessToken,
-          refreshToken,
-        };
+    return {
+      id: row.accountId,
+      provider: row.provider as ForgeProviderKind,
+      host: normalizeHost(row.host),
+      clientId: row.clientId,
+      accessToken,
+      refreshToken,
+      expiresAt: row.expiresAt,
+      scopes: parseScopes(row.scopesJson),
+      viewerLogin: row.viewerLogin,
+      createdAt: row.createdAt,
+    };
   });
 
   const listAccounts: AuthTokenStoreShape["listAccounts"] = Effect.fn(
     "AuthTokenStore.listAccounts",
   )(() =>
-    Effect.map(readTokenRecords(fileSystem), (records) =>
-      records.map((record) => {
-        const host = normalizeHost(record.host);
-        return {
-          id: record.id,
-          provider: record.provider,
-          host,
-          clientId: record.clientId,
-          viewerLogin: record.viewerLogin,
-          label: record.viewerLogin ? `${record.viewerLogin} @ ${host}` : host,
-          createdAt: record.createdAt,
-        };
-      }),
-    ),
+    database.query(async (db) => {
+      const rows = await db
+        .select()
+        .from(authTokens)
+        .orderBy(asc(authTokens.createdAt));
+      return rows.map(rowToProviderAccount);
+    }),
   );
 
   const save: AuthTokenStoreShape["save"] = Effect.fn(
     "AuthTokenStore.save",
   )(function* (token) {
-        const normalizedHost = normalizeHost(token.host);
-        const accessToken = yield* encryptValue(token.accessToken);
-        const refreshToken = token.refreshToken
-          ? yield* encryptValue(token.refreshToken)
-          : null;
-        const nextRecord: StoredAuthTokenRecord = {
+    const normalizedHost = normalizeHost(token.host);
+    const accessToken = yield* encryption.encryptString(token.accessToken);
+    const refreshToken = token.refreshToken
+      ? yield* encryption.encryptString(token.refreshToken)
+      : null;
+    const scopesJson = JSON.stringify(token.scopes);
+    const timestamp = Math.floor(Date.now() / 1000);
+    yield* database.transaction(async (tx) => {
+      await tx
+        .insert(authTokens)
+        .values({
+          accountId: token.id,
           provider: token.provider,
           host: normalizedHost,
-          id: token.id,
           clientId: token.clientId,
           accessToken,
           refreshToken,
           expiresAt: token.expiresAt,
-          scopes: token.scopes,
+          scopesJson,
           viewerLogin: token.viewerLogin,
           createdAt: token.createdAt,
-        };
-        const records = yield* readTokenRecords(fileSystem);
-        const nextRecords = records.filter((item) => item.id !== token.id);
-        nextRecords.push(nextRecord);
-        yield* writeTokenRecords(fileSystem, nextRecords);
+          updatedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: authTokens.accountId,
+          set: {
+            provider: token.provider,
+            host: normalizedHost,
+            clientId: token.clientId,
+            accessToken,
+            refreshToken,
+            expiresAt: token.expiresAt,
+            scopesJson,
+            viewerLogin: token.viewerLogin,
+            updatedAt: timestamp,
+          },
+        });
+    });
   });
 
   const deleteToken: AuthTokenStoreShape["delete"] = Effect.fn(
     "AuthTokenStore.delete",
   )(function* (accountId) {
-        const records = yield* readTokenRecords(fileSystem);
-        yield* writeTokenRecords(
-          fileSystem,
-          records.filter((item) => item.id !== accountId),
-        );
+    yield* database.transaction(async (tx) => {
+      await tx.delete(authTokens).where(eq(authTokens.accountId, accountId));
+    });
   });
 
   return {

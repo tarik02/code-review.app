@@ -6,7 +6,8 @@ const reviewEditorModeSchema = z.enum(["rich-text", "source"]);
 const reviewCommentSideSchema = z.enum(["LEFT", "RIGHT"]);
 
 const repoSummarySchema = z.object({
-  id: z.string(),
+  providerId: z.string(),
+  repoKey: z.string(),
   provider: forgeProviderKindSchema,
   host: z.string(),
   providerAccountId: z.string(),
@@ -81,11 +82,12 @@ const providerProfileSchema = z.object({
   login: z.string(),
 });
 
-const repoIdSchema = z.object({
-  repoId: z.string().min(1),
+const repoIdentitySchema = z.object({
+  providerId: z.string().min(1),
+  repoKey: z.string().min(1),
 });
 
-const pullRequestInputSchema = repoIdSchema.extend({
+const pullRequestInputSchema = repoIdentitySchema.extend({
   number: z.number().int().nonnegative(),
 });
 
@@ -101,7 +103,7 @@ const prFileChangeTypeSchema = z.enum([
   "deleted",
 ]);
 
-const pullRequestFileContentsInputSchema = repoIdSchema.extend({
+const pullRequestFileContentsInputSchema = repoIdentitySchema.extend({
   number: z.number().int().nonnegative(),
   oldPath: z.string(),
   newPath: z.string(),
@@ -151,7 +153,7 @@ export {
   replyToPullRequestReviewCommentInputSchema,
   reviewEditorModeSchema,
   reviewEditorSettingsSchema,
-  repoIdSchema,
+  repoIdentitySchema,
   repoSummarySchema,
   updatePullRequestReviewCommentInputSchema,
 };

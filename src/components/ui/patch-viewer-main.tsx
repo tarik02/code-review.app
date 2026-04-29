@@ -60,8 +60,13 @@ import type {
   ForgeProviderKind,
   PrFileChangeType,
   PrFileContents,
+  RepoIdentity,
   ReviewCommentSide,
 } from "../../types/forge";
+import {
+  providerFromProviderId,
+  repoIdentityKey,
+} from "../../lib/repo-identity";
 import {
   getPatchViewerSessionState,
   usePatchViewerStore,
@@ -109,8 +114,7 @@ type HunkExpansionOwner = {
   };
 };
 
-type SelectedPatch = {
-  repoId: string;
+type SelectedPatch = RepoIdentity & {
   number: number;
   headSha: string;
   fileDiffs: FileDiffMetadata[];
@@ -209,10 +213,6 @@ function scheduleNextFrame(callback: () => void) {
 
   const timeoutId = setTimeout(callback, 0);
   return () => clearTimeout(timeoutId);
-}
-
-function getProviderFromRepoId(repoId: string): ForgeProviderKind {
-  return repoId.startsWith("gitlab:") ? "gitlab" : "github";
 }
 
 function normalizeDiffLineText(content: string) {
@@ -428,7 +428,8 @@ function getFileContentsInput(
   }
 
   return {
-    repoId: selectedPatch.repoId,
+    providerId: selectedPatch.providerId,
+    repoKey: selectedPatch.repoKey,
     number: selectedPatch.number,
     oldPath: fileDiff.prevName ?? fileDiff.name,
     newPath: fileDiff.name,
@@ -594,7 +595,8 @@ function FloatingLineDraftEditorForTarget({
   const fileContentsQuery = useQuery({
     ...pullRequestFileContentsQueryOptions(
       fileContentsInput ?? {
-        repoId: "__idle__",
+        providerId: "__idle__",
+        repoKey: "__idle__",
         number: 0,
         oldPath: "",
         newPath: "",
@@ -1333,14 +1335,15 @@ function PatchViewerMain({
   } = usePullRequestReviewCommentMutations(
     selectedPatch
       ? {
-          repoId: selectedPatch.repoId,
+          providerId: selectedPatch.providerId,
+          repoKey: selectedPatch.repoKey,
           number: selectedPatch.number,
           headSha: selectedPatch.headSha,
         }
       : null,
   );
   const selectedProvider = selectedPatch
-    ? getProviderFromRepoId(selectedPatch.repoId)
+    ? providerFromProviderId(selectedPatch.providerId)
     : "github";
   const handleVirtualizerRootChange = useCallback(
     (node: HTMLDivElement | null) => {
@@ -1546,7 +1549,8 @@ function PatchViewerMain({
     patchViewerSessionKey,
     selectedPatch?.headSha,
     selectedPatch?.number,
-    selectedPatch?.repoId,
+    selectedPatch?.providerId,
+    selectedPatch?.repoKey,
   ]);
 
   useEffect(() => {
@@ -1617,7 +1621,8 @@ function PatchViewerMain({
 
     try {
       await createCommentMutation.mutateAsync({
-        repoId: selectedPatch.repoId,
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
         body,
         path: target.path,
@@ -1658,7 +1663,8 @@ function PatchViewerMain({
     }
 
     await replyCommentMutation.mutateAsync({
-      repoId: selectedPatch.repoId,
+      providerId: selectedPatch.providerId,
+      repoKey: selectedPatch.repoKey,
       number: selectedPatch.number,
       threadId: thread.id,
       body,
@@ -1677,7 +1683,8 @@ function PatchViewerMain({
     }
 
     await updateCommentMutation.mutateAsync({
-      repoId: selectedPatch.repoId,
+      providerId: selectedPatch.providerId,
+      repoKey: selectedPatch.repoKey,
       number: selectedPatch.number,
       threadId: parentThread.id,
       commentId: comment.id,
@@ -1777,7 +1784,7 @@ function PatchViewerMain({
                           <PatchFileDiffItem
                             fileDiff={fileDiff}
                             fileIndex={fileIndex}
-                            key={`${selectedPatch.repoId}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
+                            key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
                           />
                         ))}
                       </div>
