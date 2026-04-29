@@ -60,7 +60,7 @@ jobs:
         run: echo "::add-matcher::.github/matchers/tsc.json"
 
       - name: run typecheck
-        run: pnpm run typecheck:all -- --pretty false
+        run: pnpm run typecheck:ci
 
   test:
     runs-on: ubuntu-24.04

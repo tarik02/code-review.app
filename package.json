@@ -13,6 +13,7 @@
     "test": "vp test",
     "typecheck": "tsc -p tsconfig.json",
     "typecheck:all": "pnpm run typecheck && pnpm --filter @code-review-app/shared typecheck && pnpm --filter @code-review-app/backend typecheck && pnpm --filter @code-review-app/frontend typecheck && pnpm --filter @code-review-app/electron typecheck && pnpm --filter @code-review-app/scripts typecheck",
+    "typecheck:ci": "pnpm exec tsc -p tsconfig.json --pretty false && pnpm --filter @code-review-app/shared exec tsc -p tsconfig.json --pretty false && pnpm --filter @code-review-app/backend exec tsc -p tsconfig.json --pretty false && pnpm --filter @code-review-app/frontend exec tsc -p tsconfig.json --pretty false && pnpm --filter @code-review-app/electron exec tsc -p tsconfig.json --pretty false && pnpm --filter @code-review-app/scripts exec tsc -p tsconfig.json --pretty false",
     "lint": "vp lint",
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
