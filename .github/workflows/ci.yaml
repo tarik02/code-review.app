@@ -118,7 +118,7 @@ jobs:
           pattern: release-*
 
       - name: merge updater metadata
-        run: pnpm run release:merge-metadata -- --input-dir release-artifacts --output-dir release-assets
+        run: pnpm run release:merge-metadata -- --input-dir "$GITHUB_WORKSPACE/release-artifacts" --output-dir "$GITHUB_WORKSPACE/release-assets"
 
       - name: create github release if missing
         env:
