@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, expect, it } from 'vite-plus/test';
 import type { FileDiffMetadata } from '@pierre/diffs';
 import type { PullRequestQualityReport } from '../types/forge';
 import { buildPullRequestQualityView } from './pull-request-quality';
@@ -76,10 +75,10 @@ describe('buildPullRequestQualityView', () => {
 
     const view = buildPullRequestQualityView(report, [createFileDiff('src/app.ts', 10, 5)]);
 
-    assert.equal(view.displayedInlineCount, 1);
-    assert.equal(view.displayedFileCount, 0);
-    assert.equal(view.unmappedFindings.length, 0);
-    assert.equal(view.byFile.get('src/app.ts')?.inlineAnnotations[0]?.lineNumber, 12);
+    expect(view.displayedInlineCount).toBe(1);
+    expect(view.displayedFileCount).toBe(0);
+    expect(view.unmappedFindings).toHaveLength(0);
+    expect(view.byFile.get('src/app.ts')?.inlineAnnotations[0]?.lineNumber).toBe(12);
   });
 
   it('falls back to file-level when the line is outside rendered additions', () => {
@@ -99,9 +98,9 @@ describe('buildPullRequestQualityView', () => {
 
     const view = buildPullRequestQualityView(report, [createFileDiff('src/app.ts', 10, 5)]);
 
-    assert.equal(view.displayedInlineCount, 0);
-    assert.equal(view.displayedFileCount, 1);
-    assert.equal(view.byFile.get('src/app.ts')?.fileFindings.length, 1);
+    expect(view.displayedInlineCount).toBe(0);
+    expect(view.displayedFileCount).toBe(1);
+    expect(view.byFile.get('src/app.ts')?.fileFindings).toHaveLength(1);
   });
 
   it('surfaces missing-path findings as unmapped', () => {
@@ -121,9 +120,9 @@ describe('buildPullRequestQualityView', () => {
 
     const view = buildPullRequestQualityView(report, [createFileDiff('src/app.ts', 1, 10)]);
 
-    assert.equal(view.displayedInlineCount, 0);
-    assert.equal(view.displayedFileCount, 0);
-    assert.equal(view.unmappedFindings.length, 1);
-    assert.equal(view.unmappedFindings[0]?.path, 'src/missing.ts');
+    expect(view.displayedInlineCount).toBe(0);
+    expect(view.displayedFileCount).toBe(0);
+    expect(view.unmappedFindings).toHaveLength(1);
+    expect(view.unmappedFindings[0]?.path).toBe('src/missing.ts');
   });
 });

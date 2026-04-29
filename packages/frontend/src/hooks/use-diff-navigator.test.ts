@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, expect, it } from 'vite-plus/test';
 import { createDiffNavigatorController } from './use-diff-navigator';
 
 function createFakeNode() {
@@ -62,8 +61,8 @@ describe('createDiffNavigatorController', () => {
 
     controller.onSelectFile('src/app.ts');
 
-    assert.equal(getSelectedFilePath(), 'src/app.ts');
-    assert.equal(controller.getState().pendingScrollPath, 'src/app.ts');
+    expect(getSelectedFilePath()).toBe('src/app.ts');
+    expect(controller.getState().pendingScrollPath).toBe('src/app.ts');
   });
 
   it('does not flush pending navigation while diff is not ready or has an error', () => {
@@ -74,11 +73,11 @@ describe('createDiffNavigatorController', () => {
 
     controller.registerDiffNode('src/app.ts', firstNode.node as HTMLDivElement);
     controller.onSelectFile('src/app.ts');
-    assert.equal(firstNode.getCallCount(), 0);
+    expect(firstNode.getCallCount()).toBe(0);
 
     controller.setReadiness(true, true);
-    assert.equal(firstNode.getCallCount(), 0);
-    assert.equal(controller.getState().pendingScrollPath, 'src/app.ts');
+    expect(firstNode.getCallCount()).toBe(0);
+    expect(controller.getState().pendingScrollPath).toBe('src/app.ts');
   });
 
   it('flushes pending navigation when a matching anchor is registered and diff is ready', () => {
@@ -86,17 +85,17 @@ describe('createDiffNavigatorController', () => {
     const node = createFakeNode();
 
     controller.onSelectFile('src/app.ts');
-    assert.equal(controller.getState().pendingScrollPath, 'src/app.ts');
+    expect(controller.getState().pendingScrollPath).toBe('src/app.ts');
 
     controller.registerDiffNode('src/app.ts', node.node as HTMLDivElement);
 
-    assert.equal(node.getCallCount(), 1);
-    assert.deepEqual(node.getLastOptions(), {
+    expect(node.getCallCount()).toBe(1);
+    expect(node.getLastOptions()).toEqual({
       behavior: 'auto',
       block: 'start',
       inline: 'nearest',
     });
-    assert.equal(controller.getState().pendingScrollPath, null);
+    expect(controller.getState().pendingScrollPath).toBeNull();
   });
 
   it('preserves selection without queueing scroll when PR key changes', () => {
@@ -107,13 +106,13 @@ describe('createDiffNavigatorController', () => {
 
     controller.onSelectFile('src/app.ts');
     controller.registerDiffNode('src/app.ts', node.node as HTMLDivElement);
-    assert.equal(getSelectedFilePath(), 'src/app.ts');
-    assert.equal(controller.getState().pendingScrollPath, null);
+    expect(getSelectedFilePath()).toBe('src/app.ts');
+    expect(controller.getState().pendingScrollPath).toBeNull();
 
     controller.setPrKey('repo#2@shaB');
 
-    assert.equal(getSelectedFilePath(), 'src/app.ts');
-    assert.equal(controller.getState().pendingScrollPath, null);
+    expect(getSelectedFilePath()).toBe('src/app.ts');
+    expect(controller.getState().pendingScrollPath).toBeNull();
   });
 
   it('does not re-scroll valid selection on content change', () => {
@@ -122,13 +121,13 @@ describe('createDiffNavigatorController', () => {
 
     controller.registerDiffNode('src/app.ts', node.node as HTMLDivElement);
     controller.onSelectFile('src/app.ts');
-    assert.equal(node.getCallCount(), 1);
+    expect(node.getCallCount()).toBe(1);
 
     controller.notifyDiffContentChanged();
 
-    assert.equal(getSelectedFilePath(), 'src/app.ts');
-    assert.equal(node.getCallCount(), 1);
-    assert.equal(controller.getState().pendingScrollPath, null);
+    expect(getSelectedFilePath()).toBe('src/app.ts');
+    expect(node.getCallCount()).toBe(1);
+    expect(controller.getState().pendingScrollPath).toBeNull();
   });
 
   it('clears selection when selected file no longer exists after content changes', () => {
@@ -139,12 +138,12 @@ describe('createDiffNavigatorController', () => {
     controller.registerDiffNode('src/selected.ts', selectedNode.node as HTMLDivElement);
     controller.registerDiffNode('src/other.ts', otherNode.node as HTMLDivElement);
     controller.onSelectFile('src/selected.ts');
-    assert.equal(getSelectedFilePath(), 'src/selected.ts');
+    expect(getSelectedFilePath()).toBe('src/selected.ts');
 
     controller.registerDiffNode('src/selected.ts', null);
     controller.notifyDiffContentChanged();
 
-    assert.equal(getSelectedFilePath(), null);
-    assert.equal(controller.getState().pendingScrollPath, null);
+    expect(getSelectedFilePath()).toBeNull();
+    expect(controller.getState().pendingScrollPath).toBeNull();
   });
 });

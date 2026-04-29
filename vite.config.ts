@@ -32,4 +32,40 @@ export default defineConfig({
     singleQuote: true,
     tabWidth: 2,
   },
+  test: {
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'frontend',
+          environment: 'node',
+          include: ['packages/frontend/src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'backend',
+          environment: 'node',
+          include: ['packages/backend/src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'shared',
+          environment: 'node',
+          include: ['packages/shared/src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'electron',
+          environment: 'node',
+          include: ['apps/electron/src/**/*.test.ts'],
+        },
+      },
+    ],
+  },
 });

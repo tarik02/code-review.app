@@ -18,6 +18,7 @@
     "dev": "dotenv -- electron-vite dev --watch",
     "build": "electron-vite build",
     "dist": "electron-builder",
+    "test": "pnpm --dir ../.. exec vp test --project electron --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json",
     "postinstall": "electron-builder install-app-deps"
   },

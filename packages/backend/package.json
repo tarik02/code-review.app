@@ -9,6 +9,7 @@
     "./runtime": "./src/runtime.ts"
   },
   "scripts": {
+    "test": "pnpm --dir ../.. exec vp test --project backend --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
