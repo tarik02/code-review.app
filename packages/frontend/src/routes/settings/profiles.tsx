@@ -1,18 +1,20 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getErrorMessage } from '../hooks/use-forge-queries';
-import { useAuthSession } from '../app/auth-session';
-import { Button } from '../components/ui/button';
-import { Checkbox } from '../components/ui/checkbox';
-import { Input } from '../components/ui/input';
+import { useAuthSession } from '../../app/auth-session';
+import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
+import { Input } from '../../components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../components/ui/select';
-import { trpc } from '../lib/trpc';
+} from '../../components/ui/select';
+import { getErrorMessage } from '../../hooks/use-forge-queries';
+import { hasDefaultClientId, normalizeHostInput } from '../../lib/forge-links';
+import { trpc } from '../../lib/trpc';
 import {
   accountVisibilityQueryOptions,
   diffDataSettingsQueryOptions,
@@ -20,9 +22,8 @@ import {
   providerProfileQueryOptions,
   setAccountVisibility,
   setDiffDataMode,
-} from '../queries/forge';
-import { hasDefaultClientId, normalizeHostInput } from '../lib/forge-links';
-import type { DiffDataMode, ForgeProviderKind, ProviderAccount } from '../types/forge';
+} from '../../queries/forge';
+import type { DiffDataMode, ForgeProviderKind, ProviderAccount } from '../../types/forge';
 
 function providerName(account: ProviderAccount) {
   return account.provider === 'github' ? 'GitHub' : 'GitLab';
@@ -314,4 +315,6 @@ function ProfilesRoute() {
   );
 }
 
-export { ProfilesRoute };
+export const Route = createFileRoute('/settings/profiles')({
+  component: ProfilesRoute,
+});

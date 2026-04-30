@@ -1,6 +1,7 @@
 import babel from '@rolldown/plugin-babel';
 import { defineConfig } from 'electron-vite';
 import tailwindcss from '@tailwindcss/vite';
+import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 
@@ -47,7 +48,18 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(repoRoot, 'packages/frontend'),
-    plugins: [react(), reactCompilerBabelPlugin, ...tailwindcss()],
+    plugins: [
+      tanstackRouter({
+        target: 'react',
+        routesDirectory: './src/routes',
+        generatedRouteTree: './src/routeTree.gen.ts',
+        quoteStyle: 'single',
+        autoCodeSplitting: false,
+      }),
+      react(),
+      reactCompilerBabelPlugin,
+      ...tailwindcss(),
+    ],
     resolve: {
       alias: {
         ...workspaceAliases,
