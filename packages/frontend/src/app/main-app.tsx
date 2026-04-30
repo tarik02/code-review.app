@@ -95,7 +95,8 @@ function MainApp() {
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const { repos: savedRepos = [] } = useSavedRepos();
-  const trackedRepos = useQuery(trackedReposQueryOptions()).data ?? [];
+  const trackedReposQuery = useQuery(trackedReposQueryOptions());
+  const trackedRepos = useMemo(() => trackedReposQuery.data ?? [], [trackedReposQuery.data]);
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
   const readyProviderAccounts = useMemo(
     () => providerAccounts.filter((account) => providerStatuses[account.id]?.status === 'ready'),

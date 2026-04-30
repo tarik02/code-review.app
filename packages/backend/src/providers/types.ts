@@ -214,12 +214,25 @@ type ForgeProvider = {
     threadId: string,
     body: string,
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  setReviewThreadResolved(
+    repo: RepoIdentity,
+    number: number,
+    threadId: string,
+    isResolved: boolean,
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
   updateReviewComment(
     repo: RepoIdentity,
     number: number,
     threadId: string,
     commentId: string,
     body: string,
+    subjectType: ReviewThreadInput['subjectType'],
+  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  deleteReviewComment(
+    repo: RepoIdentity,
+    number: number,
+    threadId: string,
+    commentId: string,
     subjectType: ReviewThreadInput['subjectType'],
   ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
 };

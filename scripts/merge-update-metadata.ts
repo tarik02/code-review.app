@@ -95,8 +95,8 @@ const mergeMetadata = (base: UpdateMetadata, extra: UpdateMetadata): UpdateMetad
   stagingPercentage: base.stagingPercentage,
   files: mergeFiles(base.files, extra.files),
   packages: {
-    ...(base.packages ?? {}),
-    ...(extra.packages ?? {}),
+    ...base.packages,
+    ...extra.packages,
   },
 });
 

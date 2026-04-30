@@ -2,6 +2,7 @@ import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  getReviewThreadRefKey,
   isGlobalReviewThread,
   type ReviewComment,
   type ReviewThread,
@@ -12,6 +13,7 @@ import {
   type ReviewCommentEditorState,
   useReviewCommentEditorStore,
 } from '../../stores/review-comment-editor-store';
+import { getPatchViewerSessionState, usePatchViewerStore } from '../../stores/patch-viewer-store';
 import { CommentMarkdown } from './comment-markdown';
 import {
   ReviewCommentEditor,
@@ -25,12 +27,18 @@ type ReviewThreadCardProps = {
   thread: ReviewThread;
   compact?: boolean;
   slim?: boolean;
+  defaultCollapsed?: boolean;
+  deletingCommentId?: string | null;
+  patchViewerSessionKey?: string | null;
+  resolvingThreadId?: string | null;
   viewerLogin?: string | null;
   editorPortalRootId?: string;
   reviewEditorSessionKey?: string | null;
   onReplyToThread?: (thread: ReviewThread, body: string) => Promise<void>;
   onReplyToThreadNow?: (thread: ReviewThread, body: string) => Promise<void>;
+  onSetThreadResolved?: (thread: ReviewThread, isResolved: boolean) => Promise<void>;
   onEditComment?: (comment: ReviewComment, body: string) => Promise<void>;
+  onDeleteComment?: (thread: ReviewThread, comment: ReviewComment) => Promise<void>;
   onDeletePendingComment?: (comment: ReviewComment) => Promise<void>;
   onClick?: () => void;
   containerRef?: (node: HTMLDivElement | null) => void;
@@ -75,7 +83,7 @@ function formatThreadLineLabel(thread: ReviewThread) {
 }
 
 function getCommentPreviewText(body: string) {
-  return body
+  const previewText = body
     .replace(/\r\n?/g, '\n')
     .replace(/^```[^\n`]*\n?/gm, '')
     .replace(/^~~~[^\n~]*\n?/gm, '')
@@ -95,6 +103,22 @@ function getCommentPreviewText(body: string) {
     .replace(/(^|[\s([{])([*_]{1,3})(?=\S)(.+?\S)\2(?=[\s)\]}.,!?;:]|$)/g, '$1$3')
     .replace(/\s+/g, ' ')
     .trim();
+
+  if (previewText.length === 0) {
+    return previewText;
+  }
+
+  if (typeof document === 'undefined') {
+    return previewText
+      .replace(/&#x20;|&#32;|&nbsp;/gi, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = previewText;
+  return textarea.value;
 }
 
 function getThreadEditorTarget(thread: ReviewThread): CommentEditorTarget {
@@ -230,16 +254,24 @@ function ReviewThreadCard({
   thread,
   compact = false,
   slim = false,
+  defaultCollapsed = false,
+  deletingCommentId = null,
+  patchViewerSessionKey = null,
+  resolvingThreadId = null,
   viewerLogin = null,
   editorPortalRootId,
   reviewEditorSessionKey = null,
   onReplyToThread,
   onReplyToThreadNow,
+  onSetThreadResolved,
   onEditComment,
+  onDeleteComment,
   onDeletePendingComment,
   onClick,
   containerRef,
 }: ReviewThreadCardProps) {
+  const containerNodeRef = useRef<HTMLDivElement | null>(null);
+  const lastHandledHighlightVersionRef = useRef<number | null>(null);
   const rootComment =
     thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null;
   const editorTarget = getThreadEditorTarget(thread);
@@ -265,6 +297,10 @@ function ReviewThreadCard({
   );
   const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
+  const patchViewerSession = usePatchViewerStore((state) =>
+    getPatchViewerSessionState(state, patchViewerSessionKey),
+  );
+  const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
   const canCreateEditor =
     reviewEditorSessionKey != null && (onReplyToThread != null || onEditComment != null);
   const reviewEditorSettingsQuery = useQuery({
@@ -274,6 +310,74 @@ function ReviewThreadCard({
   const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
   const replyEditor =
     thread.id.length > 0 ? threadEditors.find((editor) => editor.kind === 'reply') : undefined;
+  const isResolvePending = resolvingThreadId === thread.id;
+  const threadRefKey = getReviewThreadRefKey(thread);
+  const isExpandedOverride = patchViewerSession.threadExpansionByKey[threadRefKey];
+  const highlightVersion = patchViewerSession.highlightedThreadVersion;
+  const isCollapsed = defaultCollapsed ? isExpandedOverride !== true : isExpandedOverride === false;
+  const canToggleResolved =
+    thread.canResolve !== false &&
+    !thread.isPending &&
+    thread.id.length > 0 &&
+    onSetThreadResolved != null &&
+    !isResolvePending;
+
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null) => {
+      containerNodeRef.current = node;
+      containerRef?.(node);
+    },
+    [containerRef],
+  );
+
+  useEffect(() => {
+    if (lastHandledHighlightVersionRef.current === null) {
+      lastHandledHighlightVersionRef.current = highlightVersion;
+      return;
+    }
+
+    if (highlightVersion === lastHandledHighlightVersionRef.current) {
+      return;
+    }
+
+    lastHandledHighlightVersionRef.current = highlightVersion;
+
+    if (patchViewerSession.highlightedThreadKey !== threadRefKey) {
+      return;
+    }
+
+    const node = containerNodeRef.current;
+    if (!node) {
+      return;
+    }
+    const highlightClasses = [
+      'border-amber-300',
+      'bg-amber-50',
+      'shadow-sm',
+      'ring-2',
+      'ring-amber-200/70',
+      'dark:border-amber-700',
+      'dark:bg-amber-950/30',
+      'dark:ring-amber-800/50',
+    ];
+    const cleanup = () => {
+      node.classList.remove(...highlightClasses);
+    };
+
+    cleanup();
+    window.requestAnimationFrame(() => {
+      node.classList.add(...highlightClasses);
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      cleanup();
+    };
+  }, [patchViewerSession.highlightedThreadKey, highlightVersion, threadRefKey]);
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
@@ -314,6 +418,49 @@ function ReviewThreadCard({
       </button>
     ) : (
       <div className={baseClassName}>{content}</div>
+    );
+  }
+
+  if (isCollapsed) {
+    const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
+
+    return (
+      <div
+        className="rounded-lg border border-ink-200 bg-canvas px-3 py-2 text-sm text-ink-800 shadow-xs transition-[background-color,border-color,box-shadow] duration-700 ease-out"
+        ref={setContainerNode}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs text-ink-500"
+            onClick={() => setThreadExpanded(patchViewerSessionKey, threadRefKey, true)}
+            type="button"
+          >
+            <span className="shrink-0 font-sans font-medium text-ink-900">
+              {formatThreadLineLabel(thread)}
+            </span>
+            {thread.isResolved ? (
+              <span className="shrink-0 rounded-full bg-canvasDark px-2 py-0.5 font-sans text-ink-700">
+                Resolved
+              </span>
+            ) : null}
+            {thread.isOutdated ? (
+              <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-sans text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                Outdated
+              </span>
+            ) : null}
+            <span className="min-w-0 truncate text-ink-600">
+              {summaryBody || '(no comment body)'}
+            </span>
+          </button>
+          <button
+            className="shrink-0 font-sans text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+            onClick={() => setThreadExpanded(patchViewerSessionKey, threadRefKey, true)}
+            type="button"
+          >
+            Expand
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -381,27 +528,58 @@ function ReviewThreadCard({
 
   return (
     <div
-      className="rounded-lg border border-ink-200 bg-canvas p-3 text-sm text-ink-800 shadow-xs"
-      ref={containerRef}
+      className={`rounded-lg border border-ink-200 bg-canvas p-3 text-sm text-ink-800 shadow-xs transition-[opacity,background-color,border-color,box-shadow] duration-700 ease-out ${
+        isResolvePending ? 'opacity-60' : 'opacity-100'
+      }`}
+      ref={setContainerNode}
     >
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-ink-500">
-        <span className="font-sans font-medium text-ink-900">{formatThreadLineLabel(thread)}</span>
-        {thread.isResolved ? (
-          <span className="rounded-full bg-canvas px-2 py-0.5 font-sans text-ink-700">
-            Resolved
-          </span>
-        ) : null}
-        {thread.isOutdated ? (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-sans text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            Outdated
-          </span>
-        ) : null}
-        {thread.isPending ? (
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-            Pending
-          </span>
-        ) : null}
-        <span className="font-sans">{thread.comments.length} comments</span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="font-sans font-medium text-ink-900">{formatThreadLineLabel(thread)}</span>
+          {thread.isResolved ? (
+            <span className="rounded-full bg-canvasDark px-2 py-0.5 font-sans text-ink-700">
+              Resolved
+            </span>
+          ) : null}
+          {thread.isOutdated ? (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-sans text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              Outdated
+            </span>
+          ) : null}
+          {thread.isPending ? (
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              Pending
+            </span>
+          ) : null}
+          <span className="font-sans">{thread.comments.length} comments</span>
+          {isResolvePending ? <span className="font-sans">Updating...</span> : null}
+          {canToggleResolved ? (
+            <button
+              className="font-sans text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+              onClick={() => {
+                if (onSetThreadResolved) {
+                  void onSetThreadResolved(thread, !thread.isResolved).catch(console.error);
+                }
+              }}
+              disabled={isResolvePending}
+              type="button"
+            >
+              {thread.isResolved ? 'Unresolve' : 'Resolve'}
+            </button>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {defaultCollapsed && (thread.isResolved || thread.isOutdated) ? (
+            <button
+              className="font-sans text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+              onClick={() => setThreadExpanded(patchViewerSessionKey, threadRefKey, false)}
+              disabled={isResolvePending}
+              type="button"
+            >
+              Collapse
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -409,21 +587,37 @@ function ReviewThreadCard({
           const editEditor = threadEditors.find(
             (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
+          const isDeleting = deletingCommentId === comment.id;
           const canEdit =
             (comment.isPending || (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
             comment.id.length > 0 &&
             thread.id.length > 0 &&
             reviewEditorSessionKey != null &&
-            onEditComment != null;
-          const canDeletePending = comment.isPending && onDeletePendingComment != null;
+            onEditComment != null &&
+            !isDeleting;
+          const canDeletePending =
+            comment.isPending && onDeletePendingComment != null && !isDeleting;
+          const canDeletePublished =
+            !comment.isPending &&
+            viewerLogin != null &&
+            viewerLogin === comment.authorLogin &&
+            comment.id.length > 0 &&
+            onDeleteComment != null &&
+            !isDeleting;
 
           return (
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3" key={comment.id}>
+            <div
+              className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 transition-opacity ${
+                isDeleting ? 'opacity-50' : 'opacity-100'
+              }`}
+              key={comment.id}
+            >
               <CommentAvatar comment={comment} />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
                   <span className="font-sans font-medium text-ink-900">{comment.authorLogin}</span>
                   <span>{formatTimestamp(comment.createdAt)}</span>
+                  {isDeleting ? <span className="text-ink-500">Deleting...</span> : null}
                   {!compact && comment.url ? (
                     <a
                       className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
@@ -453,9 +647,24 @@ function ReviewThreadCard({
                           void onDeletePendingComment(comment).catch(console.error);
                         }
                       }}
+                      disabled={isDeleting}
                       type="button"
                     >
                       Discard
+                    </button>
+                  ) : null}
+                  {canDeletePublished ? (
+                    <button
+                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                      onClick={() => {
+                        if (onDeleteComment) {
+                          void onDeleteComment(thread, comment).catch(console.error);
+                        }
+                      }}
+                      disabled={isDeleting}
+                      type="button"
+                    >
+                      Delete
                     </button>
                   ) : null}
                 </div>

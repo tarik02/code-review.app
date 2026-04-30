@@ -14,6 +14,7 @@ import {
   createPendingReviewReply,
   createPendingReviewThread,
   createPullRequestReviewComment,
+  deletePullRequestReviewComment,
   deletePendingReviewComment,
   discardPendingReview,
   forgeKeys,
@@ -26,6 +27,7 @@ import {
   publishPendingReview,
   savedReposQueryOptions,
   searchReposQueryOptions,
+  setPullRequestReviewThreadResolved,
   trackedPullRequestListQueryOptions,
   updatePendingReviewComment,
   updatePullRequestReviewComment,
@@ -36,6 +38,7 @@ import type {
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePullRequestReviewCommentInput,
   DeletePendingReviewCommentInput,
   DiffDataMode,
   DiscardPendingReviewInput,
@@ -52,6 +55,7 @@ import type {
   RepoIdentity,
   RepoSummary,
   SelectedPullRequest,
+  SetPullRequestReviewThreadResolvedInput,
   UpdatePendingReviewCommentInput,
   UpdatePullRequestReviewCommentInput,
 } from '../types/forge';
@@ -916,6 +920,7 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
         id: createTemporaryId('temp-thread'),
         provider: providerFromProviderId(input.providerId),
         path: input.path,
+        canResolve: false,
         isResolved: false,
         isOutdated: false,
         line: input.line,
@@ -1003,6 +1008,16 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
     },
     onSettled: invalidateReviewThreads,
   });
+  const setResolvedMutation = useMutation({
+    mutationFn: (input: SetPullRequestReviewThreadResolvedInput) =>
+      setPullRequestReviewThreadResolved(input),
+    onSettled: invalidateReviewThreads,
+  });
+  const deleteCommentMutation = useMutation({
+    mutationFn: (input: DeletePullRequestReviewCommentInput) =>
+      deletePullRequestReviewComment(input),
+    onSettled: invalidateReviewThreads,
+  });
   const updatePendingCommentMutation = useMutation({
     mutationFn: (input: UpdatePendingReviewCommentInput) => updatePendingReviewComment(input),
     onSettled: invalidateReviewData,
@@ -1030,10 +1045,12 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
     createPendingGlobalMutation,
     createPendingReplyMutation,
     createPendingThreadMutation,
+    deleteCommentMutation,
     deletePendingCommentMutation,
     discardPendingReviewMutation,
     publishPendingReviewMutation,
     replyCommentMutation,
+    setResolvedMutation,
     updatePendingCommentMutation,
     updateCommentMutation,
     viewerLogin: viewerLoginQuery.data?.login ?? null,

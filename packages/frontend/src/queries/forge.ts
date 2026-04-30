@@ -9,6 +9,7 @@ import type {
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePullRequestReviewCommentInput,
   DeletePendingReviewCommentInput,
   DiffDataMode,
   DiffDataSettings,
@@ -24,6 +25,7 @@ import type {
   ReviewEditorSettings,
   RepoIdentity,
   SelectedPullRequest,
+  SetPullRequestReviewThreadResolvedInput,
   ThemePreferenceSettings,
   TrackedPullRequestOrderEntry,
   UpdatePendingReviewCommentInput,
@@ -593,6 +595,27 @@ async function updatePullRequestReviewComment(input: UpdatePullRequestReviewComm
   });
 }
 
+async function setPullRequestReviewThreadResolved(input: SetPullRequestReviewThreadResolvedInput) {
+  await trpc.reviewComments.setResolved.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    threadId: input.threadId,
+    isResolved: input.isResolved,
+  });
+}
+
+async function deletePullRequestReviewComment(input: DeletePullRequestReviewCommentInput) {
+  await trpc.reviewComments.deleteComment.mutate({
+    providerId: input.providerId,
+    repoKey: input.repoKey,
+    number: input.number,
+    threadId: input.threadId,
+    commentId: input.commentId,
+    subjectType: input.subjectType,
+  });
+}
+
 async function approvePullRequest(input: SelectedPullRequest) {
   await trpc.reviewComments.approve.mutate({
     providerId: input.providerId,
@@ -618,6 +641,7 @@ export {
   createPendingReviewReply,
   createPendingReviewThread,
   createPullRequestReviewComment,
+  deletePullRequestReviewComment,
   deletePendingReviewComment,
   diffDataSettingsQueryOptions,
   discardPendingReview,
@@ -645,6 +669,7 @@ export {
   reviewEditorSettingsQueryOptions,
   savedReposQueryOptions,
   searchReposQueryOptions,
+  setPullRequestReviewThreadResolved,
   setAccountVisibility,
   setAppearanceBackground,
   setDiffDataMode,

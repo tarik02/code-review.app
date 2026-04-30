@@ -1,6 +1,6 @@
 import { HttpClient } from '@effect/platform';
 import { Effect, Layer } from 'effect';
-import { ValidationError } from '../errors.ts';
+import { ValidationError, summarizeError } from '../errors.ts';
 import { createRepoIdentityFromParts } from '../repo-id.ts';
 import { providerFor } from '../providers/registry.ts';
 import { AuthTokenStore } from '../auth/token-store.ts';
@@ -95,6 +95,7 @@ const makePullRequestQualityService = Effect.gen(function* () {
             number,
             headSha,
             message,
+            error: summarizeError(error),
           });
           return Effect.succeed(
             unavailableQualityReport(repo.provider, repoIdentity, number, headSha, message),

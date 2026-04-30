@@ -4,7 +4,7 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { Effect, Layer } from 'effect';
 import { pathToFileURL } from 'node:url';
 import { BackendConfig, type BackendRuntimeConfig } from '../config.ts';
-import { CacheError } from '../errors.ts';
+import { CacheError, ensureError } from '../errors.ts';
 import * as schema from './schema.ts';
 
 type Database = LibSQLDatabase<typeof schema>;
@@ -28,7 +28,8 @@ class DatabaseService extends Effect.Tag('DatabaseService')<
 >() {}
 
 function toCacheError(error: unknown) {
-  return new CacheError(error instanceof Error ? error.message : String(error));
+  const cause = ensureError(error);
+  return new CacheError(cause.message, { cause });
 }
 
 async function initializeDatabase(config: BackendRuntimeConfig): Promise<DatabaseHandle> {

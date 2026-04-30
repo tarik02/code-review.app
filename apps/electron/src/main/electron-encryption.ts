@@ -1,9 +1,13 @@
 import { safeStorage } from 'electron';
 import { Effect, Layer } from 'effect';
-import { EncryptionService, type EncryptionServiceShape } from '@code-review-app/backend';
+import {
+  EncryptionService,
+  ensureError,
+  type EncryptionServiceShape,
+} from '@code-review-app/backend';
 
 function toError(error: unknown) {
-  return error instanceof Error ? error : new Error(String(error));
+  return ensureError(error);
 }
 
 function assertEncryptionAvailable() {

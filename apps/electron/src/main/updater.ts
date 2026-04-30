@@ -2,6 +2,7 @@ import electronUpdater from 'electron-updater';
 import { EventEmitter } from 'node:events';
 import { app } from 'electron';
 import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
+import { summarizeError } from '@code-review-app/backend';
 
 const updateEvents = new EventEmitter();
 let availableUpdate: AvailableUpdate | null = null;
@@ -30,6 +31,10 @@ function emitUpdateEvent(event: UpdateEvent) {
 
 function isUpdaterEnabled() {
   return app.isPackaged && process.env.CODE_REVIEW_APP_DISABLE_UPDATER !== '1';
+}
+
+function logUpdaterError(context: string, error: unknown) {
+  console.error(`[updater] ${context} failed`, summarizeError(error));
 }
 
 function configureUpdater() {
@@ -62,6 +67,7 @@ function configureUpdater() {
     emitUpdateEvent({ type: 'downloaded', update: availableUpdate });
   });
   autoUpdater.on('error', (error) => {
+    logUpdaterError('event', error);
     emitUpdateEvent({
       type: 'error',
       message: error instanceof Error ? error.message : String(error),
@@ -75,10 +81,15 @@ async function checkForUpdate() {
   }
   configureUpdater();
   const autoUpdater = getAutoUpdater();
-  const result = await autoUpdater.checkForUpdates();
-  if (!result?.isUpdateAvailable || !result.updateInfo) return null;
-  availableUpdate = toAvailableUpdate(result.updateInfo);
-  return availableUpdate;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    if (!result?.isUpdateAvailable || !result.updateInfo) return null;
+    availableUpdate = toAvailableUpdate(result.updateInfo);
+    return availableUpdate;
+  } catch (error) {
+    logUpdaterError('check', error);
+    throw error;
+  }
 }
 
 async function installUpdate() {
@@ -90,8 +101,13 @@ async function installUpdate() {
     await checkForUpdate();
   }
   const autoUpdater = getAutoUpdater();
-  await autoUpdater.downloadUpdate();
-  autoUpdater.quitAndInstall();
+  try {
+    await autoUpdater.downloadUpdate();
+    autoUpdater.quitAndInstall();
+  } catch (error) {
+    logUpdaterError('install', error);
+    throw error;
+  }
 }
 
 function subscribeToUpdateEvents(listener: (event: UpdateEvent) => void) {

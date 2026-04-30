@@ -292,6 +292,17 @@ const updatePullRequestReviewCommentInputSchema = replyToPullRequestReviewCommen
   },
 );
 
+const setPullRequestReviewThreadResolvedInputSchema = pullRequestInputSchema.extend({
+  threadId: z.string(),
+  isResolved: z.boolean(),
+});
+
+const deletePullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
+  threadId: z.string(),
+  commentId: z.string(),
+  subjectType: z.enum(['file', 'line', 'global']),
+});
+
 export {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
@@ -300,6 +311,7 @@ export {
   createPendingReviewReplyInputSchema,
   createPendingReviewThreadInputSchema,
   createPullRequestReviewCommentInputSchema,
+  deletePullRequestReviewCommentInputSchema,
   deletePendingReviewCommentInputSchema,
   diffDataModeSchema,
   diffDataSettingsSchema,
@@ -336,6 +348,7 @@ export {
   reviewEditorSettingsSchema,
   repoIdentitySchema,
   repoSummarySchema,
+  setPullRequestReviewThreadResolvedInputSchema,
   themePreferenceSchema,
   themePreferenceSettingsSchema,
   trackedPullRequestOrderEntrySchema,

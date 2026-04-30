@@ -35,40 +35,50 @@ type ResolvedRefs = {
 
 function gitErrorToProviderError(error: GitError) {
   if (error instanceof GitExecutableNotFound) {
-    return new ProviderError('Git mode requires git to be installed and available on PATH.');
+    return new ProviderError('Git mode requires git to be installed and available on PATH.', {
+      cause: error,
+    });
   }
   if (error instanceof GitAuthenticationFailed) {
     return new ProviderError(
       'Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.',
+      { cause: error },
     );
   }
   if (error instanceof GitAuthorizationFailed) {
-    return new ProviderError('Your account cannot fetch this repository with git.');
+    return new ProviderError('Your account cannot fetch this repository with git.', {
+      cause: error,
+    });
   }
   if (error instanceof GitRepositoryNotFound) {
-    return new ProviderError('Git could not find this repository.');
+    return new ProviderError('Git could not find this repository.', { cause: error });
   }
   if (error instanceof GitRefNotFound) {
-    return new ProviderError('Git could not fetch one of the PR refs.');
+    return new ProviderError('Git could not fetch one of the PR refs.', { cause: error });
   }
   if (error instanceof GitPathNotFound) {
-    return new ProviderError('Git could not find this file at the requested ref.');
+    return new ProviderError('Git could not find this file at the requested ref.', {
+      cause: error,
+    });
   }
   if (error instanceof GitPartialCloneUnsupported) {
-    return new ProviderError('This git server does not support blobless partial clone.');
+    return new ProviderError('This git server does not support blobless partial clone.', {
+      cause: error,
+    });
   }
   if (error instanceof GitCommandTimedOut) {
-    return new ProviderError('Git command timed out.');
+    return new ProviderError('Git command timed out.', { cause: error });
   }
   if (error instanceof GitCommandFailed) {
     return new ProviderError(
       `Git command failed: ${firstLine(error.stderr) || 'unknown git error'}`,
+      { cause: error },
     );
   }
   if (error instanceof GitUnknownCommandError) {
-    return new ProviderError('Git command failed unexpectedly.');
+    return new ProviderError('Git command failed unexpectedly.', { cause: error });
   }
-  return new ProviderError('Git command failed unexpectedly.');
+  return new ProviderError('Git command failed unexpectedly.', { cause: error });
 }
 
 function logGitError(context: string, error: GitError) {

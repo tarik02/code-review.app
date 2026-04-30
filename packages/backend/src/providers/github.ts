@@ -5,7 +5,7 @@ import {
   HttpClientResponse,
 } from '@effect/platform';
 import { Effect, ParseResult, Schema } from 'effect';
-import { ProviderError } from '../errors.ts';
+import { ProviderError, ensureError, summarizeError } from '../errors.ts';
 import { createRepoIdentity, normalizeHost, normalizePath, parseOwnerRepo } from '../repo-id.ts';
 import { getValidAccessToken, updateViewerLogin } from '../auth/provider-auth.ts';
 import type {
@@ -409,9 +409,9 @@ function graphQlResponseSchema<A, I, R>(dataSchema: Schema.Schema<A, I, R>) {
 }
 
 function toProviderError(error: unknown) {
-  return error instanceof ProviderError
-    ? error
-    : new ProviderError(error instanceof Error ? error.message : String(error));
+  if (error instanceof ProviderError) return error;
+  const cause = ensureError(error);
+  return new ProviderError(cause.message, { cause });
 }
 
 function storedToken(
@@ -510,7 +510,7 @@ function parseGitHubErrorBody(text: string) {
 function parseErrorMessage(error: ParseResult.ParseError) {
   return Effect.map(
     ParseResult.TreeFormatter.formatError(error),
-    (message) => new ProviderError(message),
+    (message) => new ProviderError(message, { cause: error }),
   );
 }
 
@@ -539,7 +539,11 @@ function mapHttpError(error: unknown) {
 function graphqlErrors<T>(response: GraphQlResponse<T>): Effect.Effect<void, ProviderError> {
   if (!response.errors?.length) return Effect.void;
   const message = response.errors.map((error) => error.message).join('\n');
-  return Effect.fail(new ProviderError(message || 'GitHub returned an unknown GraphQL error'));
+  return Effect.fail(
+    new ProviderError(message || 'GitHub returned an unknown GraphQL error', {
+      cause: response.errors,
+    }),
+  );
 }
 
 function githubApiBase(host: string) {
@@ -972,6 +976,11 @@ class GitHubProvider implements ForgeProvider {
     }).pipe(
       Effect.catchAll((error) => {
         const message = error instanceof Error ? error.message : String(error);
+        console.warn('[github] auth status check failed', {
+          accountId,
+          message,
+          error: summarizeError(error),
+        });
         const status: ProviderAuthStatus = isNotAuthenticatedMessage(message)
           ? {
               status: 'not_authenticated',
@@ -1633,6 +1642,7 @@ query($owner: String!, $name: String!, $number: Int!) {
               id: thread.id,
               provider: 'github',
               path: thread.path,
+              canResolve: true,
               isResolved: thread.isResolved,
               isOutdated: thread.isOutdated,
               line: thread.line ?? thread.originalLine ?? null,
@@ -1653,6 +1663,7 @@ query($owner: String!, $name: String!, $number: Int!) {
           id: comment.id,
           provider: 'github',
           path: '',
+          canResolve: false,
           isResolved: false,
           isOutdated: false,
           line: null,
@@ -1784,7 +1795,9 @@ mutation($pullRequestId: ID!, $commitOID: GitObjectID!) {
       if (!providerReviewId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
-          new ProviderError(message ?? 'GitHub pending review was not created'),
+          new ProviderError(message ?? 'GitHub pending review was not created', {
+            cause: response.errors ?? response,
+          }),
         );
       }
       return { providerReviewId };
@@ -1867,7 +1880,9 @@ mutation(
       if (!thread?.id || !providerCommentId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
-          new ProviderError(message ?? 'GitHub pending comment was not created'),
+          new ProviderError(message ?? 'GitHub pending comment was not created', {
+            cause: response.errors ?? response,
+          }),
         );
       }
       return {
@@ -1922,7 +1937,9 @@ mutation($pullRequestReviewId: ID!, $pullRequestReviewThreadId: ID!, $body: Stri
       if (!providerCommentId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
-          new ProviderError(message ?? 'GitHub pending reply was not created'),
+          new ProviderError(message ?? 'GitHub pending reply was not created', {
+            cause: response.errors ?? response,
+          }),
         );
       }
       return {
@@ -2108,6 +2125,39 @@ mutation($pullRequestId: ID!, $pullRequestReviewThreadId: ID!, $body: String!) {
     });
   }
 
+  setReviewThreadResolved(
+    repo: RepoIdentity,
+    _number: number,
+    threadId: string,
+    isResolved: boolean,
+  ) {
+    return Effect.gen(function* () {
+      const trimmedThreadId = threadId.trim();
+      if (!trimmedThreadId) {
+        return yield* Effect.fail(new ProviderError('Thread id is required'));
+      }
+
+      const mutationName = isResolved ? 'resolveReviewThread' : 'unresolveReviewThread';
+      const query = `
+mutation($threadId: ID!) {
+  ${mutationName}(input: { threadId: $threadId }) {
+    thread { id }
+  }
+}
+`;
+
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          threadId: trimmedThreadId,
+        },
+        Schema.Unknown,
+      );
+    });
+  }
+
   updateReviewComment(
     repo: RepoIdentity,
     _number: number,
@@ -2159,6 +2209,60 @@ mutation($id: ID!, $body: String!) {
         {
           id: commentId.trim(),
           body: trimmedBody,
+        },
+        Schema.Unknown,
+      );
+    });
+  }
+
+  deleteReviewComment(
+    repo: RepoIdentity,
+    _number: number,
+    threadId: string,
+    commentId: string,
+    subjectType: ReviewThreadInput['subjectType'],
+  ) {
+    return Effect.gen(function* () {
+      const trimmedThreadId = threadId.trim();
+      const trimmedCommentId = commentId.trim();
+      if (!trimmedCommentId) return yield* Effect.fail(new ProviderError('Comment id is required'));
+      if (subjectType !== 'global' && !trimmedThreadId) {
+        return yield* Effect.fail(new ProviderError('Thread id is required'));
+      }
+
+      if (subjectType === 'global') {
+        const query = `
+mutation($id: ID!) {
+  deleteIssueComment(input: { id: $id }) {
+    clientMutationId
+  }
+}
+`;
+        yield* githubGraphql(
+          repo.accountId,
+          repo.host,
+          query,
+          {
+            id: trimmedCommentId,
+          },
+          Schema.Unknown,
+        );
+        return;
+      }
+
+      const query = `
+mutation($id: ID!) {
+  deletePullRequestReviewComment(input: { id: $id }) {
+    pullRequestReviewComment { id }
+  }
+}
+`;
+      yield* githubGraphql(
+        repo.accountId,
+        repo.host,
+        query,
+        {
+          id: trimmedCommentId,
         },
         Schema.Unknown,
       );

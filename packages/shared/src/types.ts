@@ -190,6 +190,7 @@ type ReviewThread = {
   id: string;
   provider: ForgeProviderKind;
   path: string;
+  canResolve?: boolean;
   isResolved: boolean;
   isOutdated: boolean;
   line: number | null;
@@ -373,6 +374,19 @@ type UpdatePullRequestReviewCommentInput = RepoIdentity & {
   subjectType: 'file' | 'line' | 'global';
 };
 
+type SetPullRequestReviewThreadResolvedInput = RepoIdentity & {
+  number: number;
+  threadId: string;
+  isResolved: boolean;
+};
+
+type DeletePullRequestReviewCommentInput = RepoIdentity & {
+  number: number;
+  threadId: string;
+  commentId: string;
+  subjectType: 'file' | 'line' | 'global';
+};
+
 type AvailableUpdate = {
   version: string;
   body: string | null;
@@ -395,6 +409,7 @@ export type {
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
+  DeletePullRequestReviewCommentInput,
   DeletePendingReviewCommentInput,
   DiffDataMode,
   DiffDataSettings,
@@ -437,6 +452,7 @@ export type {
   ReviewCommentSide,
   ReviewThread,
   SelectedPullRequest,
+  SetPullRequestReviewThreadResolvedInput,
   ThemePreference,
   ThemePreferenceSettings,
   TrackedPullRequestOrderEntry,

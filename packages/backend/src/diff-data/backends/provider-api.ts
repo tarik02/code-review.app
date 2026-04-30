@@ -1,6 +1,6 @@
 import { HttpClient } from '@effect/platform';
 import { Effect } from 'effect';
-import { ProviderError, ValidationError } from '../../errors.ts';
+import { ProviderError, ValidationError, ensureError } from '../../errors.ts';
 import { providerFor } from '../../providers/registry.ts';
 import { AuthTokenStore } from '../../auth/token-store.ts';
 import { repoIdentityCacheKey } from '../../repo-id.ts';
@@ -39,7 +39,11 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       }
       return unique;
     },
-    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
+    Effect.mapError((error) => {
+      if (error instanceof Error) return error;
+      const cause = ensureError(error);
+      return new ProviderError(cause.message, { cause });
+    }),
   );
 
   const getFileContents: DiffDataBackend['getFileContents'] = Effect.fn(
@@ -105,7 +109,11 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
         newContent,
       } satisfies PrFileContents;
     },
-    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
+    Effect.mapError((error) => {
+      if (error instanceof Error) return error;
+      const cause = ensureError(error);
+      return new ProviderError(cause.message, { cause });
+    }),
   );
 
   return {

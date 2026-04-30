@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { Effect } from 'effect';
-import { SettingsService } from '@code-review-app/backend';
+import { SettingsService, summarizeError } from '@code-review-app/backend';
 import { applyNativeThemePreference, createMainWindow } from './window';
 import { configureUpdater } from './updater';
 import { backendRuntime } from './backend-runtime';
@@ -76,7 +76,7 @@ async function syncNativeThemeFromSettings() {
     );
     applyNativeThemePreference(preference);
   } catch (error) {
-    console.error('Failed to sync native theme from settings.', error);
+    console.error('Failed to sync native theme from settings.', summarizeError(error));
   }
 }
 

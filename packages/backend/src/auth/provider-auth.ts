@@ -1,6 +1,7 @@
 import { HttpClient, HttpClientRequest } from '@effect/platform';
 import { normalizeHost } from '../repo-id.ts';
 import { Effect } from 'effect';
+import { ensureError } from '../errors.ts';
 import { AuthTokenStore } from './token-store.ts';
 import {
   DEFAULT_GITHUB_CLIENT_ID,
@@ -49,7 +50,7 @@ type DeviceOAuthPollResult =
 const REFRESH_SKEW_MS = 60_000;
 
 function toError(error: unknown) {
-  return error instanceof Error ? error : new Error(String(error));
+  return ensureError(error);
 }
 
 function redirectUri() {

@@ -10,6 +10,7 @@ import type {
   CreatePendingReviewThreadInput,
   CreatePullRequestReviewCommentInput,
   DeletePendingReviewCommentInput,
+  DeletePullRequestReviewCommentInput,
   DiscardPendingReviewInput,
   PendingReviewComment,
   PendingReviewSession,
@@ -20,6 +21,7 @@ import type {
   RepoIdentity,
   ReviewComment,
   ReviewThread,
+  SetPullRequestReviewThreadResolvedInput,
   UpdatePendingReviewCommentInput,
   UpdatePullRequestReviewCommentInput,
   ViewerLogin,
@@ -44,7 +46,9 @@ type ReviewCommentServiceShape = {
   discardPendingReview(input: DiscardPendingReviewInput): Effect.Effect<void, Error>;
   create(input: CreatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
   reply(input: ReplyToPullRequestReviewCommentInput): Effect.Effect<void, Error>;
+  setResolved(input: SetPullRequestReviewThreadResolvedInput): Effect.Effect<void, Error>;
   update(input: UpdatePullRequestReviewCommentInput): Effect.Effect<void, Error>;
+  deleteComment(input: DeletePullRequestReviewCommentInput): Effect.Effect<void, Error>;
 };
 
 class ReviewCommentService extends Effect.Tag('ReviewCommentService')<
@@ -116,6 +120,7 @@ const makeReviewCommentService = Effect.gen(function* () {
       id: pendingThreadId(pending.id),
       provider: createRepoIdentityFromParts(pending.providerId, pending.repoKey).provider,
       path: pending.path,
+      canResolve: false,
       isResolved: false,
       isOutdated: false,
       line: pending.line,
@@ -532,6 +537,35 @@ const makeReviewCommentService = Effect.gen(function* () {
     },
   );
 
+  const setResolved: ReviewCommentServiceShape['setResolved'] = Effect.fn(
+    'ReviewCommentService.setResolved',
+  )(function* (input) {
+    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    yield* provideProviderDeps(
+      providerFor(repo.provider).setReviewThreadResolved(
+        repo,
+        input.number,
+        input.threadId,
+        input.isResolved,
+      ),
+    );
+  });
+
+  const deleteComment: ReviewCommentServiceShape['deleteComment'] = Effect.fn(
+    'ReviewCommentService.deleteComment',
+  )(function* (input) {
+    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    yield* provideProviderDeps(
+      providerFor(repo.provider).deleteReviewComment(
+        repo,
+        input.number,
+        input.threadId,
+        input.commentId,
+        input.subjectType,
+      ),
+    );
+  });
+
   return {
     getViewerLogin,
     getApprovalState,
@@ -548,7 +582,9 @@ const makeReviewCommentService = Effect.gen(function* () {
     discardPendingReview,
     create,
     reply,
+    setResolved,
     update,
+    deleteComment,
   } satisfies ReviewCommentServiceShape;
 });
 
