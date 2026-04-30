@@ -1,6 +1,7 @@
 import electronUpdater from 'electron-updater';
 import { EventEmitter } from 'node:events';
 import { app } from 'electron';
+import { Effect } from 'effect';
 import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
 import { summarizeError } from '@code-review-app/backend';
 
@@ -34,7 +35,11 @@ function isUpdaterEnabled() {
 }
 
 function logUpdaterError(context: string, error: unknown) {
-  console.error(`[updater] ${context} failed`, summarizeError(error));
+  void Effect.runFork(
+    Effect.logError(`[updater] ${context} failed`, {
+      error: summarizeError(error),
+    }),
+  );
 }
 
 function configureUpdater() {

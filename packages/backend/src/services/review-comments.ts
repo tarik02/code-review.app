@@ -1,9 +1,6 @@
-import { HttpClient } from '@effect/platform';
 import { Effect, Layer } from 'effect';
-import { createRepoIdentityFromParts } from '../repo-id.ts';
-import { providerFor } from '../providers/registry.ts';
-import { AuthTokenStore } from '../auth/token-store.ts';
-import { CacheService } from '../cache.ts';
+import { createProviderRepoIdentityFromParts } from '../repo-id.ts';
+import { ForgeProviderRegistry, type AccountScopedForgeProvider } from '../providers/registry.ts';
 import type {
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
@@ -35,8 +32,12 @@ type ReviewCommentServiceShape = {
   ): Effect.Effect<PullRequestApprovalState, Error>;
   approve(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<void, Error>;
   removeApproval(repo: RepoIdentity, number: number): Effect.Effect<void, Error>;
-  listThreads(repo: RepoIdentity, number: number): Effect.Effect<ReviewThread[], Error>;
-  listPending(repo: RepoIdentity, number: number): Effect.Effect<PendingReviewState, Error>;
+  listThreads(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<ReviewThread[], Error>;
+  listPending(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<PendingReviewState, Error>;
   createPendingThread(input: CreatePendingReviewThreadInput): Effect.Effect<void, Error>;
   createPendingReply(input: CreatePendingReviewReplyInput): Effect.Effect<void, Error>;
   createPendingGlobal(input: CreatePendingReviewGlobalInput): Effect.Effect<void, Error>;
@@ -57,37 +58,27 @@ class ReviewCommentService extends Effect.Tag('ReviewCommentService')<
 >() {}
 
 const makeReviewCommentService = Effect.gen(function* () {
-  const tokenStore = yield* AuthTokenStore;
-  const httpClient = yield* HttpClient.HttpClient;
-  const cache = yield* CacheService;
-
-  const provideProviderDeps = <A, E>(
-    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
-  ) =>
-    effect.pipe(
-      Effect.provideService(AuthTokenStore, tokenStore),
-      Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
+  const providers = yield* ForgeProviderRegistry;
 
   const getViewerLogin: ReviewCommentServiceShape['getViewerLogin'] = Effect.fn(
     'ReviewCommentService.getViewerLogin',
   )(function* (accountId) {
-    const account = yield* tokenStore.get(accountId);
-    if (!account) throw new Error('Provider account is not signed in.');
-    const login = yield* provideProviderDeps(providerFor(account.provider).viewerLogin(accountId));
+    const provider = yield* providers.forAccount(accountId);
+    const login = yield* provider.viewerLogin();
     return { login };
   });
 
-  const getProviderViewerLogin = (repo: ReturnType<typeof createRepoIdentityFromParts>) =>
-    provideProviderDeps(providerFor(repo.provider).viewerLogin(repo.accountId)).pipe(
+  const getProviderViewerLogin = (repoInput: RepoIdentity) =>
+    providers.forRepo(repoInput).pipe(
+      Effect.flatMap(({ provider }) => provider.viewerLogin()),
       Effect.catchAll(() => Effect.succeed('You')),
     );
 
-  function pendingCommentId(id: number) {
+  function pendingCommentId(id: string) {
     return `pending-comment:${id}`;
   }
 
-  function pendingThreadId(id: number) {
+  function pendingThreadId(id: string) {
     return `pending-thread:${id}`;
   }
 
@@ -102,7 +93,7 @@ const makeReviewCommentService = Effect.gen(function* () {
   ): ReviewComment {
     return {
       id: pendingCommentId(pending.id),
-      databaseId: pending.id,
+      databaseId: null,
       authorLogin: viewerLogin,
       authorAvatarUrl: null,
       authorAssociation: null,
@@ -118,7 +109,7 @@ const makeReviewCommentService = Effect.gen(function* () {
   function pendingToReviewThread(pending: PendingReviewComment, viewerLogin: string): ReviewThread {
     return {
       id: pendingThreadId(pending.id),
-      provider: createRepoIdentityFromParts(pending.providerId, pending.repoKey).provider,
+      provider: createProviderRepoIdentityFromParts(pending.providerId, pending.repoKey).provider,
       path: pending.path,
       canResolve: false,
       isResolved: false,
@@ -134,7 +125,6 @@ const makeReviewCommentService = Effect.gen(function* () {
   }
 
   function mergePendingThreads(
-    repo: ReturnType<typeof createRepoIdentityFromParts>,
     threads: ReviewThread[],
     pendingComments: PendingReviewComment[],
     viewerLogin: string,
@@ -146,6 +136,21 @@ const makeReviewCommentService = Effect.gen(function* () {
 
     for (const pending of pendingComments) {
       if (pending.kind !== 'reply' || !pending.replyToThreadId) {
+        const targetThread =
+          pending.kind === 'reply' && pending.replyToCommentId != null
+            ? mergedThreads.find((thread) =>
+                thread.comments.some((comment) => comment.databaseId === pending.replyToCommentId),
+              )
+            : null;
+        if (targetThread) {
+          const rootCommentId =
+            targetThread.comments.find((comment) => comment.replyToId === null)?.id ??
+            targetThread.comments[0]?.id ??
+            null;
+          targetThread.comments.push(pendingToReviewComment(pending, viewerLogin, rootCommentId));
+          continue;
+        }
+
         mergedThreads.push(pendingToReviewThread(pending, viewerLogin));
         continue;
       }
@@ -163,42 +168,24 @@ const makeReviewCommentService = Effect.gen(function* () {
       targetThread.comments.push(pendingToReviewComment(pending, viewerLogin, rootCommentId));
     }
 
-    return mergedThreads.map((thread) =>
-      thread.provider === repo.provider
-        ? {
-            ...thread,
-            isPending:
-              thread.isPending || thread.comments.some((comment) => comment.isPending === true),
-          }
-        : thread,
+    return mergedThreads;
+  }
+
+  function getPendingState(repoInput: RepoIdentity, number: number, headSha: string) {
+    return providers.forRepo(repoInput).pipe(
+      Effect.flatMap(({ provider, repo }) => provider.listPendingReview(repo, number, headSha)),
     );
-  }
-
-  function findPendingComment(pendingComments: PendingReviewComment[], pendingCommentId: number) {
-    return pendingComments.find((comment) => comment.id === pendingCommentId) ?? null;
-  }
-
-  function getPendingState(repoInput: RepoIdentity, number: number) {
-    return Effect.gen(function* () {
-      const [session, comments] = yield* Effect.all([
-        cache.getPendingReviewSession(repoInput, number),
-        cache.listPendingReviewComments(repoInput, number),
-      ]);
-      return {
-        session,
-        comments,
-      } satisfies PendingReviewState;
-    });
   }
 
   function ensurePendingSession(
     repoInput: RepoIdentity,
     number: number,
     headSha: string,
-    repo: ReturnType<typeof createRepoIdentityFromParts>,
+    provider: AccountScopedForgeProvider,
+    repo: ReturnType<typeof createProviderRepoIdentityFromParts>,
   ): Effect.Effect<PendingReviewSession, Error> {
     return Effect.gen(function* () {
-      const existingSession = yield* cache.getPendingReviewSession(repoInput, number);
+      const existingSession = (yield* getPendingState(repoInput, number, headSha)).session;
       if (
         existingSession &&
         (repo.provider !== 'github' || existingSession.providerReviewId !== null)
@@ -206,333 +193,178 @@ const makeReviewCommentService = Effect.gen(function* () {
         return existingSession;
       }
 
-      const providerSession = yield* provideProviderDeps(
-        providerFor(repo.provider).ensurePendingReview(repo, number, headSha),
-      );
-      return yield* cache.ensurePendingReviewSession(
-        repoInput,
+      const providerSession = yield* provider.ensurePendingReview(repo, number, headSha);
+      const timestamp = Math.floor(Date.now() / 1000);
+      return {
+        ...repoInput,
+        id: 0,
         number,
-        existingSession?.headSha ?? headSha,
-        providerSession.providerReviewId,
-      );
+        headSha,
+        providerReviewId: providerSession.providerReviewId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
     });
-  }
-
-  function cleanupPendingProviderComment(
-    repo: ReturnType<typeof createRepoIdentityFromParts>,
-    number: number,
-    providerCommentId: string,
-  ) {
-    return provideProviderDeps(
-      providerFor(repo.provider).deletePendingReviewComment(repo, number, providerCommentId),
-    ).pipe(Effect.catchAll(() => Effect.void));
   }
 
   const listThreads: ReviewCommentServiceShape['listThreads'] = Effect.fn(
     'ReviewCommentService.listThreads',
-  )(function* (repoInput, number) {
-    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
+  )(function* (repoInput, number, headSha) {
+    const { provider, repo } = yield* providers.forRepo(repoInput);
     const [threads, pendingComments, viewerLogin] = yield* Effect.all([
-      provideProviderDeps(providerFor(repo.provider).listReviewThreads(repo, number)),
-      cache.listPendingReviewComments(repoInput, number),
-      getProviderViewerLogin(repo),
+      provider.listReviewThreads(repo, number),
+      getPendingState(repoInput, number, headSha).pipe(Effect.map((state) => state.comments)),
+      getProviderViewerLogin(repoInput),
     ]);
-    return mergePendingThreads(repo, threads, pendingComments, viewerLogin);
+    return mergePendingThreads(threads, pendingComments, viewerLogin);
   });
 
   const listPending: ReviewCommentServiceShape['listPending'] = Effect.fn(
     'ReviewCommentService.listPending',
-  )(function* (repoInput, number) {
-    return yield* getPendingState(repoInput, number);
+  )(function* (repoInput, number, headSha) {
+    return yield* getPendingState(repoInput, number, headSha);
   });
 
   const getApprovalState: ReviewCommentServiceShape['getApprovalState'] = Effect.fn(
     'ReviewCommentService.getApprovalState',
   )(function* (repoInput, number) {
-    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
-    return yield* provideProviderDeps(
-      providerFor(repo.provider).getPullRequestApprovalState(repo, number),
-    );
+    const { provider, repo } = yield* providers.forRepo(repoInput);
+    return yield* provider.getPullRequestApprovalState(repo, number);
   });
 
   const approve: ReviewCommentServiceShape['approve'] = Effect.fn('ReviewCommentService.approve')(
     function* (repoInput, number, headSha) {
-      const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
-      yield* provideProviderDeps(
-        providerFor(repo.provider).approvePullRequest(repo, number, headSha),
-      );
+      const { provider, repo } = yield* providers.forRepo(repoInput);
+      yield* provider.approvePullRequest(repo, number, headSha);
     },
   );
 
   const removeApproval: ReviewCommentServiceShape['removeApproval'] = Effect.fn(
     'ReviewCommentService.removeApproval',
   )(function* (repoInput, number) {
-    const repo = createRepoIdentityFromParts(repoInput.providerId, repoInput.repoKey);
-    yield* provideProviderDeps(providerFor(repo.provider).removePullRequestApproval(repo, number));
+    const { provider, repo } = yield* providers.forRepo(repoInput);
+    yield* provider.removePullRequestApproval(repo, number);
   });
 
   const createPendingThread: ReviewCommentServiceShape['createPendingThread'] = Effect.fn(
     'ReviewCommentService.createPendingThread',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    const { provider, repo } = yield* providers.forRepo(input);
     const body = input.body.trim();
     if (!body) throw new Error('Comment body is required');
 
-    const session = yield* ensurePendingSession(input, input.number, input.headSha, repo);
-    const providerComment = yield* provideProviderDeps(
-      providerFor(repo.provider).createPendingReviewThread(repo, input.number, session, {
-        body,
-        path: input.path,
-        oldPath: input.oldPath,
-        newPath: input.newPath,
-        line: input.line,
-        side: input.side,
-        startLine: input.startLine,
-        startSide: input.startSide,
-        subjectType: input.subjectType,
-      }),
-    );
-
-    yield* cache
-      .insertPendingReviewComment(input, input.number, {
-        headSha: session.headSha,
-        kind: 'thread',
-        providerCommentId: providerComment.providerCommentId,
-        providerThreadId: providerComment.providerThreadId,
-        replyToThreadId: null,
-        body,
-        path: input.path,
-        oldPath: input.oldPath,
-        newPath: input.newPath,
-        line: input.line,
-        side: input.side,
-        startLine: input.startLine,
-        startSide: input.startSide,
-        subjectType: input.subjectType,
-      })
-      .pipe(
-        Effect.catchAll((error) =>
-          cleanupPendingProviderComment(repo, input.number, providerComment.providerCommentId).pipe(
-            Effect.flatMap(() => Effect.fail(error)),
-          ),
-        ),
-      );
+    const session = yield* ensurePendingSession(input, input.number, input.headSha, provider, repo);
+    yield* provider.createPendingReviewThread(repo, input.number, session, {
+      body,
+      path: input.path,
+      oldPath: input.oldPath,
+      newPath: input.newPath,
+      line: input.line,
+      side: input.side,
+      startLine: input.startLine,
+      startSide: input.startSide,
+      subjectType: input.subjectType,
+    });
   });
 
   const createPendingReply: ReviewCommentServiceShape['createPendingReply'] = Effect.fn(
     'ReviewCommentService.createPendingReply',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    const { provider, repo } = yield* providers.forRepo(input);
     const body = input.body.trim();
     const threadId = input.threadId.trim();
     if (!body) throw new Error('Reply body is required');
     if (!threadId) throw new Error('Thread id is required');
 
-    const providerThreads = yield* provideProviderDeps(
-      providerFor(repo.provider).listReviewThreads(repo, input.number),
-    ).pipe(Effect.catchAll(() => Effect.succeed([])));
-    const targetThread = providerThreads.find((thread) => thread.id === threadId) ?? null;
-    const session = yield* ensurePendingSession(input, input.number, input.headSha, repo);
-    const providerComment = yield* provideProviderDeps(
-      providerFor(repo.provider).createPendingReviewReply(
-        repo,
-        input.number,
-        session,
-        threadId,
-        body,
-      ),
-    );
-
-    yield* cache
-      .insertPendingReviewComment(input, input.number, {
-        headSha: session.headSha,
-        kind: 'reply',
-        providerCommentId: providerComment.providerCommentId,
-        providerThreadId: providerComment.providerThreadId,
-        replyToThreadId: threadId,
-        body,
-        path: targetThread?.path ?? '',
-        oldPath: targetThread?.path ?? '',
-        newPath: targetThread?.path ?? '',
-        line: targetThread?.line ?? null,
-        side: targetThread?.side ?? null,
-        startLine: targetThread?.startLine ?? null,
-        startSide: targetThread?.startSide ?? null,
-        subjectType: targetThread?.subjectType ?? 'line',
-      })
-      .pipe(
-        Effect.catchAll((error) =>
-          cleanupPendingProviderComment(repo, input.number, providerComment.providerCommentId).pipe(
-            Effect.flatMap(() => Effect.fail(error)),
-          ),
-        ),
-      );
+    const session = yield* ensurePendingSession(input, input.number, input.headSha, provider, repo);
+    yield* provider.createPendingReviewReply(repo, input.number, session, threadId, body);
   });
 
   const createPendingGlobal: ReviewCommentServiceShape['createPendingGlobal'] = Effect.fn(
     'ReviewCommentService.createPendingGlobal',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    const { provider, repo } = yield* providers.forRepo(input);
     const body = input.body.trim();
     if (!body) throw new Error('Comment body is required');
     if (repo.provider === 'github') {
       throw new Error('GitHub global comments cannot be added to pending reviews.');
     }
 
-    const session = yield* ensurePendingSession(input, input.number, input.headSha, repo);
-    const providerComment = yield* provideProviderDeps(
-      providerFor(repo.provider).createPendingGlobalComment(repo, input.number, session, body),
-    );
-
-    yield* cache
-      .insertPendingReviewComment(input, input.number, {
-        headSha: session.headSha,
-        kind: 'global',
-        providerCommentId: providerComment.providerCommentId,
-        providerThreadId: providerComment.providerThreadId,
-        replyToThreadId: null,
-        body,
-        path: '',
-        oldPath: '',
-        newPath: '',
-        line: null,
-        side: null,
-        startLine: null,
-        startSide: null,
-        subjectType: 'global',
-      })
-      .pipe(
-        Effect.catchAll((error) =>
-          cleanupPendingProviderComment(repo, input.number, providerComment.providerCommentId).pipe(
-            Effect.flatMap(() => Effect.fail(error)),
-          ),
-        ),
-      );
+    const session = yield* ensurePendingSession(input, input.number, input.headSha, provider, repo);
+    yield* provider.createPendingGlobalComment(repo, input.number, session, body);
   });
 
   const updatePending: ReviewCommentServiceShape['updatePending'] = Effect.fn(
     'ReviewCommentService.updatePending',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
+    const { provider, repo } = yield* providers.forRepo(input);
     const body = input.body.trim();
     if (!body) throw new Error('Comment body is required');
 
-    const pendingComments = yield* cache.listPendingReviewComments(input, input.number);
-    const pendingComment = findPendingComment(pendingComments, input.pendingCommentId);
-    if (!pendingComment) throw new Error('Pending comment was not found.');
-    if (!pendingComment.providerCommentId) {
-      throw new Error('Pending provider comment id is missing.');
-    }
-
-    const providerComment = yield* provideProviderDeps(
-      providerFor(repo.provider).updatePendingReviewComment(
-        repo,
-        input.number,
-        pendingComment.providerCommentId,
-        body,
-      ),
-    );
-    yield* cache.updatePendingReviewComment(
-      input,
-      input.number,
-      input.pendingCommentId,
-      body,
-      providerComment.providerCommentId,
-    );
+    yield* provider.updatePendingReviewComment(repo, input.number, input.pendingCommentId, body);
   });
 
   const deletePending: ReviewCommentServiceShape['deletePending'] = Effect.fn(
     'ReviewCommentService.deletePending',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-    const pendingComments = yield* cache.listPendingReviewComments(input, input.number);
-    const pendingComment = findPendingComment(pendingComments, input.pendingCommentId);
-    if (!pendingComment) throw new Error('Pending comment was not found.');
-    if (!pendingComment.providerCommentId) {
-      throw new Error('Pending provider comment id is missing.');
-    }
-
-    yield* provideProviderDeps(
-      providerFor(repo.provider).deletePendingReviewComment(
-        repo,
-        input.number,
-        pendingComment.providerCommentId,
-      ),
-    );
-    yield* cache.deletePendingReviewComment(input, input.number, input.pendingCommentId);
+    const { provider, repo } = yield* providers.forRepo(input);
+    yield* provider.deletePendingReviewComment(repo, input.number, input.pendingCommentId);
   });
 
   const publishPendingReview: ReviewCommentServiceShape['publishPendingReview'] = Effect.fn(
     'ReviewCommentService.publishPendingReview',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-    const { session, comments } = yield* getPendingState(input, input.number);
+    const { provider, repo } = yield* providers.forRepo(input);
+    const { session, comments } = yield* getPendingState(input, input.number, input.headSha);
     if (!session || comments.length === 0) return;
 
-    yield* provideProviderDeps(
-      providerFor(repo.provider).publishPendingReview(repo, input.number, session, input),
-    );
-    yield* cache.clearPendingReview(input, input.number);
+    yield* provider.publishPendingReview(repo, input.number, session, input);
   });
 
   const discardPendingReview: ReviewCommentServiceShape['discardPendingReview'] = Effect.fn(
     'ReviewCommentService.discardPendingReview',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-    const { session, comments } = yield* getPendingState(input, input.number);
+    const { provider, repo } = yield* providers.forRepo(input);
+    const { session, comments } = yield* getPendingState(input, input.number, input.headSha);
     if (!session) return;
 
-    yield* provideProviderDeps(
-      providerFor(repo.provider).discardPendingReview(repo, input.number, session, comments),
-    );
-    yield* cache.clearPendingReview(input, input.number);
+    yield* provider.discardPendingReview(repo, input.number, session, comments);
   });
 
   const create: ReviewCommentServiceShape['create'] = Effect.fn('ReviewCommentService.create')(
     function* (input) {
-      const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-      yield* provideProviderDeps(
-        providerFor(repo.provider).createReviewThread(repo, input.number, {
-          body: input.body,
-          path: input.path,
-          oldPath: input.oldPath,
-          newPath: input.newPath,
-          line: input.line,
-          side: input.side,
-          startLine: input.startLine,
-          startSide: input.startSide,
-          subjectType: input.subjectType,
-        }),
-      );
+      const { provider, repo } = yield* providers.forRepo(input);
+      yield* provider.createReviewThread(repo, input.number, {
+        body: input.body,
+        path: input.path,
+        oldPath: input.oldPath,
+        newPath: input.newPath,
+        line: input.line,
+        side: input.side,
+        startLine: input.startLine,
+        startSide: input.startSide,
+        subjectType: input.subjectType,
+      });
     },
   );
 
   const reply: ReviewCommentServiceShape['reply'] = Effect.fn('ReviewCommentService.reply')(
     function* (input) {
-      const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-      yield* provideProviderDeps(
-        providerFor(repo.provider).replyToReviewThread(
-          repo,
-          input.number,
-          input.threadId,
-          input.body,
-        ),
-      );
+      const { provider, repo } = yield* providers.forRepo(input);
+      yield* provider.replyToReviewThread(repo, input.number, input.threadId, input.body);
     },
   );
 
   const update: ReviewCommentServiceShape['update'] = Effect.fn('ReviewCommentService.update')(
     function* (input) {
-      const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-      yield* provideProviderDeps(
-        providerFor(repo.provider).updateReviewComment(
-          repo,
-          input.number,
-          input.threadId,
-          input.commentId,
-          input.body,
-          input.subjectType,
-        ),
+      const { provider, repo } = yield* providers.forRepo(input);
+      yield* provider.updateReviewComment(
+        repo,
+        input.number,
+        input.threadId,
+        input.commentId,
+        input.body,
+        input.subjectType,
       );
     },
   );
@@ -540,29 +372,20 @@ const makeReviewCommentService = Effect.gen(function* () {
   const setResolved: ReviewCommentServiceShape['setResolved'] = Effect.fn(
     'ReviewCommentService.setResolved',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-    yield* provideProviderDeps(
-      providerFor(repo.provider).setReviewThreadResolved(
-        repo,
-        input.number,
-        input.threadId,
-        input.isResolved,
-      ),
-    );
+    const { provider, repo } = yield* providers.forRepo(input);
+    yield* provider.setReviewThreadResolved(repo, input.number, input.threadId, input.isResolved);
   });
 
   const deleteComment: ReviewCommentServiceShape['deleteComment'] = Effect.fn(
     'ReviewCommentService.deleteComment',
   )(function* (input) {
-    const repo = createRepoIdentityFromParts(input.providerId, input.repoKey);
-    yield* provideProviderDeps(
-      providerFor(repo.provider).deleteReviewComment(
-        repo,
-        input.number,
-        input.threadId,
-        input.commentId,
-        input.subjectType,
-      ),
+    const { provider, repo } = yield* providers.forRepo(input);
+    yield* provider.deleteReviewComment(
+      repo,
+      input.number,
+      input.threadId,
+      input.commentId,
+      input.subjectType,
     );
   });
 

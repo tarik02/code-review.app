@@ -2,6 +2,7 @@ import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating
 import { useQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { logError } from '../../lib/log';
 import {
   getReviewThreadRefKey,
   isGlobalReviewThread,
@@ -30,7 +31,7 @@ type ReviewThreadCardProps = {
   compact?: boolean;
   slim?: boolean;
   defaultCollapsed?: boolean;
-  deletingCommentId?: string | null;
+  deletingCommentIds?: ReadonlySet<string>;
   patchViewerSessionKey?: string | null;
   resolvingThreadId?: string | null;
   viewerLogin?: string | null;
@@ -257,7 +258,7 @@ function ReviewThreadCard({
   compact = false,
   slim = false,
   defaultCollapsed = false,
-  deletingCommentId = null,
+  deletingCommentIds = new Set<string>(),
   patchViewerSessionKey = null,
   resolvingThreadId = null,
   viewerLogin = null,
@@ -586,7 +587,13 @@ function ReviewThreadCard({
               className="font-sans text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
               onClick={() => {
                 if (onSetThreadResolved) {
-                  void onSetThreadResolved(thread, !thread.isResolved).catch(console.error);
+                  void onSetThreadResolved(thread, !thread.isResolved).catch((error) => {
+                    logError('failed to update thread resolution', {
+                      threadId: thread.id,
+                      nextResolved: !thread.isResolved,
+                      error,
+                    });
+                  });
                 }
               }}
               disabled={isResolvePending}
@@ -616,7 +623,7 @@ function ReviewThreadCard({
           const editEditor = threadEditors.find(
             (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
-          const isDeleting = deletingCommentId === comment.id;
+          const isDeleting = deletingCommentIds.has(comment.id);
           const canEdit =
             (comment.isPending || (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
             comment.id.length > 0 &&
@@ -646,6 +653,11 @@ function ReviewThreadCard({
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
                   <span className="font-sans font-medium text-ink-900">{comment.authorLogin}</span>
                   <span>{formatTimestamp(comment.createdAt)}</span>
+                  {comment.isPending ? (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                      Pending
+                    </span>
+                  ) : null}
                   {isDeleting ? <span className="text-ink-500">Deleting...</span> : null}
                   {!compact && comment.url ? (
                     <a
@@ -673,7 +685,13 @@ function ReviewThreadCard({
                       className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
                       onClick={() => {
                         if (onDeletePendingComment) {
-                          void onDeletePendingComment(comment).catch(console.error);
+                          void onDeletePendingComment(comment).catch((error) => {
+                            logError('failed to discard pending review comment', {
+                              commentId: comment.id,
+                              threadId: thread.id,
+                              error,
+                            });
+                          });
                         }
                       }}
                       disabled={isDeleting}
@@ -687,7 +705,13 @@ function ReviewThreadCard({
                       className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
                       onClick={() => {
                         if (onDeleteComment) {
-                          void onDeleteComment(thread, comment).catch(console.error);
+                          void onDeleteComment(thread, comment).catch((error) => {
+                            logError('failed to delete review comment', {
+                              commentId: comment.id,
+                              threadId: thread.id,
+                              error,
+                            });
+                          });
                         }
                       }}
                       disabled={isDeleting}

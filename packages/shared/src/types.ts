@@ -218,7 +218,7 @@ type PendingReviewSession = RepoIdentity & {
 };
 
 type PendingReviewComment = RepoIdentity & {
-  id: number;
+  id: string;
   sessionId: number;
   number: number;
   headSha: string;
@@ -226,6 +226,7 @@ type PendingReviewComment = RepoIdentity & {
   providerCommentId: string | null;
   providerThreadId: string | null;
   replyToThreadId: string | null;
+  replyToCommentId: number | null;
   body: string;
   path: string;
   oldPath: string;
@@ -331,6 +332,12 @@ type CreatePendingReviewReplyInput = RepoIdentity & {
   headSha: string;
   threadId: string;
   body: string;
+  path: string;
+  line: number | null;
+  side: ReviewCommentSide | null;
+  startLine: number | null;
+  startSide: ReviewCommentSide | null;
+  subjectType: PendingReviewCommentSubjectType;
 };
 
 type CreatePendingReviewGlobalInput = RepoIdentity & {
@@ -341,23 +348,27 @@ type CreatePendingReviewGlobalInput = RepoIdentity & {
 
 type UpdatePendingReviewCommentInput = RepoIdentity & {
   number: number;
-  pendingCommentId: number;
+  headSha: string;
+  pendingCommentId: string;
   body: string;
 };
 
 type DeletePendingReviewCommentInput = RepoIdentity & {
   number: number;
-  pendingCommentId: number;
+  headSha: string;
+  pendingCommentId: string;
 };
 
 type PublishPendingReviewInput = RepoIdentity & {
   number: number;
+  headSha: string;
   action?: PendingReviewSubmitAction;
   summary?: string;
 };
 
 type DiscardPendingReviewInput = RepoIdentity & {
   number: number;
+  headSha: string;
 };
 
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {

@@ -224,27 +224,33 @@ const createPendingReviewThreadInputSchema = pullRequestVersionedInputSchema.ext
 const createPendingReviewReplyInputSchema = pullRequestVersionedInputSchema.extend({
   threadId: z.string(),
   body: z.string(),
+  path: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: pendingReviewCommentSubjectTypeSchema,
 });
 
 const createPendingReviewGlobalInputSchema = pullRequestVersionedInputSchema.extend({
   body: z.string(),
 });
 
-const updatePendingReviewCommentInputSchema = pullRequestInputSchema.extend({
-  pendingCommentId: z.number().int().positive(),
+const updatePendingReviewCommentInputSchema = pullRequestVersionedInputSchema.extend({
+  pendingCommentId: z.string().min(1),
   body: z.string(),
 });
 
-const deletePendingReviewCommentInputSchema = pullRequestInputSchema.extend({
-  pendingCommentId: z.number().int().positive(),
+const deletePendingReviewCommentInputSchema = pullRequestVersionedInputSchema.extend({
+  pendingCommentId: z.string().min(1),
 });
 
-const publishPendingReviewInputSchema = pullRequestInputSchema.extend({
+const publishPendingReviewInputSchema = pullRequestVersionedInputSchema.extend({
   action: pendingReviewSubmitActionSchema.optional(),
   summary: z.string().optional(),
 });
 
-const discardPendingReviewInputSchema = pullRequestInputSchema;
+const discardPendingReviewInputSchema = pullRequestVersionedInputSchema;
 
 const pendingReviewSessionSchema = pullRequestInputSchema.extend({
   id: z.number().int().positive(),

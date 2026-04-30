@@ -1,11 +1,28 @@
 import type { ForgeProviderKind } from '../types/forge';
 
 function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
+  const trimmed = host.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const url = new URL(
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+  );
+  return url.origin.toLowerCase();
+}
+
+function hostNameFromInput(host: string) {
+  const normalizedHost = normalizeHostInput(host);
+  return normalizedHost ? new URL(normalizedHost).hostname.toLowerCase() : '';
+}
+
+function isDefaultProviderHost(provider: ForgeProviderKind, host: string) {
+  const hostname = hostNameFromInput(host);
+  return (
+    (provider === 'github' && hostname === 'github.com') ||
+    (provider === 'gitlab' && hostname === 'gitlab.com')
+  );
 }
 
 type ParsedForgeResourceUrl = {
@@ -30,7 +47,7 @@ function parseForgeResourceUrl(
     return null;
   }
 
-  const host = normalizeHostInput(parsed.host);
+  const host = normalizeHostInput(parsed.origin);
   const segments = parsed.pathname.split('/').filter(Boolean);
   const gitlabDashIndex = segments.indexOf('-');
   if (gitlabDashIndex > 0 && segments[gitlabDashIndex + 1] === 'merge_requests') {
@@ -59,7 +76,7 @@ function parseForgeResourceUrl(
     }
   }
 
-  if ((providerHint === 'gitlab' || host.includes('gitlab')) && segments.length >= 1) {
+  if ((providerHint === 'gitlab' || hostNameFromInput(host).includes('gitlab')) && segments.length >= 1) {
     return {
       provider: 'gitlab',
       host,
@@ -92,5 +109,5 @@ function parseAppOpenUrl(value: string) {
   }
 }
 
-export { normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl };
+export { hostNameFromInput, isDefaultProviderHost, normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl };
 export type { ParsedForgeResourceUrl };

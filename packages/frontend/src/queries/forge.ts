@@ -451,6 +451,7 @@ function pullRequestReviewThreadsQueryOptions(pr: SelectedPullRequest) {
         providerId: pr.providerId,
         repoKey: pr.repoKey,
         number: pr.number,
+        headSha: pr.headSha,
       }),
   });
 }
@@ -463,6 +464,7 @@ function pullRequestPendingReviewQueryOptions(pr: SelectedPullRequest) {
         providerId: pr.providerId,
         repoKey: pr.repoKey,
         number: pr.number,
+        headSha: pr.headSha,
       }),
   });
 }
@@ -506,6 +508,12 @@ async function createPendingReviewReply(input: CreatePendingReviewReplyInput) {
     headSha: input.headSha,
     threadId: input.threadId,
     body: input.body,
+    path: input.path,
+    line: input.line,
+    side: input.side,
+    startLine: input.startLine,
+    startSide: input.startSide,
+    subjectType: input.subjectType,
   });
 }
 
@@ -524,6 +532,7 @@ async function updatePendingReviewComment(input: UpdatePendingReviewCommentInput
     providerId: input.providerId,
     repoKey: input.repoKey,
     number: input.number,
+    headSha: input.headSha,
     pendingCommentId: input.pendingCommentId,
     body: input.body,
   });
@@ -534,6 +543,7 @@ async function deletePendingReviewComment(input: DeletePendingReviewCommentInput
     providerId: input.providerId,
     repoKey: input.repoKey,
     number: input.number,
+    headSha: input.headSha,
     pendingCommentId: input.pendingCommentId,
   });
 }
@@ -541,6 +551,7 @@ async function deletePendingReviewComment(input: DeletePendingReviewCommentInput
 async function publishPendingReview(input: PublishPendingReviewInput) {
   await trpc.reviewComments.publishPendingReview.mutate({
     action: input.action,
+    headSha: input.headSha,
     providerId: input.providerId,
     repoKey: input.repoKey,
     number: input.number,
@@ -550,6 +561,7 @@ async function publishPendingReview(input: PublishPendingReviewInput) {
 
 async function discardPendingReview(input: DiscardPendingReviewInput) {
   await trpc.reviewComments.discardPendingReview.mutate({
+    headSha: input.headSha,
     providerId: input.providerId,
     repoKey: input.repoKey,
     number: input.number,

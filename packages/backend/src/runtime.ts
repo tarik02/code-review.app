@@ -5,6 +5,7 @@ import { AuthTokenStoreLive } from './auth/token-store.ts';
 import { CacheServiceLive } from './cache.ts';
 import { BackendConfig, type BackendRuntimeConfig } from './config.ts';
 import { DatabaseServiceLive } from './db/client.ts';
+import { ForgeProviderRegistryLive } from './providers/registry.ts';
 import { AppSettingsServiceLive } from './services/app-settings.ts';
 import { DiffDataServiceLive } from './services/diff-data.ts';
 import { GitServiceLive } from './git/service.ts';
@@ -36,6 +37,8 @@ function createAppLayer(options: BackendRuntimeOptions) {
   const BaseServiceLayer = Layer.mergeAll(DatabaseDependentLayer, NodeHttpClient.layerUndici);
 
   const BaseLayer = Layer.provideMerge(BaseServiceLayer, PlatformLayer);
+  const ProviderLayer = Layer.provideMerge(ForgeProviderRegistryLive, BaseLayer);
+  const BaseAndProviderLayer = Layer.mergeAll(BaseLayer, ProviderLayer);
 
   const IndependentServiceLayer = Layer.mergeAll(
     RepoServiceLive,
@@ -45,7 +48,10 @@ function createAppLayer(options: BackendRuntimeOptions) {
     GitServiceLive,
   );
 
-  const BaseAndIndependentServiceLayer = Layer.provideMerge(IndependentServiceLayer, BaseLayer);
+  const BaseAndIndependentServiceLayer = Layer.provideMerge(
+    IndependentServiceLayer,
+    BaseAndProviderLayer,
+  );
 
   const BaseAndServiceLayer = Layer.provideMerge(
     DiffDataServiceLive,

@@ -2,6 +2,7 @@ import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { appearanceBackgroundQueryOptions } from '../../queries/forge';
+import { isDefaultProviderHost, normalizeHostInput } from '../../lib/forge-links';
 import type {
   ForgeProviderKind,
   ProviderAccount,
@@ -27,21 +28,6 @@ type AuthGateScreenProps = {
   onCheckAgain: () => void;
 };
 
-function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
-}
-
-function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
-  return (
-    (provider === 'github' && host === 'github.com') ||
-    (provider === 'gitlab' && host === 'gitlab.com')
-  );
-}
-
 function AuthGateScreen({
   status,
   message,
@@ -59,9 +45,9 @@ function AuthGateScreen({
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const defaultHost = provider === 'github' ? 'github.com' : 'gitlab.com';
 
-  const normalizedHost = normalizeHostInput(host) || defaultHost;
+  const normalizedHost = normalizeHostInput(host || defaultHost);
   const canStartSignIn =
-    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) &&
+    (clientId.trim().length > 0 || isDefaultProviderHost(provider, normalizedHost)) &&
     !isChecking &&
     !isSigningIn;
   const title = isChecking ? (

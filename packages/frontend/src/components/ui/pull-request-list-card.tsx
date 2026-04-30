@@ -10,6 +10,7 @@ import {
   formatPullRequestDisplayTitle,
   getDraftIndicatorLabel,
 } from '../../lib/pull-request-display';
+import { hostNameFromInput } from '../../lib/forge-links';
 import LucideGitBranch from '../../assets/icons/LucideGitBranch';
 import LucideGitPullRequestArrow from '../../assets/icons/LucideGitPullRequestArrow';
 import LucideGitPullRequestClosed from '../../assets/icons/LucideGitPullRequestClosed';
@@ -31,7 +32,7 @@ type PullRequestStatusViewModel = {
 };
 
 function getRepoLabel(repo: RepoSummary) {
-  if (repo.host === 'github.com') {
+  if (hostNameFromInput(repo.host) === 'github.com') {
     return repo.nameWithOwner;
   }
 

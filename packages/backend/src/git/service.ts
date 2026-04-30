@@ -449,7 +449,7 @@ const makeGitService = Effect.gen(function* () {
       const exists = yield* pathExists(fileSystem, cachePath);
       yield* ensureDirectory(fileSystem, path.dirname(cachePath));
 
-      console.info('[git] ensure repo', {
+      yield* Effect.logInfo('[git] ensure repo', {
         repo: repoIdentityCacheKey(repo),
         cachePath,
         exists,
@@ -515,7 +515,7 @@ const makeGitService = Effect.gen(function* () {
 
   const fetchRefs: GitServiceShape['fetchRefs'] = Effect.fn('GitService.fetchRefs')(
     function* (handle, baseSha, headSha, remoteSpec) {
-      console.info('[git] fetch refs start', {
+      yield* Effect.logInfo('[git] fetch refs start', {
         repo: repoIdentityCacheKey(handle.repo),
         cachePath: handle.path,
         baseSha,
@@ -538,7 +538,7 @@ const makeGitService = Effect.gen(function* () {
         remoteUrl: remoteSpec.url,
         ref: headSha,
       });
-      console.info('[git] fetch refs finished', {
+      yield* Effect.logInfo('[git] fetch refs finished', {
         repo: repoIdentityCacheKey(handle.repo),
         cachePath: handle.path,
         baseSha,

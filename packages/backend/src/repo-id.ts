@@ -10,6 +10,14 @@ type RepoIdentity = {
   repoKey: string;
 };
 
+type ProviderRepoIdentity = {
+  provider: ForgeProviderKind;
+  host: string;
+  path: string;
+  providerId: string;
+  repoKey: string;
+};
+
 function providerKey(provider: ForgeProviderKind) {
   return provider;
 }
@@ -23,11 +31,20 @@ function parseProviderKind(provider: string): ForgeProviderKind {
 }
 
 function normalizeHost(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
+  const trimmed = host.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const url = new URL(
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+  );
+  return url.origin.toLowerCase();
+}
+
+function hostNameFromHost(host: string) {
+  const normalizedHost = normalizeHost(host);
+  return normalizedHost ? new URL(normalizedHost).hostname.toLowerCase() : '';
 }
 
 function normalizePath(path: string) {
@@ -106,9 +123,33 @@ function createRepoIdentity(
   };
 }
 
+function createProviderRepoIdentity(
+  provider: ForgeProviderKind,
+  host: string,
+  accountId: string,
+  path: string,
+): ProviderRepoIdentity {
+  const identity = createRepoIdentity(provider, host, accountId, path);
+  return {
+    provider: identity.provider,
+    host: identity.host,
+    path: identity.path,
+    providerId: identity.providerId,
+    repoKey: identity.repoKey,
+  };
+}
+
 function createRepoIdentityFromParts(providerId: string, repoKey: string): RepoIdentity {
   const provider = parseProviderId(providerId);
   return createRepoIdentity(provider.provider, provider.host, provider.accountId, repoKey);
+}
+
+function createProviderRepoIdentityFromParts(
+  providerId: string,
+  repoKey: string,
+): ProviderRepoIdentity {
+  const provider = parseProviderId(providerId);
+  return createProviderRepoIdentity(provider.provider, provider.host, provider.accountId, repoKey);
 }
 
 function repoIdentityCacheKey(repo: { providerId: string; repoKey: string }) {
@@ -128,8 +169,11 @@ export {
   createRepoIdentity,
   createRepoIdentityFromParts,
   createProviderId,
+  createProviderRepoIdentity,
+  createProviderRepoIdentityFromParts,
   decodeKeyComponent,
   encodeKeyComponent,
+  hostNameFromHost,
   normalizeHost,
   normalizePath,
   parseOwnerRepo,
@@ -138,4 +182,4 @@ export {
   providerKey,
   repoIdentityCacheKey,
 };
-export type { RepoIdentity };
+export type { ProviderRepoIdentity, RepoIdentity };

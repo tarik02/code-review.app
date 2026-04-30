@@ -1,11 +1,8 @@
-import { HttpClient } from '@effect/platform';
 import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
-import { createRepoIdentityFromParts } from '../repo-id.ts';
-import { providerFor } from '../providers/registry.ts';
+import { ForgeProviderRegistry } from '../providers/registry.ts';
 import { DiffDataService } from './diff-data.ts';
-import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
   OverviewPullRequestSummary,
   PrFileChangeType,
@@ -52,17 +49,8 @@ function requireRepo(repo: RepoIdentity) {
 
 const makePullRequestService = Effect.gen(function* () {
   const cache = yield* CacheService;
-  const tokenStore = yield* AuthTokenStore;
   const diffData = yield* DiffDataService;
-  const httpClient = yield* HttpClient.HttpClient;
-
-  const provideProviderDeps = <A, E>(
-    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
-  ) =>
-    effect.pipe(
-      Effect.provideService(AuthTokenStore, tokenStore),
-      Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
+  const providers = yield* ForgeProviderRegistry;
 
   const listCached: PullRequestServiceShape['listCached'] = Effect.fn(
     'PullRequestService.listCached',
@@ -75,23 +63,18 @@ const makePullRequestService = Effect.gen(function* () {
   )(function* (accountId) {
     const trimmedAccountId = accountId.trim();
     if (!trimmedAccountId) throw new ValidationError('Account is required');
-    const account = yield* tokenStore.get(trimmedAccountId);
-    if (!account) throw new ValidationError('Provider account is not signed in.');
-    console.info(
-      `[pull-requests] loading overview for ${account.provider} account ${trimmedAccountId}`,
-    );
-    return yield* provideProviderDeps(
-      providerFor(account.provider).listOverviewPullRequests(trimmedAccountId),
-    );
+    yield* Effect.logInfo('loading pull request overview', {
+      accountId: trimmedAccountId,
+    });
+    const provider = yield* providers.forAccount(trimmedAccountId);
+    return yield* provider.listOverviewPullRequests();
   });
 
   const list: PullRequestServiceShape['list'] = Effect.fn('PullRequestService.list')(
     function* (repoInput) {
       const repoIdentity = requireRepo(repoInput);
-      const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
-      const pullRequests = yield* provideProviderDeps(
-        providerFor(repo.provider).listPullRequests(repo),
-      );
+      const { provider, repo } = yield* providers.forRepo(repoIdentity);
+      const pullRequests = yield* provider.listPullRequests(repo);
       yield* cache.writePullRequestsCache(repoIdentity, pullRequests);
       yield* cache.updateRepoAccessTimestamp(repoIdentity);
       return pullRequests;
@@ -101,8 +84,8 @@ const makePullRequestService = Effect.gen(function* () {
   const get: PullRequestServiceShape['get'] = Effect.fn('PullRequestService.get')(
     function* (repoInput, number) {
       const repoIdentity = requireRepo(repoInput);
-      const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
-      return yield* provideProviderDeps(providerFor(repo.provider).getPullRequest(repo, number));
+      const { provider, repo } = yield* providers.forRepo(repoIdentity);
+      return yield* provider.getPullRequest(repo, number);
     },
   );
 

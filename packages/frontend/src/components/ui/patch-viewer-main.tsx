@@ -192,7 +192,7 @@ type PatchViewerMainProps = {
 
 type PatchFileDiffItemContextValue = {
   defaultReviewEditorMode: CommentEditorMode;
-  deletingCommentId: string | null;
+  deletingCommentIds: ReadonlySet<string>;
   patchViewerSessionKey: string | null;
   resolvingThreadId: string | null;
   diffNavigator: ReturnType<typeof useDiffNavigator>['diff'];
@@ -912,17 +912,16 @@ function compareThreadLineAnnotations(
 }
 
 function getPendingCommentId(comment: ReviewComment) {
-  const match = comment.id.match(/^pending-comment:(\d+)$/);
+  const match = comment.id.match(/^pending-comment:(.+)$/);
   if (!match) return null;
-  const id = Number.parseInt(match[1] ?? '', 10);
-  return Number.isFinite(id) ? id : null;
+  return match[1] ?? null;
 }
 
 type GlobalCommentsSectionProps = {
   threads: ReviewThread[];
   isLoading: boolean;
   defaultReviewEditorMode: CommentEditorMode;
-  deletingCommentId: string | null;
+  deletingCommentIds: ReadonlySet<string>;
   patchViewerSessionKey: string | null;
   resolvingThreadId: string | null;
   provider: ForgeProviderKind;
@@ -946,7 +945,7 @@ function GlobalCommentsSection({
   threads,
   isLoading,
   defaultReviewEditorMode,
-  deletingCommentId,
+  deletingCommentIds,
   patchViewerSessionKey,
   resolvingThreadId,
   provider,
@@ -1026,7 +1025,7 @@ function GlobalCommentsSection({
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
             defaultCollapsed={thread.isResolved || thread.isOutdated}
-            deletingCommentId={deletingCommentId}
+            deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
             onDeleteComment={onDeleteComment}
@@ -1349,7 +1348,7 @@ function PatchFileDiffItem({
 }) {
   const {
     defaultReviewEditorMode,
-    deletingCommentId,
+    deletingCommentIds,
     patchViewerSessionKey,
     resolvingThreadId,
     diffNavigator,
@@ -1623,7 +1622,7 @@ function PatchFileDiffItem({
           <ReviewThreadCard
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
-            deletingCommentId={deletingCommentId}
+            deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
             onDeleteComment={handleDeleteComment}
@@ -1656,7 +1655,7 @@ function PatchFileDiffItem({
                   <ReviewThreadCard
                     key={getReviewThreadRefKey(thread)}
                     containerRef={(node) => registerThreadAnchor(thread, node)}
-                    deletingCommentId={deletingCommentId}
+                    deletingCommentIds={deletingCommentIds}
                     patchViewerSessionKey={patchViewerSessionKey}
                     resolvingThreadId={resolvingThreadId}
                     onDeleteComment={handleDeleteComment}
@@ -1847,7 +1846,7 @@ function PatchFileDiffItem({
         compact
         containerRef={(node) => registerThreadAnchor(threadAnnotation.thread, node)}
         defaultCollapsed={threadAnnotation.defaultCollapsed}
-        deletingCommentId={deletingCommentId}
+        deletingCommentIds={deletingCommentIds}
         patchViewerSessionKey={patchViewerSessionKey}
         resolvingThreadId={resolvingThreadId}
         editorPortalRootId={threadAnnotation.portalRootId}
@@ -1949,7 +1948,7 @@ function PatchFileDiffItem({
 
   return (
     <div
-      className="relative min-w-0 w-full overflow-hidden"
+      className="relative min-w-0 w-full"
       data-file-path={fileDiff.name}
       ref={(node) => diffNavigator.registerDiffNode(fileDiff.name, node)}
     >
@@ -2084,13 +2083,7 @@ function PatchViewerMain({
       : null,
   );
   const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
-  const deletingCommentId = deleteCommentMutation.isPending
-    ? deleteCommentMutation.variables?.commentId ?? null
-    : null;
-  const deletingPendingCommentId = deletePendingCommentMutation.isPending
-    ? `pending-comment:${deletePendingCommentMutation.variables?.pendingCommentId ?? ''}`
-    : null;
-  const deletingAnyCommentId = deletingCommentId ?? deletingPendingCommentId;
+  const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(() => new Set());
   const resolvingThreadId = setResolvedMutation.isPending
     ? setResolvedMutation.variables?.threadId ?? null
     : null;
@@ -2603,15 +2596,7 @@ function PatchViewerMain({
     }
 
     if (isGlobalReviewThread(thread)) {
-      if (selectedProvider === 'gitlab') {
-        await createPendingGlobalMutation.mutateAsync({
-          providerId: selectedPatch.providerId,
-          repoKey: selectedPatch.repoKey,
-          number: selectedPatch.number,
-          headSha: selectedPatch.headSha,
-          body,
-        });
-      } else {
+      if (selectedProvider !== 'gitlab') {
         await createCommentMutation.mutateAsync({
           providerId: selectedPatch.providerId,
           repoKey: selectedPatch.repoKey,
@@ -2626,8 +2611,10 @@ function PatchViewerMain({
           startSide: null,
           subjectType: 'global',
         });
+        return;
+      } else if (!thread.id || thread.isPending) {
+        throw new Error('This thread cannot be replied to from the app.');
       }
-      return;
     }
 
     if (!thread.id || thread.isPending) {
@@ -2641,6 +2628,12 @@ function PatchViewerMain({
       headSha: selectedPatch.headSha,
       threadId: thread.id,
       body,
+      path: thread.path,
+      line: thread.line,
+      side: thread.side,
+      startLine: thread.startLine,
+      startSide: thread.startSide,
+      subjectType: thread.subjectType ?? 'global',
     });
   }
 
@@ -2691,6 +2684,7 @@ function PatchViewerMain({
         providerId: selectedPatch.providerId,
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
+        headSha: selectedPatch.headSha,
         pendingCommentId,
         body,
       });
@@ -2726,13 +2720,24 @@ function PatchViewerMain({
     if (pendingCommentId === null) {
       throw new Error('This comment is not pending.');
     }
+    const deletingCommentId = comment.id;
+    setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
 
-    await deletePendingCommentMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      pendingCommentId,
-    });
+    try {
+      await deletePendingCommentMutation.mutateAsync({
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        headSha: selectedPatch.headSha,
+        pendingCommentId,
+      });
+    } finally {
+      setDeletingCommentIds((current) => {
+        const next = new Set(current);
+        next.delete(deletingCommentId);
+        return next;
+      });
+    }
   }
 
   async function handleSetThreadResolved(thread: ReviewThread, isResolved: boolean) {
@@ -2763,18 +2768,29 @@ function PatchViewerMain({
       throw new Error('This comment cannot be deleted from the app.');
     }
 
-    await deleteCommentMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      threadId: thread.id,
-      commentId: comment.id,
-      subjectType: isGlobalReviewThread(thread)
-        ? 'global'
-        : isFileReviewThread(thread)
-          ? 'file'
-          : 'line',
-    });
+    const deletingCommentId = comment.id;
+    setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
+
+    try {
+      await deleteCommentMutation.mutateAsync({
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        threadId: thread.id,
+        commentId: comment.id,
+        subjectType: isGlobalReviewThread(thread)
+          ? 'global'
+          : isFileReviewThread(thread)
+            ? 'file'
+            : 'line',
+      });
+    } finally {
+      setDeletingCommentIds((current) => {
+        const next = new Set(current);
+        next.delete(deletingCommentId);
+        return next;
+      });
+    }
   }
 
   async function handlePublishPendingReview(
@@ -2784,6 +2800,7 @@ function PatchViewerMain({
     if (!selectedPatch) return;
     await publishPendingReviewMutation.mutateAsync({
       action,
+      headSha: selectedPatch.headSha,
       providerId: selectedPatch.providerId,
       repoKey: selectedPatch.repoKey,
       number: selectedPatch.number,
@@ -2794,6 +2811,7 @@ function PatchViewerMain({
   async function handleDiscardPendingReview() {
     if (!selectedPatch) return;
     await discardPendingReviewMutation.mutateAsync({
+      headSha: selectedPatch.headSha,
       providerId: selectedPatch.providerId,
       repoKey: selectedPatch.repoKey,
       number: selectedPatch.number,
@@ -2899,7 +2917,7 @@ function PatchViewerMain({
                     <PatchFileDiffItemContext.Provider
                       value={{
                         defaultReviewEditorMode,
-                        deletingCommentId: deletingAnyCommentId,
+                        deletingCommentIds,
                         patchViewerSessionKey,
                         resolvingThreadId,
                         diffNavigator: navigator.diff,
@@ -2930,7 +2948,7 @@ function PatchViewerMain({
                       <div className="flex flex-col bg-white dark:bg-surface">
                         <GlobalCommentsSection
                           defaultReviewEditorMode={defaultReviewEditorMode}
-                          deletingCommentId={deletingAnyCommentId}
+                          deletingCommentIds={deletingCommentIds}
                           patchViewerSessionKey={patchViewerSessionKey}
                           resolvingThreadId={resolvingThreadId}
                           onDeleteComment={handleDeleteComment}

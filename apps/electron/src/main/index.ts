@@ -76,7 +76,11 @@ async function syncNativeThemeFromSettings() {
     );
     applyNativeThemePreference(preference);
   } catch (error) {
-    console.error('Failed to sync native theme from settings.', summarizeError(error));
+    void Effect.runFork(
+      Effect.logError('Failed to sync native theme from settings.', {
+        error: summarizeError(error),
+      }),
+    );
   }
 }
 

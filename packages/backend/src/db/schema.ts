@@ -110,57 +110,6 @@ export const prChangedFilesCache = sqliteTable(
   (table) => [primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] })],
 );
 
-export const pendingReviewSessions = sqliteTable(
-  'pending_review_sessions',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    repoRowId: integer('repo_row_id').notNull(),
-    prNumber: integer('pr_number').notNull(),
-    headSha: text('head_sha').notNull(),
-    providerReviewId: text('provider_review_id'),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [
-    uniqueIndex('idx_pending_review_sessions_repo_pr').on(table.repoRowId, table.prNumber),
-    index('idx_pending_review_sessions_repo_pr_head').on(
-      table.repoRowId,
-      table.prNumber,
-      table.headSha,
-    ),
-  ],
-);
-
-export const pendingReviewComments = sqliteTable(
-  'pending_review_comments',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    sessionId: integer('session_id').notNull(),
-    kind: text('kind').notNull(),
-    providerCommentId: text('provider_comment_id'),
-    providerThreadId: text('provider_thread_id'),
-    replyToThreadId: text('reply_to_thread_id'),
-    body: text('body').notNull(),
-    path: text('path').notNull(),
-    oldPath: text('old_path').notNull(),
-    newPath: text('new_path').notNull(),
-    line: integer('line'),
-    side: text('side'),
-    startLine: integer('start_line'),
-    startSide: text('start_side'),
-    subjectType: text('subject_type').notNull(),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [
-    index('idx_pending_review_comments_session').on(table.sessionId),
-    uniqueIndex('idx_pending_review_comments_provider_comment').on(
-      table.sessionId,
-      table.providerCommentId,
-    ),
-  ],
-);
-
 export const providerProfiles = sqliteTable('provider_profiles', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   accountId: text('account_id').notNull().unique(),

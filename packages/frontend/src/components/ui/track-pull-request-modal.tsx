@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { ArrowLeftIcon } from '@heroicons/react/20/solid';
 import { Dialog, DialogContent } from './dialog';
 import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from '../../lib/forge-owner';
-import { normalizeHostInput, parseForgeResourceUrl } from '../../lib/forge-links';
+import { hostNameFromInput, normalizeHostInput, parseForgeResourceUrl } from '../../lib/forge-links';
 import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
@@ -190,7 +190,8 @@ function RepoSelectionStep({
                     ) : null}
                     <div className="mt-1 truncate text-[11px] text-neutral-500">
                       {getRepoProviderLabel(repo)}
-                      {repo.host === 'github.com' || repo.host === 'gitlab.com'
+                      {hostNameFromInput(repo.host) === 'github.com' ||
+                      hostNameFromInput(repo.host) === 'gitlab.com'
                         ? ''
                         : ` · ${repo.host}`}
                     </div>

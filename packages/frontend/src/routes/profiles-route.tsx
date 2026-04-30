@@ -21,25 +21,11 @@ import {
   setAccountVisibility,
   setDiffDataMode,
 } from '../queries/forge';
+import { isDefaultProviderHost, normalizeHostInput } from '../lib/forge-links';
 import type { DiffDataMode, ForgeProviderKind, ProviderAccount } from '../types/forge';
 
 function providerName(account: ProviderAccount) {
   return account.provider === 'github' ? 'GitHub' : 'GitLab';
-}
-
-function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
-}
-
-function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
-  return (
-    (provider === 'github' && host === 'github.com') ||
-    (provider === 'gitlab' && host === 'gitlab.com')
-  );
 }
 
 const diffDataModeOptions: { value: DiffDataMode; label: string }[] = [
@@ -117,9 +103,9 @@ function ProfilesRoute() {
       ]);
     },
   });
-  const normalizedHost = normalizeHostInput(host) || defaultHost;
+  const normalizedHost = normalizeHostInput(host || defaultHost);
   const canStartSignIn =
-    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) && !isSigningIn;
+    (clientId.trim().length > 0 || isDefaultProviderHost(provider, normalizedHost)) && !isSigningIn;
 
   function toggleAccountVisibility(accountId: string) {
     const nextEnabled = new Set(enabledAccountIds);

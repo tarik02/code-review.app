@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme, shell } from 'electron';
+import { Effect } from 'effect';
 import type { ThemePreference } from '@code-review-app/shared';
 import { registerTrpc } from './trpc';
 
@@ -84,8 +85,19 @@ nativeTheme.on('updated', syncAllWindowAppearance);
 
 function forwardRendererConsole(window: BrowserWindow): void {
   window.webContents.on('console-message', (details) => {
-    const source = details.sourceId ? ` ${details.sourceId}:${details.lineNumber}` : '';
-    console.log(`[renderer:${details.level}] ${details.message}${source}`);
+    const logDetails = {
+      level: details.level,
+      message: details.message,
+      sourceId: details.sourceId || null,
+      lineNumber: details.lineNumber,
+    };
+    const logEffect =
+      details.level >= 3
+        ? Effect.logError('[renderer] console message', logDetails)
+        : details.level === 2
+          ? Effect.logWarning('[renderer] console message', logDetails)
+          : Effect.logInfo('[renderer] console message', logDetails);
+    void Effect.runFork(logEffect);
   });
 }
 

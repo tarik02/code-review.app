@@ -109,7 +109,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       return exit.value;
     }
     const error = causeFailureOrSquash(exit.cause);
-    console.error(`[trpc] ${label} failed\n${formatLogDetails(summarizeEffectCause(exit.cause))}`);
+    await runtime.runPromise(
+      Effect.logError(`[trpc] ${label} failed\n${formatLogDetails(summarizeEffectCause(exit.cause))}`),
+    );
     throw mapError(error);
   }
 
@@ -368,7 +370,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
-            console.info(`[trpc] pullRequests.listOverview ${input.accountId}`);
+            yield* Effect.logInfo('tRPC pullRequests.listOverview', {
+              accountId: input.accountId,
+            });
             const service = yield* PullRequestService;
             const pullRequests = yield* service.listOverview(input.accountId);
             return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
@@ -544,20 +548,20 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           'reviewComments.removeApproval',
         ),
       ),
-      listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+      listThreads: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
-            return yield* service.listThreads(input, input.number);
+            return yield* service.listThreads(input, input.number, input.headSha);
           }),
           'reviewComments.listThreads',
         ),
       ),
-      listPending: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+      listPending: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
-            const pendingState = yield* service.listPending(input, input.number);
+            const pendingState = yield* service.listPending(input, input.number, input.headSha);
             return pendingReviewStateSchema.parse(pendingState);
           }),
           'reviewComments.listPending',
@@ -706,7 +710,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         try {
           return await platform.checkForUpdate();
         } catch (error) {
-          console.error(`[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`);
+          await runtime.runPromise(
+            Effect.logError(`[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`),
+          );
           throw mapError(error);
         }
       }),
@@ -714,7 +720,11 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         try {
           await platform.installUpdate();
         } catch (error) {
-          console.error(`[trpc] updates.install failed\n${formatLogDetails(summarizeError(error))}`);
+          await runtime.runPromise(
+            Effect.logError(
+              `[trpc] updates.install failed\n${formatLogDetails(summarizeError(error))}`,
+            ),
+          );
           throw mapError(error);
         }
       }),
