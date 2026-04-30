@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Cog6ToothIcon, PlusIcon } from '@heroicons/react/20/solid';
+import { Cog6ToothIcon } from '@heroicons/react/20/solid';
 import { PlusIcon as OutlinePlusIcon } from '@heroicons/react/24/outline';
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { repoIdentityKey } from '../../lib/repo-identity';
@@ -9,6 +9,7 @@ import type {
   RepoSummary,
 } from '../../types/forge';
 import { AppUpdater } from './app-updater';
+import { CommandPaletteLaunchers } from './command-palette-launchers';
 import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
 import { ScrollArea } from './scroll-area';
 import { TopBar } from './top-bar';
@@ -17,6 +18,11 @@ import { TrackedPullRequestList } from './tracked-pull-request-list';
 type SidebarPullRequestView = 'overview' | 'tracked';
 
 type RepoSidebarProps = {
+  activeFilters?: Array<{
+    id: string;
+    label: string;
+    onClear: () => void;
+  }>;
   repos: RepoSummary[];
   repoErrors: Record<string, string>;
   overviewPullRequests: OverviewPullRequestSummary[];
@@ -29,7 +35,6 @@ type RepoSidebarProps = {
   trackedRepoCount: number;
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   emptyState?: ReactNode;
-  onAddAction: () => void;
   onViewChange: (view: SidebarPullRequestView) => void;
   onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
   onTrackPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
@@ -44,6 +49,7 @@ function toTimestamp(value: string) {
 
 function RepoSidebar({
   repos,
+  activeFilters = [],
   repoErrors,
   overviewPullRequests,
   trackedPullRequests,
@@ -55,7 +61,6 @@ function RepoSidebar({
   trackedRepoCount,
   trackedPullRequestNumbersByRepo,
   emptyState,
-  onAddAction,
   onViewChange,
   onSelectPr,
   onTrackPr,
@@ -87,9 +92,19 @@ function RepoSidebar({
       <div className="sticky top-0 z-10 flex flex-col">
         <TopBar position="left" className="cursor-grab app-region-drag flex">
           <div className="grow flex items-center justify-between gap-2.5 px-3">
-            <div>code-review.app</div>
+            <div style={noDragRegionStyle}>
+              <CommandPaletteLaunchers scope="home" />
+            </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5" style={noDragRegionStyle}>
+              <div>
+                <AppUpdater
+                  buttonClassName="rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium hover:bg-canvasDark dark:bg-transparent dark:hover:bg-canvasDark"
+                  buttonLabel="Update now"
+                  containerClassName="flex-row items-center gap-0"
+                  showFeedback={false}
+                />
+              </div>
               <Link
                 aria-label="Settings"
                 className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
@@ -102,26 +117,6 @@ function RepoSidebar({
           </div>
         </TopBar>
 
-        <div className="flex items-center gap-2.5 border-b border-neutral-300 dark:border-neutral-700 bg-canvas px-3 py-2.5 text-sm font-medium">
-          {isOverview ? 'Pull requests' : 'Tracked items'}
-          <div className="ml-auto flex items-center gap-1.5">
-            <AppUpdater
-              buttonClassName="rounded-md border-0 bg-transparent px-2 py-1 text-xs font-medium hover:bg-canvasDark dark:bg-transparent dark:hover:bg-canvasDark"
-              buttonLabel="Update now"
-              containerClassName="flex-row items-center gap-0"
-              showFeedback={false}
-            />
-          </div>
-          <button
-            aria-label={isOverview ? 'Add repo' : 'Add tracked PR or MR'}
-            className="inline-flex items-center justify-center rounded p-1 text-ink-500 transition hover:bg-canvasDark hover:text-ink-700"
-            onClick={onAddAction}
-            style={noDragRegionStyle}
-            type="button"
-          >
-            <PlusIcon className="size-5 shrink-0" />
-          </button>
-        </div>
         <div className="border-b border-neutral-300 bg-canvas px-3 py-2 dark:border-neutral-700">
           <div
             className="grid grid-cols-2 rounded-md bg-canvasDark p-0.5 text-xs font-medium text-ink-600"
@@ -147,6 +142,23 @@ function RepoSidebar({
               );
             })}
           </div>
+          {activeFilters.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5" style={noDragRegionStyle}>
+              {activeFilters.map((filter) => (
+                <button
+                  className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-surface px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
+                  key={filter.id}
+                  onClick={filter.onClear}
+                  type="button"
+                >
+                  <span>{filter.label}</span>
+                  <span aria-hidden="true" className="text-ink-500">
+                    x
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

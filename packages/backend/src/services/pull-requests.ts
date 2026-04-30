@@ -8,6 +8,7 @@ import type {
   PrFileChangeType,
   PrFileContents,
   PrPatch,
+  PullRequestSearchState,
   RepoIdentity,
   PullRequestSummary,
 } from '@code-review-app/shared';
@@ -15,6 +16,12 @@ import type {
 type PullRequestServiceShape = {
   listCached(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
   listOverview(accountId: string): Effect.Effect<OverviewPullRequestSummary[], Error>;
+  search(
+    accountId: string,
+    query: string,
+    limit: number,
+    states: PullRequestSearchState,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error>;
   list(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
   get(repo: RepoIdentity, number: number): Effect.Effect<PullRequestSummary, Error>;
   getPatch(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<PrPatch, Error>;
@@ -97,6 +104,20 @@ const makePullRequestService = Effect.gen(function* () {
     },
   );
 
+  const search: PullRequestServiceShape['search'] = Effect.fn('PullRequestService.search')(
+    function* (accountId, query, limit, states) {
+      const trimmedAccountId = accountId.trim();
+      if (!trimmedAccountId) throw new ValidationError('Account is required');
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) {
+        return [];
+      }
+
+      const provider = yield* providers.forAccount(trimmedAccountId);
+      return yield* provider.searchPullRequests(trimmedQuery, limit, states);
+    },
+  );
+
   const listChangedFiles: PullRequestServiceShape['listChangedFiles'] = Effect.fn(
     'PullRequestService.listChangedFiles',
   )(function* (repo, number, headSha) {
@@ -112,6 +133,7 @@ const makePullRequestService = Effect.gen(function* () {
   return {
     listCached,
     listOverview,
+    search,
     list,
     get,
     getPatch,

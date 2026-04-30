@@ -8,6 +8,7 @@ const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
 const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
 const pendingReviewCommentSubjectTypeSchema = z.enum(['file', 'line', 'global']);
 const pendingReviewSubmitActionSchema = z.enum(['comment', 'approve', 'request_changes']);
+const pullRequestSearchStateSchema = z.enum(['open', 'draft_open', 'all']);
 const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
   'ok',
@@ -116,6 +117,12 @@ const repoIdentitySchema = z.object({
 
 const pullRequestInputSchema = repoIdentitySchema.extend({
   number: z.number().int().nonnegative(),
+});
+
+const pullRequestSearchInputSchema = providerAccountSchema.extend({
+  query: z.string(),
+  limit: z.number().int().positive().max(100).optional().default(20),
+  states: pullRequestSearchStateSchema,
 });
 
 const trackedPullRequestOrderEntrySchema = pullRequestInputSchema;
@@ -334,6 +341,8 @@ export {
   providerAccountSchema,
   providerProfileSchema,
   publishPendingReviewInputSchema,
+  pullRequestSearchInputSchema,
+  pullRequestSearchStateSchema,
   pullRequestApprovalActorSchema,
   pullRequestApprovalRemoveStrategySchema,
   pullRequestApprovalStateSchema,

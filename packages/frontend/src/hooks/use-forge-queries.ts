@@ -15,6 +15,7 @@ import {
   initialReposQueryOptions,
   pullRequestCachedListQueryOptions,
   pullRequestListQueryOptions,
+  pullRequestSearchQueryOptions,
   pullRequestOverviewQueryOptions,
   removePullRequestApproval,
   replyToPullRequestReviewComment,
@@ -41,6 +42,7 @@ import type {
   PendingReviewState,
   PublishPendingReviewInput,
   PullRequestApprovalState,
+  PullRequestSearchState,
   PrPatch,
   ProviderAccount,
   PullRequestQualityReport,
@@ -415,6 +417,94 @@ function useAccountOverviewPullRequests(
     accountIds,
     errors,
     isLoading: enabled && overviewQueries.some((query) => query.isPending),
+    pullRequests,
+  };
+}
+
+function dedupeOverviewPullRequestEntries(entries: OverviewPullRequestSummary[]) {
+  const byKey = new Map<string, OverviewPullRequestSummary>();
+
+  for (const entry of entries) {
+    const key = `${entry.repo.providerId}:${entry.repo.repoKey}#${entry.pullRequest.number}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, entry);
+      continue;
+    }
+
+    if (
+      Date.parse(entry.pullRequest.updatedAt || '') >
+      Date.parse(existing.pullRequest.updatedAt || '')
+    ) {
+      byKey.set(key, entry);
+    }
+  }
+
+  return [...byKey.values()].sort(
+    (left, right) =>
+      Date.parse(right.pullRequest.updatedAt || '') - Date.parse(left.pullRequest.updatedAt || ''),
+  );
+}
+
+function usePullRequestSearchForAccounts(args: {
+  accounts: ProviderAccount[];
+  enabledAccountIds: string[];
+  query: string;
+  states: PullRequestSearchState;
+  enabled?: boolean;
+  limit?: number;
+}) {
+  const { accounts, enabledAccountIds, query, states, enabled = true, limit = 10 } = args;
+  const accountIds = useMemo(
+    () =>
+      accounts
+        .map((account) => account.id)
+        .filter((accountId) => enabledAccountIds.includes(accountId)),
+    [accounts, enabledAccountIds],
+  );
+
+  const searchQueries = useQueries({
+    queries: accountIds.map((accountId) => ({
+      ...pullRequestSearchQueryOptions(accountId, query, states, limit),
+      enabled,
+    })),
+  });
+
+  const pullRequests = useMemo(() => {
+    const entries: OverviewPullRequestSummary[] = [];
+    for (const queryResult of searchQueries) {
+      entries.push(...(queryResult.data ?? []));
+    }
+    return dedupeOverviewPullRequestEntries(entries);
+  }, [searchQueries]);
+
+  const errors = useMemo(() => {
+    const entries: string[] = [];
+    for (const queryResult of searchQueries) {
+      if (!queryResult.error) {
+        continue;
+      }
+      entries.push(getErrorMessage(queryResult.error));
+    }
+    return entries;
+  }, [searchQueries]);
+
+  const pendingCount = useMemo(
+    () =>
+      searchQueries.filter((queryResult) => queryResult.isPending || queryResult.isFetching).length,
+    [searchQueries],
+  );
+  const completedCount = useMemo(
+    () => searchQueries.filter((queryResult) => queryResult.data !== undefined).length,
+    [searchQueries],
+  );
+
+  return {
+    accountIds,
+    completedCount,
+    errors,
+    isLoading: enabled && pendingCount > 0,
+    pendingCount,
     pullRequests,
   };
 }
@@ -880,9 +970,11 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
 
 export {
   getErrorMessage,
+  dedupeOverviewPullRequestEntries,
   useAccountOverviewPullRequests,
   useInitialReposForAccounts,
   usePullRequestApprovalMutations,
+  usePullRequestSearchForAccounts,
   useOverviewPullRequests,
   usePullRequestReviewCommentMutations,
   useRepoPickerReposForAccounts,

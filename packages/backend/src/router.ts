@@ -28,6 +28,7 @@ import {
   publishPendingReviewInputSchema,
   pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
+  pullRequestSearchInputSchema,
   pullRequestQualityReportSchema,
   pullRequestInputSchema,
   pullRequestSummarySchema,
@@ -398,6 +399,14 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           Effect.gen(function* () {
             const service = yield* PullRequestService;
             return yield* service.list(input);
+          }),
+        ),
+      ),
+      search: t.procedure.input(pullRequestSearchInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.search(input.accountId, input.query, input.limit, input.states);
           }),
         ),
       ),

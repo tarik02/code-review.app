@@ -15,6 +15,7 @@ import type {
   DiffDataSettings,
   DiscardPendingReviewInput,
   PendingReviewState,
+  PullRequestSearchState,
   PrFileChangeType,
   ProviderProfile,
   PublishPendingReviewInput,
@@ -57,6 +58,12 @@ const forgeKeys = {
   pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
     [...forgeKeys.pullRequests(), 'overview', accountId] as const,
+  pullRequestSearch: (
+    accountId: string,
+    query: string,
+    states: PullRequestSearchState,
+    limit: number,
+  ) => [...forgeKeys.pullRequests(), 'search', accountId, query, states, limit] as const,
   pullRequestList: (repo: RepoIdentity) =>
     [...forgeKeys.pullRequests(), 'list', repo.providerId, repo.repoKey] as const,
   pullRequestCachedList: (repo: RepoIdentity) =>
@@ -346,6 +353,26 @@ function pullRequestOverviewQueryOptions(accountId: string) {
     queryKey: forgeKeys.pullRequestOverview(accountId),
     queryFn: () => trpc.pullRequests.listOverview.query({ accountId }),
     staleTime: 0,
+  });
+}
+
+function pullRequestSearchQueryOptions(
+  accountId: string,
+  query: string,
+  states: PullRequestSearchState,
+  limit = 20,
+) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestSearch(accountId, query, states, limit),
+    queryFn: () =>
+      trpc.pullRequests.search.query({
+        accountId,
+        query,
+        limit,
+        states,
+      }),
+    staleTime: 0,
+    retry: false,
   });
 }
 
@@ -666,6 +693,7 @@ export {
   pullRequestCachedListQueryOptions,
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,
+  pullRequestSearchQueryOptions,
   pullRequestOverviewQueryOptions,
   pullRequestPatchQueryOptions,
   pullRequestApprovalStateQueryOptions,

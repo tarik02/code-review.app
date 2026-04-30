@@ -1,7 +1,9 @@
 import { Effect } from 'effect';
 import type {
+  OverviewPullRequestSummary,
   PendingReviewComment,
   PullRequestApprovalState,
+  PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
@@ -243,6 +245,29 @@ function repoSummaryFromGraphql(
 
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
   return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+}
+
+function buildPullRequestSearchQuery(query: string, states: PullRequestSearchState) {
+  const qualifiers = ['is:pr', 'archived:false', 'sort:updated-desc'];
+  if (states !== 'all') {
+    qualifiers.push('is:open');
+  }
+
+  const trimmedQuery = query.trim();
+  return trimmedQuery ? `${qualifiers.join(' ')} ${trimmedQuery}` : qualifiers.join(' ');
+}
+
+function filterSearchPullRequestsByState(
+  entries: OverviewPullRequestSummary[],
+  states: PullRequestSearchState,
+) {
+  if (states !== 'open') {
+    return entries;
+  }
+
+  return entries.filter(
+    (entry) => entry.pullRequest.state === 'OPEN' && !entry.pullRequest.isDraft,
+  );
 }
 
 function toPullRequestSummary(pullRequest: GhPullRequest) {
@@ -683,6 +708,44 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const response = yield* api.repositoryPullRequests(owner, name);
       return (response.data?.repository?.pullRequests.nodes ?? []).map(toPullRequestSummary);
+    },
+  );
+
+  const searchPullRequests: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['searchPullRequests'] = providerEffect(
+    'GitHubProvider.searchPullRequests',
+    'searchPullRequests',
+    function* (query, limit, states) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation: 'searchPullRequests' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const response = yield* api.searchPullRequests(buildPullRequestSearchQuery(query, states), limit);
+      const entries = (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
+        const repo = pullRequest?.repository;
+        if (!pullRequest || !repo) {
+          return [];
+        }
+
+        return [
+          {
+            repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
+            pullRequest: toPullRequestSummary(pullRequest),
+          } satisfies OverviewPullRequestSummary,
+        ];
+      });
+
+      return filterSearchPullRequestsByState(entries, states);
     },
   );
 
@@ -1552,6 +1615,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     searchRepos,
     validateRepo,
     listOverviewPullRequests,
+    searchPullRequests,
     listPullRequests,
     getPullRequest,
     getPullRequestApprovalState,

@@ -59,6 +59,8 @@ type OverviewPullRequestSummary = {
   pullRequest: PullRequestSummary;
 };
 
+type PullRequestSearchState = 'open' | 'draft_open' | 'all';
+
 type TrackedPullRequestOrderEntry = RepoIdentity & {
   number: number;
 };
@@ -371,6 +373,13 @@ type DiscardPendingReviewInput = RepoIdentity & {
   headSha: string;
 };
 
+type PullRequestSearchInput = {
+  accountId: string;
+  query: string;
+  limit: number;
+  states: PullRequestSearchState;
+};
+
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   threadId: string;
@@ -445,6 +454,8 @@ export type {
   ProviderAuthStatus,
   ProviderAuthStatusKind,
   ProviderProfile,
+  PullRequestSearchInput,
+  PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityFindingAnchorState,
   PullRequestQualityFindingSeverity,

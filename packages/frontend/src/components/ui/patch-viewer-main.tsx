@@ -2013,7 +2013,9 @@ function PatchViewerMain({
     : null;
   const reviewEditorSessionKey = selectedPrKey;
   const ensureSession = usePatchViewerStore((state) => state.ensureSession);
+  const clearNavigationIntent = usePatchViewerStore((state) => state.clearNavigationIntent);
   const highlightThread = usePatchViewerStore((state) => state.highlightThread);
+  const requestNavigationIntent = usePatchViewerStore((state) => state.requestNavigationIntent);
   const setPendingScrollPath = usePatchViewerStore((state) => state.setPendingScrollPath);
   const setScrollTop = usePatchViewerStore((state) => state.setScrollTop);
   const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
@@ -2049,6 +2051,12 @@ function PatchViewerMain({
     : 'global-comments-editor-root-idle';
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const hasSelection = selectedPrKey !== null;
+  const navigationIntent = usePatchViewerStore(
+    (state) => getPatchViewerSessionState(state, patchViewerSessionKey).navigationIntent,
+  );
+  const navigationIntentVersion = usePatchViewerStore(
+    (state) => getPatchViewerSessionState(state, patchViewerSessionKey).navigationIntentVersion,
+  );
   const isDiffReady = !isPatchLoading && !patchError && !parsedPatch.parseError;
   const shouldShowCommentsPanel =
     hasSelection &&
@@ -2222,26 +2230,42 @@ function PatchViewerMain({
 
   const handleSelectReviewThread = useCallback(
     (thread: ReviewThread) => {
+      requestNavigationIntent(patchViewerSessionKey, {
+        kind: 'thread',
+        threadKey: getReviewThreadRefKey(thread),
+        filePath: isGlobalReviewThread(thread) ? null : normalizePath(thread.path),
+        isGlobal: isGlobalReviewThread(thread),
+        expandInactiveComments: isFileReviewThread(thread) && !isActiveReviewThread(thread),
+      });
+    },
+    [patchViewerSessionKey, requestNavigationIntent],
+  );
+
+  const performThreadNavigation = useCallback(
+    (intent: {
+      threadKey: string;
+      filePath: string | null;
+      isGlobal: boolean;
+      expandInactiveComments: boolean;
+    }) => {
       cancelThreadScrollRef.current?.();
       cancelThreadScrollRef.current = null;
 
-      if (isGlobalReviewThread(thread)) {
+      if (intent.isGlobal) {
         globalCommentsSectionNodeRef.current?.scrollIntoView({
           behavior: 'auto',
           block: 'start',
           inline: 'nearest',
         });
-      } else {
-        navigator.tree.onSelectFile(thread.path);
-        const normalizedFilePath = normalizePath(thread.path);
+      } else if (intent.filePath) {
+        navigator.tree.onSelectFile(intent.filePath);
 
-        if (isFileReviewThread(thread) && !isActiveReviewThread(thread)) {
-          setInactiveFileCommentsExpanded(normalizedFilePath, true);
+        if (intent.expandInactiveComments) {
+          setInactiveFileCommentsExpanded(intent.filePath, true);
         }
       }
 
-      const threadKey = getReviewThreadRefKey(thread);
-      setThreadExpanded(patchViewerSessionKey, threadKey, true);
+      setThreadExpanded(patchViewerSessionKey, intent.threadKey, true);
       let attempts = 0;
       let cancelFrame: (() => void) | null = null;
       let cancelled = false;
@@ -2258,14 +2282,14 @@ function PatchViewerMain({
           return;
         }
 
-        const node = threadAnchorNodesRef.current.get(threadKey);
+        const node = threadAnchorNodesRef.current.get(intent.threadKey);
         if (node?.isConnected) {
           node.scrollIntoView({
             behavior: 'auto',
             block: 'center',
             inline: 'nearest',
           });
-          highlightThread(patchViewerSessionKey, threadKey);
+          highlightThread(patchViewerSessionKey, intent.threadKey);
           stop();
           return;
         }
@@ -2280,7 +2304,7 @@ function PatchViewerMain({
       };
 
       cancelThreadScrollRef.current = stop;
-      if (isGlobalReviewThread(thread)) {
+      if (intent.isGlobal) {
         cancelFrame = scheduleNextFrame(scrollToThread);
         return;
       }
@@ -2295,6 +2319,38 @@ function PatchViewerMain({
       setThreadExpanded,
     ],
   );
+
+  useEffect(() => {
+    if (!navigationIntent || !patchViewerSessionKey) {
+      return;
+    }
+
+    if (navigationIntent.kind === 'file') {
+      navigator.tree.onSelectFile(navigationIntent.path);
+      clearNavigationIntent(patchViewerSessionKey, navigationIntentVersion);
+      return;
+    }
+
+    if (navigationIntent.kind === 'global-comments') {
+      globalCommentsSectionNodeRef.current?.scrollIntoView({
+        behavior: 'auto',
+        block: 'start',
+        inline: 'nearest',
+      });
+      clearNavigationIntent(patchViewerSessionKey, navigationIntentVersion);
+      return;
+    }
+
+    performThreadNavigation(navigationIntent);
+    clearNavigationIntent(patchViewerSessionKey, navigationIntentVersion);
+  }, [
+    clearNavigationIntent,
+    navigationIntent,
+    navigationIntentVersion,
+    navigator.tree,
+    patchViewerSessionKey,
+    performThreadNavigation,
+  ]);
 
   const handleFileDiffPostRender = useCallback(
     (

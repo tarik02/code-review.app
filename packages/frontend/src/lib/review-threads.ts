@@ -223,6 +223,7 @@ export {
   getFileReviewThreadsForPath,
   getGlobalReviewThreads,
   getReviewThreadCreatedAt,
+  getThreadRootComment,
   getReviewThreadRefKey,
   isActiveReviewThread,
   isFileReviewThread,

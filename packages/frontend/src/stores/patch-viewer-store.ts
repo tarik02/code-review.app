@@ -9,6 +9,22 @@ type HunkExpansionRegion = {
   fromEnd: number;
 };
 
+type PatchViewerNavigationIntent =
+  | {
+      kind: 'file';
+      path: string;
+    }
+  | {
+      kind: 'global-comments';
+    }
+  | {
+      kind: 'thread';
+      threadKey: string;
+      filePath: string | null;
+      isGlobal: boolean;
+      expandInactiveComments: boolean;
+    };
+
 type PatchViewerSessionState = {
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
@@ -16,6 +32,8 @@ type PatchViewerSessionState = {
   threadExpansionByKey: Record<string, boolean | undefined>;
   highlightedThreadKey: string | null;
   highlightedThreadVersion: number;
+  navigationIntent: PatchViewerNavigationIntent | null;
+  navigationIntentVersion: number;
   hunkExpansionsByFile: Record<string, Record<string, HunkExpansionRegion | undefined> | undefined>;
 };
 
@@ -30,12 +48,17 @@ type PatchViewerStore = {
   setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
   setThreadExpanded: (sessionKey: string | null, threadKey: string, expanded: boolean) => void;
   highlightThread: (sessionKey: string | null, threadKey: string | null) => void;
+  clearNavigationIntent: (sessionKey: string | null, version: number) => void;
   recordHunkExpansion: (
     sessionKey: string | null,
     filePath: string,
     hunkIndex: number,
     direction: HunkExpansionDirection,
     lineCount: number,
+  ) => void;
+  requestNavigationIntent: (
+    sessionKey: string | null,
+    intent: PatchViewerNavigationIntent,
   ) => void;
   selectFile: (sessionKey: string | null, path: string) => void;
   resetNavigation: (sessionKey: string | null) => void;
@@ -49,6 +72,8 @@ function createPatchViewerSessionState(): PatchViewerSessionState {
     threadExpansionByKey: {},
     highlightedThreadKey: null,
     highlightedThreadVersion: 0,
+    navigationIntent: null,
+    navigationIntentVersion: 0,
     hunkExpansionsByFile: {},
   };
 }
@@ -178,6 +203,17 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       })),
     );
   },
+  clearNavigationIntent(sessionKey, version) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) =>
+        session.navigationIntentVersion !== version
+          ? {}
+          : {
+              navigationIntent: null,
+            },
+      ),
+    );
+  },
   recordHunkExpansion(sessionKey, filePath, hunkIndex, direction, lineCount) {
     set((state) =>
       updateSession(state, sessionKey, (session) => {
@@ -208,6 +244,14 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       }),
     );
   },
+  requestNavigationIntent(sessionKey, intent) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => ({
+        navigationIntent: intent,
+        navigationIntentVersion: session.navigationIntentVersion + 1,
+      })),
+    );
+  },
   selectFile(sessionKey, path) {
     set((state) =>
       updateSession(state, sessionKey, () => ({
@@ -227,4 +271,9 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
 }));
 
 export { getPatchViewerSessionState, usePatchViewerStore };
-export type { HunkExpansionDirection, HunkExpansionRegion, PatchViewerSessionState };
+export type {
+  HunkExpansionDirection,
+  HunkExpansionRegion,
+  PatchViewerNavigationIntent,
+  PatchViewerSessionState,
+};
