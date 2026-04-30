@@ -1,4 +1,4 @@
-import { Navigate } from '@tanstack/react-router';
+import { Navigate, createFileRoute } from '@tanstack/react-router';
 import { useAuthSession } from '../app/auth-session';
 import { AuthGateScreen } from '../components/ui/auth-gate-screen';
 
@@ -33,4 +33,6 @@ function AuthRoute() {
   );
 }
 
-export { AuthRoute };
+export const Route = createFileRoute('/auth')({
+  component: AuthRoute,
+});

@@ -1,17 +1,18 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AppearanceBackground } from '../components/ui/appearance-background';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
-import { useTheme } from '../hooks/use-theme';
-import type { ThemePreference } from '../hooks/use-theme';
+import { AppearanceBackground } from '../../components/ui/appearance-background';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
+import { useTheme } from '../../hooks/use-theme';
+import type { ThemePreference } from '../../hooks/use-theme';
 import {
   appearanceBackgroundQueryOptions,
-  setAppearanceBackground,
   selectCustomBackgroundFile,
-} from '../queries/forge';
-import type { AppearanceBackgroundInput, AppearanceBackgroundSettings } from '../types/forge';
+  setAppearanceBackground,
+} from '../../queries/forge';
+import type { AppearanceBackgroundInput, AppearanceBackgroundSettings } from '../../types/forge';
 
 const themeOptions: { value: ThemePreference; label: string }[] = [
   { value: 'auto', label: 'Auto' },
@@ -184,4 +185,6 @@ function AppearanceRoute() {
   );
 }
 
-export { AppearanceRoute };
+export const Route = createFileRoute('/settings/appearance')({
+  component: AppearanceRoute,
+});

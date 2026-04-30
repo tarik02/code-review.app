@@ -38,6 +38,7 @@
   "devDependencies": {
     "@rolldown/plugin-babel": "catalog:",
     "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
     "@vitejs/plugin-react": "catalog:",

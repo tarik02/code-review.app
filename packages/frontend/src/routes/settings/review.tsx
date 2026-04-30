@@ -1,15 +1,16 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getErrorMessage } from '../hooks/use-forge-queries';
-import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from '../queries/forge';
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
   FieldTitle,
-} from '../components/ui/field';
-import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import type { ReviewEditorMode } from '../types/forge';
+} from '../../components/ui/field';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
+import { getErrorMessage } from '../../hooks/use-forge-queries';
+import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from '../../queries/forge';
+import type { ReviewEditorMode } from '../../types/forge';
 
 const reviewEditorModeOptions: { value: ReviewEditorMode; label: string }[] = [
   { value: 'rich-text', label: 'Rich text' },
@@ -107,4 +108,6 @@ function ReviewRoute() {
   );
 }
 
-export { ReviewRoute };
+export const Route = createFileRoute('/settings/review')({
+  component: ReviewRoute,
+});

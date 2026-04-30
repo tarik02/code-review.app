@@ -28,6 +28,7 @@ export default defineConfig({
     },
   },
   fmt: {
+    ignorePatterns: ['packages/frontend/src/routeTree.gen.ts'],
     semi: true,
     singleQuote: true,
     tabWidth: 2,

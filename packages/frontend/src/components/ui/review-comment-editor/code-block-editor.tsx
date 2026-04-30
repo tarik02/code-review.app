@@ -189,6 +189,7 @@ function CommentCodeMirrorEditor({
 }: CommentCodeMirrorEditorProps) {
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const editorViewRef = useRef<EditorView | null>(null);
+  const latestEditorCodeRef = useRef(codeOverride ?? code);
   const editorHandleRef = useRef({
     getCodemirror: () => editorViewRef.current,
   });
@@ -250,6 +251,10 @@ function CommentCodeMirrorEditor({
     setCode,
     setEditorInFocus,
   ]);
+
+  useEffect(() => {
+    latestEditorCodeRef.current = editorCode;
+  }, [editorCode]);
 
   useEffect(() => {
     if (forceReadOnly) {
@@ -364,7 +369,7 @@ function CommentCodeMirrorEditor({
       editorViewRef.current = new EditorView({
         parent: editorHost,
         state: EditorState.create({
-          doc: editorCode,
+          doc: latestEditorCodeRef.current,
           extensions,
         }),
       });

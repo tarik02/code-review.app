@@ -1,9 +1,9 @@
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { ArrowLeftIcon } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { TopBar } from '../components/ui/top-bar';
-import { SETTINGS_RETURN_HREF_STORAGE_KEY } from '../lib/settings-return-location';
+import { Button } from '../../components/ui/button';
+import { TopBar } from '../../components/ui/top-bar';
+import { SETTINGS_RETURN_HREF_STORAGE_KEY } from '../../lib/settings-return-location';
 
 function SettingsLayout() {
   const navigate = useNavigate();
@@ -77,18 +77,13 @@ function SettingsLayout() {
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          aria-hidden="true"
-          position="middle"
-          className="shrink-0 cursor-grab app-region-drag"
-        />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Outlet />
-        </div>
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <Outlet />
       </main>
     </div>
   );
 }
 
-export { SettingsLayout };
+export const Route = createFileRoute('/settings')({
+  component: SettingsLayout,
+});
