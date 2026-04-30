@@ -503,6 +503,9 @@ importers:
       codemirror:
         specifier: 'catalog:'
         version: 6.0.2
+      effect:
+        specifier: 'catalog:'
+        version: 3.21.2
       fuse.js:
         specifier: 'catalog:'
         version: 7.3.0
