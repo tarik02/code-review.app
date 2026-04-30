@@ -94,7 +94,9 @@ function causeFailureOrSquash<E>(cause: Cause.Cause<E>): unknown {
 }
 
 function summarizeEffectCause<E>(cause: Cause.Cause<E>) {
-  const errors = Cause.prettyErrors(cause).map((error) => summarizeError(Cause.originalError(error)));
+  const errors = Cause.prettyErrors(cause).map((error) =>
+    summarizeError(Cause.originalError(error)),
+  );
   return {
     pretty: Cause.pretty(cause, { renderErrorCause: true }),
     errors,
@@ -110,7 +112,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     }
     const error = causeFailureOrSquash(exit.cause);
     await runtime.runPromise(
-      Effect.logError(`[trpc] ${label} failed\n${formatLogDetails(summarizeEffectCause(exit.cause))}`),
+      Effect.logError(
+        `[trpc] ${label} failed\n${formatLogDetails(summarizeEffectCause(exit.cause))}`,
+      ),
     );
     throw mapError(error);
   }
@@ -370,9 +374,11 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
-            yield* Effect.logInfo('tRPC pullRequests.listOverview', {
-              accountId: input.accountId,
-            });
+            yield* Effect.logInfo('tRPC pullRequests.listOverview').pipe(
+              Effect.annotateLogs({
+                accountId: input.accountId,
+              }),
+            );
             const service = yield* PullRequestService;
             const pullRequests = yield* service.listOverview(input.accountId);
             return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
@@ -711,7 +717,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           return await platform.checkForUpdate();
         } catch (error) {
           await runtime.runPromise(
-            Effect.logError(`[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`),
+            Effect.logError(
+              `[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`,
+            ),
           );
           throw mapError(error);
         }

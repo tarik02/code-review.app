@@ -6,7 +6,7 @@ import path from 'node:path';
 import type { DurationInput } from 'effect/Duration';
 import { BackendConfig } from '../config.ts';
 import type { GitRemoteSpec } from '../providers/types.ts';
-import { repoIdentityCacheKey, type RepoIdentity } from '../repo-id.ts';
+import { repoIdentityCacheKey } from '../repo-id.ts';
 import type { PrChangedFile, PrFileChangeType } from '@code-review-app/shared';
 import {
   GitAuthenticationFailed,
@@ -42,12 +42,15 @@ type GitCommandOutput = {
 };
 
 type GitRepoHandle = {
-  repo: RepoIdentity;
+  repo: { providerId: string; repoKey: string };
   path: string;
 };
 
 type GitServiceShape = {
-  ensureRepo(repo: RepoIdentity, remoteSpec: GitRemoteSpec): Effect.Effect<GitRepoHandle, GitError>;
+  ensureRepo(
+    repo: { providerId: string; repoKey: string },
+    remoteSpec: GitRemoteSpec,
+  ): Effect.Effect<GitRepoHandle, GitError>;
   fetchRefs(
     handle: GitRepoHandle,
     baseSha: string,
@@ -93,7 +96,7 @@ const COMMAND_TIMEOUT = '45 seconds';
 const FULL_DIFF_CONTEXT_LINES = '1000000';
 const decoder = new TextDecoder();
 
-function gitCachePath(userDataPath: string, repo: RepoIdentity) {
+function gitCachePath(userDataPath: string, repo: { providerId: string; repoKey: string }) {
   const hash = createHash('sha256').update(repoIdentityCacheKey(repo)).digest('hex');
   return path.join(userDataPath, 'git-cache', `${hash}.git`);
 }
@@ -449,11 +452,13 @@ const makeGitService = Effect.gen(function* () {
       const exists = yield* pathExists(fileSystem, cachePath);
       yield* ensureDirectory(fileSystem, path.dirname(cachePath));
 
-      yield* Effect.logInfo('[git] ensure repo', {
-        repo: repoIdentityCacheKey(repo),
-        cachePath,
-        exists,
-      });
+      yield* Effect.logInfo('[git] ensure repo').pipe(
+        Effect.annotateLogs({
+          repo: repoIdentityCacheKey(repo),
+          cachePath,
+          exists,
+        }),
+      );
 
       if (!exists) {
         yield* runGit({
@@ -515,12 +520,14 @@ const makeGitService = Effect.gen(function* () {
 
   const fetchRefs: GitServiceShape['fetchRefs'] = Effect.fn('GitService.fetchRefs')(
     function* (handle, baseSha, headSha, remoteSpec) {
-      yield* Effect.logInfo('[git] fetch refs start', {
-        repo: repoIdentityCacheKey(handle.repo),
-        cachePath: handle.path,
-        baseSha,
-        headSha,
-      });
+      yield* Effect.logInfo('[git] fetch refs start').pipe(
+        Effect.annotateLogs({
+          repo: repoIdentityCacheKey(handle.repo),
+          cachePath: handle.path,
+          baseSha,
+          headSha,
+        }),
+      );
       yield* runGit({
         args: [
           '-C',
@@ -538,12 +545,14 @@ const makeGitService = Effect.gen(function* () {
         remoteUrl: remoteSpec.url,
         ref: headSha,
       });
-      yield* Effect.logInfo('[git] fetch refs finished', {
-        repo: repoIdentityCacheKey(handle.repo),
-        cachePath: handle.path,
-        baseSha,
-        headSha,
-      });
+      yield* Effect.logInfo('[git] fetch refs finished').pipe(
+        Effect.annotateLogs({
+          repo: repoIdentityCacheKey(handle.repo),
+          cachePath: handle.path,
+          baseSha,
+          headSha,
+        }),
+      );
     },
   );
 

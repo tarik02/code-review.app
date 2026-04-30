@@ -153,47 +153,6 @@ async function findRepoRowId(database: Database | DatabaseTransaction, repo: Rep
   return row?.id ?? null;
 }
 
-async function ensureRepoRowId(database: DatabaseTransaction, repo: RepoIdentity) {
-  const existingRepoRowId = await findRepoRowId(database, repo);
-  if (existingRepoRowId !== null) return existingRepoRowId;
-
-  const timestamp = nowUnixTimestamp();
-  const identity = createRepoIdentityFromParts(repo.providerId, repo.repoKey);
-  const providerProfileId = await getProviderProfileRowId(database, identity.accountId, timestamp);
-
-  await database
-    .insert(repos)
-    .values({
-      providerId: identity.providerId,
-      repoKey: identity.repoKey,
-      provider: identity.provider,
-      host: identity.host,
-      providerProfileId,
-      name: repoNameFromKey(identity.repoKey),
-      nameWithOwner: identity.repoKey,
-      description: null,
-      isPrivate: null,
-      avatarUrl: null,
-      addedAt: 0,
-      lastOpenedAt: timestamp,
-    })
-    .onConflictDoUpdate({
-      target: [repos.providerId, repos.repoKey],
-      set: {
-        provider: identity.provider,
-        host: identity.host,
-        providerProfileId,
-        lastOpenedAt: timestamp,
-      },
-    });
-
-  const repoRowId = await findRepoRowId(database, repo);
-  if (repoRowId === null) {
-    throw new Error('Repo was not saved in the cache.');
-  }
-  return repoRowId;
-}
-
 function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
   return {
     number: row.prNumber,

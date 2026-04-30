@@ -63,9 +63,11 @@ const makePullRequestService = Effect.gen(function* () {
   )(function* (accountId) {
     const trimmedAccountId = accountId.trim();
     if (!trimmedAccountId) throw new ValidationError('Account is required');
-    yield* Effect.logInfo('loading pull request overview', {
-      accountId: trimmedAccountId,
-    });
+    yield* Effect.logInfo('loading pull request overview').pipe(
+      Effect.annotateLogs({
+        accountId: trimmedAccountId,
+      }),
+    );
     const provider = yield* providers.forAccount(trimmedAccountId);
     return yield* provider.listOverviewPullRequests();
   });

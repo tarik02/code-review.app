@@ -79,11 +79,13 @@ function gitErrorToProviderError(error: GitError) {
 }
 
 function logGitError(context: string, error: GitError) {
-  return Effect.logDebug('[diff-data] git backend error', {
-    context,
-    tag: error._tag,
-    error: error instanceof GitUnknownCommandError ? { args: error.args } : error,
-  });
+  return Effect.logDebug('[diff-data] git backend error').pipe(
+    Effect.annotateLogs({
+      context,
+      tag: error._tag,
+      error: error instanceof GitUnknownCommandError ? { args: error.args } : error,
+    }),
+  );
 }
 
 function resolveRefs(
@@ -105,11 +107,13 @@ function resolveRefs(
       } satisfies ResolvedRefs;
     }
 
-    yield* Effect.logInfo('[diff-data] git base sha missing; fetching refs', {
-      repo: repoIdentityCacheKey(repo),
-      number,
-      provider: repo.provider,
-    });
+    yield* Effect.logInfo('[diff-data] git base sha missing; fetching refs').pipe(
+      Effect.annotateLogs({
+        repo: repoIdentityCacheKey(repo),
+        number,
+        provider: repo.provider,
+      }),
+    );
     const refs: PullRequestRefs = yield* provider.fetchPullRequestRefs(repo, number);
     if (!refs.baseSha) {
       throw new ValidationError('Base SHA is required');
@@ -132,20 +136,16 @@ function prepareGitDiff(
 > {
   return Effect.gen(function* () {
     const { provider, repo } = yield* providers.forRepo(input.repo);
-    const refs = yield* resolveRefs(
-      repo,
-      input.number,
-      input.baseSha,
-      input.headSha,
-      provider,
+    const refs = yield* resolveRefs(repo, input.number, input.baseSha, input.headSha, provider);
+    yield* Effect.logInfo('[diff-data] git refs resolved').pipe(
+      Effect.annotateLogs({
+        repo: repoIdentityCacheKey(input.repo),
+        number: input.number,
+        source: refs.source,
+        baseSha: refs.baseSha,
+        headSha: refs.headSha,
+      }),
     );
-    yield* Effect.logInfo('[diff-data] git refs resolved', {
-      repo: repoIdentityCacheKey(input.repo),
-      number: input.number,
-      source: refs.source,
-      baseSha: refs.baseSha,
-      headSha: refs.headSha,
-    });
 
     const remoteSpec = yield* provider.gitRemote(repo);
     const handle = yield* git.ensureRepo(input.repo, remoteSpec).pipe(
@@ -171,7 +171,10 @@ function prepareGitDiff(
   });
 }
 
-function makeGitDiffBackend(git: GitServiceShape, providers: ForgeProviderRegistryShape): DiffDataBackend {
+function makeGitDiffBackend(
+  git: GitServiceShape,
+  providers: ForgeProviderRegistryShape,
+): DiffDataBackend {
   const getPatch: DiffDataBackend['getPatch'] = Effect.fn('GitDiffBackend.getPatch')(
     function* (input, options) {
       const prepared = yield* prepareGitDiff(input, git, providers);
@@ -188,13 +191,15 @@ function makeGitDiffBackend(git: GitServiceShape, providers: ForgeProviderRegist
           Effect.tapError((error) => logGitError('git diff patch failed', error)),
           Effect.mapError(gitErrorToProviderError),
         );
-      yield* Effect.logInfo('[diff-data] git patch generated', {
-        repo: repoIdentityCacheKey(input.repo),
-        number: input.number,
-        headSha: prepared.headSha,
-        cachePath: prepared.cachePath,
-        length: patch.length,
-      });
+      yield* Effect.logInfo('[diff-data] git patch generated').pipe(
+        Effect.annotateLogs({
+          repo: repoIdentityCacheKey(input.repo),
+          number: input.number,
+          headSha: prepared.headSha,
+          cachePath: prepared.cachePath,
+          length: patch.length,
+        }),
+      );
       return patch;
     },
   );
@@ -210,13 +215,15 @@ function makeGitDiffBackend(git: GitServiceShape, providers: ForgeProviderRegist
         Effect.tapError((error) => logGitError('git changed files failed', error)),
         Effect.mapError(gitErrorToProviderError),
       );
-    yield* Effect.logInfo('[diff-data] git changed files generated', {
-      repo: repoIdentityCacheKey(input.repo),
-      number: input.number,
-      headSha: prepared.headSha,
-      cachePath: prepared.cachePath,
-      count: files.length,
-    });
+    yield* Effect.logInfo('[diff-data] git changed files generated').pipe(
+      Effect.annotateLogs({
+        repo: repoIdentityCacheKey(input.repo),
+        number: input.number,
+        headSha: prepared.headSha,
+        cachePath: prepared.cachePath,
+        count: files.length,
+      }),
+    );
     return files;
   });
 
@@ -254,17 +261,19 @@ function makeGitDiffBackend(git: GitServiceShape, providers: ForgeProviderRegist
       );
     }
 
-    yield* Effect.logInfo('[diff-data] git file contents generated', {
-      repo: repoIdentityCacheKey(input.repo),
-      number: input.number,
-      oldPath,
-      newPath,
-      baseSha: prepared.diffBaseSha,
-      headSha: prepared.headSha,
-      cachePath: prepared.cachePath,
-      oldLength: oldContent.length,
-      newLength: newContent.length,
-    });
+    yield* Effect.logInfo('[diff-data] git file contents generated').pipe(
+      Effect.annotateLogs({
+        repo: repoIdentityCacheKey(input.repo),
+        number: input.number,
+        oldPath,
+        newPath,
+        baseSha: prepared.diffBaseSha,
+        headSha: prepared.headSha,
+        cachePath: prepared.cachePath,
+        oldLength: oldContent.length,
+        newLength: newContent.length,
+      }),
+    );
 
     return {
       providerId: input.repo.providerId,

@@ -55,19 +55,23 @@ function makeProviderApiDiffBackend(providers: ForgeProviderRegistryShape): Diff
       }
 
       if (!baseSha && input.changeType !== 'new') {
-        yield* Effect.logInfo('[diff-data] provider api base sha missing; fetching refs', {
-          repo: repoIdentityCacheKey(input.repo),
-          number: input.number,
-          provider: repo.provider,
-        });
+        yield* Effect.logInfo('[diff-data] provider api base sha missing; fetching refs').pipe(
+          Effect.annotateLogs({
+            repo: repoIdentityCacheKey(input.repo),
+            number: input.number,
+            provider: repo.provider,
+          }),
+        );
         const refs = yield* provider.fetchPullRequestRefs(repo, input.number);
         baseSha = refs.baseSha;
-        yield* Effect.logInfo('[diff-data] provider api resolved refs', {
-          repo: repoIdentityCacheKey(input.repo),
-          number: input.number,
-          baseSha,
-          headSha: refs.headSha,
-        });
+        yield* Effect.logInfo('[diff-data] provider api resolved refs').pipe(
+          Effect.annotateLogs({
+            repo: repoIdentityCacheKey(input.repo),
+            number: input.number,
+            baseSha,
+            headSha: refs.headSha,
+          }),
+        );
       }
       if (!baseSha && input.changeType !== 'new') {
         throw new ValidationError('Base SHA is required');

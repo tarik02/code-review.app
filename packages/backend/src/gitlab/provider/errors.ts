@@ -20,7 +20,9 @@ class GitLabProviderRepoHostMismatch extends Data.TaggedError('GitLabProviderRep
   cause: unknown;
 }> {}
 
-class GitLabProviderMissingDiffVersion extends Data.TaggedError('GitLabProviderMissingDiffVersion')<{
+class GitLabProviderMissingDiffVersion extends Data.TaggedError(
+  'GitLabProviderMissingDiffVersion',
+)<{
   message: string;
   number: number;
   cause: unknown;

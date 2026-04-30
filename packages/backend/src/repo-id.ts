@@ -36,9 +36,7 @@ function normalizeHost(host: string) {
     return '';
   }
 
-  const url = new URL(
-    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
-  );
+  const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
   return url.origin.toLowerCase();
 }
 

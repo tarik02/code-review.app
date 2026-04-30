@@ -68,29 +68,32 @@ const makePullRequestQualityService = Effect.gen(function* () {
       const repoIdentity = requireRepo(repoInput);
       const { provider, repo } = yield* providers.forRepo(repoIdentity);
 
-      return yield* provider.getPullRequestQualityReport({
-        repo,
-        number,
-        headSha,
-      }).pipe(
-        Effect.catchAll((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          return Effect.logWarning('[pull-request-quality] failed to load quality report', {
-            provider: repo.provider,
-            repo: repo.path,
-            number,
-            headSha,
-            message,
-            error: summarizeError(error),
-          }).pipe(
-            Effect.zipRight(
-              Effect.succeed(
-                unavailableQualityReport(repo.provider, repoIdentity, number, headSha, message),
+      return yield* provider
+        .getPullRequestQualityReport({
+          repo,
+          number,
+          headSha,
+        })
+        .pipe(
+          Effect.catchAll((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            return Effect.logWarning('[pull-request-quality] failed to load quality report').pipe(
+              Effect.annotateLogs({
+                provider: repo.provider,
+                repo: repo.path,
+                number,
+                headSha,
+                message,
+                error: summarizeError(error),
+              }),
+              Effect.zipRight(
+                Effect.succeed(
+                  unavailableQualityReport(repo.provider, repoIdentity, number, headSha, message),
+                ),
               ),
-            ),
-          );
-        }),
-      );
+            );
+          }),
+        );
     },
   );
 

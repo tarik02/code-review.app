@@ -1,9 +1,5 @@
 type QueryPrimitive = string | number | boolean;
-type QueryValue =
-  | QueryPrimitive
-  | null
-  | undefined
-  | ReadonlyArray<QueryPrimitive>;
+type QueryValue = QueryPrimitive | null | undefined | ReadonlyArray<QueryPrimitive>;
 
 type QueryParams = Record<string, QueryValue>;
 type EmptyQuery = Record<never, never>;
@@ -30,15 +26,17 @@ type PathParams<TPath extends string> = [PathParamNames<TPath>] extends [never]
       [TParam in PathParamNames<TPath>]: ParamValue;
     };
 
-type BuildRouteOptions<TPath extends string, TQuery extends QueryParams> = (
-  [PathParamNames<TPath>] extends [never]
-    ? { params?: never }
-    : { params: PathParams<TPath> }
-) &
+type BuildRouteOptions<TPath extends string, TQuery extends QueryParams> = ([
+  PathParamNames<TPath>,
+] extends [never]
+  ? { params?: never }
+  : { params: PathParams<TPath> }) &
   (keyof TQuery extends never ? { query?: never } : { query?: TQuery });
 
-type RouteQuery<TRoutes extends RouteMap, TPath extends keyof TRoutes & string> =
-  TRoutes[TPath] extends { query: infer TQuery extends QueryParams } ? TQuery : EmptyQuery;
+type RouteQuery<
+  TRoutes extends RouteMap,
+  TPath extends keyof TRoutes & string,
+> = TRoutes[TPath] extends { query: infer TQuery extends QueryParams } ? TQuery : EmptyQuery;
 
 function rawPathParam(value: string): RawPathParam {
   return { raw: value };

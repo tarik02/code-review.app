@@ -12,7 +12,12 @@ import type {
   ReviewThread,
 } from '@code-review-app/shared';
 import { summarizeError } from '../../errors.ts';
-import { createRepoIdentity, normalizeHost, normalizePath, type ProviderRepoIdentity } from '../../repo-id.ts';
+import {
+  createRepoIdentity,
+  normalizeHost,
+  normalizePath,
+  type ProviderRepoIdentity,
+} from '../../repo-id.ts';
 import type {
   ForgeProviderEffectContract,
   PullRequestQualityReportInput,
@@ -20,10 +25,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
-import {
-  type GitLabClientError,
-  isGitLabClientError,
-} from '../client/errors.ts';
+import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
 import {
   GitLabProviderClientFailure,
   type GitLabProviderError,
@@ -381,9 +383,11 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   effect: (...args: Args) => Generator<any, Success, any>,
 ): ((...args: Args) => Effect.Effect<Success, GitLabProviderError, GitLabApiClient>) =>
   Effect.fn(name)((...args: Args) =>
-    (Effect.gen(function* () {
-      return yield* effect(...args);
-    }) as Effect.Effect<Success, GitLabClientError | GitLabProviderError, GitLabApiClient>).pipe(
+    (
+      Effect.gen(function* () {
+        return yield* effect(...args);
+      }) as Effect.Effect<Success, GitLabClientError | GitLabProviderError, GitLabApiClient>
+    ).pipe(
       Effect.mapError((error: GitLabClientError | GitLabProviderError) =>
         mapProviderError(operation)(error),
       ),
@@ -391,18 +395,19 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   );
 
 function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError> {
-  const viewerLogin: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['viewerLogin'] = providerEffect(
-    'GitLabProvider.viewerLogin',
-    'viewerLogin',
-    function* () {
+  const viewerLogin: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['viewerLogin'] = providerEffect('GitLabProvider.viewerLogin', 'viewerLogin', function* () {
     const api = yield* GitLabApiClient;
     const user = yield* api.user();
     return user.username;
   });
 
-  const authStatus: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['authStatus'] = Effect.fn(
-    'GitLabProvider.authStatus',
-  )(function* () {
+  const authStatus: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['authStatus'] = Effect.fn('GitLabProvider.authStatus')(function* () {
     const api = yield* GitLabApiClient;
     return yield* Effect.gen(function* () {
       const token = yield* api.storedToken();
@@ -418,10 +423,11 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     }).pipe(
       Effect.catchAll((error) => {
         const message = error instanceof Error ? error.message : String(error);
-        return Effect.logWarning('[gitlab] auth status check failed', {
-          message,
-          error: summarizeError(error),
-        }).pipe(
+        return Effect.logWarning('[gitlab] auth status check failed').pipe(
+          Effect.annotateLogs({
+            message,
+            error: summarizeError(error),
+          }),
           Effect.zipRight(
             Effect.succeed(
               isNotAuthenticatedMessage(message)
@@ -437,87 +443,108 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     );
   });
 
-  const listInitialRepos: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['listInitialRepos'] = providerEffect(
+  const listInitialRepos: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listInitialRepos'] = providerEffect(
     'GitLabProvider.listInitialRepos',
     'listInitialRepos',
     function* (limit: number) {
-    const api = yield* GitLabApiClient;
-    const token = yield* api.storedToken();
-    if (!token) {
-      return yield* Effect.fail(
-        new GitLabProviderNotAuthenticated({
-          message: 'GitLab is not signed in.',
-          cause: { provider: 'gitlab', operation: 'listInitialRepos' },
-        }),
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'listInitialRepos' },
+          }),
+        );
+      }
+      const label = labelForToken(token);
+      const projects = yield* api.projects({
+        membership: true,
+        simple: true,
+        perPage: limit,
+      });
+      return projects.map((project) =>
+        repoSummaryFromProject(token.id, token.host, label, project),
       );
-    }
-    const label = labelForToken(token);
-    const projects = yield* api.projects({
-      membership: true,
-      simple: true,
-      perPage: limit,
-    });
-    return projects.map((project) => repoSummaryFromProject(token.id, token.host, label, project));
-  });
+    },
+  );
 
-  const searchRepos: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['searchRepos'] = providerEffect(
+  const searchRepos: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['searchRepos'] = providerEffect(
     'GitLabProvider.searchRepos',
     'searchRepos',
     function* (query: string, limit: number) {
-    const api = yield* GitLabApiClient;
-    const token = yield* api.storedToken();
-    if (!token) {
-      return yield* Effect.fail(
-        new GitLabProviderNotAuthenticated({
-          message: 'GitLab is not signed in.',
-          cause: { provider: 'gitlab', operation: 'searchRepos' },
-        }),
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'searchRepos' },
+          }),
+        );
+      }
+      const label = labelForToken(token);
+      if (query.length === 0) return yield* listInitialRepos(limit);
+      const projects = yield* api.projects({
+        membership: true,
+        search: query,
+        simple: true,
+        perPage: limit,
+      });
+      return projects.map((project) =>
+        repoSummaryFromProject(token.id, token.host, label, project),
       );
-    }
-    const label = labelForToken(token);
-    if (query.length === 0) return yield* listInitialRepos(limit);
-    const projects = yield* api.projects({
-      membership: true,
-      search: query,
-      simple: true,
-      perPage: limit,
-    });
-    return projects.map((project) => repoSummaryFromProject(token.id, token.host, label, project));
-  });
+    },
+  );
 
-  const validateRepo: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['validateRepo'] = providerEffect(
+  const validateRepo: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['validateRepo'] = providerEffect(
     'GitLabProvider.validateRepo',
     'validateRepo',
     function* (input: string) {
-    const api = yield* GitLabApiClient;
-    const token = yield* api.storedToken();
-    if (!token) {
-      return yield* Effect.fail(
-        new GitLabProviderNotAuthenticated({
-          message: 'GitLab is not signed in.',
-          cause: { provider: 'gitlab', operation: 'validateRepo' },
-        }),
-      );
-    }
-    const label = labelForToken(token);
-    const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
-    if (validatedHost !== token.host) {
-      return yield* Effect.fail(
-        new GitLabProviderRepoHostMismatch({
-          message: 'Project URL host must match the selected GitLab account.',
-          expectedHost: token.host,
-          actualHost: validatedHost,
-          cause: { input, expectedHost: token.host, actualHost: validatedHost },
-        }),
-      );
-    }
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'validateRepo' },
+          }),
+        );
+      }
+      const label = labelForToken(token);
+      const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
+      if (validatedHost !== token.host) {
+        return yield* Effect.fail(
+          new GitLabProviderRepoHostMismatch({
+            message: 'Project URL host must match the selected GitLab account.',
+            expectedHost: token.host,
+            actualHost: validatedHost,
+            cause: { input, expectedHost: token.host, actualHost: validatedHost },
+          }),
+        );
+      }
 
-    const project = yield* api.project(projectPath);
-    return repoSummaryFromProject(token.id, validatedHost, label, project);
-  });
+      const project = yield* api.project(projectPath);
+      return repoSummaryFromProject(token.id, validatedHost, label, project);
+    },
+  );
 
-  const listOverviewPullRequests: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['listOverviewPullRequests'] =
-    providerEffect('GitLabProvider.listOverviewPullRequests', 'listOverviewPullRequests', function* () {
+  const listOverviewPullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listOverviewPullRequests'] = providerEffect(
+    'GitLabProvider.listOverviewPullRequests',
+    'listOverviewPullRequests',
+    function* () {
       const api = yield* GitLabApiClient;
       const token = yield* api.storedToken();
       if (!token) {
@@ -601,34 +628,48 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       }
 
       return entries;
-    });
+    },
+  );
 
-  const listPullRequests: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['listPullRequests'] = providerEffect(
+  const listPullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listPullRequests'] = providerEffect(
     'GitLabProvider.listPullRequests',
     'listPullRequests',
     function* (repo: ProviderRepoIdentity) {
-    const api = yield* GitLabApiClient;
-    const mergeRequests = yield* api.projectMergeRequests({
-      project: repo.path,
-      state: 'opened',
-      orderBy: 'updated_at',
-      sort: 'desc',
-      perPage: 100,
-    });
-    return mergeRequests.map(toPullRequestSummary);
-  });
+      const api = yield* GitLabApiClient;
+      const mergeRequests = yield* api.projectMergeRequests({
+        project: repo.path,
+        state: 'opened',
+        orderBy: 'updated_at',
+        sort: 'desc',
+        perPage: 100,
+      });
+      return mergeRequests.map(toPullRequestSummary);
+    },
+  );
 
-  const getPullRequest: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['getPullRequest'] = providerEffect(
+  const getPullRequest: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['getPullRequest'] = providerEffect(
     'GitLabProvider.getPullRequest',
     'getPullRequest',
     function* (repo: ProviderRepoIdentity, number: number) {
-    const api = yield* GitLabApiClient;
-    const mergeRequest = yield* api.mergeRequest(repo.path, number);
-    return toPullRequestSummary(mergeRequest);
-  });
+      const api = yield* GitLabApiClient;
+      const mergeRequest = yield* api.mergeRequest(repo.path, number);
+      return toPullRequestSummary(mergeRequest);
+    },
+  );
 
-  const getPullRequestApprovalState: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['getPullRequestApprovalState'] =
-    providerEffect('GitLabProvider.getPullRequestApprovalState', 'getPullRequestApprovalState', function* (repo: ProviderRepoIdentity, number: number) {
+  const getPullRequestApprovalState: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['getPullRequestApprovalState'] = providerEffect(
+    'GitLabProvider.getPullRequestApprovalState',
+    'getPullRequestApprovalState',
+    function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       const approvalState = yield* api.mergeRequestApprovals(repo.path, number);
       const currentViewerLogin = yield* viewerLogin();
@@ -646,64 +687,88 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         approvalsRequired: approvalState.approvals_required ?? null,
         approvalsLeft: approvalState.approvals_left ?? null,
       } satisfies PullRequestApprovalState;
-    });
+    },
+  );
 
-  const approvePullRequest: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['approvePullRequest'] = providerEffect(
+  const approvePullRequest: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['approvePullRequest'] = providerEffect(
     'GitLabProvider.approvePullRequest',
     'approvePullRequest',
     function* (repo: ProviderRepoIdentity, number: number, headSha: string) {
-    const api = yield* GitLabApiClient;
-    yield* api.approveMergeRequest(repo.path, number, headSha);
-  });
+      const api = yield* GitLabApiClient;
+      yield* api.approveMergeRequest(repo.path, number, headSha);
+    },
+  );
 
-  const removePullRequestApproval: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['removePullRequestApproval'] =
-    providerEffect('GitLabProvider.removePullRequestApproval', 'removePullRequestApproval', function* (repo: ProviderRepoIdentity, number: number) {
+  const removePullRequestApproval: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['removePullRequestApproval'] = providerEffect(
+    'GitLabProvider.removePullRequestApproval',
+    'removePullRequestApproval',
+    function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       yield* api.unapproveMergeRequest(repo.path, number);
-    });
+    },
+  );
 
-  const fetchChangedFiles: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['fetchChangedFiles'] = providerEffect(
+  const fetchChangedFiles: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['fetchChangedFiles'] = providerEffect(
     'GitLabProvider.fetchChangedFiles',
     'fetchChangedFiles',
     function* (repo: ProviderRepoIdentity, number: number) {
-    const api = yield* GitLabApiClient;
-    const files: ReturnType<typeof toChangedFile>[] = [];
-    const seen = new Set<string>();
-    let page = 1;
-    let shouldContinue = true;
-    while (shouldContinue) {
-      const diffs = yield* api.mergeRequestDiffs({
-        project: repo.path,
-        number,
-        perPage: 100,
-        page,
-      });
-      if (diffs.length === 0) {
-        shouldContinue = false;
-      } else {
-        for (const diff of diffs) {
-          const file = toChangedFile(diff);
-          if (!seen.has(file.path)) {
-            seen.add(file.path);
-            files.push(file);
+      const api = yield* GitLabApiClient;
+      const files: ReturnType<typeof toChangedFile>[] = [];
+      const seen = new Set<string>();
+      let page = 1;
+      let shouldContinue = true;
+      while (shouldContinue) {
+        const diffs = yield* api.mergeRequestDiffs({
+          project: repo.path,
+          number,
+          perPage: 100,
+          page,
+        });
+        if (diffs.length === 0) {
+          shouldContinue = false;
+        } else {
+          for (const diff of diffs) {
+            const file = toChangedFile(diff);
+            if (!seen.has(file.path)) {
+              seen.add(file.path);
+              files.push(file);
+            }
           }
+          page += 1;
         }
-        page += 1;
       }
-    }
-    return files;
-  });
+      return files;
+    },
+  );
 
-  const fetchPatch: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['fetchPatch'] = providerEffect(
+  const fetchPatch: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['fetchPatch'] = providerEffect(
     'GitLabProvider.fetchPatch',
     'fetchPatch',
     function* (repo: ProviderRepoIdentity, number: number) {
-    const api = yield* GitLabApiClient;
-    return yield* api.mergeRequestRawDiffs(repo.path, number);
-  });
+      const api = yield* GitLabApiClient;
+      return yield* api.mergeRequestRawDiffs(repo.path, number);
+    },
+  );
 
-  const fetchPullRequestRefs: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['fetchPullRequestRefs'] =
-    providerEffect('GitLabProvider.fetchPullRequestRefs', 'fetchPullRequestRefs', function* (repo: ProviderRepoIdentity, number: number) {
+  const fetchPullRequestRefs: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['fetchPullRequestRefs'] = providerEffect(
+    'GitLabProvider.fetchPullRequestRefs',
+    'fetchPullRequestRefs',
+    function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       const versions = yield* api.mergeRequestVersions(repo.path, number);
       const version = versions[0];
@@ -717,27 +782,37 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         );
       }
       return refsFromVersion(version);
-    });
+    },
+  );
 
-  const fetchFileContent: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['fetchFileContent'] = providerEffect(
+  const fetchFileContent: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['fetchFileContent'] = providerEffect(
     'GitLabProvider.fetchFileContent',
     'fetchFileContent',
     function* (repo: ProviderRepoIdentity, path: string, ref: string) {
-    const api = yield* GitLabApiClient;
-    return yield* api.repositoryFileRaw({
-      project: repo.path,
-      path,
-      ref,
-    });
-  });
+      const api = yield* GitLabApiClient;
+      return yield* api.repositoryFileRaw({
+        project: repo.path,
+        path,
+        ref,
+      });
+    },
+  );
 
-  const getPullRequestQualityReport: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['getPullRequestQualityReport'] =
-    providerEffect('GitLabProvider.getPullRequestQualityReport', 'getPullRequestQualityReport', function* (input: PullRequestQualityReportInput) {
+  const getPullRequestQualityReport: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['getPullRequestQualityReport'] = providerEffect(
+    'GitLabProvider.getPullRequestQualityReport',
+    'getPullRequestQualityReport',
+    function* (input: PullRequestQualityReportInput) {
       const api = yield* GitLabApiClient;
       const { repo, number, headSha } = input;
-      const graphqlResponse = yield* api.codeQualityReportsComparer(repo.path, String(number)).pipe(
-        Effect.catchAll(() => Effect.succeed(null)),
-      );
+      const graphqlResponse = yield* api
+        .codeQualityReportsComparer(repo.path, String(number))
+        .pipe(Effect.catchAll(() => Effect.succeed(null)));
       const graphqlResult =
         graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ?? null;
 
@@ -860,160 +935,170 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           graphqlAvailable: graphqlResponse !== null,
         },
       } satisfies PullRequestQualityReport;
+    },
+  );
+
+  const gitRemote: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['gitRemote'] =
+    providerEffect('GitLabProvider.gitRemote', 'gitRemote', function* (repo: ProviderRepoIdentity) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.accessToken();
+      return {
+        url: `${repo.host}/${repo.path}.git`,
+        auth: {
+          envConfig: [],
+          askPass: {
+            username: 'oauth2',
+            password: token,
+          },
+        },
+      };
     });
 
-  const gitRemote: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['gitRemote'] = providerEffect(
-    'GitLabProvider.gitRemote',
-    'gitRemote',
-    function* (repo: ProviderRepoIdentity) {
-    const api = yield* GitLabApiClient;
-    const token = yield* api.accessToken();
-    return {
-      url: `${repo.host}/${repo.path}.git`,
-      auth: {
-        envConfig: [],
-        askPass: {
-          username: 'oauth2',
-          password: token,
-        },
-      },
-    };
-  });
-
-  const listReviewThreads: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['listReviewThreads'] = providerEffect(
+  const listReviewThreads: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listReviewThreads'] = providerEffect(
     'GitLabProvider.listReviewThreads',
     'listReviewThreads',
     function* (repo: ProviderRepoIdentity, number: number) {
-    const api = yield* GitLabApiClient;
-    const threads: ReviewThread[] = [];
-    const discussionNoteIds = new Set<number>();
-    let discussionsPage = 1;
-    while (true) {
-      const discussions = yield* api.mergeRequestDiscussions({
-        project: repo.path,
-        number,
-        perPage: 100,
-        page: discussionsPage,
-      });
-      if (discussions.length === 0) break;
-      for (const discussion of discussions) {
-        for (const note of discussion.notes ?? []) {
-          discussionNoteIds.add(note.id);
+      const api = yield* GitLabApiClient;
+      const threads: ReviewThread[] = [];
+      const discussionNoteIds = new Set<number>();
+      let discussionsPage = 1;
+      while (true) {
+        const discussions = yield* api.mergeRequestDiscussions({
+          project: repo.path,
+          number,
+          perPage: 100,
+          page: discussionsPage,
+        });
+        if (discussions.length === 0) break;
+        for (const discussion of discussions) {
+          for (const note of discussion.notes ?? []) {
+            discussionNoteIds.add(note.id);
+          }
+          const thread = discussionToReviewThread(discussion);
+          if (thread) threads.push(thread);
         }
-        const thread = discussionToReviewThread(discussion);
-        if (thread) threads.push(thread);
+        discussionsPage += 1;
       }
-      discussionsPage += 1;
-    }
 
-    let notesPage = 1;
-    while (true) {
-      const notes = yield* api.mergeRequestNotes({
-        project: repo.path,
-        number,
-        orderBy: 'created_at',
-        sort: 'asc',
-        perPage: 100,
-        page: notesPage,
-      });
-      if (notes.length === 0) break;
-      for (const note of notes) {
-        if (note.system) continue;
-        if (discussionNoteIds.has(note.id)) continue;
-        if (note.position != null) continue;
-        if (note.type === 'DiffNote') continue;
-        threads.push(noteToGlobalReviewThread(note));
+      let notesPage = 1;
+      while (true) {
+        const notes = yield* api.mergeRequestNotes({
+          project: repo.path,
+          number,
+          orderBy: 'created_at',
+          sort: 'asc',
+          perPage: 100,
+          page: notesPage,
+        });
+        if (notes.length === 0) break;
+        for (const note of notes) {
+          if (note.system) continue;
+          if (discussionNoteIds.has(note.id)) continue;
+          if (note.position != null) continue;
+          if (note.type === 'DiffNote') continue;
+          threads.push(noteToGlobalReviewThread(note));
+        }
+        notesPage += 1;
       }
-      notesPage += 1;
-    }
 
-    return threads;
-  });
+      return threads;
+    },
+  );
 
-  const listPendingReview: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['listPendingReview'] = providerEffect(
+  const listPendingReview: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listPendingReview'] = providerEffect(
     'GitLabProvider.listPendingReview',
     'listPendingReview',
     function* (repo: ProviderRepoIdentity, number: number, headSha: string) {
-    const api = yield* GitLabApiClient;
-    const draftNotes = yield* api.draftNotes(repo.path, number);
-    const timestamp = unixTimestampNow();
-    const comments = draftNotes.flatMap((draftNote) => {
-      const body = draftNote.note?.trim() ?? '';
-      if (!body) return [];
-      const position = draftNote.position ?? null;
-      const positionHeadSha = position?.head_sha?.trim() ?? '';
-      if (positionHeadSha && positionHeadSha !== headSha) return [];
-      const oldPath = position?.old_path?.trim() ?? '';
-      const newPath = position?.new_path?.trim() ?? '';
-      const path = newPath || oldPath;
-      const line = position?.new_line ?? position?.old_line ?? null;
-      const side =
-        position?.old_line != null && position?.new_line == null
-          ? 'LEFT'
-          : position?.new_line != null
-            ? 'RIGHT'
-            : null;
-      const subjectType =
-        position?.position_type === 'file' ? 'file' : position != null ? 'line' : 'global';
-      const kind =
-        draftNote.discussion_id != null && position == null
-          ? 'reply'
-          : subjectType === 'global'
-            ? 'global'
-            : 'thread';
-      return [
-        {
-          ...repo,
-          id: String(draftNote.id),
-          sessionId: 0,
-          number,
-          headSha,
-          kind,
-          providerCommentId: String(draftNote.id),
-          providerThreadId: draftNote.discussion_id ?? null,
-          replyToThreadId: draftNote.discussion_id ?? null,
-          replyToCommentId: null,
-          body,
-          path,
-          oldPath,
-          newPath,
-          line,
-          side,
-          startLine: null,
-          startSide: null,
-          subjectType,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        } satisfies PendingReviewComment,
-      ];
-    });
+      const api = yield* GitLabApiClient;
+      const draftNotes = yield* api.draftNotes(repo.path, number);
+      const timestamp = unixTimestampNow();
+      const comments = draftNotes.flatMap((draftNote) => {
+        const body = draftNote.note?.trim() ?? '';
+        if (!body) return [];
+        const position = draftNote.position ?? null;
+        const positionHeadSha = position?.head_sha?.trim() ?? '';
+        if (positionHeadSha && positionHeadSha !== headSha) return [];
+        const oldPath = position?.old_path?.trim() ?? '';
+        const newPath = position?.new_path?.trim() ?? '';
+        const path = newPath || oldPath;
+        const line = position?.new_line ?? position?.old_line ?? null;
+        const side =
+          position?.old_line != null && position?.new_line == null
+            ? 'LEFT'
+            : position?.new_line != null
+              ? 'RIGHT'
+              : null;
+        const subjectType =
+          position?.position_type === 'file' ? 'file' : position != null ? 'line' : 'global';
+        const kind =
+          draftNote.discussion_id != null && position == null
+            ? 'reply'
+            : subjectType === 'global'
+              ? 'global'
+              : 'thread';
+        return [
+          {
+            ...repo,
+            id: String(draftNote.id),
+            sessionId: 0,
+            number,
+            headSha,
+            kind,
+            providerCommentId: String(draftNote.id),
+            providerThreadId: draftNote.discussion_id ?? null,
+            replyToThreadId: draftNote.discussion_id ?? null,
+            replyToCommentId: null,
+            body,
+            path,
+            oldPath,
+            newPath,
+            line,
+            side,
+            startLine: null,
+            startSide: null,
+            subjectType,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } satisfies PendingReviewComment,
+        ];
+      });
 
-    return {
-      session:
-        comments.length > 0
-          ? {
-              ...repo,
-              id: 0,
-              number,
-              headSha,
-              providerReviewId: null,
-              createdAt: timestamp,
-              updatedAt: timestamp,
-            }
-          : null,
-      comments,
-    };
-  });
+      return {
+        session:
+          comments.length > 0
+            ? {
+                ...repo,
+                id: 0,
+                number,
+                headSha,
+                providerReviewId: null,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              }
+            : null,
+        comments,
+      };
+    },
+  );
 
-  const buildDraftLineForm = (version: GitLabMrVersion, input: {
-    path: string;
-    oldPath: string;
-    newPath: string;
-    line: number | null;
-    side: string | null;
-    subjectType: 'file' | 'line' | 'global';
-    body: string;
-  }) => {
+  const buildDraftLineForm = (
+    version: GitLabMrVersion,
+    input: {
+      path: string;
+      oldPath: string;
+      newPath: string;
+      line: number | null;
+      side: string | null;
+      subjectType: 'file' | 'line' | 'global';
+      body: string;
+    },
+  ) => {
     const oldPath = input.oldPath || input.path;
     const newPath = input.newPath || input.path;
     const forms: Array<[string, string]> = [
@@ -1037,52 +1122,70 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     return forms;
   };
 
-  const createReviewThread: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['createReviewThread'] = providerEffect(
+  const createReviewThread: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['createReviewThread'] = providerEffect(
     'GitLabProvider.createReviewThread',
     'createReviewThread',
     function* (repo: ProviderRepoIdentity, number: number, input: ReviewThreadInput) {
-    const api = yield* GitLabApiClient;
-    if (input.subjectType === 'global') {
-      yield* api.createMergeRequestNote(repo.path, number, input.body);
-      return;
-    }
+      const api = yield* GitLabApiClient;
+      if (input.subjectType === 'global') {
+        yield* api.createMergeRequestNote(repo.path, number, input.body);
+        return;
+      }
 
-    const versions = yield* api.mergeRequestVersions(repo.path, number);
-    const version = versions[0];
-    if (!version) {
-      return yield* Effect.fail(
-        new GitLabProviderMissingDiffVersion({
-          message: 'GitLab merge request has no diff versions',
-          number,
-          cause: { repo: repo.path, number },
-        }),
+      const versions = yield* api.mergeRequestVersions(repo.path, number);
+      const version = versions[0];
+      if (!version) {
+        return yield* Effect.fail(
+          new GitLabProviderMissingDiffVersion({
+            message: 'GitLab merge request has no diff versions',
+            number,
+            cause: { repo: repo.path, number },
+          }),
+        );
+      }
+
+      yield* api.createDiscussion(
+        repo.path,
+        number,
+        buildDraftLineForm(version, {
+          body: input.body,
+          path: input.path,
+          oldPath: input.oldPath,
+          newPath: input.newPath,
+          line: input.line,
+          side: input.side,
+          subjectType: input.subjectType,
+        }).map(([key, value]) => [key.replace(/^note$/, 'body'), value]),
       );
-    }
+    },
+  );
 
-    yield* api.createDiscussion(
-      repo.path,
-      number,
-      buildDraftLineForm(version, {
-        body: input.body,
-        path: input.path,
-        oldPath: input.oldPath,
-        newPath: input.newPath,
-        line: input.line,
-        side: input.side,
-        subjectType: input.subjectType,
-      }).map(([key, value]) => [key.replace(/^note$/, 'body'), value]),
-    );
-  });
-
-  const ensurePendingReview: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['ensurePendingReview'] = providerEffect(
+  const ensurePendingReview: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['ensurePendingReview'] = providerEffect(
     'GitLabProvider.ensurePendingReview',
     'ensurePendingReview',
     function* () {
-    return { providerReviewId: null };
-  });
+      return yield* Effect.succeed({ providerReviewId: null });
+    },
+  );
 
-  const createPendingReviewThread: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['createPendingReviewThread'] =
-    providerEffect('GitLabProvider.createPendingReviewThread', 'createPendingReviewThread', function* (repo: ProviderRepoIdentity, number: number, _session: unknown, input: ReviewThreadInput) {
+  const createPendingReviewThread: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['createPendingReviewThread'] = providerEffect(
+    'GitLabProvider.createPendingReviewThread',
+    'createPendingReviewThread',
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      _session: unknown,
+      input: ReviewThreadInput,
+    ) {
       const api = yield* GitLabApiClient;
       if (input.subjectType === 'global') {
         return yield* Effect.fail(
@@ -1123,10 +1226,22 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
       };
-    });
+    },
+  );
 
-  const createPendingReviewReply: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['createPendingReviewReply'] =
-    providerEffect('GitLabProvider.createPendingReviewReply', 'createPendingReviewReply', function* (repo: ProviderRepoIdentity, number: number, _session: unknown, threadId: string, body: string) {
+  const createPendingReviewReply: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['createPendingReviewReply'] = providerEffect(
+    'GitLabProvider.createPendingReviewReply',
+    'createPendingReviewReply',
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      _session: unknown,
+      threadId: string,
+      body: string,
+    ) {
       const api = yield* GitLabApiClient;
       const draftNote = yield* api.createDraftNote(repo.path, number, [
         ['note', body],
@@ -1136,98 +1251,160 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? threadId,
       };
-    });
+    },
+  );
 
-  const createPendingGlobalComment: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['createPendingGlobalComment'] =
-    providerEffect('GitLabProvider.createPendingGlobalComment', 'createPendingGlobalComment', function* (repo: ProviderRepoIdentity, number: number, _session: unknown, body: string) {
+  const createPendingGlobalComment: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['createPendingGlobalComment'] = providerEffect(
+    'GitLabProvider.createPendingGlobalComment',
+    'createPendingGlobalComment',
+    function* (repo: ProviderRepoIdentity, number: number, _session: unknown, body: string) {
       const api = yield* GitLabApiClient;
       const draftNote = yield* api.createDraftNote(repo.path, number, [['note', body]]);
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
       };
-    });
+    },
+  );
 
-  const updatePendingReviewComment: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['updatePendingReviewComment'] =
-    providerEffect('GitLabProvider.updatePendingReviewComment', 'updatePendingReviewComment', function* (repo: ProviderRepoIdentity, number: number, providerCommentId: string, body: string) {
+  const updatePendingReviewComment: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['updatePendingReviewComment'] = providerEffect(
+    'GitLabProvider.updatePendingReviewComment',
+    'updatePendingReviewComment',
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      providerCommentId: string,
+      body: string,
+    ) {
       const api = yield* GitLabApiClient;
       const draftNote = yield* api.updateDraftNote(repo.path, number, providerCommentId, body);
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
       };
-    });
+    },
+  );
 
-  const deletePendingReviewComment: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['deletePendingReviewComment'] =
-    providerEffect('GitLabProvider.deletePendingReviewComment', 'deletePendingReviewComment', function* (repo: ProviderRepoIdentity, number: number, providerCommentId: string) {
+  const deletePendingReviewComment: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['deletePendingReviewComment'] = providerEffect(
+    'GitLabProvider.deletePendingReviewComment',
+    'deletePendingReviewComment',
+    function* (repo: ProviderRepoIdentity, number: number, providerCommentId: string) {
       const api = yield* GitLabApiClient;
       yield* api.deleteDraftNote(repo.path, number, providerCommentId);
-    });
+    },
+  );
 
-  const publishPendingReview: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['publishPendingReview'] = providerEffect(
+  const publishPendingReview: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['publishPendingReview'] = providerEffect(
     'GitLabProvider.publishPendingReview',
     'publishPendingReview',
-    function* (repo: ProviderRepoIdentity, number: number, _session: unknown, input: { action?: 'approve' | 'request_changes' | 'comment'; summary?: string | null }) {
-    const api = yield* GitLabApiClient;
-    const summary = input.summary ?? '';
-    const reviewSummary =
-      input.action === 'request_changes'
-        ? summary
-          ? `${summary}\n\n/submit_review requested_changes`
-          : '/submit_review requested_changes'
-        : summary;
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      _session: unknown,
+      input: { action?: 'approve' | 'request_changes' | 'comment'; summary?: string | null },
+    ) {
+      const api = yield* GitLabApiClient;
+      const summary = input.summary ?? '';
+      const reviewSummary =
+        input.action === 'request_changes'
+          ? summary
+            ? `${summary}\n\n/submit_review requested_changes`
+            : '/submit_review requested_changes'
+          : summary;
 
-    if (reviewSummary) {
-      yield* api.createDraftNote(repo.path, number, [['note', reviewSummary]]);
-    }
+      if (reviewSummary) {
+        yield* api.createDraftNote(repo.path, number, [['note', reviewSummary]]);
+      }
 
-    yield* api.bulkPublishDraftNotes(repo.path, number).pipe(
-      Effect.catchAll(() =>
-        Effect.gen(function* () {
-          const draftNotes = yield* api.draftNotes(repo.path, number);
-          if (draftNotes.length === 0) return;
-          yield* Effect.forEach(draftNotes, (draftNote) =>
-            api.publishDraftNote(repo.path, number, draftNote.id),
-          );
-        }),
-      ),
-    );
+      yield* api.bulkPublishDraftNotes(repo.path, number).pipe(
+        Effect.catchAll(() =>
+          Effect.gen(function* () {
+            const draftNotes = yield* api.draftNotes(repo.path, number);
+            if (draftNotes.length === 0) return;
+            yield* Effect.forEach(draftNotes, (draftNote) =>
+              api.publishDraftNote(repo.path, number, draftNote.id),
+            );
+          }),
+        ),
+      );
 
-    if (input.action === 'approve') {
-      const pullRequest = yield* getPullRequest(repo, number);
-      yield* api.approveMergeRequest(repo.path, number, pullRequest.headSha);
-    }
-  });
+      if (input.action === 'approve') {
+        const pullRequest = yield* getPullRequest(repo, number);
+        yield* api.approveMergeRequest(repo.path, number, pullRequest.headSha);
+      }
+    },
+  );
 
-  const discardPendingReview: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['discardPendingReview'] = providerEffect(
+  const discardPendingReview: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['discardPendingReview'] = providerEffect(
     'GitLabProvider.discardPendingReview',
     'discardPendingReview',
-    function* (repo: ProviderRepoIdentity, number: number, _session: unknown, comments: PendingReviewComment[]) {
-    yield* Effect.forEach(
-      comments.filter((comment) => comment.providerCommentId != null),
-      (comment) => deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
-      { discard: true },
-    );
-  });
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      _session: unknown,
+      comments: PendingReviewComment[],
+    ) {
+      yield* Effect.forEach(
+        comments.filter((comment) => comment.providerCommentId != null),
+        (comment) => deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
+        { discard: true },
+      );
+    },
+  );
 
-  const replyToReviewThread: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['replyToReviewThread'] = providerEffect(
+  const replyToReviewThread: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['replyToReviewThread'] = providerEffect(
     'GitLabProvider.replyToReviewThread',
     'replyToReviewThread',
     function* (repo: ProviderRepoIdentity, number: number, threadId: string, body: string) {
-    const api = yield* GitLabApiClient;
-    yield* api.createDiscussionNote(repo.path, number, threadId, body);
-  });
+      const api = yield* GitLabApiClient;
+      yield* api.createDiscussionNote(repo.path, number, threadId, body);
+    },
+  );
 
-  const setReviewThreadResolved: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['setReviewThreadResolved'] =
-    providerEffect('GitLabProvider.setReviewThreadResolved', 'setReviewThreadResolved', function* (repo: ProviderRepoIdentity, number: number, threadId: string, isResolved: boolean) {
+  const setReviewThreadResolved: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['setReviewThreadResolved'] = providerEffect(
+    'GitLabProvider.setReviewThreadResolved',
+    'setReviewThreadResolved',
+    function* (repo: ProviderRepoIdentity, number: number, threadId: string, isResolved: boolean) {
       const api = yield* GitLabApiClient;
       yield* api.updateDiscussion(repo.path, number, threadId, isResolved);
-    });
+    },
+  );
 
-  const updateReviewComment: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['updateReviewComment'] = providerEffect(
+  const updateReviewComment: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['updateReviewComment'] = providerEffect(
     'GitLabProvider.updateReviewComment',
     'updateReviewComment',
-    function* (repo: ProviderRepoIdentity, number: number, threadId: string, commentId: string, body: string, subjectType: ReviewThreadInput['subjectType']) {
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      threadId: string,
+      commentId: string,
+      body: string,
+      subjectType: ReviewThreadInput['subjectType'],
+    ) {
       const api = yield* GitLabApiClient;
       if (subjectType === 'global') {
         yield* api.updateMergeRequestNote(repo.path, number, commentId, body);
@@ -1235,12 +1412,22 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       }
 
       yield* api.updateDiscussionNote(repo.path, number, threadId, commentId, body);
-    });
+    },
+  );
 
-  const deleteReviewComment: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['deleteReviewComment'] = providerEffect(
+  const deleteReviewComment: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['deleteReviewComment'] = providerEffect(
     'GitLabProvider.deleteReviewComment',
     'deleteReviewComment',
-    function* (repo: ProviderRepoIdentity, number: number, threadId: string, commentId: string, subjectType: ReviewThreadInput['subjectType']) {
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      threadId: string,
+      commentId: string,
+      subjectType: ReviewThreadInput['subjectType'],
+    ) {
       const api = yield* GitLabApiClient;
       if (subjectType === 'global') {
         yield* api.deleteMergeRequestNote(repo.path, number, commentId);
@@ -1248,7 +1435,8 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       }
 
       yield* api.deleteDiscussionNote(repo.path, number, threadId, commentId);
-    });
+    },
+  );
 
   return {
     authStatus,

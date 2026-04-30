@@ -253,7 +253,7 @@ const publishPendingReviewInputSchema = pullRequestVersionedInputSchema.extend({
 const discardPendingReviewInputSchema = pullRequestVersionedInputSchema;
 
 const pendingReviewSessionSchema = pullRequestInputSchema.extend({
-  id: z.number().int().positive(),
+  id: z.number().int().nonnegative(),
   headSha: z.string(),
   providerReviewId: z.string().nullable(),
   createdAt: z.number().int().nonnegative(),
@@ -261,13 +261,14 @@ const pendingReviewSessionSchema = pullRequestInputSchema.extend({
 });
 
 const pendingReviewCommentSchema = pullRequestInputSchema.extend({
-  id: z.number().int().positive(),
-  sessionId: z.number().int().positive(),
+  id: z.string().min(1),
+  sessionId: z.number().int().nonnegative(),
   headSha: z.string(),
   kind: pendingReviewCommentKindSchema,
   providerCommentId: z.string().nullable(),
   providerThreadId: z.string().nullable(),
   replyToThreadId: z.string().nullable(),
+  replyToCommentId: z.number().int().nonnegative().nullable(),
   body: z.string(),
   path: z.string(),
   oldPath: z.string(),

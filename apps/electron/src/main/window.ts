@@ -84,19 +84,19 @@ function syncAllWindowAppearance(): void {
 nativeTheme.on('updated', syncAllWindowAppearance);
 
 function forwardRendererConsole(window: BrowserWindow): void {
-  window.webContents.on('console-message', (details) => {
+  window.webContents.on('console-message', (_event, level, message, lineNumber, sourceId) => {
     const logDetails = {
-      level: details.level,
-      message: details.message,
-      sourceId: details.sourceId || null,
-      lineNumber: details.lineNumber,
+      level,
+      message,
+      sourceId: sourceId || null,
+      lineNumber,
     };
     const logEffect =
-      details.level >= 3
-        ? Effect.logError('[renderer] console message', logDetails)
-        : details.level === 2
-          ? Effect.logWarning('[renderer] console message', logDetails)
-          : Effect.logInfo('[renderer] console message', logDetails);
+      level >= 3
+        ? Effect.logError('[renderer] console message').pipe(Effect.annotateLogs(logDetails))
+        : level === 2
+          ? Effect.logWarning('[renderer] console message').pipe(Effect.annotateLogs(logDetails))
+          : Effect.logInfo('[renderer] console message').pipe(Effect.annotateLogs(logDetails));
     void Effect.runFork(logEffect);
   });
 }

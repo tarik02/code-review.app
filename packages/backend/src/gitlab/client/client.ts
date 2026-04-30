@@ -43,7 +43,7 @@ import {
   GitLabProjectSchema,
   GitLabUserSchema,
 } from './schemas.ts';
-import { gitlabProjectPath, gitlabRoute } from './routes.ts';
+import { gitlabRoute } from './routes.ts';
 
 type GitLabClientEffect<Success> = Effect.Effect<Success, GitLabClientError>;
 
@@ -56,9 +56,9 @@ type GitLabApiClientShape = {
     perPage?: number;
     search?: string;
   }): GitLabClientEffect<ReadonlyArray<GitLabProject>>;
-  overviewMergeRequests(scope: 'reviews_for_me' | 'assigned_to_me' | 'created_by_me'): GitLabClientEffect<
-    ReadonlyArray<GitLabMergeRequest>
-  >;
+  overviewMergeRequests(
+    scope: 'reviews_for_me' | 'assigned_to_me' | 'created_by_me',
+  ): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
   project(project: string | number): GitLabClientEffect<GitLabProject>;
   projectMergeRequests(input: {
     project: string;
@@ -68,9 +68,10 @@ type GitLabApiClientShape = {
     perPage?: number;
   }): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
   mergeRequest(project: string, number: number): GitLabClientEffect<GitLabMergeRequest>;
-  mergeRequestApprovals(project: string, number: number): GitLabClientEffect<
-    typeof GitLabMergeRequestApprovalsSchema.Type
-  >;
+  mergeRequestApprovals(
+    project: string,
+    number: number,
+  ): GitLabClientEffect<typeof GitLabMergeRequestApprovalsSchema.Type>;
   approveMergeRequest(project: string, number: number, sha: string): GitLabClientEffect<void>;
   unapproveMergeRequest(project: string, number: number): GitLabClientEffect<void>;
   mergeRequestDiffs(input: {
@@ -80,15 +81,22 @@ type GitLabApiClientShape = {
     page?: number;
   }): GitLabClientEffect<ReadonlyArray<GitLabDiff>>;
   mergeRequestRawDiffs(project: string, number: number): GitLabClientEffect<string>;
-  mergeRequestVersions(project: string, number: number): GitLabClientEffect<ReadonlyArray<GitLabMrVersion>>;
+  mergeRequestVersions(
+    project: string,
+    number: number,
+  ): GitLabClientEffect<ReadonlyArray<GitLabMrVersion>>;
   repositoryFileRaw(input: {
     project: string;
     path: string;
     ref: string;
   }): GitLabClientEffect<string>;
-  codeQualityReportsComparer(fullPath: string, iid: string): GitLabClientEffect<
-    { readonly data?: typeof GitLabCodeQualityGraphqlQueryDataSchema.Type | null; readonly errors?: readonly { readonly message: string }[] | null }
-  >;
+  codeQualityReportsComparer(
+    fullPath: string,
+    iid: string,
+  ): GitLabClientEffect<{
+    readonly data?: typeof GitLabCodeQualityGraphqlQueryDataSchema.Type | null;
+    readonly errors?: readonly { readonly message: string }[] | null;
+  }>;
   mergeRequestDiscussions(input: {
     project: string;
     number: number;
@@ -104,9 +112,21 @@ type GitLabApiClientShape = {
     page?: number;
   }): GitLabClientEffect<ReadonlyArray<GitLabNote>>;
   draftNotes(project: string, number: number): GitLabClientEffect<ReadonlyArray<GitLabDraftNote>>;
-  createMergeRequestNote(project: string, number: number, body: string): GitLabClientEffect<GitLabNote>;
-  createDiscussion(project: string, number: number, formData: Array<[string, string]>): GitLabClientEffect<unknown>;
-  createDraftNote(project: string, number: number, formData: Array<[string, string]>): GitLabClientEffect<GitLabDraftNote>;
+  createMergeRequestNote(
+    project: string,
+    number: number,
+    body: string,
+  ): GitLabClientEffect<GitLabNote>;
+  createDiscussion(
+    project: string,
+    number: number,
+    formData: Array<[string, string]>,
+  ): GitLabClientEffect<unknown>;
+  createDraftNote(
+    project: string,
+    number: number,
+    formData: Array<[string, string]>,
+  ): GitLabClientEffect<GitLabDraftNote>;
   updateDraftNote(
     project: string,
     number: number,
@@ -122,7 +142,12 @@ type GitLabApiClientShape = {
     threadId: string,
     body: string,
   ): GitLabClientEffect<void>;
-  updateDiscussion(project: string, number: number, threadId: string, resolved: boolean): GitLabClientEffect<void>;
+  updateDiscussion(
+    project: string,
+    number: number,
+    threadId: string,
+    resolved: boolean,
+  ): GitLabClientEffect<void>;
   updateDiscussionNote(
     project: string,
     number: number,
@@ -142,11 +167,18 @@ type GitLabApiClientShape = {
     commentId: string,
     body: string,
   ): GitLabClientEffect<void>;
-  deleteMergeRequestNote(project: string, number: number, commentId: string): GitLabClientEffect<void>;
+  deleteMergeRequestNote(
+    project: string,
+    number: number,
+    commentId: string,
+  ): GitLabClientEffect<void>;
   accessToken(): GitLabClientEffect<string>;
 };
 
-class GitLabApiClient extends Effect.Tag('GitLabApiClient')<GitLabApiClient, GitLabApiClientShape>() {}
+class GitLabApiClient extends Effect.Tag('GitLabApiClient')<
+  GitLabApiClient,
+  GitLabApiClientShape
+>() {}
 
 const API_REQUEST_TIMEOUT = '30 seconds';
 
@@ -331,7 +363,9 @@ const makeGitLabApiClient = (accountId: string) =>
           Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
         );
 
-    const decodeTextBody = (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitLabClientError>) =>
+    const decodeTextBody = (
+      response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitLabClientError>,
+    ) =>
       response.pipe(
         Effect.flatMap((httpResponse) => httpResponse.text),
         Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
@@ -354,10 +388,7 @@ const makeGitLabApiClient = (accountId: string) =>
     const decodeGraphqlBody =
       <A, I>(schema: Schema.Schema<A, I, never>) =>
       (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitLabClientError>) =>
-        response.pipe(
-          decodeJsonBody(graphQlResponseSchema(schema)),
-          Effect.tap(graphqlErrors),
-        );
+        response.pipe(decodeJsonBody(graphQlResponseSchema(schema)), Effect.tap(graphqlErrors));
 
     const user: GitLabApiClientShape['user'] = Effect.fn('GitLabApiClient.user')(function* () {
       const token = yield* requireStoredToken();
@@ -421,21 +452,23 @@ const makeGitLabApiClient = (accountId: string) =>
       );
     });
 
-    const project: GitLabApiClientShape['project'] = Effect.fn('GitLabApiClient.project')(function* (project) {
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.get(
-        gitlabRoute('projects/:project', {
-          params: { project },
-        }),
-      ).pipe(
-        setDefaultHeaders,
-        prefixApiHost(token.host),
-        auth,
-        send,
-        decodeJsonBody(GitLabProjectSchema),
-      );
-    });
+    const project: GitLabApiClientShape['project'] = Effect.fn('GitLabApiClient.project')(
+      function* (project) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.get(
+          gitlabRoute('projects/:project', {
+            params: { project },
+          }),
+        ).pipe(
+          setDefaultHeaders,
+          prefixApiHost(token.host),
+          auth,
+          send,
+          decodeJsonBody(GitLabProjectSchema),
+        );
+      },
+    );
 
     const projectMergeRequests: GitLabApiClientShape['projectMergeRequests'] = Effect.fn(
       'GitLabApiClient.projectMergeRequests',
@@ -607,17 +640,16 @@ const makeGitLabApiClient = (accountId: string) =>
       );
     });
 
-    const codeQualityReportsComparer: GitLabApiClientShape['codeQualityReportsComparer'] = Effect.fn(
-      'GitLabApiClient.codeQualityReportsComparer',
-    )(function* (fullPath, iid) {
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.post('graphql').pipe(
-        setDefaultHeaders,
-        prefixGraphqlHost(token.host),
-        auth,
-        jsonRequestBody({
-          query: `
+    const codeQualityReportsComparer: GitLabApiClientShape['codeQualityReportsComparer'] =
+      Effect.fn('GitLabApiClient.codeQualityReportsComparer')(function* (fullPath, iid) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.post('graphql').pipe(
+          setDefaultHeaders,
+          prefixGraphqlHost(token.host),
+          auth,
+          jsonRequestBody({
+            query: `
 query($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) {
     mergeRequest(iid: $iid) {
@@ -663,12 +695,12 @@ query($fullPath: ID!, $iid: String!) {
   }
 }
 `,
-          variables: { fullPath, iid },
-        }),
-        send,
-        decodeGraphqlBody(GitLabCodeQualityGraphqlQueryDataSchema),
-      );
-    });
+            variables: { fullPath, iid },
+          }),
+          send,
+          decodeGraphqlBody(GitLabCodeQualityGraphqlQueryDataSchema),
+        );
+      });
 
     const mergeRequestDiscussions: GitLabApiClientShape['mergeRequestDiscussions'] = Effect.fn(
       'GitLabApiClient.mergeRequestDiscussions',
@@ -713,23 +745,23 @@ query($fullPath: ID!, $iid: String!) {
       );
     });
 
-    const draftNotes: GitLabApiClientShape['draftNotes'] = Effect.fn(
-      'GitLabApiClient.draftNotes',
-    )(function* (project, number) {
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.get(
-        gitlabRoute('projects/:project/merge_requests/:number/draft_notes', {
-          params: { project, number },
-        }),
-      ).pipe(
-        setDefaultHeaders,
-        prefixApiHost(token.host),
-        auth,
-        send,
-        decodeJsonBody(Schema.Array(GitLabDraftNoteSchema)),
-      );
-    });
+    const draftNotes: GitLabApiClientShape['draftNotes'] = Effect.fn('GitLabApiClient.draftNotes')(
+      function* (project, number) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.get(
+          gitlabRoute('projects/:project/merge_requests/:number/draft_notes', {
+            params: { project, number },
+          }),
+        ).pipe(
+          setDefaultHeaders,
+          prefixApiHost(token.host),
+          auth,
+          send,
+          decodeJsonBody(Schema.Array(GitLabDraftNoteSchema)),
+        );
+      },
+    );
 
     const createMergeRequestNote: GitLabApiClientShape['createMergeRequestNote'] = Effect.fn(
       'GitLabApiClient.createMergeRequestNote',

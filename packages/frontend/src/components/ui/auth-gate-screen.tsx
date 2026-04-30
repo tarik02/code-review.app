@@ -2,7 +2,7 @@ import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { appearanceBackgroundQueryOptions } from '../../queries/forge';
-import { isDefaultProviderHost, normalizeHostInput } from '../../lib/forge-links';
+import { hasDefaultClientId, normalizeHostInput } from '../../lib/forge-links';
 import type {
   ForgeProviderKind,
   ProviderAccount,
@@ -47,7 +47,7 @@ function AuthGateScreen({
 
   const normalizedHost = normalizeHostInput(host || defaultHost);
   const canStartSignIn =
-    (clientId.trim().length > 0 || isDefaultProviderHost(provider, normalizedHost)) &&
+    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) &&
     !isChecking &&
     !isSigningIn;
   const title = isChecking ? (

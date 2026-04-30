@@ -64,16 +64,9 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
   authStatus(): Effect.Effect<ProviderAuthStatus, Error, Dependencies>;
   viewerLogin(): Effect.Effect<string, Error, Dependencies>;
   listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
-  searchRepos(
-    query: string,
-    limit: number,
-  ): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  searchRepos(query: string, limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
   validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
-  listOverviewPullRequests(): Effect.Effect<
-    OverviewPullRequestSummary[],
-    Error,
-    Dependencies
-  >;
+  listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   listPullRequests(
     repo: ProviderRepoIdentity,
   ): Effect.Effect<PullRequestSummary[], Error, Dependencies>;
@@ -111,14 +104,10 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
     path: string,
     ref: string,
   ): Effect.Effect<string, Error, Dependencies>;
-  getPullRequestQualityReport(input: PullRequestQualityReportInput): Effect.Effect<
-    PullRequestQualityReport,
-    Error,
-    Dependencies
-  >;
-  gitRemote(
-    repo: ProviderRepoIdentity,
-  ): Effect.Effect<GitRemoteSpec, Error, Dependencies>;
+  getPullRequestQualityReport(
+    input: PullRequestQualityReportInput,
+  ): Effect.Effect<PullRequestQualityReport, Error, Dependencies>;
+  gitRemote(repo: ProviderRepoIdentity): Effect.Effect<GitRemoteSpec, Error, Dependencies>;
   listReviewThreads(
     repo: ProviderRepoIdentity,
     number: number,
@@ -214,7 +203,9 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
 };
 
 type RemoveProviderDependencies<T> = {
-  [K in keyof T]: T[K] extends (...args: infer A) => Effect.Effect<infer Success, infer Error, infer _Dependencies>
+  [K in keyof T]: T[K] extends (
+    ...args: infer A
+  ) => Effect.Effect<infer Success, infer Error, infer _Dependencies>
     ? (...args: A) => Effect.Effect<Success, Error>
     : T[K];
 };

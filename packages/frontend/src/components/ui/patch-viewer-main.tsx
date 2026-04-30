@@ -908,7 +908,9 @@ function compareThreadLineAnnotations(
     return lineDifference;
   }
 
-  return getReviewThreadCreatedAt(left.metadata.thread) - getReviewThreadCreatedAt(right.metadata.thread);
+  return (
+    getReviewThreadCreatedAt(left.metadata.thread) - getReviewThreadCreatedAt(right.metadata.thread)
+  );
 }
 
 function getPendingCommentId(comment: ReviewComment) {
@@ -1402,24 +1404,23 @@ function PatchFileDiffItem({
   const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
   const [fileCommentsPortalHost, setFileCommentsPortalHost] = useState<HTMLDivElement | null>(null);
   const fileCommentsPortalHostRef = useRef<HTMLDivElement | null>(null);
-  const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
-    [
-      ...fileReviewThreads.activeLineAnnotations.map((annotation) => ({
-        ...annotation,
-        metadata: {
-          ...annotation.metadata,
-          portalRootId: lineDraftPortalRootId,
-        },
-      })),
-      ...fileReviewThreads.inactiveLineAnnotations.map((annotation) => ({
-        ...annotation,
-        metadata: {
-          ...annotation.metadata,
-          defaultCollapsed: true,
-          portalRootId: lineDraftPortalRootId,
-        },
-      })),
-    ].sort(compareThreadLineAnnotations);
+  const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] = [
+    ...fileReviewThreads.activeLineAnnotations.map((annotation) => ({
+      ...annotation,
+      metadata: {
+        ...annotation.metadata,
+        portalRootId: lineDraftPortalRootId,
+      },
+    })),
+    ...fileReviewThreads.inactiveLineAnnotations.map((annotation) => ({
+      ...annotation,
+      metadata: {
+        ...annotation.metadata,
+        defaultCollapsed: true,
+        portalRootId: lineDraftPortalRootId,
+      },
+    })),
+  ].sort(compareThreadLineAnnotations);
   const lineQualityAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
     fileQualityFindings.inlineAnnotations.map((annotation) => ({
       ...annotation,
@@ -2085,7 +2086,7 @@ function PatchViewerMain({
   const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
   const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(() => new Set());
   const resolvingThreadId = setResolvedMutation.isPending
-    ? setResolvedMutation.variables?.threadId ?? null
+    ? (setResolvedMutation.variables?.threadId ?? null)
     : null;
   const selectedProvider = selectedPatch
     ? providerFromProviderId(selectedPatch.providerId)

@@ -340,9 +340,7 @@ const makeSettingsService = Effect.gen(function* () {
         throw new Error('Background image must be a PNG, JPG, GIF, WebP, or AVIF file.');
       }
 
-      const sourceStats = yield* fileSystem
-        .stat(filePath)
-        .pipe(Effect.mapError(ensureError));
+      const sourceStats = yield* fileSystem.stat(filePath).pipe(Effect.mapError(ensureError));
       if (sourceStats.type !== 'File') {
         throw new Error('Background image must be a file.');
       }

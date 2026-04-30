@@ -21,7 +21,7 @@ import {
   setAccountVisibility,
   setDiffDataMode,
 } from '../queries/forge';
-import { isDefaultProviderHost, normalizeHostInput } from '../lib/forge-links';
+import { hasDefaultClientId, normalizeHostInput } from '../lib/forge-links';
 import type { DiffDataMode, ForgeProviderKind, ProviderAccount } from '../types/forge';
 
 function providerName(account: ProviderAccount) {
@@ -105,7 +105,7 @@ function ProfilesRoute() {
   });
   const normalizedHost = normalizeHostInput(host || defaultHost);
   const canStartSignIn =
-    (clientId.trim().length > 0 || isDefaultProviderHost(provider, normalizedHost)) && !isSigningIn;
+    (clientId.trim().length > 0 || hasDefaultClientId(provider, normalizedHost)) && !isSigningIn;
 
   function toggleAccountVisibility(accountId: string) {
     const nextEnabled = new Set(enabledAccountIds);

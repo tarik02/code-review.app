@@ -21,10 +21,13 @@ type AccountScopedForgeProvider = ForgeProviderContract;
 
 type ForgeProviderRegistryShape = {
   forAccount(accountId: string): Effect.Effect<AccountScopedForgeProvider, ProviderError>;
-  forRepo(repo: { providerId: string; repoKey: string }): Effect.Effect<{
-    provider: AccountScopedForgeProvider;
-    repo: ReturnType<typeof createProviderRepoIdentityFromParts>;
-  }, ProviderError>;
+  forRepo(repo: { providerId: string; repoKey: string }): Effect.Effect<
+    {
+      provider: AccountScopedForgeProvider;
+      repo: ReturnType<typeof createProviderRepoIdentityFromParts>;
+    },
+    ProviderError
+  >;
 };
 
 class ForgeProviderRegistry extends Effect.Tag('ForgeProviderRegistry')<
@@ -58,7 +61,12 @@ const makeForgeProviderRegistry = Effect.gen(function* () {
     'ForgeProviderRegistry.forAccount',
   )(function* (accountId) {
     const account = yield* tokenStore.get(accountId).pipe(
-      Effect.mapError((error) => new ProviderError(error instanceof Error ? error.message : String(error), { cause: error })),
+      Effect.mapError(
+        (error) =>
+          new ProviderError(error instanceof Error ? error.message : String(error), {
+            cause: error,
+          }),
+      ),
     );
     if (!account) {
       return yield* Effect.fail(new ProviderError('Provider account is not signed in.'));
@@ -88,15 +96,15 @@ const makeForgeProviderRegistry = Effect.gen(function* () {
     return provider;
   });
 
-  const forRepo: ForgeProviderRegistryShape['forRepo'] = Effect.fn(
-    'ForgeProviderRegistry.forRepo',
-  )(function* (repo) {
-    const providerInfo = parseProviderId(repo.providerId);
-    return {
-      provider: yield* forAccount(providerInfo.accountId),
-      repo: createProviderRepoIdentityFromParts(repo.providerId, repo.repoKey),
-    };
-  });
+  const forRepo: ForgeProviderRegistryShape['forRepo'] = Effect.fn('ForgeProviderRegistry.forRepo')(
+    function* (repo) {
+      const providerInfo = parseProviderId(repo.providerId);
+      return {
+        provider: yield* forAccount(providerInfo.accountId),
+        repo: createProviderRepoIdentityFromParts(repo.providerId, repo.repoKey),
+      };
+    },
+  );
 
   return {
     forAccount,
@@ -104,10 +112,7 @@ const makeForgeProviderRegistry = Effect.gen(function* () {
   } satisfies ForgeProviderRegistryShape;
 });
 
-const ForgeProviderRegistryLive = Layer.effect(
-  ForgeProviderRegistry,
-  makeForgeProviderRegistry,
-);
+const ForgeProviderRegistryLive = Layer.effect(ForgeProviderRegistry, makeForgeProviderRegistry);
 
 export { ForgeProviderRegistry, ForgeProviderRegistryLive };
 export type { AccountScopedForgeProvider, ForgeProviderRegistryShape };

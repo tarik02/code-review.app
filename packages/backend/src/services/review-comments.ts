@@ -32,7 +32,11 @@ type ReviewCommentServiceShape = {
   ): Effect.Effect<PullRequestApprovalState, Error>;
   approve(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<void, Error>;
   removeApproval(repo: RepoIdentity, number: number): Effect.Effect<void, Error>;
-  listThreads(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<ReviewThread[], Error>;
+  listThreads(
+    repo: RepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<ReviewThread[], Error>;
   listPending(
     repo: RepoIdentity,
     number: number,
@@ -172,9 +176,11 @@ const makeReviewCommentService = Effect.gen(function* () {
   }
 
   function getPendingState(repoInput: RepoIdentity, number: number, headSha: string) {
-    return providers.forRepo(repoInput).pipe(
-      Effect.flatMap(({ provider, repo }) => provider.listPendingReview(repo, number, headSha)),
-    );
+    return providers
+      .forRepo(repoInput)
+      .pipe(
+        Effect.flatMap(({ provider, repo }) => provider.listPendingReview(repo, number, headSha)),
+      );
   }
 
   function ensurePendingSession(

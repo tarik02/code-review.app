@@ -6,9 +6,7 @@ function normalizeHostInput(host: string) {
     return '';
   }
 
-  const url = new URL(
-    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
-  );
+  const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
   return url.origin.toLowerCase();
 }
 
@@ -23,6 +21,10 @@ function isDefaultProviderHost(provider: ForgeProviderKind, host: string) {
     (provider === 'github' && hostname === 'github.com') ||
     (provider === 'gitlab' && hostname === 'gitlab.com')
   );
+}
+
+function hasDefaultClientId(provider: ForgeProviderKind, host: string) {
+  return isDefaultProviderHost(provider, host);
 }
 
 type ParsedForgeResourceUrl = {
@@ -76,7 +78,10 @@ function parseForgeResourceUrl(
     }
   }
 
-  if ((providerHint === 'gitlab' || hostNameFromInput(host).includes('gitlab')) && segments.length >= 1) {
+  if (
+    (providerHint === 'gitlab' || hostNameFromInput(host).includes('gitlab')) &&
+    segments.length >= 1
+  ) {
     return {
       provider: 'gitlab',
       host,
@@ -109,5 +114,12 @@ function parseAppOpenUrl(value: string) {
   }
 }
 
-export { hostNameFromInput, isDefaultProviderHost, normalizeHostInput, parseAppOpenUrl, parseForgeResourceUrl };
+export {
+  hasDefaultClientId,
+  hostNameFromInput,
+  isDefaultProviderHost,
+  normalizeHostInput,
+  parseAppOpenUrl,
+  parseForgeResourceUrl,
+};
 export type { ParsedForgeResourceUrl };

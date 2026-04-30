@@ -1,16 +1,16 @@
 import type { Effect } from 'effect';
 import type { PrChangedFile, PrFileChangeType, PrFileContents } from '@code-review-app/shared';
-import type { RepoIdentity } from '../../repo-id.ts';
+import type { ProviderRepoIdentity } from '../../repo-id.ts';
 
 type DiffBackendInput = {
-  repo: RepoIdentity;
+  repo: ProviderRepoIdentity;
   number: number;
   headSha: string;
   baseSha: string | null;
 };
 
 type DiffBackendFileContentsInput = {
-  repo: RepoIdentity;
+  repo: ProviderRepoIdentity;
   number: number;
   oldPath: string;
   newPath: string;

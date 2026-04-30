@@ -1,14 +1,11 @@
 import type { ProviderRepoIdentity } from '../../repo-id.ts';
 import { createBuildRoute } from '../../providers/route.ts';
 
-type GitLabOverviewMergeRequestScope =
-  | 'reviews_for_me'
-  | 'assigned_to_me'
-  | 'created_by_me';
+type GitLabOverviewMergeRequestScope = 'reviews_for_me' | 'assigned_to_me' | 'created_by_me';
 
 type GitlabRoutes = {
-  'user': {};
-  'projects': {
+  user: {};
+  projects: {
     query: {
       membership?: boolean;
       simple?: boolean;
@@ -16,7 +13,7 @@ type GitlabRoutes = {
       search?: string;
     };
   };
-  'merge_requests': {
+  merge_requests: {
     query: {
       scope: GitLabOverviewMergeRequestScope;
       state: 'opened';

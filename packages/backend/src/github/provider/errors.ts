@@ -27,13 +27,17 @@ class GitHubProviderViewerLoginUnavailable extends Data.TaggedError(
   cause: unknown;
 }> {}
 
-class GitHubProviderPullRequestNotFound extends Data.TaggedError('GitHubProviderPullRequestNotFound')<{
+class GitHubProviderPullRequestNotFound extends Data.TaggedError(
+  'GitHubProviderPullRequestNotFound',
+)<{
   message: string;
   number: number;
   cause: unknown;
 }> {}
 
-class GitHubProviderNoApprovalToRemove extends Data.TaggedError('GitHubProviderNoApprovalToRemove')<{
+class GitHubProviderNoApprovalToRemove extends Data.TaggedError(
+  'GitHubProviderNoApprovalToRemove',
+)<{
   message: string;
   number: number;
   viewerLogin: string;

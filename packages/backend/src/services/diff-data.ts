@@ -78,12 +78,14 @@ const makeDiffDataService = Effect.gen(function* () {
       const req = createRequest(repoInput, headSha);
       const mode = (yield* settings.getDiffDataSettings()).mode;
       const repo = createProviderRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
-      yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get patch`, {
-        mode,
-        repo: repoIdentityCacheKey(repo),
-        number,
-        headSha: req.headSha,
-      });
+      yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get patch`).pipe(
+        Effect.annotateLogs({
+          mode,
+          repo: repoIdentityCacheKey(repo),
+          number,
+          headSha: req.headSha,
+        }),
+      );
 
       if (mode === 'provider-api') {
         const cached = yield* cache.getCachedPatch(req.repo, number, req.headSha);
@@ -141,12 +143,14 @@ const makeDiffDataService = Effect.gen(function* () {
     const req = createRequest(repoInput, headSha);
     const mode = (yield* settings.getDiffDataSettings()).mode;
     const repo = createProviderRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
-    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get changed files`, {
-      mode,
-      repo: repoIdentityCacheKey(repo),
-      number,
-      headSha: req.headSha,
-    });
+    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get changed files`).pipe(
+      Effect.annotateLogs({
+        mode,
+        repo: repoIdentityCacheKey(repo),
+        number,
+        headSha: req.headSha,
+      }),
+    );
 
     if (mode === 'provider-api') {
       const cached = yield* cache.getCachedChangedFiles(req.repo, number, req.headSha);
@@ -180,16 +184,18 @@ const makeDiffDataService = Effect.gen(function* () {
     const newPath = input.newPath.trim();
     const baseSha = input.baseSha?.trim() || null;
     const mode = (yield* settings.getDiffDataSettings()).mode;
-    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get file contents`, {
-      mode,
-      repo: repoIdentityCacheKey(req.repo),
-      number: input.number,
-      oldPath,
-      newPath,
-      baseSha,
-      headSha: req.headSha,
-      changeType: input.changeType,
-    });
+    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get file contents`).pipe(
+      Effect.annotateLogs({
+        mode,
+        repo: repoIdentityCacheKey(req.repo),
+        number: input.number,
+        oldPath,
+        newPath,
+        baseSha,
+        headSha: req.headSha,
+        changeType: input.changeType,
+      }),
+    );
 
     if (!oldPath && input.changeType !== 'new') {
       throw new ValidationError('Old file path is required');

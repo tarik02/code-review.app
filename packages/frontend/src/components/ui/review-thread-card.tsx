@@ -564,7 +564,9 @@ function ReviewThreadCard({
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-sans font-medium text-ink-900">{formatThreadLineLabel(thread)}</span>
+          <span className="font-sans font-medium text-ink-900">
+            {formatThreadLineLabel(thread)}
+          </span>
           {thread.isResolved ? (
             <span className="rounded-full bg-canvasDark px-2 py-0.5 font-sans text-ink-700">
               Resolved
@@ -620,140 +622,147 @@ function ReviewThreadCard({
       <div className="flex flex-col gap-3">
         {shouldRenderExpandedContent ? (
           thread.comments.map((comment) => {
-          const editEditor = threadEditors.find(
-            (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
-          );
-          const isDeleting = deletingCommentIds.has(comment.id);
-          const canEdit =
-            (comment.isPending || (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
-            comment.id.length > 0 &&
-            thread.id.length > 0 &&
-            reviewEditorSessionKey != null &&
-            onEditComment != null &&
-            !isDeleting;
-          const canDeletePending =
-            comment.isPending && onDeletePendingComment != null && !isDeleting;
-          const canDeletePublished =
-            !comment.isPending &&
-            viewerLogin != null &&
-            viewerLogin === comment.authorLogin &&
-            comment.id.length > 0 &&
-            onDeleteComment != null &&
-            !isDeleting;
+            const editEditor = threadEditors.find(
+              (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
+            );
+            const isDeleting = deletingCommentIds.has(comment.id);
+            const canEdit =
+              (comment.isPending || (viewerLogin != null && viewerLogin === comment.authorLogin)) &&
+              comment.id.length > 0 &&
+              thread.id.length > 0 &&
+              reviewEditorSessionKey != null &&
+              onEditComment != null &&
+              !isDeleting;
+            const canDeletePending =
+              comment.isPending && onDeletePendingComment != null && !isDeleting;
+            const canDeletePublished =
+              !comment.isPending &&
+              viewerLogin != null &&
+              viewerLogin === comment.authorLogin &&
+              comment.id.length > 0 &&
+              onDeleteComment != null &&
+              !isDeleting;
 
-          return (
-            <div
-              className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 transition-opacity ${
-                isDeleting ? 'opacity-50' : 'opacity-100'
-              }`}
-              key={comment.id}
-            >
-              <CommentAvatar comment={comment} />
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
-                  <span className="font-sans font-medium text-ink-900">{comment.authorLogin}</span>
-                  <span>{formatTimestamp(comment.createdAt)}</span>
-                  {comment.isPending ? (
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                      Pending
+            return (
+              <div
+                className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 transition-opacity ${
+                  isDeleting ? 'opacity-50' : 'opacity-100'
+                }`}
+                key={comment.id}
+              >
+                <CommentAvatar comment={comment} />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500">
+                    <span className="font-sans font-medium text-ink-900">
+                      {comment.authorLogin}
                     </span>
-                  ) : null}
-                  {isDeleting ? <span className="text-ink-500">Deleting...</span> : null}
-                  {!compact && comment.url ? (
-                    <a
-                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
-                      href={comment.url}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Open
-                    </a>
-                  ) : null}
-                  {canEdit ? (
-                    <button
-                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
-                      onClick={() => {
-                        openEditEditor(reviewEditorSessionKey, thread.id, comment.id, comment.body);
-                      }}
-                      type="button"
-                    >
-                      Edit
-                    </button>
-                  ) : null}
-                  {canDeletePending ? (
-                    <button
-                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
-                      onClick={() => {
-                        if (onDeletePendingComment) {
-                          void onDeletePendingComment(comment).catch((error) => {
-                            logError('failed to discard pending review comment', {
-                              commentId: comment.id,
-                              threadId: thread.id,
-                              error,
+                    <span>{formatTimestamp(comment.createdAt)}</span>
+                    {comment.isPending ? (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        Pending
+                      </span>
+                    ) : null}
+                    {isDeleting ? <span className="text-ink-500">Deleting...</span> : null}
+                    {!compact && comment.url ? (
+                      <a
+                        className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                        href={comment.url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Open
+                      </a>
+                    ) : null}
+                    {canEdit ? (
+                      <button
+                        className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                        onClick={() => {
+                          openEditEditor(
+                            reviewEditorSessionKey,
+                            thread.id,
+                            comment.id,
+                            comment.body,
+                          );
+                        }}
+                        type="button"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                    {canDeletePending ? (
+                      <button
+                        className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                        onClick={() => {
+                          if (onDeletePendingComment) {
+                            void onDeletePendingComment(comment).catch((error) => {
+                              logError('failed to discard pending review comment', {
+                                commentId: comment.id,
+                                threadId: thread.id,
+                                error,
+                              });
                             });
-                          });
-                        }
-                      }}
-                      disabled={isDeleting}
-                      type="button"
-                    >
-                      Discard
-                    </button>
-                  ) : null}
-                  {canDeletePublished ? (
-                    <button
-                      className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
-                      onClick={() => {
-                        if (onDeleteComment) {
-                          void onDeleteComment(thread, comment).catch((error) => {
-                            logError('failed to delete review comment', {
-                              commentId: comment.id,
-                              threadId: thread.id,
-                              error,
+                          }
+                        }}
+                        disabled={isDeleting}
+                        type="button"
+                      >
+                        Discard
+                      </button>
+                    ) : null}
+                    {canDeletePublished ? (
+                      <button
+                        className="text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+                        onClick={() => {
+                          if (onDeleteComment) {
+                            void onDeleteComment(thread, comment).catch((error) => {
+                              logError('failed to delete review comment', {
+                                commentId: comment.id,
+                                threadId: thread.id,
+                                error,
+                              });
                             });
-                          });
+                          }
+                        }}
+                        disabled={isDeleting}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 min-w-0">
+                    {editEditor ? (
+                      <FloatingReviewCommentEditor
+                        portalRootId={editorPortalRootId}
+                        cursorPosition={editEditor.cursorPosition}
+                        defaultMode={defaultReviewEditorMode}
+                        error={editEditor.error}
+                        initialValue={comment.body}
+                        isPending={editEditor.isSubmitting}
+                        provider={thread.provider}
+                        submitLabel="Save"
+                        target={editorTarget}
+                        value={editEditor.body}
+                        onCancel={() => closeEditor(reviewEditorSessionKey, editEditor.id)}
+                        onChange={(body) =>
+                          setEditorBody(reviewEditorSessionKey, editEditor.id, body)
                         }
-                      }}
-                      disabled={isDeleting}
-                      type="button"
-                    >
-                      Delete
-                    </button>
-                  ) : null}
-                </div>
-                <div className="mt-1 min-w-0">
-                  {editEditor ? (
-                    <FloatingReviewCommentEditor
-                      portalRootId={editorPortalRootId}
-                      cursorPosition={editEditor.cursorPosition}
-                      defaultMode={defaultReviewEditorMode}
-                      error={editEditor.error}
-                      initialValue={comment.body}
-                      isPending={editEditor.isSubmitting}
-                      provider={thread.provider}
-                      submitLabel="Save"
-                      target={editorTarget}
-                      value={editEditor.body}
-                      onCancel={() => closeEditor(reviewEditorSessionKey, editEditor.id)}
-                      onChange={(body) =>
-                        setEditorBody(reviewEditorSessionKey, editEditor.id, body)
-                      }
-                      onCursorPositionChange={(cursorPosition) =>
-                        setEditorCursorPosition(
-                          reviewEditorSessionKey,
-                          editEditor.id,
-                          cursorPosition ?? null,
-                        )
-                      }
-                      onSubmit={(body) => handleEditSubmit(editEditor.id, comment, body)}
-                    />
-                  ) : (
-                    <CommentMarkdown body={comment.body} filePath={thread.path || undefined} />
-                  )}
+                        onCursorPositionChange={(cursorPosition) =>
+                          setEditorCursorPosition(
+                            reviewEditorSessionKey,
+                            editEditor.id,
+                            cursorPosition ?? null,
+                          )
+                        }
+                        onSubmit={(body) => handleEditSubmit(editEditor.id, comment, body)}
+                      />
+                    ) : (
+                      <CommentMarkdown body={comment.body} filePath={thread.path || undefined} />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
+            );
           })
         ) : (
           <div className="rounded-md border border-dashed border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500">

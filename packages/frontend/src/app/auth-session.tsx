@@ -115,8 +115,9 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (provider: ForgeProviderKind, host: string, clientId: string, clientSecret = '') => {
-      const normalizedHost =
-        normalizeHostInput(host || (provider === 'github' ? 'github.com' : 'gitlab.com'));
+      const normalizedHost = normalizeHostInput(
+        host || (provider === 'github' ? 'github.com' : 'gitlab.com'),
+      );
       setIsSigningIn(true);
       setAuthMessage(null);
       try {

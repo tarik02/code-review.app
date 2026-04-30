@@ -57,26 +57,36 @@ type GitHubClientEffect<Success> = Effect.Effect<Success, GitHubClientError>;
 type GitHubApiClientShape = {
   storedToken(): GitHubClientEffect<StoredAuthToken | null>;
   user(): GitHubClientEffect<typeof GhRestUserSchema.Type>;
-  userOrgs(input?: { perPage?: number }): GitHubClientEffect<ReadonlyArray<typeof GhRestUserSchema.Type>>;
+  userOrgs(input?: {
+    perPage?: number;
+  }): GitHubClientEffect<ReadonlyArray<typeof GhRestUserSchema.Type>>;
   userRepos(input: {
     perPage?: number;
     sort?: 'created' | 'updated' | 'pushed' | 'full_name';
-    affiliation?: 'owner' | 'collaborator' | 'organization_member' | ReadonlyArray<'owner' | 'collaborator' | 'organization_member'>;
+    affiliation?:
+      | 'owner'
+      | 'collaborator'
+      | 'organization_member'
+      | ReadonlyArray<'owner' | 'collaborator' | 'organization_member'>;
   }): GitHubClientEffect<ReadonlyArray<GhRestRepo>>;
   searchRepositories(input: {
     query: string;
     perPage?: number;
   }): GitHubClientEffect<typeof GhSearchResponseSchema.Type>;
   repo(owner: string, name: string): GitHubClientEffect<GhRestRepo>;
-  searchPullRequests(query: string, first: number): GitHubClientEffect<
-    GraphQlResponse<typeof SearchPullRequestsQueryDataSchema.Type>
-  >;
-  repositoryPullRequests(owner: string, name: string): GitHubClientEffect<
-    GraphQlResponse<typeof ListPullRequestsQueryDataSchema.Type>
-  >;
-  repositoryPullRequest(owner: string, name: string, number: number): GitHubClientEffect<
-    GraphQlResponse<typeof GetPullRequestQueryDataSchema.Type>
-  >;
+  searchPullRequests(
+    query: string,
+    first: number,
+  ): GitHubClientEffect<GraphQlResponse<typeof SearchPullRequestsQueryDataSchema.Type>>;
+  repositoryPullRequests(
+    owner: string,
+    name: string,
+  ): GitHubClientEffect<GraphQlResponse<typeof ListPullRequestsQueryDataSchema.Type>>;
+  repositoryPullRequest(
+    owner: string,
+    name: string,
+    number: number,
+  ): GitHubClientEffect<GraphQlResponse<typeof GetPullRequestQueryDataSchema.Type>>;
   pullRequestNodeId(owner: string, name: string, number: number): GitHubClientEffect<string>;
   pullRequestReviews(input: {
     owner: string;
@@ -127,9 +137,11 @@ type GitHubApiClientShape = {
     page?: number;
     perPage?: number;
   }): GitHubClientEffect<ReadonlyArray<GhCheckRunAnnotation>>;
-  reviewThreads(owner: string, name: string, number: number): GitHubClientEffect<
-    GraphQlResponse<typeof ReviewThreadsQueryDataSchema.Type>
-  >;
+  reviewThreads(
+    owner: string,
+    name: string,
+    number: number,
+  ): GitHubClientEffect<GraphQlResponse<typeof ReviewThreadsQueryDataSchema.Type>>;
   pullRequestReviewComments(input: {
     owner: string;
     name: string;
@@ -137,10 +149,7 @@ type GitHubApiClientShape = {
     reviewId: number;
     perPage?: number;
   }): GitHubClientEffect<ReadonlyArray<GhPendingReviewComment>>;
-  addComment(input: {
-    pullRequestId: string;
-    body: string;
-  }): GitHubClientEffect<unknown>;
+  addComment(input: { pullRequestId: string; body: string }): GitHubClientEffect<unknown>;
   addPullRequestReviewThread(input: {
     pullRequestId?: string;
     pullRequestReviewId?: string;
@@ -180,7 +189,10 @@ type GitHubApiClientShape = {
   accessToken(): GitHubClientEffect<string>;
 };
 
-class GitHubApiClient extends Effect.Tag('GitHubApiClient')<GitHubApiClient, GitHubApiClientShape>() {}
+class GitHubApiClient extends Effect.Tag('GitHubApiClient')<
+  GitHubApiClient,
+  GitHubApiClientShape
+>() {}
 
 const API_REQUEST_TIMEOUT = '30 seconds';
 
@@ -373,7 +385,9 @@ const makeGitHubApiClient = (accountId: string) =>
           Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
         );
 
-    const decodeTextBody = (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubClientError>) =>
+    const decodeTextBody = (
+      response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubClientError>,
+    ) =>
       response.pipe(
         Effect.flatMap((httpResponse) => httpResponse.text),
         Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
@@ -397,10 +411,7 @@ const makeGitHubApiClient = (accountId: string) =>
     const decodeGraphqlBody =
       <A, I, R>(schema: Schema.Schema<A, I, R>) =>
       (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubClientError>) =>
-        response.pipe(
-          decodeJsonBody(graphQlResponseSchema(schema)),
-          Effect.tap(graphqlErrors),
-        );
+        response.pipe(decodeJsonBody(graphQlResponseSchema(schema)), Effect.tap(graphqlErrors));
 
     const user: GitHubApiClientShape['user'] = Effect.fn('GitHubApiClient.user')(function* () {
       const token = yield* requireStoredToken();
@@ -479,21 +490,23 @@ const makeGitHubApiClient = (accountId: string) =>
       );
     });
 
-    const repo: GitHubApiClientShape['repo'] = Effect.fn('GitHubApiClient.repo')(function* (owner, name) {
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.get(
-        githubRoute('/repos/:owner/:name', {
-          params: { owner, name },
-        }),
-      ).pipe(
-        setDefaultHeaders,
-        prefixApiHost(token.host),
-        auth,
-        send,
-        decodeJsonBody(GhRestRepoSchema),
-      );
-    });
+    const repo: GitHubApiClientShape['repo'] = Effect.fn('GitHubApiClient.repo')(
+      function* (owner, name) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.get(
+          githubRoute('/repos/:owner/:name', {
+            params: { owner, name },
+          }),
+        ).pipe(
+          setDefaultHeaders,
+          prefixApiHost(token.host),
+          auth,
+          send,
+          decodeJsonBody(GhRestRepoSchema),
+        );
+      },
+    );
 
     const searchPullRequests: GitHubApiClientShape['searchPullRequests'] = Effect.fn(
       'GitHubApiClient.searchPullRequests',
@@ -962,17 +975,16 @@ query($owner: String!, $name: String!, $number: Int!) {
       );
     });
 
-    const addComment: GitHubApiClientShape['addComment'] = Effect.fn(
-      'GitHubApiClient.addComment',
-    )(function* (input) {
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.post('/graphql').pipe(
-        setDefaultHeaders,
-        prefixGraphqlHost(token.host),
-        auth,
-        jsonRequestBody({
-          query: `
+    const addComment: GitHubApiClientShape['addComment'] = Effect.fn('GitHubApiClient.addComment')(
+      function* (input) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.post('/graphql').pipe(
+          setDefaultHeaders,
+          prefixGraphqlHost(token.host),
+          auth,
+          jsonRequestBody({
+            query: `
 mutation($pullRequestId: ID!, $body: String!) {
   addComment(input: { subjectId: $pullRequestId, body: $body }) {
     commentEdge {
@@ -983,30 +995,32 @@ mutation($pullRequestId: ID!, $body: String!) {
   }
 }
 `,
-          variables: input,
-        }),
-        send,
-        decodeGraphqlBody(Schema.Unknown),
-      );
-    });
+            variables: input,
+          }),
+          send,
+          decodeGraphqlBody(Schema.Unknown),
+        );
+      },
+    );
 
-    const addPullRequestReviewThread: GitHubApiClientShape['addPullRequestReviewThread'] = Effect.fn(
-      'GitHubApiClient.addPullRequestReviewThread',
-    )(function* (input) {
-      const idField = input.pullRequestReviewId ? 'pullRequestReviewId' : 'pullRequestId';
-      const idVariableName = input.pullRequestReviewId ? '$pullRequestReviewId: ID!' : '$pullRequestId: ID!';
-      const idVariable = input.pullRequestReviewId
-        ? { pullRequestReviewId: input.pullRequestReviewId }
-        : { pullRequestId: input.pullRequestId };
+    const addPullRequestReviewThread: GitHubApiClientShape['addPullRequestReviewThread'] =
+      Effect.fn('GitHubApiClient.addPullRequestReviewThread')(function* (input) {
+        const idField = input.pullRequestReviewId ? 'pullRequestReviewId' : 'pullRequestId';
+        const idVariableName = input.pullRequestReviewId
+          ? '$pullRequestReviewId: ID!'
+          : '$pullRequestId: ID!';
+        const idVariable = input.pullRequestReviewId
+          ? { pullRequestReviewId: input.pullRequestReviewId }
+          : { pullRequestId: input.pullRequestId };
 
-      const token = yield* requireStoredToken();
-      const auth = yield* authorize();
-      return yield* HttpClientRequest.post('/graphql').pipe(
-        setDefaultHeaders,
-        prefixGraphqlHost(token.host),
-        auth,
-        jsonRequestBody({
-          query: `
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.post('/graphql').pipe(
+          setDefaultHeaders,
+          prefixGraphqlHost(token.host),
+          auth,
+          jsonRequestBody({
+            query: `
 mutation(
   ${idVariableName},
   $body: String!,
@@ -1036,21 +1050,21 @@ mutation(
   }
 }
 `,
-          variables: {
-            ...idVariable,
-            body: input.body,
-            path: input.path,
-            line: input.line,
-            side: input.side,
-            startLine: input.startLine,
-            startSide: input.startSide,
-            subjectType: input.subjectType,
-          },
-        }),
-        send,
-        decodeGraphqlBody(AddPullRequestReviewThreadDataSchema),
-      );
-    });
+            variables: {
+              ...idVariable,
+              body: input.body,
+              path: input.path,
+              line: input.line,
+              side: input.side,
+              startLine: input.startLine,
+              startSide: input.startSide,
+              subjectType: input.subjectType,
+            },
+          }),
+          send,
+          decodeGraphqlBody(AddPullRequestReviewThreadDataSchema),
+        );
+      });
 
     const addPullRequestReview: GitHubApiClientShape['addPullRequestReview'] = Effect.fn(
       'GitHubApiClient.addPullRequestReview',
@@ -1079,7 +1093,9 @@ mutation($pullRequestId: ID!, $commitOID: GitObjectID!) {
     const addPullRequestReviewThreadReply: GitHubApiClientShape['addPullRequestReviewThreadReply'] =
       Effect.fn('GitHubApiClient.addPullRequestReviewThreadReply')(function* (input) {
         const idField = input.pullRequestReviewId ? 'pullRequestReviewId' : 'pullRequestId';
-        const idVariableName = input.pullRequestReviewId ? '$pullRequestReviewId: ID!' : '$pullRequestId: ID!';
+        const idVariableName = input.pullRequestReviewId
+          ? '$pullRequestReviewId: ID!'
+          : '$pullRequestId: ID!';
         const idVariable = input.pullRequestReviewId
           ? { pullRequestReviewId: input.pullRequestReviewId }
           : { pullRequestId: input.pullRequestId };

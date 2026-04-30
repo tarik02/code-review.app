@@ -36,9 +36,11 @@ function isUpdaterEnabled() {
 
 function logUpdaterError(context: string, error: unknown) {
   void Effect.runFork(
-    Effect.logError(`[updater] ${context} failed`, {
-      error: summarizeError(error),
-    }),
+    Effect.logError(`[updater] ${context} failed`).pipe(
+      Effect.annotateLogs({
+        error: summarizeError(error),
+      }),
+    ),
   );
 }
 

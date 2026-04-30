@@ -3,7 +3,11 @@ import { Link } from '@tanstack/react-router';
 import { ArrowLeftIcon } from '@heroicons/react/20/solid';
 import { Dialog, DialogContent } from './dialog';
 import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from '../../lib/forge-owner';
-import { hostNameFromInput, normalizeHostInput, parseForgeResourceUrl } from '../../lib/forge-links';
+import {
+  hostNameFromInput,
+  normalizeHostInput,
+  parseForgeResourceUrl,
+} from '../../lib/forge-links';
 import {
   PullRequestBadgeStatus,
   type ForgeProviderKind,
