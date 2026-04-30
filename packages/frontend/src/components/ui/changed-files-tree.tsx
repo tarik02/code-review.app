@@ -172,7 +172,7 @@ function ChangedFilesTree({
         </div>
       </TopBar>
 
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-hidden">
+      <div className="min-h-0 flex-1 overflow-auto bg-surface">
         {!hasSelection ? (
           <div className="flex h-full min-h-[220px] items-center justify-center px-4 text-center text-sm text-ink-500">
             Select a pull request to load changed files.

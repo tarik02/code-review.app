@@ -1,5 +1,6 @@
 import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating-ui/react';
 import { useQuery } from '@tanstack/react-query';
+import { useInView } from 'react-intersection-observer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getReviewThreadRefKey,
@@ -22,6 +23,7 @@ import {
 } from './review-comment-editor';
 
 const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
+const COMMENT_DEFER_ROOT_MARGIN = '600px 0px';
 
 type ReviewThreadCardProps = {
   thread: ReviewThread;
@@ -272,6 +274,9 @@ function ReviewThreadCard({
 }: ReviewThreadCardProps) {
   const containerNodeRef = useRef<HTMLDivElement | null>(null);
   const lastHandledHighlightVersionRef = useRef<number | null>(null);
+  const [hasBeenNearViewport, setHasBeenNearViewport] = useState(
+    () => typeof IntersectionObserver === 'undefined',
+  );
   const rootComment =
     thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null;
   const editorTarget = getThreadEditorTarget(thread);
@@ -315,6 +320,22 @@ function ReviewThreadCard({
   const isExpandedOverride = patchViewerSession.threadExpansionByKey[threadRefKey];
   const highlightVersion = patchViewerSession.highlightedThreadVersion;
   const isCollapsed = defaultCollapsed ? isExpandedOverride !== true : isExpandedOverride === false;
+  const hasActiveEditor =
+    replyEditor !== undefined || threadEditors.some((editor) => editor.kind === 'edit');
+  const shouldObserveExpandedContent = !slim && !isCollapsed && !hasBeenNearViewport;
+  const { ref: inViewRef } = useInView({
+    root: null,
+    rootMargin: COMMENT_DEFER_ROOT_MARGIN,
+    threshold: 0,
+    triggerOnce: true,
+    skip: !shouldObserveExpandedContent,
+    initialInView: typeof IntersectionObserver === 'undefined',
+    onChange: (nextInView: boolean) => {
+      if (nextInView) {
+        setHasBeenNearViewport(true);
+      }
+    },
+  });
   const canToggleResolved =
     thread.canResolve !== false &&
     !thread.isPending &&
@@ -325,9 +346,10 @@ function ReviewThreadCard({
   const setContainerNode = useCallback(
     (node: HTMLDivElement | null) => {
       containerNodeRef.current = node;
+      inViewRef(node);
       containerRef?.(node);
     },
-    [containerRef],
+    [containerRef, inViewRef],
   );
 
   useEffect(() => {
@@ -378,6 +400,12 @@ function ReviewThreadCard({
       cleanup();
     };
   }, [patchViewerSession.highlightedThreadKey, highlightVersion, threadRefKey]);
+
+  const shouldRenderExpandedContent =
+    hasBeenNearViewport ||
+    hasActiveEditor ||
+    isResolvePending ||
+    patchViewerSession.highlightedThreadKey === threadRefKey;
 
   if (slim) {
     const threadLine = thread.startLine ?? thread.line;
@@ -583,7 +611,8 @@ function ReviewThreadCard({
       </div>
 
       <div className="flex flex-col gap-3">
-        {thread.comments.map((comment) => {
+        {shouldRenderExpandedContent ? (
+          thread.comments.map((comment) => {
           const editEditor = threadEditors.find(
             (editor) => editor.kind === 'edit' && editor.commentId === comment.id,
           );
@@ -701,14 +730,20 @@ function ReviewThreadCard({
               </div>
             </div>
           );
-        })}
+          })
+        ) : (
+          <div className="rounded-md border border-dashed border-ink-200 bg-surface px-3 py-2 text-xs text-ink-500">
+            Rendering comments when visible...
+          </div>
+        )}
       </div>
 
       {rootComment &&
       onReplyToThread &&
       !thread.isPending &&
       thread.id.length > 0 &&
-      reviewEditorSessionKey != null ? (
+      reviewEditorSessionKey != null &&
+      shouldRenderExpandedContent ? (
         <div className="mt-3 border-t border-ink-200 pt-3">
           {replyEditor ? (
             <FloatingReviewCommentEditor

@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode, UIEvent } from 'react';
 import { useCallback, useState } from 'react';
 import { Virtualizer as PierreVirtualizer, type VirtualizerConfig } from '@pierre/diffs';
 import { VirtualizerContext } from '@pierre/diffs/react';
+import { ScrollArea } from './scroll-area';
 
 type PatchScrollVirtualizerProps = {
   children: ReactNode;
@@ -44,11 +45,17 @@ function PatchScrollVirtualizer({
 
   return (
     <VirtualizerContext.Provider value={instance}>
-      <div className={className} onScroll={onScroll} ref={setRoot} style={style}>
+      <ScrollArea
+        className={className}
+        orientation="vertical"
+        style={style}
+        viewportProps={{ onScroll }}
+        viewportRef={setRoot}
+      >
         <div className={contentClassName} style={contentStyle}>
           {children}
         </div>
-      </div>
+      </ScrollArea>
     </VirtualizerContext.Provider>
   );
 }

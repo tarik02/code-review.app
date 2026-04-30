@@ -5,6 +5,7 @@ import type { ThemeRegistrationResolved } from '@shikijs/types';
 import pierreDarkTheme from '@pierre/theme/pierre-dark';
 import pierreLightTheme from '@pierre/theme/pierre-light';
 import { useDocumentDarkMode } from '../../hooks/use-document-dark-mode';
+import { ScrollArea } from './scroll-area';
 import { getLanguageFromPath } from './review-comment-editor/language';
 import './comment-markdown.css';
 
@@ -122,17 +123,27 @@ function MarkdownCodeBlock({
 
   if (resolvedHtml?.cacheKey !== cacheKey) {
     return (
-      <pre className="m-0 overflow-x-auto rounded-lg border border-ink-200 bg-canvas p-3 text-sm leading-6 text-ink-800">
-        <code>{text}</code>
-      </pre>
+      <ScrollArea
+        className="overflow-hidden rounded-lg border border-ink-200 bg-canvas"
+        orientation="both"
+        viewportClassName="max-h-80 bg-canvas"
+      >
+        <pre className="m-0 p-3 text-sm leading-6 text-ink-800">
+          <code>{text}</code>
+        </pre>
+      </ScrollArea>
     );
   }
 
   return (
-    <div
-      className="overflow-x-auto rounded-lg border border-ink-200 bg-canvas text-sm [&_.shiki]:m-0 [&_.shiki]:p-3"
-      dangerouslySetInnerHTML={{ __html: resolvedHtml.html }}
-    />
+    <ScrollArea
+      className="overflow-hidden rounded-lg border border-ink-200 bg-canvas text-sm"
+      orientation="both"
+      viewportClassName="max-h-80 bg-canvas"
+      contentClassName="[&_.shiki]:m-0 [&_.shiki]:bg-transparent! [&_.shiki]:p-3"
+    >
+      <div dangerouslySetInnerHTML={{ __html: resolvedHtml.html }} />
+    </ScrollArea>
   );
 }
 

@@ -47,6 +47,7 @@
     "prismjs": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-intersection-observer": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:",

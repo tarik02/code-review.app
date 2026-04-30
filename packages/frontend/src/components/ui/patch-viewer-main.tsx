@@ -34,6 +34,7 @@ import { PullRequestApprovalSummary } from './pull-request-approval-summary';
 import { PullRequestQualitySummary } from './pull-request-quality-summary';
 import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-editor';
 import { ReviewThreadCard } from './review-thread-card';
+import { ScrollArea } from './scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
@@ -1076,14 +1077,23 @@ function ReviewThreadsPanel({
   onSelectThread,
 }: ReviewThreadsPanelProps) {
   const globalThreads = getGlobalReviewThreads(threads);
-  const activeGlobalThreads = globalThreads.filter(isActiveReviewThread);
+  const pendingGlobalThreads = globalThreads.filter((thread) => thread.isPending);
+  const activeGlobalThreads = globalThreads.filter(
+    (thread) => !thread.isPending && isActiveReviewThread(thread),
+  );
   const inactiveGlobalThreads = globalThreads.filter((thread) => !isActiveReviewThread(thread));
   const nonGlobalThreads = threads.filter((thread) => !isGlobalReviewThread(thread));
-  const activeThreads = nonGlobalThreads.filter(isActiveReviewThread);
+  const pendingThreads = nonGlobalThreads.filter((thread) => thread.isPending);
+  const activeThreads = nonGlobalThreads.filter(
+    (thread) => !thread.isPending && isActiveReviewThread(thread),
+  );
   const resolvedThreads = [
-    ...nonGlobalThreads.filter((thread) => thread.isResolved || thread.isOutdated),
+    ...nonGlobalThreads.filter(
+      (thread) => !thread.isPending && (thread.isResolved || thread.isOutdated),
+    ),
     ...inactiveGlobalThreads,
   ];
+  const allPendingThreads = [...pendingGlobalThreads, ...pendingThreads];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -1091,7 +1101,12 @@ function ReviewThreadsPanel({
         <p className="text-sm font-medium text-ink-500">Comments</p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden px-2 pb-2">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        contentClassName="min-h-full px-2 pb-2"
+        orientation="vertical"
+        viewportClassName="bg-surface"
+      >
         {!hasSelection ? (
           <div className="flex items-center justify-center py-6 text-center text-sm text-ink-500">
             Select a pull request to load comments.
@@ -1120,6 +1135,7 @@ function ReviewThreadsPanel({
         !isLoading &&
         !error &&
         threads.length > 0 &&
+        allPendingThreads.length === 0 &&
         activeThreads.length === 0 &&
         activeGlobalThreads.length === 0 ? (
           <div className="mb-3 rounded-lg px-3  text-sm text-emerald-800  dark:text-emerald-300">
@@ -1135,6 +1151,25 @@ function ReviewThreadsPanel({
             </div>
             <div className="flex flex-col gap-2">
               {activeGlobalThreads.map((thread) => (
+                <ReviewThreadCard
+                  key={getReviewThreadRefKey(thread)}
+                  slim
+                  thread={thread}
+                  onClick={() => onSelectThread(thread)}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {allPendingThreads.length > 0 ? (
+          <div className="mb-3">
+            <div className="sticky top-0 z-10 mb-2 bg-surface px-1 py-1 text-xs font-medium tracking-wide text-ink-500">
+              Pending
+              <span className="ml-2 text-ink-400">{allPendingThreads.length}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {allPendingThreads.map((thread) => (
                 <ReviewThreadCard
                   key={getReviewThreadRefKey(thread)}
                   slim
@@ -1183,7 +1218,7 @@ function ReviewThreadsPanel({
             </div>
           </div>
         ) : null}
-      </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -1435,19 +1470,6 @@ function PatchFileDiffItem({
         endSide: toSelectionSide(lineDraft.side),
       }
     : null;
-  const lineAnnotationKey = lineAnnotations
-    .map((annotation) => {
-      if ('kind' in annotation.metadata) {
-        if (annotation.metadata.kind === 'quality') {
-          return `${annotation.side}:${annotation.lineNumber}:quality:${annotation.metadata.finding.id}`;
-        }
-
-        return `${annotation.side}:${annotation.lineNumber}:draft:${annotation.metadata.editorId}`;
-      }
-
-      return `${annotation.side}:${annotation.lineNumber}:thread:${getReviewThreadRefKey(annotation.metadata.thread)}`;
-    })
-    .join('|');
   const shouldRenderFileCommentsInHeader =
     fileReviewThreads.fileThreadCount > 0 ||
     fileDraftEditors.length > 0 ||
@@ -1845,7 +1867,6 @@ function PatchFileDiffItem({
   const fileDiffElement = (
     <FileDiff
       fileDiff={fileDiff}
-      key={lineAnnotationKey}
       metrics={VIRTUAL_FILE_METRICS}
       lineAnnotations={lineAnnotations}
       selectedLines={selectedLines}
@@ -1928,7 +1949,7 @@ function PatchFileDiffItem({
 
   return (
     <div
-      className="relative"
+      className="relative min-w-0 w-full overflow-hidden"
       data-file-path={fileDiff.name}
       ref={(node) => diffNavigator.registerDiffNode(fileDiff.name, node)}
     >
@@ -2801,7 +2822,7 @@ function PatchViewerMain({
           <div className="min-h-0 min-w-[30%] flex-1">
             <div className="relative h-full min-h-0 min-w-0">
               <PatchScrollVirtualizer
-                className="relative h-full min-h-0 min-w-0 overflow-y-auto scrollbar-hidden"
+                className="relative h-full min-h-0 min-w-0"
                 config={VIRTUALIZER_CONFIG}
                 contentClassName="flex min-h-full flex-col bg-white dark:bg-surface"
                 onRootChange={handleVirtualizerRootChange}
