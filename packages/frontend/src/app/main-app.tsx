@@ -95,7 +95,8 @@ function MainApp() {
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const { repos: savedRepos = [] } = useSavedRepos();
-  const trackedRepos = useQuery(trackedReposQueryOptions()).data ?? [];
+  const trackedReposQuery = useQuery(trackedReposQueryOptions());
+  const trackedRepos = useMemo(() => trackedReposQuery.data ?? [], [trackedReposQuery.data]);
   const accountVisibilityQuery = useQuery(accountVisibilityQueryOptions());
   const readyProviderAccounts = useMemo(
     () => providerAccounts.filter((account) => providerStatuses[account.id]?.status === 'ready'),
@@ -280,9 +281,12 @@ function MainApp() {
     isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,
+    isPendingReviewLoading,
     isQualityReportLoading,
     isReviewThreadsLoading,
     patchError,
+    pendingReview,
+    pendingReviewError,
     qualityReport,
     qualityReportError,
     reviewThreads,
@@ -313,60 +317,87 @@ function MainApp() {
     () => parseForgeResourceUrl(searchQuery.trim()),
     [searchQuery],
   );
-  const pickerDirectLinkAccount = useMemo(() => {
+  const pickerDirectLinkAccounts = useMemo(() => {
     if (!parsedPickerDirectLink || parsedPickerDirectLink.number === null) {
-      return null;
+      return [];
     }
 
-    return (
-      pickerAccounts.find(
-        (account) =>
-          account.provider === parsedPickerDirectLink.provider &&
-          normalizeHostInput(account.host) === parsedPickerDirectLink.host,
-      ) ?? null
+    const matchingAccounts = pickerAccounts.filter(
+      (account) =>
+        account.provider === parsedPickerDirectLink.provider &&
+        normalizeHostInput(account.host) === parsedPickerDirectLink.host,
     );
+
+    if (parsedPickerDirectLink.provider !== 'github') {
+      return matchingAccounts;
+    }
+
+    const repoOwner = parsedPickerDirectLink.repoPath.split('/')[0]?.toLowerCase() ?? '';
+    const ownerAccounts = matchingAccounts.filter(
+      (account) => account.viewerLogin?.toLowerCase() === repoOwner,
+    );
+    return ownerAccounts.length > 0 ? ownerAccounts : matchingAccounts;
   }, [parsedPickerDirectLink, pickerAccounts]);
   const pickerDirectLinkPullRequestQuery = useQuery({
     queryKey: [
       ...forgeKeys.trackedPullRequests(),
       'direct-link',
-      pickerDirectLinkAccount?.id ?? '__idle__',
+      pickerDirectLinkAccounts.map((account) => account.id).join(',') || '__idle__',
       parsedPickerDirectLink?.host ?? '__idle__',
       parsedPickerDirectLink?.repoPath ?? '__idle__',
       parsedPickerDirectLink?.number ?? '__idle__',
     ],
     queryFn: async () => {
       if (
-        !pickerDirectLinkAccount ||
+        pickerDirectLinkAccounts.length === 0 ||
         !parsedPickerDirectLink ||
         parsedPickerDirectLink.number === null
       ) {
         throw new Error('No direct link to resolve.');
       }
 
-      const repo = await trpc.repos.validate.query({
-        accountId: pickerDirectLinkAccount.id,
-        repo: parsedPickerDirectLink.repoPath,
-      });
-      const pullRequest = await trpc.pullRequests.get.query({
-        ...repoIdentity(repo),
-        number: parsedPickerDirectLink.number,
-      });
+      let lastError: unknown = null;
+      for (const account of pickerDirectLinkAccounts) {
+        try {
+          const repo = await trpc.repos.tryValidate.query({
+            accountId: account.id,
+            repo: parsedPickerDirectLink.repoPath,
+          });
+          if (!repo) {
+            continue;
+          }
 
-      return { repo, pullRequest };
+          const pullRequest = await trpc.pullRequests.tryGet.query({
+            ...repoIdentity(repo),
+            number: parsedPickerDirectLink.number,
+          });
+          if (!pullRequest) {
+            continue;
+          }
+
+          return { repo, pullRequest };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error('No signed-in account can access this pull request.');
     },
     enabled:
       isPickerOpen &&
       pickerStep === 'repo' &&
       parsedPickerDirectLink !== null &&
       parsedPickerDirectLink.number !== null &&
-      pickerDirectLinkAccount !== null,
+      pickerDirectLinkAccounts.length > 0,
+    retry: false,
   });
   const pickerDirectLinkPullRequestOption = pickerDirectLinkPullRequestQuery.data ?? null;
   const pickerDirectLinkPullRequestError =
     parsedPickerDirectLink &&
     parsedPickerDirectLink.number !== null &&
-    pickerDirectLinkAccount === null
+    pickerDirectLinkAccounts.length === 0
       ? `No signed-in ${parsedPickerDirectLink.provider === 'github' ? 'GitHub' : 'GitLab'} account for ${parsedPickerDirectLink.host}.`
       : getErrorMessage(pickerDirectLinkPullRequestQuery.error);
   const pickerRepoIdentity = pickerRepo ? repoIdentity(pickerRepo) : null;
@@ -884,6 +915,9 @@ function MainApp() {
             reviewThreads={reviewThreads}
             isReviewThreadsLoading={isReviewThreadsLoading}
             reviewThreadsError={reviewThreadsError}
+            pendingReview={pendingReview}
+            isPendingReviewLoading={isPendingReviewLoading}
+            pendingReviewError={pendingReviewError}
             qualityReport={qualityReport}
             isQualityReportLoading={isQualityReportLoading}
             qualityReportError={qualityReportError}

@@ -1,6 +1,6 @@
 import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
 import { Effect } from 'effect';
-import { ProviderError } from '../errors.ts';
+import { ProviderError, ensureError } from '../errors.ts';
 import { getValidAccessToken } from './provider-auth.ts';
 import type { AuthTokenStore } from './token-store.ts';
 
@@ -12,9 +12,9 @@ type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
 const API_REQUEST_TIMEOUT = '30 seconds';
 
 function toProviderError(error: unknown) {
-  return error instanceof ProviderError
-    ? error
-    : new ProviderError(error instanceof Error ? error.message : String(error));
+  if (error instanceof ProviderError) return error;
+  const cause = ensureError(error);
+  return new ProviderError(cause.message, { cause });
 }
 
 function readResponseBody(
@@ -86,7 +86,14 @@ function providerFetch(
             Effect.gen(function* () {
               const message = yield* readResponseBody(response);
               return yield* Effect.fail(
-                new ProviderError(message || `Provider API returned HTTP ${response.status}`),
+                new ProviderError(message || `Provider API returned HTTP ${response.status}`, {
+                  cause: {
+                    method,
+                    url,
+                    status: response.status,
+                    responseBody: message,
+                  },
+                }),
               );
             }),
           ),

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { Effect, Layer } from 'effect';
 import { BackendConfig } from '../config.ts';
 import { CacheService } from '../cache.ts';
+import { ensureError } from '../errors.ts';
 import { AppSettingsService } from './app-settings.ts';
 import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
@@ -339,11 +340,7 @@ const makeSettingsService = Effect.gen(function* () {
         throw new Error('Background image must be a PNG, JPG, GIF, WebP, or AVIF file.');
       }
 
-      const sourceStats = yield* fileSystem
-        .stat(filePath)
-        .pipe(
-          Effect.mapError((error) => (error instanceof Error ? error : new Error(String(error)))),
-        );
+      const sourceStats = yield* fileSystem.stat(filePath).pipe(Effect.mapError(ensureError));
       if (sourceStats.type !== 'File') {
         throw new Error('Background image must be a file.');
       }
@@ -359,7 +356,7 @@ const makeSettingsService = Effect.gen(function* () {
             ? Effect.void
             : fileSystem.copyFile(filePath, destinationPath),
         ),
-        Effect.mapError((error) => (error instanceof Error ? error : new Error(String(error)))),
+        Effect.mapError(ensureError),
       );
 
       const persisted: PersistedAppearanceBackgroundSettings = {

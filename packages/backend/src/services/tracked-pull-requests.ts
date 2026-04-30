@@ -1,10 +1,7 @@
-import { HttpClient } from '@effect/platform';
 import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
-import { createRepoIdentityFromParts } from '../repo-id.ts';
-import { providerFor } from '../providers/registry.ts';
-import { AuthTokenStore } from '../auth/token-store.ts';
+import { ForgeProviderRegistry } from '../providers/registry.ts';
 import { AppSettingsService } from './app-settings.ts';
 import { trackedPullRequestOrderEntrySchema } from '@code-review-app/shared';
 import type {
@@ -79,17 +76,8 @@ function normalizeTrackedPullRequestOrder(
 
 const makeTrackedPullRequestService = Effect.gen(function* () {
   const cache = yield* CacheService;
-  const tokenStore = yield* AuthTokenStore;
-  const httpClient = yield* HttpClient.HttpClient;
   const appSettings = yield* AppSettingsService;
-
-  const provideProviderDeps = <A, E>(
-    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
-  ) =>
-    effect.pipe(
-      Effect.provideService(AuthTokenStore, tokenStore),
-      Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
+  const providers = yield* ForgeProviderRegistry;
 
   const list: TrackedPullRequestServiceShape['list'] = Effect.fn('TrackedPullRequestService.list')(
     function* (repo) {
@@ -140,12 +128,11 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
     'TrackedPullRequestService.refresh',
   )(function* (repoInput) {
     const repoIdentity = requireRepo(repoInput);
-    const repo = createRepoIdentityFromParts(repoIdentity.providerId, repoIdentity.repoKey);
+    const { provider, repo } = yield* providers.forRepo(repoIdentity);
     const tracked = yield* cache.readTrackedPullRequests(repoIdentity);
     if (tracked.length === 0) return [];
 
-    const provider = providerFor(repo.provider);
-    const openPullRequests = yield* provideProviderDeps(provider.listPullRequests(repo));
+    const openPullRequests = yield* provider.listPullRequests(repo);
     const openByNumber = new Map(
       openPullRequests.map((pullRequest) => [pullRequest.number, pullRequest]),
     );
@@ -158,9 +145,9 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
       }
 
       if (pullRequest.state === 'OPEN') {
-        const verified = yield* provideProviderDeps(
-          provider.getPullRequest(repo, pullRequest.number),
-        ).pipe(Effect.catchAll(() => Effect.succeed(null)));
+        const verified = yield* provider
+          .getPullRequest(repo, pullRequest.number)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
         if (verified) {
           yield* cache.trackPullRequest(repoIdentity, verified);
         }

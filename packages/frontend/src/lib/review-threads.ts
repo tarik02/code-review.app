@@ -19,6 +19,7 @@ type ReviewThread = {
   id: string;
   provider: 'github' | 'gitlab';
   path: string;
+  canResolve?: boolean;
   isResolved: boolean;
   isOutdated: boolean;
   line: number | null;
@@ -39,6 +40,7 @@ type FileReviewThreads = {
   activeFileThreads: ReviewThread[];
   activeLineAnnotations: DiffLineAnnotation<ReviewThreadAnnotation>[];
   inactiveFileThreads: ReviewThread[];
+  inactiveLineAnnotations: DiffLineAnnotation<ReviewThreadAnnotation>[];
   totalCount: number;
   unresolvedCount: number;
   fileThreadCount: number;
@@ -48,6 +50,7 @@ const EMPTY_FILE_REVIEW_THREADS: FileReviewThreads = {
   activeFileThreads: [],
   activeLineAnnotations: [],
   inactiveFileThreads: [],
+  inactiveLineAnnotations: [],
   totalCount: 0,
   unresolvedCount: 0,
   fileThreadCount: 0,
@@ -55,6 +58,14 @@ const EMPTY_FILE_REVIEW_THREADS: FileReviewThreads = {
 
 function normalizePath(path: string) {
   return path.replace(/^[ab]\//, '');
+}
+
+function getReviewThreadRefKey(thread: ReviewThread) {
+  if (thread.id) {
+    return `id:${thread.id}`;
+  }
+
+  return `fallback:${normalizePath(thread.path)}:${thread.startLine ?? thread.line ?? 'file'}:${thread.comments[0]?.id ?? 'unknown'}`;
 }
 
 function getAnnotationSide(
@@ -69,8 +80,18 @@ function getThreadSortLine(thread: ReviewThread) {
   return thread.startLine ?? thread.line ?? Number.MAX_SAFE_INTEGER;
 }
 
+function getReviewThreadCreatedAt(thread: ReviewThread) {
+  const createdAt = Date.parse(getThreadRootComment(thread)?.createdAt ?? '');
+  return Number.isNaN(createdAt) ? Number.MAX_SAFE_INTEGER : createdAt;
+}
+
 function compareThreads(a: ReviewThread, b: ReviewThread) {
-  return getThreadSortLine(a) - getThreadSortLine(b);
+  const lineDifference = getThreadSortLine(a) - getThreadSortLine(b);
+  if (lineDifference !== 0) {
+    return lineDifference;
+  }
+
+  return getReviewThreadCreatedAt(a) - getReviewThreadCreatedAt(b);
 }
 
 function isActiveReviewThread(thread: ReviewThread) {
@@ -111,10 +132,25 @@ function createFileReviewThreads(fileThreads: ReviewThread[]): FileReviewThreads
   });
   const activeFileThreads = activeThreads.filter(isFileReviewThread);
   const inactiveFileThreads = inactiveThreads.filter(isFileReviewThread);
+  const inactiveLineAnnotations = inactiveThreads.flatMap((thread) => {
+    const annotationSide = getAnnotationSide(thread.side);
+    if (isFileReviewThread(thread) || thread.line === null || !annotationSide) {
+      return [];
+    }
+
+    return [
+      {
+        side: annotationSide,
+        lineNumber: thread.line,
+        metadata: { thread },
+      },
+    ];
+  });
   return {
     activeFileThreads,
     activeLineAnnotations,
     inactiveFileThreads,
+    inactiveLineAnnotations,
     totalCount: sortedThreads.length,
     unresolvedCount: activeThreads.length,
     fileThreadCount: activeFileThreads.length + inactiveFileThreads.length,
@@ -186,6 +222,8 @@ export {
   EMPTY_FILE_REVIEW_THREADS,
   getFileReviewThreadsForPath,
   getGlobalReviewThreads,
+  getReviewThreadCreatedAt,
+  getReviewThreadRefKey,
   isActiveReviewThread,
   isFileReviewThread,
   isGlobalReviewThread,

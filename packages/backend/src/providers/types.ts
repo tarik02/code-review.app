@@ -1,8 +1,6 @@
-import type { HttpClient } from '@effect/platform';
 import type { Effect } from 'effect';
 import type { ProviderError } from '../errors.ts';
-import type { RepoIdentity } from '../repo-id.ts';
-import type { AuthTokenStore } from '../auth/token-store.ts';
+import type { ProviderRepoIdentity } from '../repo-id.ts';
 import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
@@ -11,7 +9,10 @@ import type {
   ProviderAuthStatus,
   PrChangedFile,
   RepoSummary,
+  PendingReviewComment,
+  PendingReviewSession,
   ReviewThread,
+  PublishPendingReviewInput,
 } from '@code-review-app/shared';
 
 type ReviewThreadInput = {
@@ -32,9 +33,18 @@ type PullRequestRefs = {
 };
 
 type PullRequestQualityReportInput = {
-  repo: RepoIdentity;
+  repo: ProviderRepoIdentity;
   number: number;
   headSha: string;
+};
+
+type PendingReviewSessionResult = {
+  providerReviewId: string | null;
+};
+
+type PendingReviewCommentResult = {
+  providerCommentId: string;
+  providerThreadId: string | null;
 };
 
 type GitRemoteAuth = {
@@ -50,106 +60,167 @@ type GitRemoteSpec = {
   auth: GitRemoteAuth;
 };
 
-type ForgeProvider = {
-  authStatus(
-    accountId: string,
-  ): Effect.Effect<ProviderAuthStatus, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  viewerLogin(
-    accountId: string,
-  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  listInitialRepos(
-    accountId: string,
-    limit: number,
-  ): Effect.Effect<RepoSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  searchRepos(
-    accountId: string,
-    query: string,
-    limit: number,
-  ): Effect.Effect<RepoSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  validateRepo(
-    accountId: string,
-    input: string,
-  ): Effect.Effect<RepoSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  listOverviewPullRequests(
-    accountId: string,
-  ): Effect.Effect<
-    OverviewPullRequestSummary[],
-    ProviderError,
-    AuthTokenStore | HttpClient.HttpClient
-  >;
+type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = {
+  authStatus(): Effect.Effect<ProviderAuthStatus, Error, Dependencies>;
+  viewerLogin(): Effect.Effect<string, Error, Dependencies>;
+  listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  searchRepos(query: string, limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
+  listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   listPullRequests(
-    repo: RepoIdentity,
-  ): Effect.Effect<PullRequestSummary[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+    repo: ProviderRepoIdentity,
+  ): Effect.Effect<PullRequestSummary[], Error, Dependencies>;
   getPullRequest(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<PullRequestSummary, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PullRequestSummary, Error, Dependencies>;
   getPullRequestApprovalState(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<PullRequestApprovalState, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PullRequestApprovalState, Error, Dependencies>;
   approvePullRequest(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
     headSha: string,
-  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<void, Error, Dependencies>;
   removePullRequestApproval(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<void, Error, Dependencies>;
   fetchPatch(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<string, Error, Dependencies>;
   fetchChangedFiles(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<PrChangedFile[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PrChangedFile[], Error, Dependencies>;
   fetchPullRequestRefs(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<PullRequestRefs, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PullRequestRefs, Error, Dependencies>;
   fetchFileContent(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     path: string,
     ref: string,
-  ): Effect.Effect<string, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<string, Error, Dependencies>;
   getPullRequestQualityReport(
     input: PullRequestQualityReportInput,
-  ): Effect.Effect<PullRequestQualityReport, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
-  gitRemote(
-    repo: RepoIdentity,
-  ): Effect.Effect<GitRemoteSpec, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<PullRequestQualityReport, Error, Dependencies>;
+  gitRemote(repo: ProviderRepoIdentity): Effect.Effect<GitRemoteSpec, Error, Dependencies>;
   listReviewThreads(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<ReviewThread[], ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<ReviewThread[], Error, Dependencies>;
+  listPendingReview(
+    repo: ProviderRepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<
+    { session: PendingReviewSession | null; comments: PendingReviewComment[] },
+    Error,
+    Dependencies
+  >;
   createReviewThread(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
     input: ReviewThreadInput,
-  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<void, Error, Dependencies>;
+  ensurePendingReview(
+    repo: ProviderRepoIdentity,
+    number: number,
+    headSha: string,
+  ): Effect.Effect<PendingReviewSessionResult, Error, Dependencies>;
+  createPendingReviewThread(
+    repo: ProviderRepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    input: ReviewThreadInput,
+  ): Effect.Effect<PendingReviewCommentResult, Error, Dependencies>;
+  createPendingReviewReply(
+    repo: ProviderRepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    threadId: string,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, Error, Dependencies>;
+  createPendingGlobalComment(
+    repo: ProviderRepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, Error, Dependencies>;
+  updatePendingReviewComment(
+    repo: ProviderRepoIdentity,
+    number: number,
+    providerCommentId: string,
+    body: string,
+  ): Effect.Effect<PendingReviewCommentResult, Error, Dependencies>;
+  deletePendingReviewComment(
+    repo: ProviderRepoIdentity,
+    number: number,
+    providerCommentId: string,
+  ): Effect.Effect<void, Error, Dependencies>;
+  publishPendingReview(
+    repo: ProviderRepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    input: PublishPendingReviewInput,
+  ): Effect.Effect<void, Error, Dependencies>;
+  discardPendingReview(
+    repo: ProviderRepoIdentity,
+    number: number,
+    session: PendingReviewSession,
+    comments: PendingReviewComment[],
+  ): Effect.Effect<void, Error, Dependencies>;
   replyToReviewThread(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
     threadId: string,
     body: string,
-  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<void, Error, Dependencies>;
+  setReviewThreadResolved(
+    repo: ProviderRepoIdentity,
+    number: number,
+    threadId: string,
+    isResolved: boolean,
+  ): Effect.Effect<void, Error, Dependencies>;
   updateReviewComment(
-    repo: RepoIdentity,
+    repo: ProviderRepoIdentity,
     number: number,
     threadId: string,
     commentId: string,
     body: string,
     subjectType: ReviewThreadInput['subjectType'],
-  ): Effect.Effect<void, ProviderError, AuthTokenStore | HttpClient.HttpClient>;
+  ): Effect.Effect<void, Error, Dependencies>;
+  deleteReviewComment(
+    repo: ProviderRepoIdentity,
+    number: number,
+    threadId: string,
+    commentId: string,
+    subjectType: ReviewThreadInput['subjectType'],
+  ): Effect.Effect<void, Error, Dependencies>;
 };
 
+type RemoveProviderDependencies<T> = {
+  [K in keyof T]: T[K] extends (
+    ...args: infer A
+  ) => Effect.Effect<infer Success, infer Error, infer _Dependencies>
+    ? (...args: A) => Effect.Effect<Success, Error>
+    : T[K];
+};
+
+type ForgeProviderContract = RemoveProviderDependencies<ForgeProviderEffectContract>;
+
 export type {
-  ForgeProvider,
+  ForgeProviderContract,
+  ForgeProviderEffectContract,
   GitRemoteAuth,
   GitRemoteSpec,
+  RemoveProviderDependencies,
   PullRequestQualityReportInput,
+  PendingReviewCommentResult,
+  PendingReviewSessionResult,
   PullRequestRefs,
   ReviewThreadInput,
 };

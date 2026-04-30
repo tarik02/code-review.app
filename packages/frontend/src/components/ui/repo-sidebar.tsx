@@ -10,6 +10,7 @@ import type {
 } from '../../types/forge';
 import { AppUpdater } from './app-updater';
 import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
+import { ScrollArea } from './scroll-area';
 import { TopBar } from './top-bar';
 import { TrackedPullRequestList } from './tracked-pull-request-list';
 
@@ -149,7 +150,12 @@ function RepoSidebar({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        contentClassName="min-h-full"
+        orientation="vertical"
+        viewportClassName="bg-canvas"
+      >
         {!isOverview && trackedRepoCount === 0 && trackedPullRequests.length === 0 ? (
           (emptyState ?? null)
         ) : isOverview ? (
@@ -210,7 +216,7 @@ function RepoSidebar({
             onSelectPr={onSelectPr}
           />
         )}
-      </div>
+      </ScrollArea>
     </aside>
   );
 }

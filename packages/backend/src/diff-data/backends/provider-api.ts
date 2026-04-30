@@ -1,22 +1,15 @@
-import { HttpClient } from '@effect/platform';
 import { Effect } from 'effect';
-import { ProviderError, ValidationError } from '../../errors.ts';
-import { providerFor } from '../../providers/registry.ts';
-import { AuthTokenStore } from '../../auth/token-store.ts';
+import { ProviderError, ValidationError, ensureError } from '../../errors.ts';
+import type { ForgeProviderRegistryShape } from '../../providers/registry.ts';
 import { repoIdentityCacheKey } from '../../repo-id.ts';
 import type { PrChangedFile, PrFileContents } from '@code-review-app/shared';
 import type { DiffDataBackend } from './types.ts';
 
-type ProvideProviderDeps = <A, E>(
-  effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
-) => Effect.Effect<A, E>;
-
-function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): DiffDataBackend {
+function makeProviderApiDiffBackend(providers: ForgeProviderRegistryShape): DiffDataBackend {
   const getPatch: DiffDataBackend['getPatch'] = Effect.fn('ProviderApiDiffBackend.getPatch')(
     function* (input, _options) {
-      return yield* provideProviderDeps(
-        providerFor(input.repo.provider).fetchPatch(input.repo, input.number),
-      );
+      const { provider, repo } = yield* providers.forRepo(input.repo);
+      return yield* provider.fetchPatch(repo, input.number);
     },
   );
 
@@ -24,9 +17,8 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
     'ProviderApiDiffBackend.getChangedFiles',
   )(
     function* (input) {
-      const files = yield* provideProviderDeps(
-        providerFor(input.repo.provider).fetchChangedFiles(input.repo, input.number),
-      );
+      const { provider, repo } = yield* providers.forRepo(input.repo);
+      const files = yield* provider.fetchChangedFiles(repo, input.number);
       const seen = new Set<string>();
       const unique: PrChangedFile[] = [];
       for (const file of files) {
@@ -39,7 +31,11 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       }
       return unique;
     },
-    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
+    Effect.mapError((error) => {
+      if (error instanceof Error) return error;
+      const cause = ensureError(error);
+      return new ProviderError(cause.message, { cause });
+    }),
   );
 
   const getFileContents: DiffDataBackend['getFileContents'] = Effect.fn(
@@ -49,7 +45,7 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       const oldPath = input.oldPath.trim();
       const newPath = input.newPath.trim();
       let baseSha = input.baseSha?.trim() || null;
-      const provider = providerFor(input.repo.provider);
+      const { provider, repo } = yield* providers.forRepo(input.repo);
 
       if (!oldPath && input.changeType !== 'new') {
         throw new ValidationError('Old file path is required');
@@ -59,21 +55,23 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       }
 
       if (!baseSha && input.changeType !== 'new') {
-        console.info('[diff-data] provider api base sha missing; fetching refs', {
-          repo: repoIdentityCacheKey(input.repo),
-          number: input.number,
-          provider: input.repo.provider,
-        });
-        const refs = yield* provideProviderDeps(
-          provider.fetchPullRequestRefs(input.repo, input.number),
+        yield* Effect.logInfo('[diff-data] provider api base sha missing; fetching refs').pipe(
+          Effect.annotateLogs({
+            repo: repoIdentityCacheKey(input.repo),
+            number: input.number,
+            provider: repo.provider,
+          }),
         );
+        const refs = yield* provider.fetchPullRequestRefs(repo, input.number);
         baseSha = refs.baseSha;
-        console.info('[diff-data] provider api resolved refs', {
-          repo: repoIdentityCacheKey(input.repo),
-          number: input.number,
-          baseSha,
-          headSha: refs.headSha,
-        });
+        yield* Effect.logInfo('[diff-data] provider api resolved refs').pipe(
+          Effect.annotateLogs({
+            repo: repoIdentityCacheKey(input.repo),
+            number: input.number,
+            baseSha,
+            headSha: refs.headSha,
+          }),
+        );
       }
       if (!baseSha && input.changeType !== 'new') {
         throw new ValidationError('Base SHA is required');
@@ -83,15 +81,11 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
       let newContent = '';
 
       if (input.changeType !== 'new') {
-        oldContent = yield* provideProviderDeps(
-          provider.fetchFileContent(input.repo, oldPath, baseSha ?? ''),
-        );
+        oldContent = yield* provider.fetchFileContent(repo, oldPath, baseSha ?? '');
       }
 
       if (input.changeType !== 'deleted') {
-        newContent = yield* provideProviderDeps(
-          provider.fetchFileContent(input.repo, newPath, input.headSha),
-        );
+        newContent = yield* provider.fetchFileContent(repo, newPath, input.headSha);
       }
 
       return {
@@ -105,7 +99,11 @@ function makeProviderApiDiffBackend(provideProviderDeps: ProvideProviderDeps): D
         newContent,
       } satisfies PrFileContents;
     },
-    Effect.mapError((error) => (error instanceof Error ? error : new ProviderError(String(error)))),
+    Effect.mapError((error) => {
+      if (error instanceof Error) return error;
+      const cause = ensureError(error);
+      return new ProviderError(cause.message, { cause });
+    }),
   );
 
   return {

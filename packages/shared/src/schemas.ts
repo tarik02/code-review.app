@@ -5,6 +5,9 @@ const diffDataModeSchema = z.enum(['provider-api', 'git']);
 const themePreferenceSchema = z.enum(['auto', 'light', 'dark']);
 const reviewEditorModeSchema = z.enum(['rich-text', 'source']);
 const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
+const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
+const pendingReviewCommentSubjectTypeSchema = z.enum(['file', 'line', 'global']);
+const pendingReviewSubmitActionSchema = z.enum(['comment', 'approve', 'request_changes']);
 const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
   'ok',
@@ -206,6 +209,84 @@ const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
   subjectType: z.enum(['file', 'line', 'global']),
 });
 
+const createPendingReviewThreadInputSchema = pullRequestVersionedInputSchema.extend({
+  body: z.string(),
+  path: z.string(),
+  oldPath: z.string(),
+  newPath: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: z.enum(['file', 'line']),
+});
+
+const createPendingReviewReplyInputSchema = pullRequestVersionedInputSchema.extend({
+  threadId: z.string(),
+  body: z.string(),
+  path: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: pendingReviewCommentSubjectTypeSchema,
+});
+
+const createPendingReviewGlobalInputSchema = pullRequestVersionedInputSchema.extend({
+  body: z.string(),
+});
+
+const updatePendingReviewCommentInputSchema = pullRequestVersionedInputSchema.extend({
+  pendingCommentId: z.string().min(1),
+  body: z.string(),
+});
+
+const deletePendingReviewCommentInputSchema = pullRequestVersionedInputSchema.extend({
+  pendingCommentId: z.string().min(1),
+});
+
+const publishPendingReviewInputSchema = pullRequestVersionedInputSchema.extend({
+  action: pendingReviewSubmitActionSchema.optional(),
+  summary: z.string().optional(),
+});
+
+const discardPendingReviewInputSchema = pullRequestVersionedInputSchema;
+
+const pendingReviewSessionSchema = pullRequestInputSchema.extend({
+  id: z.number().int().nonnegative(),
+  headSha: z.string(),
+  providerReviewId: z.string().nullable(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+});
+
+const pendingReviewCommentSchema = pullRequestInputSchema.extend({
+  id: z.string().min(1),
+  sessionId: z.number().int().nonnegative(),
+  headSha: z.string(),
+  kind: pendingReviewCommentKindSchema,
+  providerCommentId: z.string().nullable(),
+  providerThreadId: z.string().nullable(),
+  replyToThreadId: z.string().nullable(),
+  replyToCommentId: z.number().int().nonnegative().nullable(),
+  body: z.string(),
+  path: z.string(),
+  oldPath: z.string(),
+  newPath: z.string(),
+  line: z.number().int().nonnegative().nullable(),
+  side: reviewCommentSideSchema.nullable(),
+  startLine: z.number().int().nonnegative().nullable(),
+  startSide: reviewCommentSideSchema.nullable(),
+  subjectType: pendingReviewCommentSubjectTypeSchema,
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+});
+
+const pendingReviewStateSchema = z.object({
+  session: pendingReviewSessionSchema.nullable(),
+  comments: z.array(pendingReviewCommentSchema),
+});
+
 const replyToPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
   threadId: z.string(),
   body: z.string(),
@@ -218,17 +299,41 @@ const updatePullRequestReviewCommentInputSchema = replyToPullRequestReviewCommen
   },
 );
 
+const setPullRequestReviewThreadResolvedInputSchema = pullRequestInputSchema.extend({
+  threadId: z.string(),
+  isResolved: z.boolean(),
+});
+
+const deletePullRequestReviewCommentInputSchema = pullRequestInputSchema.extend({
+  threadId: z.string(),
+  commentId: z.string(),
+  subjectType: z.enum(['file', 'line', 'global']),
+});
+
 export {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
   completeOAuthSchema,
+  createPendingReviewGlobalInputSchema,
+  createPendingReviewReplyInputSchema,
+  createPendingReviewThreadInputSchema,
   createPullRequestReviewCommentInputSchema,
+  deletePullRequestReviewCommentInputSchema,
+  deletePendingReviewCommentInputSchema,
   diffDataModeSchema,
   diffDataSettingsSchema,
+  discardPendingReviewInputSchema,
   forgeProviderKindSchema,
   overviewPullRequestSummarySchema,
+  pendingReviewCommentKindSchema,
+  pendingReviewCommentSchema,
+  pendingReviewCommentSubjectTypeSchema,
+  pendingReviewSubmitActionSchema,
+  pendingReviewSessionSchema,
+  pendingReviewStateSchema,
   providerAccountSchema,
   providerProfileSchema,
+  publishPendingReviewInputSchema,
   pullRequestApprovalActorSchema,
   pullRequestApprovalRemoveStrategySchema,
   pullRequestApprovalStateSchema,
@@ -250,8 +355,10 @@ export {
   reviewEditorSettingsSchema,
   repoIdentitySchema,
   repoSummarySchema,
+  setPullRequestReviewThreadResolvedInputSchema,
   themePreferenceSchema,
   themePreferenceSettingsSchema,
   trackedPullRequestOrderEntrySchema,
+  updatePendingReviewCommentInputSchema,
   updatePullRequestReviewCommentInputSchema,
 };

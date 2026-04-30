@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
-import { Effect } from 'effect';
-import { BackendError, getErrorMessage } from './errors.ts';
+import { Cause, Effect, Exit, Option } from 'effect';
+import { BackendError, formatLogDetails, getErrorMessage, summarizeError } from './errors.ts';
 import { PullRequestService } from './services/pull-requests.ts';
 import { PullRequestQualityService } from './services/pull-request-quality.ts';
 import { RepoService } from './services/repos.ts';
@@ -12,12 +12,20 @@ import {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
   completeOAuthSchema,
+  createPendingReviewGlobalInputSchema,
+  createPendingReviewReplyInputSchema,
+  createPendingReviewThreadInputSchema,
   createPullRequestReviewCommentInputSchema,
+  deletePendingReviewCommentInputSchema,
+  deletePullRequestReviewCommentInputSchema,
   diffDataSettingsSchema,
+  discardPendingReviewInputSchema,
   overviewPullRequestSummarySchema,
+  pendingReviewStateSchema,
   providerAccountSchema,
   providerHostSchema,
   providerProfileSchema,
+  publishPendingReviewInputSchema,
   pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
   pullRequestQualityReportSchema,
@@ -27,8 +35,10 @@ import {
   replyToPullRequestReviewCommentInputSchema,
   repoIdentitySchema,
   repoSummarySchema,
+  setPullRequestReviewThreadResolvedInputSchema,
   themePreferenceSettingsSchema,
   reviewEditorSettingsSchema,
+  updatePendingReviewCommentInputSchema,
   updatePullRequestReviewCommentInputSchema,
   trackedPullRequestOrderEntrySchema,
 } from '@code-review-app/shared';
@@ -75,38 +85,38 @@ function mapError(error: unknown): TRPCError {
   });
 }
 
-function summarizeRouterError(error: unknown): unknown {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause ? summarizeRouterError(error.cause) : undefined,
-    };
+function causeFailureOrSquash<E>(cause: Cause.Cause<E>): unknown {
+  const failure = Cause.failureOption(cause);
+  if (Option.isSome(failure)) {
+    return Cause.originalError(failure.value);
   }
+  return Cause.squash(cause);
+}
 
-  if (typeof error === 'object' && error !== null) {
-    return Object.fromEntries(
-      Object.entries(error).map(([key, value]): [string, unknown] => [
-        key,
-        summarizeRouterError(value),
-      ]),
-    );
-  }
-
+function summarizeEffectCause<E>(cause: Cause.Cause<E>) {
+  const errors = Cause.prettyErrors(cause).map((error) =>
+    summarizeError(Cause.originalError(error)),
+  );
   return {
-    message: String(error),
+    pretty: Cause.pretty(cause, { renderErrorCause: true }),
+    errors,
+    primaryError: errors[0] ?? summarizeError(causeFailureOrSquash(cause)),
   };
 }
 
 function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
   async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>, label = 'effect') {
-    try {
-      return await runtime.runPromise(effect as Effect.Effect<A, E, never>);
-    } catch (error) {
-      console.error(`[trpc] ${label} failed`, summarizeRouterError(error));
-      throw mapError(error);
+    const exit = await runtime.runPromiseExit(effect as Effect.Effect<A, E, never>);
+    if (Exit.isSuccess(exit)) {
+      return exit.value;
     }
+    const error = causeFailureOrSquash(exit.cause);
+    await runtime.runPromise(
+      Effect.logError(
+        `[trpc] ${label} failed\n${formatLogDetails(summarizeEffectCause(exit.cause))}`,
+      ),
+    );
+    throw mapError(error);
   }
 
   return t.router({
@@ -330,6 +340,18 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             }),
           ),
         ),
+      tryValidate: t.procedure
+        .input(providerAccountSchema.extend({ repo: z.string() }))
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service
+                .validateRepo(input.accountId, input.repo)
+                .pipe(Effect.catchAll(() => Effect.succeed(null)));
+            }),
+          ),
+        ),
       listSaved: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
@@ -352,7 +374,11 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
-            console.info(`[trpc] pullRequests.listOverview ${input.accountId}`);
+            yield* Effect.logInfo('tRPC pullRequests.listOverview').pipe(
+              Effect.annotateLogs({
+                accountId: input.accountId,
+              }),
+            );
             const service = yield* PullRequestService;
             const pullRequests = yield* service.listOverview(input.accountId);
             return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
@@ -380,6 +406,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           Effect.gen(function* () {
             const service = yield* PullRequestService;
             return yield* service.get(input, input.number);
+          }),
+        ),
+      ),
+      tryGet: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service
+              .get(input, input.number)
+              .pipe(Effect.catchAll(() => Effect.succeed(null)));
           }),
         ),
       ),
@@ -518,15 +554,102 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           'reviewComments.removeApproval',
         ),
       ),
-      listThreads: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
+      listThreads: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
             const service = yield* ReviewCommentService;
-            return yield* service.listThreads(input, input.number);
+            return yield* service.listThreads(input, input.number, input.headSha);
           }),
           'reviewComments.listThreads',
         ),
       ),
+      listPending: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            const pendingState = yield* service.listPending(input, input.number, input.headSha);
+            return pendingReviewStateSchema.parse(pendingState);
+          }),
+          'reviewComments.listPending',
+        ),
+      ),
+      createPendingThread: t.procedure
+        .input(createPendingReviewThreadInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingThread(input);
+            }),
+            'reviewComments.createPendingThread',
+          ),
+        ),
+      createPendingReply: t.procedure
+        .input(createPendingReviewReplyInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingReply(input);
+            }),
+            'reviewComments.createPendingReply',
+          ),
+        ),
+      createPendingGlobal: t.procedure
+        .input(createPendingReviewGlobalInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.createPendingGlobal(input);
+            }),
+            'reviewComments.createPendingGlobal',
+          ),
+        ),
+      updatePending: t.procedure
+        .input(updatePendingReviewCommentInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.updatePending(input);
+            }),
+            'reviewComments.updatePending',
+          ),
+        ),
+      deletePending: t.procedure
+        .input(deletePendingReviewCommentInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.deletePending(input);
+            }),
+            'reviewComments.deletePending',
+          ),
+        ),
+      publishPendingReview: t.procedure
+        .input(publishPendingReviewInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.publishPendingReview(input);
+            }),
+            'reviewComments.publishPendingReview',
+          ),
+        ),
+      discardPendingReview: t.procedure
+        .input(discardPendingReviewInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.discardPendingReview(input);
+            }),
+            'reviewComments.discardPendingReview',
+          ),
+        ),
       create: t.procedure.input(createPullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -545,6 +668,17 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           'reviewComments.reply',
         ),
       ),
+      setResolved: t.procedure
+        .input(setPullRequestReviewThreadResolvedInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.setResolved(input);
+            }),
+            'reviewComments.setResolved',
+          ),
+        ),
       update: t.procedure.input(updatePullRequestReviewCommentInputSchema).mutation(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -554,6 +688,17 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           'reviewComments.update',
         ),
       ),
+      deleteComment: t.procedure
+        .input(deletePullRequestReviewCommentInputSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* ReviewCommentService;
+              return yield* service.deleteComment(input);
+            }),
+            'reviewComments.deleteComment',
+          ),
+        ),
     }),
 
     window: t.router({
@@ -571,6 +716,11 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         try {
           return await platform.checkForUpdate();
         } catch (error) {
+          await runtime.runPromise(
+            Effect.logError(
+              `[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`,
+            ),
+          );
           throw mapError(error);
         }
       }),
@@ -578,6 +728,11 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         try {
           await platform.installUpdate();
         } catch (error) {
+          await runtime.runPromise(
+            Effect.logError(
+              `[trpc] updates.install failed\n${formatLogDetails(summarizeError(error))}`,
+            ),
+          );
           throw mapError(error);
         }
       }),

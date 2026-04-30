@@ -1,6 +1,7 @@
 import { HttpClient, HttpClientRequest } from '@effect/platform';
-import { normalizeHost } from '../repo-id.ts';
+import { hostNameFromHost, normalizeHost } from '../repo-id.ts';
 import { Effect } from 'effect';
+import { ensureError } from '../errors.ts';
 import { AuthTokenStore } from './token-store.ts';
 import {
   DEFAULT_GITHUB_CLIENT_ID,
@@ -49,7 +50,7 @@ type DeviceOAuthPollResult =
 const REFRESH_SKEW_MS = 60_000;
 
 function toError(error: unknown) {
-  return error instanceof Error ? error : new Error(String(error));
+  return ensureError(error);
 }
 
 function redirectUri() {
@@ -57,11 +58,12 @@ function redirectUri() {
 }
 
 function defaultClientId(provider: ForgeProviderKind, host: string) {
-  if (provider === 'github' && host === 'github.com') {
+  const hostname = hostNameFromHost(host);
+  if (provider === 'github' && hostname === 'github.com') {
     return DEFAULT_GITHUB_CLIENT_ID;
   }
 
-  if (provider === 'gitlab' && host === 'gitlab.com') {
+  if (provider === 'gitlab' && hostname === 'gitlab.com') {
     return DEFAULT_GITLAB_CLIENT_ID;
   }
 
@@ -74,16 +76,17 @@ function defaultClientSecret() {
 
 function resolveClientId(provider: ForgeProviderKind, host: string, clientId: string) {
   const normalizedHost = normalizeHost(host);
+  const hostname = hostNameFromHost(normalizedHost);
   const resolvedClientId = clientId.trim() || defaultClientId(provider, normalizedHost);
   if (resolvedClientId) {
     return resolvedClientId;
   }
 
-  if (provider === 'github' && normalizedHost === 'github.com') {
+  if (provider === 'github' && hostname === 'github.com') {
     throw new Error('Client ID is required. Set GITHUB_CLIENT_ID or enter one.');
   }
 
-  if (provider === 'gitlab' && normalizedHost === 'gitlab.com') {
+  if (provider === 'gitlab' && hostname === 'gitlab.com') {
     throw new Error('Client ID is required. Set GITLAB_CLIENT_ID or enter one.');
   }
 
@@ -97,6 +100,7 @@ function oauthConfig(
   clientSecret = '',
 ): OAuthProviderConfig {
   const normalizedHost = normalizeHost(host);
+  const hostname = hostNameFromHost(normalizedHost);
   const resolvedClientId = resolveClientId(provider, normalizedHost, clientId);
   const resolvedClientSecret = clientSecret.trim() || defaultClientSecret();
   if (provider === 'github') {
@@ -106,17 +110,17 @@ function oauthConfig(
       redirectUri: redirectUri(),
       scopes: ['repo', 'read:org'],
       authorizeUrl:
-        normalizedHost === 'github.com'
+        hostname === 'github.com'
           ? 'https://github.com/login/oauth/authorize'
-          : `https://${normalizedHost}/login/oauth/authorize`,
+          : `${normalizedHost}/login/oauth/authorize`,
       tokenUrl:
-        normalizedHost === 'github.com'
+        hostname === 'github.com'
           ? 'https://github.com/login/oauth/access_token'
-          : `https://${normalizedHost}/login/oauth/access_token`,
+          : `${normalizedHost}/login/oauth/access_token`,
       deviceCodeUrl:
-        normalizedHost === 'github.com'
+        hostname === 'github.com'
           ? 'https://github.com/login/device/code'
-          : `https://${normalizedHost}/login/device/code`,
+          : `${normalizedHost}/login/device/code`,
     };
   }
 
@@ -125,8 +129,8 @@ function oauthConfig(
     clientSecret: resolvedClientSecret || null,
     redirectUri: redirectUri(),
     scopes: ['api'],
-    authorizeUrl: `https://${normalizedHost}/oauth/authorize`,
-    tokenUrl: `https://${normalizedHost}/oauth/token`,
+    authorizeUrl: `${normalizedHost}/oauth/authorize`,
+    tokenUrl: `${normalizedHost}/oauth/token`,
     deviceCodeUrl: null,
   };
 }

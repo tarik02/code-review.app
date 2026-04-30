@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { HttpClient } from '@effect/platform';
 import { Effect } from 'effect';
+import { ensureError } from '../errors.ts';
 import { normalizeHost } from '../repo-id.ts';
 import {
   exchangeDeviceOAuthCode,
@@ -91,7 +92,7 @@ function startOAuth(
     const accountId = base64Url(randomBytes(18));
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, normalizedHost, clientId, clientSecret),
-      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+      catch: ensureError,
     });
 
     if (provider === 'github' && !config.clientSecret) {

@@ -1,10 +1,9 @@
-import { HttpClient } from '@effect/platform';
 import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
 import { GitService } from '../git/service.ts';
-import { createRepoIdentityFromParts, repoIdentityCacheKey } from '../repo-id.ts';
-import { AuthTokenStore } from '../auth/token-store.ts';
+import { createProviderRepoIdentityFromParts, repoIdentityCacheKey } from '../repo-id.ts';
+import { ForgeProviderRegistry } from '../providers/registry.ts';
 import { SettingsService } from './settings.ts';
 import { makeGitDiffBackend } from '../diff-data/backends/git.ts';
 import { makeProviderApiDiffBackend } from '../diff-data/backends/provider-api.ts';
@@ -54,20 +53,12 @@ function createRequest(repo: RepoIdentity, headSha: string) {
 
 const makeDiffDataService = Effect.gen(function* () {
   const cache = yield* CacheService;
-  const tokenStore = yield* AuthTokenStore;
-  const httpClient = yield* HttpClient.HttpClient;
   const settings = yield* SettingsService;
   const git = yield* GitService;
+  const providers = yield* ForgeProviderRegistry;
 
-  const provideProviderDeps = <A, E>(
-    effect: Effect.Effect<A, E, AuthTokenStore | HttpClient.HttpClient>,
-  ) =>
-    effect.pipe(
-      Effect.provideService(AuthTokenStore, tokenStore),
-      Effect.provideService(HttpClient.HttpClient, httpClient),
-    );
-  const providerApiBackend = makeProviderApiDiffBackend(provideProviderDeps);
-  const gitBackend = makeGitDiffBackend(git, provideProviderDeps);
+  const providerApiBackend = makeProviderApiDiffBackend(providers);
+  const gitBackend = makeGitDiffBackend(git, providers);
   const parsePatchResult = (input: {
     patch: string;
     providerId: string;
@@ -86,13 +77,15 @@ const makeDiffDataService = Effect.gen(function* () {
     function* (repoInput, number, headSha) {
       const req = createRequest(repoInput, headSha);
       const mode = (yield* settings.getDiffDataSettings()).mode;
-      const repo = createRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
-      console.info(DIFF_DATA_LOG_PREFIX, 'get patch', {
-        mode,
-        repo: repoIdentityCacheKey(repo),
-        number,
-        headSha: req.headSha,
-      });
+      const repo = createProviderRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
+      yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get patch`).pipe(
+        Effect.annotateLogs({
+          mode,
+          repo: repoIdentityCacheKey(repo),
+          number,
+          headSha: req.headSha,
+        }),
+      );
 
       if (mode === 'provider-api') {
         const cached = yield* cache.getCachedPatch(req.repo, number, req.headSha);
@@ -149,13 +142,15 @@ const makeDiffDataService = Effect.gen(function* () {
   )(function* (repoInput, number, headSha) {
     const req = createRequest(repoInput, headSha);
     const mode = (yield* settings.getDiffDataSettings()).mode;
-    const repo = createRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
-    console.info(DIFF_DATA_LOG_PREFIX, 'get changed files', {
-      mode,
-      repo: repoIdentityCacheKey(repo),
-      number,
-      headSha: req.headSha,
-    });
+    const repo = createProviderRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
+    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get changed files`).pipe(
+      Effect.annotateLogs({
+        mode,
+        repo: repoIdentityCacheKey(repo),
+        number,
+        headSha: req.headSha,
+      }),
+    );
 
     if (mode === 'provider-api') {
       const cached = yield* cache.getCachedChangedFiles(req.repo, number, req.headSha);
@@ -189,16 +184,18 @@ const makeDiffDataService = Effect.gen(function* () {
     const newPath = input.newPath.trim();
     const baseSha = input.baseSha?.trim() || null;
     const mode = (yield* settings.getDiffDataSettings()).mode;
-    console.info(DIFF_DATA_LOG_PREFIX, 'get file contents', {
-      mode,
-      repo: repoIdentityCacheKey(req.repo),
-      number: input.number,
-      oldPath,
-      newPath,
-      baseSha,
-      headSha: req.headSha,
-      changeType: input.changeType,
-    });
+    yield* Effect.logInfo(`${DIFF_DATA_LOG_PREFIX} get file contents`).pipe(
+      Effect.annotateLogs({
+        mode,
+        repo: repoIdentityCacheKey(req.repo),
+        number: input.number,
+        oldPath,
+        newPath,
+        baseSha,
+        headSha: req.headSha,
+        changeType: input.changeType,
+      }),
+    );
 
     if (!oldPath && input.changeType !== 'new') {
       throw new ValidationError('Old file path is required');
@@ -206,7 +203,7 @@ const makeDiffDataService = Effect.gen(function* () {
     if (!newPath && input.changeType !== 'deleted') {
       throw new ValidationError('New file path is required');
     }
-    const repo = createRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
+    const repo = createProviderRepoIdentityFromParts(req.repo.providerId, req.repo.repoKey);
     const backendInput = {
       repo,
       number: input.number,

@@ -16,6 +16,7 @@ import {
   providerAccountsQueryOptions,
   providerStatusesQueryOptions,
 } from '../queries/forge';
+import { normalizeHostInput } from '../lib/forge-links';
 import type { ForgeProviderKind, ProviderAccount, ProviderAuthStatus } from '../types/forge';
 
 type AuthSessionValue = {
@@ -31,14 +32,6 @@ type AuthSessionValue = {
 };
 
 const AuthSessionContext = createContext<AuthSessionValue | null>(null);
-
-function normalizeHostInput(host: string) {
-  return host
-    .trim()
-    .replace(/^https?:\/\//, '')
-    .replace(/\/+$/, '')
-    .toLowerCase();
-}
 
 function AuthSessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -122,8 +115,9 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (provider: ForgeProviderKind, host: string, clientId: string, clientSecret = '') => {
-      const normalizedHost =
-        normalizeHostInput(host) || (provider === 'github' ? 'github.com' : 'gitlab.com');
+      const normalizedHost = normalizeHostInput(
+        host || (provider === 'github' ? 'github.com' : 'gitlab.com'),
+      );
       setIsSigningIn(true);
       setAuthMessage(null);
       try {

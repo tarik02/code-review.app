@@ -13,6 +13,9 @@ type PatchViewerSessionState = {
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
   scrollTop: number | null;
+  threadExpansionByKey: Record<string, boolean | undefined>;
+  highlightedThreadKey: string | null;
+  highlightedThreadVersion: number;
   hunkExpansionsByFile: Record<string, Record<string, HunkExpansionRegion | undefined> | undefined>;
 };
 
@@ -25,6 +28,8 @@ type PatchViewerStore = {
   setSelectedFilePath: (sessionKey: string | null, path: string | null) => void;
   setPendingScrollPath: (sessionKey: string | null, path: string | null) => void;
   setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
+  setThreadExpanded: (sessionKey: string | null, threadKey: string, expanded: boolean) => void;
+  highlightThread: (sessionKey: string | null, threadKey: string | null) => void;
   recordHunkExpansion: (
     sessionKey: string | null,
     filePath: string,
@@ -41,6 +46,9 @@ function createPatchViewerSessionState(): PatchViewerSessionState {
     selectedFilePath: null,
     pendingScrollPath: null,
     scrollTop: null,
+    threadExpansionByKey: {},
+    highlightedThreadKey: null,
+    highlightedThreadVersion: 0,
     hunkExpansionsByFile: {},
   };
 }
@@ -151,6 +159,24 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
   },
   setScrollTop(sessionKey, scrollTop) {
     set((state) => updateSession(state, sessionKey, () => ({ scrollTop })));
+  },
+  setThreadExpanded(sessionKey, threadKey, expanded) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => ({
+        threadExpansionByKey: {
+          ...session.threadExpansionByKey,
+          [threadKey]: expanded,
+        },
+      })),
+    );
+  },
+  highlightThread(sessionKey, threadKey) {
+    set((state) =>
+      updateSession(state, sessionKey, (session) => ({
+        highlightedThreadKey: threadKey,
+        highlightedThreadVersion: session.highlightedThreadVersion + 1,
+      })),
+    );
   },
   recordHunkExpansion(sessionKey, filePath, hunkIndex, direction, lineCount) {
     set((state) =>

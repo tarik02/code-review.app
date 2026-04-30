@@ -1,3 +1,5 @@
+import { inspect } from 'node:util';
+
 class BackendError extends Error {
   readonly code: string;
 
@@ -9,26 +11,26 @@ class BackendError extends Error {
 }
 
 class ValidationError extends BackendError {
-  constructor(message: string) {
-    super('ValidationError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('ValidationError', message, options);
   }
 }
 
 class CliMissingError extends BackendError {
-  constructor(message: string) {
-    super('CliMissingError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('CliMissingError', message, options);
   }
 }
 
 class CliAuthError extends BackendError {
-  constructor(message: string) {
-    super('CliAuthError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('CliAuthError', message, options);
   }
 }
 
 class CliExecutionError extends BackendError {
-  constructor(message: string) {
-    super('CliExecutionError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('CliExecutionError', message, options);
   }
 }
 
@@ -39,14 +41,14 @@ class ProviderError extends BackendError {
 }
 
 class CacheError extends BackendError {
-  constructor(message: string) {
-    super('CacheError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('CacheError', message, options);
   }
 }
 
 class UpdateError extends BackendError {
-  constructor(message: string) {
-    super('UpdateError', message);
+  constructor(message: string, options?: ErrorOptions) {
+    super('UpdateError', message, options);
   }
 }
 
@@ -55,13 +57,59 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function ensureError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  return new Error(String(error), { cause: error });
+}
+
+function summarizeError(error: unknown): unknown {
+  if (error instanceof Error) {
+    const summary: Record<string, unknown> = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+    if (error.cause !== undefined) {
+      summary.cause = summarizeError(error.cause);
+    }
+    return summary;
+  }
+
+  if (Array.isArray(error)) {
+    return error.map((value) => summarizeError(value));
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    return Object.fromEntries(
+      Object.entries(error).map(([key, value]): [string, unknown] => [key, summarizeError(value)]),
+    );
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
+function formatLogDetails(details: unknown): string {
+  return inspect(details, {
+    depth: null,
+    colors: false,
+    compact: false,
+    breakLength: 120,
+    sorted: true,
+  });
+}
+
 export {
   BackendError,
   CacheError,
   CliAuthError,
   CliExecutionError,
   CliMissingError,
+  ensureError,
+  formatLogDetails,
   ProviderError,
+  summarizeError,
   UpdateError,
   ValidationError,
   getErrorMessage,

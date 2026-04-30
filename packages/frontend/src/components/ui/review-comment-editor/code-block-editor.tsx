@@ -348,7 +348,9 @@ function CommentCodeMirrorEditor({
               const languageSupport = await languageData.load();
               extensions.push(languageSupport.extension);
             } catch {
-              console.warn('failed to load language support for', effectiveLanguage);
+              console.warn('failed to load language support', {
+                language: effectiveLanguage,
+              });
             }
           }
         }
@@ -380,7 +382,6 @@ function CommentCodeMirrorEditor({
   }, [
     autoLoadLanguageSupport,
     disableExpandControls,
-    editorCode,
     effectiveLanguage,
     forceReadOnly,
     lineNumberPrefix,
@@ -388,6 +389,32 @@ function CommentCodeMirrorEditor({
     lineNumberColumns,
     readOnly,
   ]);
+
+  useEffect(() => {
+    const editorView = editorViewRef.current;
+    if (!editorView) {
+      return;
+    }
+
+    const currentCode = editorView.state.doc.toString();
+    if (currentCode === editorCode) {
+      return;
+    }
+
+    const selection = editorView.state.selection.main;
+    const nextCursorPosition = Math.min(selection.from, editorCode.length);
+    editorView.dispatch({
+      changes: {
+        from: 0,
+        to: currentCode.length,
+        insert: editorCode,
+      },
+      selection: {
+        anchor: nextCursorPosition,
+        head: nextCursorPosition,
+      },
+    });
+  }, [editorCode]);
 
   function handleLanguageChange(nextLanguage: string | null) {
     parentEditor.update(() => {

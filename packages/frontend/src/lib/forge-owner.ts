@@ -1,4 +1,5 @@
 import type { ForgeProviderKind } from '../types/forge';
+import { normalizeHostInput } from './forge-links';
 
 function getOwnerLogin(nameWithOwner: string) {
   const [owner] = nameWithOwner.split('/');
@@ -20,9 +21,8 @@ function getOwnerAvatarUrl(
     return null;
   }
 
-  const normalizedHost = host.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  const protocolHost = `https://${normalizedHost}`;
-  return `${protocolHost}/${ownerLogin}.png?size=${size}`;
+  const normalizedHost = normalizeHostInput(host);
+  return normalizedHost ? `${normalizedHost}/${ownerLogin}.png?size=${size}` : null;
 }
 
 export { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin };

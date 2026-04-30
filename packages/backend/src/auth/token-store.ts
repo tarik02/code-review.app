@@ -157,4 +157,4 @@ const makeAuthTokenStore = Effect.gen(function* () {
 const AuthTokenStoreLive = Layer.effect(AuthTokenStore, makeAuthTokenStore);
 
 export { AuthTokenStore, AuthTokenStoreLive };
-export type { StoredAuthToken };
+export type { AuthTokenStoreShape, StoredAuthToken };
