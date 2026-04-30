@@ -76,7 +76,7 @@ async function syncNativeThemeFromSettings() {
     );
     applyNativeThemePreference(preference);
   } catch (error) {
-    void Effect.runFork(
+    void backendRuntime.runFork(
       Effect.logError('Failed to sync native theme from settings.').pipe(
         Effect.annotateLogs({
           error: summarizeError(error),

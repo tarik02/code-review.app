@@ -1,9 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Event, WebContentsConsoleMessageEventParams } from 'electron';
 import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme, shell } from 'electron';
 import { Effect } from 'effect';
 import type { ThemePreference } from '@code-review-app/shared';
 import { registerTrpc } from './trpc';
+import { backendRuntime } from './backend-runtime';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -84,20 +86,36 @@ function syncAllWindowAppearance(): void {
 nativeTheme.on('updated', syncAllWindowAppearance);
 
 function forwardRendererConsole(window: BrowserWindow): void {
-  window.webContents.on('console-message', (_event, level, message, lineNumber, sourceId) => {
+  window.webContents.on('console-message', (event: Event<WebContentsConsoleMessageEventParams>) => {
+    const { level, lineNumber, message, sourceId } = event;
     const logDetails = {
+      context: `WebContent ${event.frame.url}`,
       level,
-      message,
-      sourceId: sourceId || null,
+      sourceId: sourceId ?? null,
       lineNumber,
     };
-    const logEffect =
-      level >= 3
-        ? Effect.logError('[renderer] console message').pipe(Effect.annotateLogs(logDetails))
-        : level === 2
-          ? Effect.logWarning('[renderer] console message').pipe(Effect.annotateLogs(logDetails))
-          : Effect.logInfo('[renderer] console message').pipe(Effect.annotateLogs(logDetails));
-    void Effect.runFork(logEffect);
+
+    let logEffect: Effect.Effect<void>;
+
+    switch (level) {
+      case 'error':
+        logEffect = Effect.logError(message);
+        break;
+
+      case 'warning':
+        logEffect = Effect.logWarning(message);
+        break;
+
+      case 'info':
+        logEffect = Effect.logInfo(message);
+        break;
+
+      case 'debug':
+        logEffect = Effect.logDebug(message);
+        break;
+    }
+
+    void backendRuntime.runFork(logEffect.pipe(Effect.annotateLogs(logDetails)));
   });
 }
 

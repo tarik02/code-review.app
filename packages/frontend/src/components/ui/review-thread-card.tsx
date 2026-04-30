@@ -2,7 +2,6 @@ import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating
 import { useQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { logError } from '../../lib/log';
 import {
   getReviewThreadRefKey,
   isGlobalReviewThread,
@@ -590,7 +589,7 @@ function ReviewThreadCard({
               onClick={() => {
                 if (onSetThreadResolved) {
                   void onSetThreadResolved(thread, !thread.isResolved).catch((error) => {
-                    logError('failed to update thread resolution', {
+                    console.error('failed to update thread resolution', {
                       threadId: thread.id,
                       nextResolved: !thread.isResolved,
                       error,
@@ -695,7 +694,7 @@ function ReviewThreadCard({
                         onClick={() => {
                           if (onDeletePendingComment) {
                             void onDeletePendingComment(comment).catch((error) => {
-                              logError('failed to discard pending review comment', {
+                              console.error('failed to discard pending review comment', {
                                 commentId: comment.id,
                                 threadId: thread.id,
                                 error,
@@ -715,7 +714,7 @@ function ReviewThreadCard({
                         onClick={() => {
                           if (onDeleteComment) {
                             void onDeleteComment(thread, comment).catch((error) => {
-                              logError('failed to delete review comment', {
+                              console.error('failed to delete review comment', {
                                 commentId: comment.id,
                                 threadId: thread.id,
                                 error,

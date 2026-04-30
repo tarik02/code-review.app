@@ -59,7 +59,6 @@ import {
   repoIdentityKey,
 } from '../lib/repo-identity';
 import { normalizeHostInput, parseForgeResourceUrl } from '../lib/forge-links';
-import { logError, logInfo } from '../lib/log';
 
 function getErrorMessage(error: unknown): string {
   if (!error) return '';
@@ -371,7 +370,7 @@ function useAccountOverviewPullRequests(
       return;
     }
 
-    logInfo(`[overview] configured for ${accountIds.length} enabled provider account(s)`, {
+    console.log(`[overview] configured for ${accountIds.length} enabled provider account(s)`, {
       accountIds,
     });
 
@@ -383,13 +382,13 @@ function useAccountOverviewPullRequests(
       const query = overviewQueries[i];
       if (!query) continue;
       if (query.error) {
-        logError(`[overview] failed for account ${accountIds[i]}`, {
+        console.error(`[overview] failed for account ${accountIds[i]}`, {
           error: query.error,
         });
         continue;
       }
       if (query.data) {
-        logInfo(`[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`);
+        console.log(`[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`);
       }
     }
   }, [accountIds, enabled, overviewQueries]);

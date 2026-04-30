@@ -1,5 +1,5 @@
 import { NodeCommandExecutor, NodeFileSystem, NodeHttpClient } from '@effect/platform-node';
-import { Layer, ManagedRuntime } from 'effect';
+import { Layer, Logger, ManagedRuntime } from 'effect';
 import { EncryptionService } from './auth/encryption.ts';
 import { AuthTokenStoreLive } from './auth/token-store.ts';
 import { CacheServiceLive } from './cache.ts';
@@ -63,7 +63,7 @@ function createAppLayer(options: BackendRuntimeOptions) {
     BaseAndServiceLayer,
   );
 
-  return Layer.provideMerge(AppLayer, ConfigLayer);
+  return Layer.mergeAll(Logger.pretty, Layer.provideMerge(AppLayer, ConfigLayer));
 }
 
 function createBackendRuntime(options: BackendRuntimeOptions) {

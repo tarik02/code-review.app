@@ -36,7 +36,7 @@ import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-ed
 import { ReviewThreadCard } from './review-thread-card';
 import { ScrollArea } from './scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
-import { TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
+import { TopBar, TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
   usePullRequestApprovalMutations,
   usePullRequestReviewCommentMutations,
@@ -2824,10 +2824,11 @@ function PatchViewerMain({
   if (!hasSelection) {
     return (
       <main className="h-full min-h-0 min-w-0 pl-0">
-        <section className="h-full min-h-0 min-w-0 overflow-hidden">
+        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <TopBar className="shrink-0 cursor-grab app-region-drag" position="middle" />
           <AppearanceBackground
             background={backgroundQuery.data}
-            className="h-full w-full object-cover"
+            className="min-h-0 flex-1 w-full object-cover"
           />
         </section>
       </main>
@@ -2848,11 +2849,18 @@ function PatchViewerMain({
                 onScroll={handlePatchScroll}
               >
                 {!selectedPrKey && !isPatchLoading ? (
-                  <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 px-6 py-10 text-center md:min-h-full">
-                    <strong>Select a pull request.</strong>
-                    <span className="text-sm text-ink-600">
-                      The PR patch will render here with Pierre Diffs.
-                    </span>
+                  <div className="flex min-h-full flex-col">
+                    <TopBar
+                      aria-hidden="true"
+                      position="middle"
+                      className="shrink-0 cursor-grab app-region-drag border-b border-ink-200 bg-transparent dark:border-neutral-700"
+                    />
+                    <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center md:min-h-full">
+                      <strong>Select a pull request.</strong>
+                      <span className="text-sm text-ink-600">
+                        The PR patch will render here with Pierre Diffs.
+                      </span>
+                    </div>
                   </div>
                 ) : null}
 

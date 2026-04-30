@@ -27,7 +27,6 @@ import {
   $setSelection,
 } from 'lexical';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { logWarning } from '../../../lib/log';
 import { cn } from '../../../lib/utils';
 import { Combobox } from '../combobox';
 import { toggleCodeFormatting } from '../review-comment-editor-actions';
@@ -349,7 +348,7 @@ function CommentCodeMirrorEditor({
               const languageSupport = await languageData.load();
               extensions.push(languageSupport.extension);
             } catch {
-              logWarning('failed to load language support', {
+              console.warn('failed to load language support', {
                 language: effectiveLanguage,
               });
             }

@@ -4,6 +4,7 @@ import { app } from 'electron';
 import { Effect } from 'effect';
 import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
 import { summarizeError } from '@code-review-app/backend';
+import { backendRuntime } from './backend-runtime';
 
 const updateEvents = new EventEmitter();
 let availableUpdate: AvailableUpdate | null = null;
@@ -35,7 +36,7 @@ function isUpdaterEnabled() {
 }
 
 function logUpdaterError(context: string, error: unknown) {
-  void Effect.runFork(
+  void backendRuntime.runFork(
     Effect.logError(`[updater] ${context} failed`).pipe(
       Effect.annotateLogs({
         error: summarizeError(error),
