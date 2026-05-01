@@ -3,6 +3,8 @@ import { z } from 'zod';
 const forgeProviderKindSchema = z.enum(['github', 'gitlab']);
 const diffDataModeSchema = z.enum(['provider-api', 'git']);
 const themePreferenceSchema = z.enum(['auto', 'light', 'dark']);
+const codeAppearanceFontFamilySchema = z.enum(['geist-mono', 'system-mono', 'custom']);
+const diffThemePresetSchema = z.enum(['pierre', 'github', 'catppuccin', 'solarized']);
 const reviewEditorModeSchema = z.enum(['rich-text', 'source']);
 const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
 const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
@@ -132,6 +134,14 @@ const diffDataSettingsSchema = z.object({
 
 const themePreferenceSettingsSchema = z.object({
   preference: themePreferenceSchema,
+});
+
+const codeAppearanceSettingsSchema = z.object({
+  fontFamily: codeAppearanceFontFamilySchema,
+  customFontFamily: z.string().nullable(),
+  fontSizePx: z.number().int().min(11).max(18),
+  ligatures: z.boolean(),
+  diffThemePreset: diffThemePresetSchema,
 });
 
 const reviewEditorSettingsSchema = z.object({
@@ -371,6 +381,8 @@ export {
   appearanceBackgroundInputSchema,
   browseSearchInputSchema,
   browseSearchSnapshotSchema,
+  codeAppearanceFontFamilySchema,
+  codeAppearanceSettingsSchema,
   completeOAuthSchema,
   createPendingReviewGlobalInputSchema,
   createPendingReviewReplyInputSchema,
@@ -379,6 +391,7 @@ export {
   deletePullRequestReviewCommentInputSchema,
   deletePendingReviewCommentInputSchema,
   diffDataModeSchema,
+  diffThemePresetSchema,
   diffDataSettingsSchema,
   discardPendingReviewInputSchema,
   forgeProviderKindSchema,

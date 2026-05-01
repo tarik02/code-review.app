@@ -4,6 +4,7 @@ import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
+  CodeAppearanceSettings,
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
@@ -46,6 +47,7 @@ const forgeKeys = {
   appearanceBackground: () => [...forgeKeys.settings(), 'appearance-background'] as const,
   diffDataSettings: () => [...forgeKeys.settings(), 'diff-data'] as const,
   themePreference: () => [...forgeKeys.settings(), 'theme-preference'] as const,
+  codeAppearanceSettings: () => [...forgeKeys.settings(), 'code-appearance'] as const,
   reviewEditorSettings: () => [...forgeKeys.settings(), 'review-editor'] as const,
   savedRepos: () => [...forgeKeys.repos(), 'saved'] as const,
   initialRepos: (accountId: string) => [...forgeKeys.repos(), 'initial', accountId] as const,
@@ -225,6 +227,16 @@ function themePreferenceQueryOptions() {
   });
 }
 
+function codeAppearanceSettingsQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.codeAppearanceSettings(),
+    queryFn: async (): Promise<CodeAppearanceSettings> => {
+      return trpc.settings.getCodeAppearanceSettings.query();
+    },
+    staleTime: 0,
+  });
+}
+
 function reviewEditorSettingsQueryOptions() {
   return queryOptions({
     queryKey: forgeKeys.reviewEditorSettings(),
@@ -249,6 +261,10 @@ async function setDiffDataMode(mode: DiffDataMode) {
 
 async function setThemePreference(preference: ThemePreferenceSettings['preference']) {
   return trpc.settings.setThemePreference.mutate({ preference });
+}
+
+async function setCodeAppearanceSettings(settings: CodeAppearanceSettings) {
+  return trpc.settings.setCodeAppearanceSettings.mutate(settings);
 }
 
 async function setReviewEditorDefaultMode(mode: ReviewEditorMode) {
@@ -613,6 +629,7 @@ async function removePullRequestApproval(input: SelectedPullRequest) {
 export {
   accountVisibilityQueryOptions,
   appearanceBackgroundQueryOptions,
+  codeAppearanceSettingsQueryOptions,
   createPendingReviewGlobal,
   createPendingReviewReply,
   createPendingReviewThread,
@@ -653,6 +670,7 @@ export {
   setThemePreference,
   setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
+  setCodeAppearanceSettings,
   themePreferenceQueryOptions,
   trackedPullRequestOrderQueryOptions,
   updatePendingReviewComment,

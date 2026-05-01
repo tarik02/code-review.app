@@ -14,6 +14,18 @@ type ThemePreferenceSettings = {
   preference: ThemePreference;
 };
 
+type CodeAppearanceFontFamily = 'geist-mono' | 'system-mono' | 'custom';
+
+type DiffThemePreset = 'pierre' | 'github' | 'catppuccin' | 'solarized';
+
+type CodeAppearanceSettings = {
+  fontFamily: CodeAppearanceFontFamily;
+  customFontFamily: string | null;
+  fontSizePx: number;
+  ligatures: boolean;
+  diffThemePreset: DiffThemePreset;
+};
+
 type ReviewEditorMode = 'rich-text' | 'source';
 
 type ReviewEditorSettings = {
@@ -478,6 +490,8 @@ export type {
   AvailableUpdate,
   BrowseSearchInput,
   BrowseSearchSnapshot,
+  CodeAppearanceFontFamily,
+  CodeAppearanceSettings,
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
@@ -486,6 +500,7 @@ export type {
   DeletePendingReviewCommentInput,
   DiffDataMode,
   DiffDataSettings,
+  DiffThemePreset,
   DiscardPendingReviewInput,
   ForgeProviderKind,
   NamespaceSummary,

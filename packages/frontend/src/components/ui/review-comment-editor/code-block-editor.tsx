@@ -51,13 +51,15 @@ const commentCodeMirrorTheme = EditorView.theme({
   '&': {
     backgroundColor: 'rgb(var(--rgb-surface))',
     color: 'rgb(var(--rgb-ink-900))',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '13px',
-    lineHeight: '20px',
+    fontFamily: 'var(--app-code-font-family)',
+    fontSize: 'var(--app-code-font-size)',
+    lineHeight: 'var(--app-code-line-height)',
+    fontFeatureSettings: 'var(--app-code-font-features)',
   },
   '.cm-content': {
     caretColor: 'rgb(var(--rgb-ink-900))',
-    fontFamily: 'var(--font-mono)',
+    fontFamily: 'var(--app-code-font-family)',
+    fontFeatureSettings: 'var(--app-code-font-features)',
     minHeight: '2.5rem',
   },
   '.cm-line': {
@@ -76,9 +78,10 @@ const commentCodeMirrorTheme = EditorView.theme({
     backgroundColor: 'rgb(var(--rgb-canvas))',
     borderRight: '1px solid rgb(var(--rgb-ink-200))',
     color: 'rgb(var(--rgb-ink-500))',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '13px',
-    lineHeight: '20px',
+    fontFamily: 'var(--app-code-font-family)',
+    fontSize: 'var(--app-code-font-size)',
+    lineHeight: 'var(--app-code-line-height)',
+    fontFeatureSettings: 'var(--app-code-font-features)',
   },
   '.cm-lineNumbers .cm-gutterElement': {
     minWidth: '2rem',

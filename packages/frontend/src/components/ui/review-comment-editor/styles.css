@@ -25,7 +25,10 @@
   --accentText: rgb(var(--rgb-ink-800));
   --accentTextContrast: rgb(var(--rgb-ink-900));
   --font-body: var(--font-sans);
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: var(--app-code-font-family);
+  --code-font-size: var(--app-code-font-size);
+  --code-line-height: var(--app-code-line-height);
+  --code-font-features: var(--app-code-font-features);
 
   overflow: visible;
   border: 0;
@@ -172,6 +175,7 @@
   background: rgb(var(--rgb-canvas));
   padding: 0.125rem 0.25rem;
   font-family: var(--font-mono);
+  font-feature-settings: var(--code-font-features);
 }
 
 .comment-editor-code-block,
@@ -191,13 +195,14 @@
 
 .comment-editor .cm-gutters,
 .comment-editor-code-block .cm-gutters {
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--code-font-size);
+  line-height: var(--code-line-height);
+  font-feature-settings: var(--code-font-features);
 }
 
 .comment-editor .cm-gutterElement,
 .comment-editor-code-block .cm-gutterElement {
-  line-height: 20px;
+  line-height: var(--code-line-height);
 }
 
 .comment-editor-code-toolbar {

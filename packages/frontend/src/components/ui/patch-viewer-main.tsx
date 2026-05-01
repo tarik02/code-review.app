@@ -21,7 +21,6 @@ import type {
   FileDiffMetadata,
   HunkExpansionRegion,
   SelectedLineRange,
-  VirtualFileMetrics,
   VirtualizerConfig,
 } from '@pierre/diffs';
 import { useQuery } from '@tanstack/react-query';
@@ -40,6 +39,7 @@ import {
   usePullRequestApprovalMutations,
   usePullRequestReviewCommentMutations,
 } from '../../hooks/use-forge-queries';
+import { useCodeAppearance } from '../../hooks/use-code-appearance';
 import { useDiffNavigator } from '../../hooks/use-diff-navigator';
 import { cx } from '../../lib/cx';
 import {
@@ -94,21 +94,6 @@ const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
   overscrollSize: 1200,
   resizeDebugging: false,
 };
-
-const VIRTUAL_FILE_METRICS: VirtualFileMetrics = {
-  hunkLineCount: 50,
-  lineHeight: 20,
-  diffHeaderHeight: 44,
-  hunkSeparatorHeight: 32,
-  fileGap: 8,
-};
-
-const DIFF_FONT_STYLE = {
-  '--diffs-font-family':
-    '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  '--diffs-header-font-family':
-    '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-} as CSSProperties;
 
 const DIFF_EXPANSION_LINE_COUNT = 20;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
@@ -1349,6 +1334,14 @@ function PatchFileDiffItem({
   );
   const fileReviewThreads = getFileReviewThreadsForPath(reviewThreadsByFile, fileDiff.name);
   const fileQualityFindings = getFileQualityFindings(qualityFindingsByFile, fileDiff.name);
+  const {
+    codeFontFamily,
+    codeFontSizePx,
+    codeLineHeightPx,
+    diffTheme,
+    ligatureFontFeatures,
+    virtualFileMetrics,
+  } = useCodeAppearance();
   const normalizedFilePath = normalizePath(fileDiff.name);
   const inactiveFileCommentsExpanded = isInactiveFileCommentsExpanded(normalizedFilePath);
   const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
@@ -1821,18 +1814,30 @@ function PatchFileDiffItem({
     );
   }
 
+  const diffFontStyle = useMemo(
+    () =>
+      ({
+        '--diffs-font-family': codeFontFamily,
+        '--diffs-header-font-family': codeFontFamily,
+        '--diffs-font-size': `${codeFontSizePx}px`,
+        '--diffs-line-height': `${codeLineHeightPx}px`,
+        '--diffs-font-features': ligatureFontFeatures,
+        '--diffs-bg-selection-override': 'rgb(245 158 11 / 0.22)',
+        '--diffs-bg-selection-number-override': 'rgb(245 158 11 / 0.14)',
+        '--diffs-selection-color-override': '#f59e0b',
+      }) as CSSProperties,
+    [codeFontFamily, codeFontSizePx, codeLineHeightPx, ligatureFontFeatures],
+  );
+
   const fileDiffElement = (
     <FileDiff
       fileDiff={fileDiff}
-      metrics={VIRTUAL_FILE_METRICS}
+      metrics={virtualFileMetrics}
       lineAnnotations={lineAnnotations}
       selectedLines={selectedLines}
-      style={DIFF_FONT_STYLE}
+      style={diffFontStyle}
       options={{
-        theme: {
-          dark: 'pierre-dark',
-          light: 'pierre-light',
-        },
+        theme: diffTheme,
         diffStyle: 'unified',
         diffIndicators: 'bars',
         lineDiffType: 'word',
@@ -1890,7 +1895,16 @@ function PatchFileDiffItem({
             background-image: none;
           }
 
+          [data-selected-line][data-line] {
+            box-shadow: inset 3px 0 0 #f59e0b;
+          }
+
+          [data-selected-line][data-column-number] {
+            box-shadow: inset -1px 0 0 rgb(245 158 11 / 0.45);
+          }
+
         `,
+        enableLineSelection: true,
         enableGutterUtility: true,
         onGutterUtilityClick: openLineCommentDraft,
         onPostRender: (node, instance) => {
