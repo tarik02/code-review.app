@@ -1,5 +1,6 @@
 import type { PullRequestQualityFinding, PullRequestQualityReport } from '../../types/forge';
 import { cx } from '../../lib/cx';
+import { TopBar } from './top-bar';
 
 type PullRequestQualitySummaryProps = {
   report: PullRequestQualityReport | null;
@@ -73,7 +74,7 @@ function PullRequestQualitySummary({
   const notes = report.summary.notes ?? [];
 
   return (
-    <div className="border-b border-ink-200 px-4 pb-3 pt-3">
+    <TopBar position='middle' className="border-b border-ink-200 px-4 pb-3 pt-3 app-region-drag">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-ink-900">{report.summary.providerLabel}</span>
         <span
@@ -131,7 +132,7 @@ function PullRequestQualitySummary({
           </div>
         </div>
       ) : null}
-    </div>
+    </TopBar>
   );
 }
 

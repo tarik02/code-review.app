@@ -51,10 +51,10 @@ function PatchScrollVirtualizer({
         style={style}
         viewportProps={{ onScroll }}
         viewportRef={setRoot}
+        contentClassName={contentClassName}
+        contentStyle={contentStyle}
       >
-        <div className={contentClassName} style={contentStyle}>
-          {children}
-        </div>
+        {children}
       </ScrollArea>
     </VirtualizerContext.Provider>
   );

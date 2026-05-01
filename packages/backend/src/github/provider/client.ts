@@ -5,6 +5,7 @@ import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
   PullRequestApprovalState,
+  PullRequestSummary,
   PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
@@ -14,7 +15,7 @@ import type {
   ReviewComment,
   ReviewThread,
 } from '@code-review-app/shared';
-import { summarizeError } from '../../errors.ts';
+import { getErrorMessage } from '../../errors.ts';
 import {
   createRepoIdentity,
   hostNameFromHost,
@@ -346,6 +347,20 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
   };
 }
 
+function withGitHubReviewCapabilities(
+  pullRequest: PullRequestSummary,
+  viewerLogin: string | null,
+): PullRequestSummary {
+  const isOwnPullRequest =
+    viewerLogin != null && viewerLogin.length > 0 && pullRequest.authorLogin === viewerLogin;
+
+  return {
+    ...pullRequest,
+    canApprove: !isOwnPullRequest,
+    canRequestChanges: !isOwnPullRequest,
+  };
+}
+
 function toPullRequestSummaryFromRest(pullRequest: GhRestPullRequest) {
   const merged = pullRequest.merged_at != null;
   return {
@@ -625,7 +640,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return Effect.logWarning('[github] auth status check failed').pipe(
           Effect.annotateLogs({
             message,
-            error: summarizeError(error),
+            error: getErrorMessage(error),
           }),
           Effect.zipRight(
             Effect.succeed(
@@ -873,7 +888,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return [
           {
             repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
-            pullRequest: toPullRequestSummary(pullRequest),
+            pullRequest: withGitHubReviewCapabilities(toPullRequestSummary(pullRequest), login),
           },
         ];
       });
@@ -889,8 +904,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     function* (repo: ProviderRepoIdentity) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      yield* ensureUserContext();
+      const login = userContext?.login ?? null;
       const pullRequests = yield* api.repositoryOpenPullRequests(owner, name);
-      return pullRequests.map(toPullRequestSummaryFromRest);
+      return pullRequests.map((pullRequest) =>
+        withGitHubReviewCapabilities(toPullRequestSummaryFromRest(pullRequest), login),
+      );
     },
   );
 
@@ -913,6 +932,17 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       }
 
       const label = labelForToken(token);
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      if (!login) {
+        return yield* Effect.fail(
+          new GitHubProviderViewerLoginUnavailable({
+            message: 'Unable to determine GitHub viewer login',
+            cause: { provider: 'github', operation: 'searchPullRequests' },
+          }),
+        );
+      }
+
       const directPullRequest = parseGitHubPullRequestUrl(query, token.host);
       if (directPullRequest) {
         const repo = yield* api.repo(directPullRequest.owner, directPullRequest.name);
@@ -929,20 +959,9 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return [
           {
             repo: repoSummaryFromRest(token.id, token.host, label, repo),
-            pullRequest: toPullRequestSummary(pullRequest),
+            pullRequest: withGitHubReviewCapabilities(toPullRequestSummary(pullRequest), login),
           } satisfies OverviewPullRequestSummary,
         ];
-      }
-
-      yield* ensureUserContext();
-      const login = userContext?.login;
-      if (!login) {
-        return yield* Effect.fail(
-          new GitHubProviderViewerLoginUnavailable({
-            message: 'Unable to determine GitHub viewer login',
-            cause: { provider: 'github', operation: 'searchPullRequests' },
-          }),
-        );
       }
 
       const scopedEntries = yield* Effect.forEach(
@@ -964,7 +983,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
                   return [
                     {
                       repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
-                      pullRequest: toPullRequestSummary(pullRequest),
+                      pullRequest: withGitHubReviewCapabilities(
+                        toPullRequestSummary(pullRequest),
+                        login,
+                      ),
                     } satisfies OverviewPullRequestSummary,
                   ];
                 }),
@@ -989,6 +1011,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
+      yield* ensureUserContext();
+      const login = userContext?.login ?? null;
       const response = yield* api.repositoryPullRequest(owner, name, number);
       const pullRequest = response.data?.repository?.pullRequest;
       if (!pullRequest) {
@@ -1001,7 +1025,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         );
       }
 
-      return toPullRequestSummary(pullRequest);
+      return withGitHubReviewCapabilities(toPullRequestSummary(pullRequest), login);
     },
   );
 

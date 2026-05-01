@@ -42,6 +42,7 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
         diffSessionKey={props.diffSessionKey}
         pendingReview={props.pendingReview}
         selectedPr={props.selectedPr}
+        selectedPullRequestSummary={props.selectedPullRequestSummary}
         selectedPrKey={props.selectedPrKey}
         sidebarView={props.sidebarView}
         setSidebarView={props.setSidebarView}

@@ -20,6 +20,7 @@ import { useReviewCommentEditorStore } from '../stores/review-comment-editor-sto
 import type {
   PendingReviewState,
   PullRequestApprovalState,
+  PullRequestSummary,
   SelectedPullRequest,
 } from '../types/forge';
 import { Button } from '../components/ui/button';
@@ -33,6 +34,7 @@ type HomeWorkflowPaletteProps = {
   diffSessionKey: string | null;
   pendingReview: PendingReviewState;
   selectedPr: SelectedPullRequest | null;
+  selectedPullRequestSummary: PullRequestSummary | null;
   selectedPrKey: string | null;
   sidebarView: SidebarPullRequestView;
   setSidebarView: (view: SidebarPullRequestView) => void;
@@ -43,6 +45,7 @@ function HomeWorkflowPalette({
   diffSessionKey,
   pendingReview,
   selectedPr,
+  selectedPullRequestSummary,
   selectedPrKey,
   sidebarView,
   setSidebarView,
@@ -69,6 +72,14 @@ function HomeWorkflowPalette({
   const setSubmitSummary = useCommandPaletteStore((state) => state.setWorkflowSubmitSummary);
   const workflowQuery = useCommandPaletteStore((state) => state.workflowQuery);
   const setWorkflowQuery = useCommandPaletteStore((state) => state.setWorkflowQuery);
+  const canApprove = selectedPullRequestSummary?.canApprove ?? true;
+  const canRequestChanges = selectedPullRequestSummary?.canRequestChanges ?? true;
+  const effectiveSubmitAction =
+    submitAction === 'approve' && !canApprove
+      ? 'comment'
+      : submitAction === 'request_changes' && !canRequestChanges
+        ? 'comment'
+        : submitAction;
 
   const items = (() => {
     if (submitReviewMode) {
@@ -77,7 +88,8 @@ function HomeWorkflowPalette({
           id: 'submit-review-comment',
           group: 'Review type',
           title: 'Comment',
-          badge: submitAction === 'comment' ? <CheckIcon className="size-3.5" /> : undefined,
+          badge:
+            effectiveSubmitAction === 'comment' ? <CheckIcon className="size-3.5" /> : undefined,
           icon: <MessageSquareMoreIcon className="size-4" />,
           onSelect: () => setSubmitAction('comment'),
         },
@@ -85,7 +97,9 @@ function HomeWorkflowPalette({
           id: 'submit-review-approve',
           group: 'Review type',
           title: 'Approve',
-          badge: submitAction === 'approve' ? <CheckIcon className="size-3.5" /> : undefined,
+          badge:
+            effectiveSubmitAction === 'approve' ? <CheckIcon className="size-3.5" /> : undefined,
+          disabled: !canApprove,
           icon: <CheckIcon className="size-4" />,
           onSelect: () => setSubmitAction('approve'),
         },
@@ -94,7 +108,10 @@ function HomeWorkflowPalette({
           group: 'Review type',
           title: 'Request changes',
           badge:
-            submitAction === 'request_changes' ? <CheckIcon className="size-3.5" /> : undefined,
+            effectiveSubmitAction === 'request_changes'
+              ? <CheckIcon className="size-3.5" />
+              : undefined,
+          disabled: !canRequestChanges,
           icon: <FilterXIcon className="size-4" />,
           onSelect: () => setSubmitAction('request_changes'),
         },
@@ -202,7 +219,7 @@ function HomeWorkflowPalette({
       });
     }
 
-    if (selectedPr && !approvalState?.viewerApproved) {
+    if (selectedPr && canApprove && !approvalState?.viewerApproved) {
       nextItems.push({
         id: 'action-approve',
         group: 'Actions',
@@ -295,7 +312,7 @@ function HomeWorkflowPalette({
                 void publishPendingReviewMutation
                   .mutateAsync({
                     ...selectedPr,
-                    action: submitAction,
+                    action: effectiveSubmitAction,
                     summary: submitSummary.trim() || undefined,
                   })
                   .then(() => setWorkflowOpen(false));

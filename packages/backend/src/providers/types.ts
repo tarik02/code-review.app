@@ -25,8 +25,12 @@ type ReviewThreadInput = {
   newPath: string;
   line: number | null;
   side: string | null;
+  oldLine: number | null;
+  newLine: number | null;
   startLine: number | null;
   startSide: string | null;
+  startOldLine: number | null;
+  startNewLine: number | null;
   subjectType: 'file' | 'line' | 'global';
 };
 

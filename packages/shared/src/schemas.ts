@@ -70,6 +70,8 @@ const pullRequestSummarySchema = z.object({
   url: z.string(),
   headSha: z.string(),
   baseSha: z.string().nullable(),
+  canApprove: z.boolean().optional(),
+  canRequestChanges: z.boolean().optional(),
 });
 
 const overviewPullRequestSummarySchema = z.object({
@@ -246,8 +248,12 @@ const createPullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
   newPath: z.string(),
   line: z.number().int().nonnegative().nullable(),
   side: reviewCommentSideSchema.nullable(),
+  oldLine: z.number().int().nonnegative().nullable(),
+  newLine: z.number().int().nonnegative().nullable(),
   startLine: z.number().int().nonnegative().nullable(),
   startSide: reviewCommentSideSchema.nullable(),
+  startOldLine: z.number().int().nonnegative().nullable(),
+  startNewLine: z.number().int().nonnegative().nullable(),
   subjectType: z.enum(['file', 'line', 'global']),
 });
 
@@ -258,8 +264,12 @@ const createPendingReviewThreadInputSchema = pullRequestVersionedInputSchema.ext
   newPath: z.string(),
   line: z.number().int().nonnegative().nullable(),
   side: reviewCommentSideSchema.nullable(),
+  oldLine: z.number().int().nonnegative().nullable(),
+  newLine: z.number().int().nonnegative().nullable(),
   startLine: z.number().int().nonnegative().nullable(),
   startSide: reviewCommentSideSchema.nullable(),
+  startOldLine: z.number().int().nonnegative().nullable(),
+  startNewLine: z.number().int().nonnegative().nullable(),
   subjectType: z.enum(['file', 'line']),
 });
 

@@ -18,8 +18,12 @@ type DraftReviewCommentTarget =
       path: string;
       line: number;
       side: ReviewCommentSide;
+      oldLine: number | null;
+      newLine: number | null;
       startLine: number | null;
       startSide: ReviewCommentSide | null;
+      startOldLine: number | null;
+      startNewLine: number | null;
     };
 
 type ReviewCommentEditorKind = 'new' | 'reply' | 'edit';

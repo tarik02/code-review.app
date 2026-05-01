@@ -1,9 +1,8 @@
 import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
-import { summarizeError, ValidationError } from '../errors.ts';
+import { ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 import { AppSettingsService } from './app-settings.ts';
-import { repoIdentityCacheKey } from '../repo-id.ts';
 import { trackedPullRequestOrderEntrySchema } from '@code-review-app/shared';
 import type {
   PullRequestSummary,
@@ -80,9 +79,50 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
   const appSettings = yield* AppSettingsService;
   const providers = yield* ForgeProviderRegistry;
 
+  const resolveTrackedPullRequests = Effect.fn(
+    'TrackedPullRequestService.resolveTrackedPullRequests',
+  )(function* (repoInput: RepoIdentity) {
+    const repoIdentity = requireRepo(repoInput);
+    const { provider, repo } = yield* providers.forRepo(repoIdentity);
+    const tracked = yield* cache.readTrackedPullRequests(repoIdentity);
+    if (tracked.length === 0) {
+      return [];
+    }
+
+    const openPullRequests = yield* provider.listPullRequests(repo);
+    const openByNumber = new Map(
+      openPullRequests.map((pullRequest) => [pullRequest.number, pullRequest]),
+    );
+    const resolvedTrackedPullRequests = yield* Effect.forEach(
+      tracked,
+      (trackedPullRequest) => {
+        const openPullRequest = openByNumber.get(trackedPullRequest.number);
+        if (openPullRequest) {
+          return Effect.succeed(openPullRequest);
+        }
+
+        return provider
+          .getPullRequest(repo, trackedPullRequest.number)
+          .pipe(Effect.catchAll(() => Effect.succeed(null)));
+      },
+      { concurrency: 'unbounded' },
+    );
+
+    const currentPullRequests = resolvedTrackedPullRequests.filter(
+      (pullRequest): pullRequest is PullRequestSummary => pullRequest !== null,
+    );
+
+    for (const pullRequest of currentPullRequests) {
+      yield* cache.trackPullRequest(repoIdentity, pullRequest);
+    }
+
+    yield* cache.updateRepoAccessTimestamp(repoIdentity);
+    return currentPullRequests;
+  });
+
   const list: TrackedPullRequestServiceShape['list'] = Effect.fn('TrackedPullRequestService.list')(
     function* (repo) {
-      return yield* cache.readTrackedPullRequests(requireRepo(repo));
+      return yield* resolveTrackedPullRequests(repo);
     },
   );
 
@@ -128,50 +168,7 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
   const refresh: TrackedPullRequestServiceShape['refresh'] = Effect.fn(
     'TrackedPullRequestService.refresh',
   )(function* (repoInput) {
-    const repoIdentity = requireRepo(repoInput);
-    const { provider, repo } = yield* providers.forRepo(repoIdentity);
-    const tracked = yield* cache.readTrackedPullRequests(repoIdentity);
-    if (tracked.length === 0) return [];
-
-    const openPullRequests = yield* provider.listPullRequests(repo).pipe(
-      Effect.catchAll((error) =>
-        Effect.logWarning('[tracked] refresh failed; returning cached pull requests').pipe(
-          Effect.annotateLogs({
-            repo: repoIdentityCacheKey(repoIdentity),
-            error: summarizeError(error),
-          }),
-          Effect.zipRight(Effect.succeed<PullRequestSummary[] | null>(null)),
-        ),
-      ),
-    );
-    if (!openPullRequests) {
-      yield* cache.updateRepoAccessTimestamp(repoIdentity);
-      return tracked;
-    }
-
-    const openByNumber = new Map(
-      openPullRequests.map((pullRequest) => [pullRequest.number, pullRequest]),
-    );
-
-    for (const pullRequest of tracked) {
-      const openPullRequest = openByNumber.get(pullRequest.number);
-      if (openPullRequest) {
-        yield* cache.trackPullRequest(repoIdentity, openPullRequest);
-        continue;
-      }
-
-      if (pullRequest.state === 'OPEN') {
-        const verified = yield* provider
-          .getPullRequest(repo, pullRequest.number)
-          .pipe(Effect.catchAll(() => Effect.succeed(null)));
-        if (verified) {
-          yield* cache.trackPullRequest(repoIdentity, verified);
-        }
-      }
-    }
-
-    yield* cache.updateRepoAccessTimestamp(repoIdentity);
-    return yield* cache.readTrackedPullRequests(repoIdentity);
+    return yield* resolveTrackedPullRequests(repoInput);
   });
 
   return {

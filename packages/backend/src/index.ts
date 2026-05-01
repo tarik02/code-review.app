@@ -1,7 +1,7 @@
 export { EncryptionService } from './auth/encryption.ts';
 export { createAppRouter } from './router.ts';
 export { createBackendRuntime } from './runtime.ts';
-export { ensureError, formatLogDetails, summarizeError } from './errors.ts';
+export { ensureError, formatLogDetails, getErrorMessage } from './errors.ts';
 export { SettingsService } from './services/settings.ts';
 export {
   PROVIDER_IMAGE_PROTOCOL,

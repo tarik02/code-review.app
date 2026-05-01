@@ -1,5 +1,5 @@
 import { Effect, Layer } from 'effect';
-import { ValidationError, summarizeError } from '../errors.ts';
+import { ValidationError, getErrorMessage } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 import type {
   ForgeProviderKind,
@@ -84,7 +84,7 @@ const makePullRequestQualityService = Effect.gen(function* () {
                 number,
                 headSha,
                 message,
-                error: summarizeError(error),
+                error: getErrorMessage(error),
               }),
               Effect.zipRight(
                 Effect.succeed(

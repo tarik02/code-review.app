@@ -446,13 +446,22 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
       });
     }
 
+    if (repoFilterKey) {
+      return [
+        ...(profileFilterAccountId ? [] : profileItems),
+        ...pullRequestItems,
+        ...(namespaceFilterPath ? namespaceFilterItems : []),
+        ...repoItems,
+        ...(profileFilterAccountId ? profileItems : []),
+      ];
+    }
+
     return [
       ...(profileFilterAccountId ? [] : profileItems),
       ...(namespaceFilterPath ? [] : namespaceFilterItems),
-      ...(repoFilterKey ? [] : repoItems),
       ...pullRequestItems,
-      ...(repoFilterKey ? repoItems : []),
       ...(namespaceFilterPath ? namespaceFilterItems : []),
+      ...repoItems,
       ...(profileFilterAccountId ? profileItems : []),
     ];
   })();

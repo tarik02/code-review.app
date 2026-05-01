@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import { Cause, Effect, Exit, Option } from 'effect';
-import { BackendError, formatLogDetails, getErrorMessage, summarizeError } from './errors.ts';
+import { BackendError, formatLogDetails, getErrorMessage } from './errors.ts';
 import { PullRequestService } from './services/pull-requests.ts';
 import { PullRequestQualityService } from './services/pull-request-quality.ts';
 import { RepoService } from './services/repos.ts';
@@ -174,13 +174,17 @@ function causeFailureOrSquash<E>(cause: Cause.Cause<E>): unknown {
 }
 
 function summarizeEffectCause<E>(cause: Cause.Cause<E>) {
-  const errors = Cause.prettyErrors(cause).map((error) =>
-    summarizeError(Cause.originalError(error)),
-  );
+  const errors = Cause.prettyErrors(cause).map((error) => {
+    const originalError = Cause.originalError(error);
+    return {
+      message: getErrorMessage(originalError),
+      name: originalError instanceof Error ? originalError.name : typeof originalError,
+    };
+  });
   return {
     pretty: Cause.pretty(cause, { renderErrorCause: true }),
     errors,
-    primaryError: errors[0] ?? summarizeError(causeFailureOrSquash(cause)),
+    primaryError: errors[0] ?? { message: getErrorMessage(causeFailureOrSquash(cause)) },
   };
 }
 
@@ -1067,7 +1071,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         } catch (error) {
           await runtime.runPromise(
             Effect.logError(
-              `[trpc] updates.check failed\n${formatLogDetails(summarizeError(error))}`,
+              `[trpc] updates.check failed\n${formatLogDetails({ message: getErrorMessage(error) })}`,
             ),
           );
           throw mapError(error);
@@ -1079,7 +1083,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         } catch (error) {
           await runtime.runPromise(
             Effect.logError(
-              `[trpc] updates.install failed\n${formatLogDetails(summarizeError(error))}`,
+              `[trpc] updates.install failed\n${formatLogDetails({ message: getErrorMessage(error) })}`,
             ),
           );
           throw mapError(error);
