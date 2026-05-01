@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import {
-  parseCodeAppearanceSettings,
-  validateCodeAppearanceSettings,
-} from './settings.ts';
+import { parseCodeAppearanceSettings, validateCodeAppearanceSettings } from './settings.ts';
 
 describe('code appearance settings', () => {
   it('returns defaults when no persisted settings exist', () => {

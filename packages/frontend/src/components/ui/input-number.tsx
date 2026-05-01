@@ -1,11 +1,6 @@
 import { NumberField } from '@base-ui/react/number-field';
 import type { NumberFieldRootProps } from '@base-ui/react/number-field';
-import {
-  MinusIcon,
-  MoveHorizontalIcon,
-  MoveVerticalIcon,
-  PlusIcon,
-} from 'lucide-react';
+import { MinusIcon, MoveHorizontalIcon, MoveVerticalIcon, PlusIcon } from 'lucide-react';
 import { Button } from './button';
 import { ButtonGroup } from './button-group';
 import { Input } from './input';

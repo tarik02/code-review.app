@@ -253,7 +253,11 @@ function validateCodeAppearanceSettings(settings: CodeAppearanceSettings): CodeA
     throw new Error('Unsupported code font family.');
   }
 
-  if (!Number.isInteger(settings.fontSizePx) || settings.fontSizePx < 11 || settings.fontSizePx > 18) {
+  if (
+    !Number.isInteger(settings.fontSizePx) ||
+    settings.fontSizePx < 11 ||
+    settings.fontSizePx > 18
+  ) {
     throw new Error('Code font size must be an integer between 11 and 18.');
   }
 

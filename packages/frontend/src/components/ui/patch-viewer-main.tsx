@@ -1334,8 +1334,14 @@ function PatchFileDiffItem({
   );
   const fileReviewThreads = getFileReviewThreadsForPath(reviewThreadsByFile, fileDiff.name);
   const fileQualityFindings = getFileQualityFindings(qualityFindingsByFile, fileDiff.name);
-  const { codeFontFamily, codeFontSizePx, codeLineHeightPx, diffTheme, ligatureFontFeatures, virtualFileMetrics } =
-    useCodeAppearance();
+  const {
+    codeFontFamily,
+    codeFontSizePx,
+    codeLineHeightPx,
+    diffTheme,
+    ligatureFontFeatures,
+    virtualFileMetrics,
+  } = useCodeAppearance();
   const normalizedFilePath = normalizePath(fileDiff.name);
   const inactiveFileCommentsExpanded = isInactiveFileCommentsExpanded(normalizedFilePath);
   const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;

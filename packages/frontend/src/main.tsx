@@ -11,10 +11,7 @@ import '@fontsource/geist-mono/700.css';
 import App from './App';
 import './index.css';
 import PierreDiffsWorker from '@pierre/diffs/worker/worker-portable.js?worker';
-import {
-  DEFAULT_CODE_APPEARANCE_SETTINGS,
-  resolveDiffTheme,
-} from './hooks/use-code-appearance';
+import { DEFAULT_CODE_APPEARANCE_SETTINGS, resolveDiffTheme } from './hooks/use-code-appearance';
 import { isElectron, syncDocumentPlatformClass } from './lib/platform';
 import { syncDocumentWindowControlsOverlayClass } from './lib/wco';
 import { syncDocumentWindowFullscreenClass } from './lib/window-fullscreen';
