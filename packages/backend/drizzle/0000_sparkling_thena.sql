@@ -49,13 +49,13 @@ CREATE TABLE `provider_profiles` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `provider_profiles_account_id_unique` ON `provider_profiles` (`account_id`);--> statement-breakpoint
 CREATE TABLE `pull_requests` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`repo_row_id` integer NOT NULL,
 	`pr_number` integer NOT NULL,
 	`title` text NOT NULL,
 	`state` text NOT NULL,
 	`is_draft` integer DEFAULT false NOT NULL,
-	`is_tracked` integer DEFAULT false NOT NULL,
+	`tracked_at` integer,
+	`tracked_position` integer,
 	`merge_state_status` text DEFAULT 'UNKNOWN' NOT NULL,
 	`mergeable` text DEFAULT 'UNKNOWN' NOT NULL,
 	`additions` integer,
@@ -63,16 +63,15 @@ CREATE TABLE `pull_requests` (
 	`change_count` integer,
 	`author_login` text NOT NULL,
 	`updated_at` text NOT NULL,
-	`url` text NOT NULL,
 	`head_sha` text NOT NULL,
 	`base_sha` text,
-	`cached_at` integer NOT NULL,
 	`last_seen_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `idx_pull_requests_repo_pr_number` ON `pull_requests` (`repo_row_id`,`pr_number`);--> statement-breakpoint
 CREATE INDEX `idx_pull_requests_repo_updated` ON `pull_requests` (`repo_row_id`,"updated_at" desc);--> statement-breakpoint
-CREATE INDEX `idx_pull_requests_repo_tracked` ON `pull_requests` (`repo_row_id`,`is_tracked`);--> statement-breakpoint
+CREATE INDEX `idx_pull_requests_tracked_position` ON `pull_requests` (`tracked_position`,`tracked_at`);--> statement-breakpoint
+CREATE INDEX `idx_pull_requests_repo_tracked` ON `pull_requests` (`repo_row_id`,`tracked_at`);--> statement-breakpoint
 CREATE TABLE `repos` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`provider_id` text NOT NULL,

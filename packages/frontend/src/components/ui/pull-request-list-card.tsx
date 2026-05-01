@@ -21,9 +21,11 @@ type PullRequestListCardProps = {
   pullRequest: PullRequestSummary;
   selectedPrKey: string | null;
   repoLabel?: string;
+  className?: string;
   isDimmed?: boolean;
   leadingActions?: ReactNode;
   trailingActions?: ReactNode;
+  trailingActionsAlwaysVisible?: boolean;
   onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
 };
 
@@ -124,9 +126,11 @@ function PullRequestListCard({
   pullRequest,
   selectedPrKey,
   repoLabel,
+  className,
   isDimmed = false,
   leadingActions,
   trailingActions,
+  trailingActionsAlwaysVisible = false,
   onSelectPr,
 }: PullRequestListCardProps) {
   const status = getPullRequestStatus(pullRequest);
@@ -136,7 +140,7 @@ function PullRequestListCard({
   const isSelected = selectedPrKey === `${lookupKey}#${pullRequest.number}@${pullRequest.headSha}`;
 
   return (
-    <div className={cx('group relative', isDimmed && 'opacity-60')}>
+    <div className={cx('group relative', className, isDimmed && 'opacity-60')}>
       <div
         className={cx(
           'flex items-stretch bg-canvas transition hover:bg-canvasDark focus-within:bg-surface',
@@ -175,7 +179,10 @@ function PullRequestListCard({
         {trailingActions ? (
           <div
             className={cx(
-              'pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center pl-1 pr-2 opacity-0 transition group-hover:opacity-100',
+              'pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center pl-1 pr-2 transition',
+              trailingActionsAlwaysVisible
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
               'shadow-[-24px_0_32px_-12px_rgba(15,23,42,0.5)]',
               isSelected ? 'bg-canvasDark' : 'bg-canvas group-hover:bg-canvasDark',
             )}

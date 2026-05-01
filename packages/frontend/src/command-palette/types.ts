@@ -1,3 +1,3 @@
-type SidebarPullRequestView = 'overview' | 'tracked';
+type SidebarPullRequestView = 'overview' | 'recent' | 'tracked';
 
 export type { SidebarPullRequestView };

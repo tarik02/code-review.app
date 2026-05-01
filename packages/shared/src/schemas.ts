@@ -55,7 +55,7 @@ const namespaceSummarySchema = z.object({
   webUrl: z.string().nullable(),
 });
 
-const pullRequestSummarySchema = z.object({
+const pullRequestListItemSchema = z.object({
   number: z.number().int().nonnegative(),
   title: z.string(),
   state: z.string(),
@@ -67,16 +67,20 @@ const pullRequestSummarySchema = z.object({
   changeCount: z.number().int().nonnegative().nullable(),
   authorLogin: z.string(),
   updatedAt: z.string(),
-  url: z.string(),
   headSha: z.string(),
   baseSha: z.string().nullable(),
-  canApprove: z.boolean().optional(),
-  canRequestChanges: z.boolean().optional(),
 });
+
+const pullRequestSchema = pullRequestListItemSchema.extend({
+  canApprove: z.boolean(),
+  canRequestChanges: z.boolean(),
+});
+
+const pullRequestSummarySchema = pullRequestListItemSchema;
 
 const overviewPullRequestSummarySchema = z.object({
   repo: repoSummarySchema,
-  pullRequest: pullRequestSummarySchema,
+  pullRequest: pullRequestListItemSchema,
 });
 
 const browseSearchInputSchema = z.object({
@@ -405,7 +409,9 @@ export {
   pullRequestQualityReportSchema,
   pullRequestQualityReportStatusSchema,
   pullRequestQualitySummarySchema,
+  pullRequestListItemSchema,
   pullRequestSummarySchema,
+  pullRequestSchema,
   pullRequestVersionedInputSchema,
   replyToPullRequestReviewCommentInputSchema,
   reviewEditorModeSchema,

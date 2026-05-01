@@ -49,7 +49,7 @@ type NamespaceSummary = {
   webUrl: string | null;
 };
 
-type PullRequestSummary = {
+type PullRequestListItem = {
   number: number;
   title: string;
   state: string;
@@ -61,16 +61,20 @@ type PullRequestSummary = {
   changeCount: number | null;
   authorLogin: string;
   updatedAt: string;
-  url: string;
   headSha: string;
   baseSha: string | null;
-  canApprove?: boolean;
-  canRequestChanges?: boolean;
 };
+
+type PullRequest = PullRequestListItem & {
+  canApprove: boolean;
+  canRequestChanges: boolean;
+};
+
+type PullRequestSummary = PullRequestListItem;
 
 type OverviewPullRequestSummary = {
   repo: RepoSummary;
-  pullRequest: PullRequestSummary;
+  pullRequest: PullRequestListItem;
 };
 
 type PullRequestSearchState = 'open' | 'draft_open' | 'all';
@@ -496,6 +500,7 @@ export type {
   PullRequestApprovalActor,
   PullRequestApprovalRemoveStrategy,
   PullRequestApprovalState,
+  PullRequest,
   PrChangedFile,
   PrFileChangeType,
   PrFileContents,
@@ -514,6 +519,7 @@ export type {
   PullRequestQualityReport,
   PullRequestQualityReportStatus,
   PullRequestQualitySummary,
+  PullRequestListItem,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoIdentity,

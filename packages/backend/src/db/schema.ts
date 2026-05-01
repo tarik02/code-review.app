@@ -57,13 +57,13 @@ export const repos = sqliteTable(
 export const pullRequests = sqliteTable(
   'pull_requests',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
     repoRowId: integer('repo_row_id').notNull(),
     prNumber: integer('pr_number').notNull(),
     title: text('title').notNull(),
     state: text('state').notNull(),
     isDraft: integer('is_draft', { mode: 'boolean' }).notNull().default(false),
-    isTracked: integer('is_tracked', { mode: 'boolean' }).notNull().default(false),
+    trackedAt: integer('tracked_at'),
+    trackedPosition: integer('tracked_position'),
     mergeStateStatus: text('merge_state_status').notNull().default('UNKNOWN'),
     mergeable: text('mergeable').notNull().default('UNKNOWN'),
     additions: integer('additions'),
@@ -71,16 +71,15 @@ export const pullRequests = sqliteTable(
     changeCount: integer('change_count'),
     authorLogin: text('author_login').notNull(),
     updatedAt: text('updated_at').notNull(),
-    url: text('url').notNull(),
     headSha: text('head_sha').notNull(),
     baseSha: text('base_sha'),
-    cachedAt: integer('cached_at').notNull(),
     lastSeenAt: integer('last_seen_at').notNull(),
   },
   (table) => [
     uniqueIndex('idx_pull_requests_repo_pr_number').on(table.repoRowId, table.prNumber),
     index('idx_pull_requests_repo_updated').on(table.repoRowId, sql`${table.updatedAt} desc`),
-    index('idx_pull_requests_repo_tracked').on(table.repoRowId, table.isTracked),
+    index('idx_pull_requests_tracked_position').on(table.trackedPosition, table.trackedAt),
+    index('idx_pull_requests_repo_tracked').on(table.repoRowId, table.trackedAt),
   ],
 );
 

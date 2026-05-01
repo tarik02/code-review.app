@@ -14,6 +14,7 @@ type CommandPaletteItem = {
   keywords?: string[];
   icon?: ReactNode;
   badge?: ReactNode;
+  trailing?: ReactNode;
   shortcut?: string;
   disabled?: boolean;
   onSelect: () => void;
@@ -306,6 +307,8 @@ function CommandPalette({
                               </p>
                             ) : null}
                           </div>
+
+                          {item.trailing ? <div className="shrink-0">{item.trailing}</div> : null}
 
                           {shortcut ? (
                             <div className="shrink-0 select-none rounded border border-neutral-300 bg-surface px-1.5 py-0.5 text-[11px] font-medium text-ink-500 dark:border-neutral-700">

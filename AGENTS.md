@@ -49,6 +49,8 @@ This project is a local Electron app for browsing GitHub/GitLab PRs/MRs and rend
 ## Working Rules For Agents
 
 - Keep UI changes aligned with existing Tailwind design tokens (`bg-canvas`, `bg-surface`, etc.).
+- Prefer existing shadcn-style UI components from `packages/frontend/src/components/ui/` for interactive controls.
+- Do not introduce raw HTML buttons/inputs/selects/textareas when an existing local shadcn-style component covers the use case.
 - Prefer small focused components over growing `App.tsx`.
 - Keep tree and diff states decoupled: one may fail while the other still renders.
 - Use pnpm everywhere for JS tasks (`pnpm install`, `pnpm add`, `pnpm run ...`); do not use npm.

@@ -14,25 +14,36 @@ import type {
   ForgeProviderKind,
   ProviderProfile,
   RepoIdentity,
-  PullRequestSummary,
+  PullRequestListItem,
   RepoSummary,
+  OverviewPullRequestSummary,
+  TrackedPullRequestOrderEntry,
 } from '@code-review-app/shared';
 
 type CacheServiceShape = {
   listSavedRepos(): Effect.Effect<RepoSummary[], CacheError>;
   listTrackedRepos(): Effect.Effect<RepoSummary[], CacheError>;
+  listRecentPullRequests(): Effect.Effect<OverviewPullRequestSummary[], CacheError>;
   saveRepo(repo: RepoSummary): Effect.Effect<void, CacheError>;
   ensureRepo(repo: RepoIdentity): Effect.Effect<void, CacheError>;
-  readCachedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], CacheError>;
+  readCachedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestListItem[], CacheError>;
+  readTrackedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestListItem[], CacheError>;
+  readTrackedPullRequestOrder(): Effect.Effect<TrackedPullRequestOrderEntry[], CacheError>;
   writePullRequestsCache(
     repo: RepoIdentity,
-    pullRequests: PullRequestSummary[],
+    pullRequests: PullRequestListItem[],
   ): Effect.Effect<void, CacheError>;
-  readTrackedPullRequests(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], CacheError>;
+  cachePullRequest(
+    repo: RepoIdentity,
+    pullRequest: PullRequestListItem,
+  ): Effect.Effect<void, CacheError>;
   trackPullRequest(
     repo: RepoIdentity,
-    pullRequest: PullRequestSummary,
+    pullRequest: PullRequestListItem,
   ): Effect.Effect<void, CacheError>;
+  setTrackedPullRequestOrder(
+    entries: TrackedPullRequestOrderEntry[],
+  ): Effect.Effect<TrackedPullRequestOrderEntry[], CacheError>;
   removeTrackedPullRequest(repo: RepoIdentity, number: number): Effect.Effect<void, CacheError>;
   getCachedPatch(
     repo: RepoIdentity,
@@ -153,7 +164,7 @@ async function findRepoRowId(database: Database | DatabaseTransaction, repo: Rep
   return row?.id ?? null;
 }
 
-function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
+function rowToPullRequestListItem(row: PullRequestCacheRow): PullRequestListItem {
   return {
     number: row.prNumber,
     title: row.title,
@@ -166,13 +177,24 @@ function rowToPullRequest(row: PullRequestCacheRow): PullRequestSummary {
     changeCount: row.changeCount,
     authorLogin: row.authorLogin,
     updatedAt: row.updatedAt,
-    url: row.url,
     headSha: row.headSha,
     baseSha: row.baseSha,
   };
 }
 
-function pullRequestValues(repoRowId: number, pullRequest: PullRequestSummary) {
+function rowToOverviewPullRequestSummary(input: {
+  repo: typeof repos.$inferSelect;
+  profileAccountId: string | null;
+  profileLogin: string | null;
+  pullRequest: PullRequestCacheRow;
+}): OverviewPullRequestSummary {
+  return {
+    repo: rowToRepo(input.repo, input.profileAccountId, input.profileLogin),
+    pullRequest: rowToPullRequestListItem(input.pullRequest),
+  };
+}
+
+function pullRequestValues(repoRowId: number, pullRequest: PullRequestListItem) {
   return {
     repoRowId,
     prNumber: pullRequest.number,
@@ -186,7 +208,6 @@ function pullRequestValues(repoRowId: number, pullRequest: PullRequestSummary) {
     changeCount: pullRequest.changeCount,
     authorLogin: pullRequest.authorLogin,
     updatedAt: pullRequest.updatedAt,
-    url: pullRequest.url,
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
   };
@@ -204,12 +225,18 @@ function pullRequestCacheUpdateValues(timestamp: number) {
     changeCount: sqlExcluded(pullRequests.changeCount),
     authorLogin: sqlExcluded(pullRequests.authorLogin),
     updatedAt: sqlExcluded(pullRequests.updatedAt),
-    url: sqlExcluded(pullRequests.url),
     headSha: sqlExcluded(pullRequests.headSha),
     baseSha: sqlExcluded(pullRequests.baseSha),
-    cachedAt: timestamp,
     lastSeenAt: timestamp,
   };
+}
+
+function trackedPullRequestOrderBy() {
+  return [
+    sql`case when ${pullRequests.trackedPosition} is null then 1 else 0 end`,
+    asc(pullRequests.trackedPosition),
+    desc(pullRequests.trackedAt),
+  ] as const;
 }
 
 const makeCacheService = Effect.gen(function* () {
@@ -241,7 +268,7 @@ const makeCacheService = Effect.gen(function* () {
       const trackedRepoRows = db
         .select({ repoRowId: pullRequests.repoRowId })
         .from(pullRequests)
-        .where(eq(pullRequests.isTracked, true))
+        .where(sql`${pullRequests.trackedAt} is not null`)
         .groupBy(pullRequests.repoRowId)
         .as('tracked_repo_rows');
 
@@ -257,6 +284,26 @@ const makeCacheService = Effect.gen(function* () {
         .orderBy(asc(repos.nameWithOwner));
 
       return rows.map((row) => rowToRepo(row.repo, row.profileAccountId, row.profileLogin));
+    }),
+  );
+
+  const listRecentPullRequests: CacheServiceShape['listRecentPullRequests'] = Effect.fn(
+    'CacheService.listRecentPullRequests',
+  )(() =>
+    database.query(async (db) => {
+      const rows = await db
+        .select({
+          repo: repos,
+          profileAccountId: providerProfiles.accountId,
+          profileLogin: providerProfiles.login,
+          pullRequest: pullRequests,
+        })
+        .from(pullRequests)
+        .innerJoin(repos, eq(repos.id, pullRequests.repoRowId))
+        .leftJoin(providerProfiles, eq(providerProfiles.id, repos.providerProfileId))
+        .orderBy(desc(pullRequests.lastSeenAt), desc(pullRequests.updatedAt));
+
+      return rows.map((row) => rowToOverviewPullRequestSummary(row));
     }),
   );
 
@@ -351,7 +398,43 @@ const makeCacheService = Effect.gen(function* () {
         .where(eq(pullRequests.repoRowId, repoRowId))
         .orderBy(desc(pullRequests.updatedAt));
 
-      return rows.map(rowToPullRequest);
+      return rows.map(rowToPullRequestListItem);
+    }),
+  );
+
+  const readTrackedPullRequests: CacheServiceShape['readTrackedPullRequests'] = Effect.fn(
+    'CacheService.readTrackedPullRequests',
+  )((repo) =>
+    database.query(async (db) => {
+      const repoRowId = await findRepoRowId(db, repo);
+      if (repoRowId === null) return [];
+
+      const rows = await db
+        .select()
+        .from(pullRequests)
+        .where(
+          and(eq(pullRequests.repoRowId, repoRowId), sql`${pullRequests.trackedAt} is not null`),
+        )
+        .orderBy(...trackedPullRequestOrderBy());
+
+      return rows.map(rowToPullRequestListItem);
+    }),
+  );
+
+  const readTrackedPullRequestOrder: CacheServiceShape['readTrackedPullRequestOrder'] = Effect.fn(
+    'CacheService.readTrackedPullRequestOrder',
+  )(() =>
+    database.query(async (db) => {
+      return db
+        .select({
+          providerId: repos.providerId,
+          repoKey: repos.repoKey,
+          number: pullRequests.prNumber,
+        })
+        .from(pullRequests)
+        .innerJoin(repos, eq(repos.id, pullRequests.repoRowId))
+        .where(sql`${pullRequests.trackedAt} is not null`)
+        .orderBy(...trackedPullRequestOrderBy());
     }),
   );
 
@@ -366,7 +449,7 @@ const makeCacheService = Effect.gen(function* () {
 
       await tx
         .delete(pullRequests)
-        .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.isTracked, false)));
+        .where(and(eq(pullRequests.repoRowId, repoRowId), sql`${pullRequests.trackedAt} is null`));
 
       if (summaries.length === 0) return;
 
@@ -375,8 +458,6 @@ const makeCacheService = Effect.gen(function* () {
         .values(
           summaries.map((pullRequest) => ({
             ...pullRequestValues(repoRowId, pullRequest),
-            isTracked: false,
-            cachedAt: timestamp,
             lastSeenAt: timestamp,
           })),
         )
@@ -387,20 +468,25 @@ const makeCacheService = Effect.gen(function* () {
     }),
   );
 
-  const readTrackedPullRequests: CacheServiceShape['readTrackedPullRequests'] = Effect.fn(
-    'CacheService.readTrackedPullRequests',
-  )((repo) =>
-    database.query(async (db) => {
-      const repoRowId = await findRepoRowId(db, repo);
-      if (repoRowId === null) return [];
+  const cachePullRequest: CacheServiceShape['cachePullRequest'] = Effect.fn(
+    'CacheService.cachePullRequest',
+  )((repo, pullRequest) =>
+    database.transaction(async (tx) => {
+      const repoRowId = await findRepoRowId(tx, repo);
+      if (repoRowId === null) return;
 
-      const rows = await db
-        .select()
-        .from(pullRequests)
-        .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.isTracked, true)))
-        .orderBy(desc(pullRequests.updatedAt));
+      const timestamp = nowUnixTimestamp();
 
-      return rows.map(rowToPullRequest);
+      await tx
+        .insert(pullRequests)
+        .values({
+          ...pullRequestValues(repoRowId, pullRequest),
+          lastSeenAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: [pullRequests.repoRowId, pullRequests.prNumber],
+          set: pullRequestCacheUpdateValues(timestamp),
+        });
     }),
   );
 
@@ -411,24 +497,67 @@ const makeCacheService = Effect.gen(function* () {
       const repoRowId = await findRepoRowId(tx, repo);
       if (repoRowId === null) return;
 
+      const [minTrackedPositionRow] = await tx
+        .select({ trackedPosition: sql<number>`min(${pullRequests.trackedPosition})` })
+        .from(pullRequests)
+        .where(sql`${pullRequests.trackedAt} is not null`);
       const timestamp = nowUnixTimestamp();
-      const values = pullRequestValues(repoRowId, pullRequest);
+      const trackedPosition =
+        minTrackedPositionRow?.trackedPosition == null
+          ? 0
+          : minTrackedPositionRow.trackedPosition - 1;
 
       await tx
         .insert(pullRequests)
         .values({
-          ...values,
-          isTracked: true,
-          cachedAt: timestamp,
+          ...pullRequestValues(repoRowId, pullRequest),
+          trackedAt: timestamp,
+          trackedPosition,
           lastSeenAt: timestamp,
         })
         .onConflictDoUpdate({
           target: [pullRequests.repoRowId, pullRequests.prNumber],
           set: {
             ...pullRequestCacheUpdateValues(timestamp),
-            isTracked: true,
+            trackedAt: timestamp,
+            trackedPosition,
           },
         });
+    }),
+  );
+
+  const setTrackedPullRequestOrder: CacheServiceShape['setTrackedPullRequestOrder'] = Effect.fn(
+    'CacheService.setTrackedPullRequestOrder',
+  )((entries) =>
+    database.transaction(async (tx) => {
+      await tx
+        .update(pullRequests)
+        .set({ trackedPosition: null })
+        .where(sql`${pullRequests.trackedAt} is not null`);
+
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        const repoRowId = await findRepoRowId(tx, entry);
+        if (repoRowId === null) continue;
+
+        await tx
+          .update(pullRequests)
+          .set({ trackedPosition: index })
+          .where(
+            and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.prNumber, entry.number)),
+          );
+      }
+
+      return tx
+        .select({
+          providerId: repos.providerId,
+          repoKey: repos.repoKey,
+          number: pullRequests.prNumber,
+        })
+        .from(pullRequests)
+        .innerJoin(repos, eq(repos.id, pullRequests.repoRowId))
+        .where(sql`${pullRequests.trackedAt} is not null`)
+        .orderBy(...trackedPullRequestOrderBy());
     }),
   );
 
@@ -441,7 +570,7 @@ const makeCacheService = Effect.gen(function* () {
 
       await tx
         .update(pullRequests)
-        .set({ isTracked: false })
+        .set({ trackedAt: null, trackedPosition: null })
         .where(and(eq(pullRequests.repoRowId, repoRowId), eq(pullRequests.prNumber, number)));
     }),
   );
@@ -681,12 +810,16 @@ const makeCacheService = Effect.gen(function* () {
   return {
     listSavedRepos,
     listTrackedRepos,
+    listRecentPullRequests,
     saveRepo,
     ensureRepo,
     readCachedPullRequests,
-    writePullRequestsCache,
     readTrackedPullRequests,
+    readTrackedPullRequestOrder,
+    writePullRequestsCache,
+    cachePullRequest,
     trackPullRequest,
+    setTrackedPullRequestOrder,
     removeTrackedPullRequest,
     getCachedPatch,
     storePatch,

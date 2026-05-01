@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "485aad3f-4d5d-4fb4-a3c7-8cb409160955",
+  "id": "0215c2ff-3f50-4587-97fd-8d1c52cfbd48",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "app_settings": {
@@ -297,13 +297,6 @@
     "pull_requests": {
       "name": "pull_requests",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
         "repo_row_id": {
           "name": "repo_row_id",
           "type": "integer",
@@ -340,13 +333,19 @@
           "autoincrement": false,
           "default": false
         },
-        "is_tracked": {
-          "name": "is_tracked",
+        "tracked_at": {
+          "name": "tracked_at",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tracked_position": {
+          "name": "tracked_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "merge_state_status": {
           "name": "merge_state_status",
@@ -399,13 +398,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "head_sha": {
           "name": "head_sha",
           "type": "text",
@@ -418,13 +410,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false
-        },
-        "cached_at": {
-          "name": "cached_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
           "autoincrement": false
         },
         "last_seen_at": {
@@ -446,9 +431,14 @@
           "columns": ["repo_row_id", "\"updated_at\" desc"],
           "isUnique": false
         },
+        "idx_pull_requests_tracked_position": {
+          "name": "idx_pull_requests_tracked_position",
+          "columns": ["tracked_position", "tracked_at"],
+          "isUnique": false
+        },
         "idx_pull_requests_repo_tracked": {
           "name": "idx_pull_requests_repo_tracked",
-          "columns": ["repo_row_id", "is_tracked"],
+          "columns": ["repo_row_id", "tracked_at"],
           "isUnique": false
         }
       },
