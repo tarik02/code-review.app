@@ -1,6 +1,5 @@
 {
   "name": "@code-review-app/electron",
-  "productName": "code-review.app",
   "version": "0.0.0",
   "private": true,
   "description": "Browse GitHub and GitLab pull requests locally",
@@ -63,5 +62,6 @@
     "@libsql/linux-x64-gnu": "catalog:",
     "@libsql/linux-x64-musl": "catalog:",
     "@libsql/win32-x64-msvc": "catalog:"
-  }
+  },
+  "productName": "code-review.app"
 }
