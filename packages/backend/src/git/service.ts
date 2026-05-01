@@ -472,6 +472,7 @@ const makeGitService = Effect.gen(function* () {
   ): Effect.Effect<boolean, GitError> =>
     runGit({
       args: ['-C', handle.path, 'cat-file', '-e', `${sha}^{commit}`],
+      auth: remoteSpec,
       timeout: COMMAND_TIMEOUT,
       redactValues: redactValues(remoteSpec),
       remoteUrl: remoteSpec.url,
