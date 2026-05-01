@@ -179,7 +179,7 @@ type GitLabApiClientShape = {
     project: string,
     number: number,
     body: string,
-    internal?: boolean
+    internal?: boolean,
   ): GitLabClientEffect<unknown>;
   createDiscussion(
     project: string,

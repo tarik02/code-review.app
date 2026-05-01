@@ -3012,16 +3012,16 @@ function PatchViewerMain({
                         ))
                       )}
 
-                      <div className='grow' />
+                      <div className="grow" />
 
                       <div className="sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
-                          <PendingReviewBar
-                            approvalState={approvalState}
-                            approvalStateError={approvalStateError}
-                            canApprove={canApprove}
-                            canRequestChanges={canRequestChanges}
-                            count={pendingReviewCount}
-                            error={pendingReviewError}
+                        <PendingReviewBar
+                          approvalState={approvalState}
+                          approvalStateError={approvalStateError}
+                          canApprove={canApprove}
+                          canRequestChanges={canRequestChanges}
+                          count={pendingReviewCount}
+                          error={pendingReviewError}
                           isApprovalStateLoading={isApprovalStateLoading}
                           isApprovePending={approveMutation.isPending}
                           isRemovePending={removeApprovalMutation.isPending}

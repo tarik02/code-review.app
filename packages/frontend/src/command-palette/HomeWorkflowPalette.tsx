@@ -108,9 +108,9 @@ function HomeWorkflowPalette({
           group: 'Review type',
           title: 'Request changes',
           badge:
-            effectiveSubmitAction === 'request_changes'
-              ? <CheckIcon className="size-3.5" />
-              : undefined,
+            effectiveSubmitAction === 'request_changes' ? (
+              <CheckIcon className="size-3.5" />
+            ) : undefined,
           disabled: !canRequestChanges,
           icon: <FilterXIcon className="size-4" />,
           onSelect: () => setSubmitAction('request_changes'),

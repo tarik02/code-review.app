@@ -202,7 +202,10 @@ const makeReviewCommentService = Effect.gen(function* () {
         null;
       const pendingComment = pendingToReviewComment(pending, viewerLogin, rootCommentId);
       targetThread.comments.push(pendingComment);
-      existingCommentsById.set(pendingComment.id, { thread: targetThread, comment: pendingComment });
+      existingCommentsById.set(pendingComment.id, {
+        thread: targetThread,
+        comment: pendingComment,
+      });
     }
 
     return mergedThreads;

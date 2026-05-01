@@ -1,7 +1,4 @@
-import type {
-  PendingReviewSubmitAction,
-  PullRequestApprovalState,
-} from '../../types/forge';
+import type { PendingReviewSubmitAction, PullRequestApprovalState } from '../../types/forge';
 import { getPatchViewerSessionState, usePatchViewerStore } from '../../stores/patch-viewer-store';
 import { cx } from '../../lib/cx';
 import { Button } from './button';
@@ -120,11 +117,7 @@ function PendingReviewBar({
                           htmlFor={id}
                           key={option.value}
                         >
-                          <RadioGroupItem
-                            disabled={option.disabled}
-                            id={id}
-                            value={option.value}
-                          />
+                          <RadioGroupItem disabled={option.disabled} id={id} value={option.value} />
                           <span>{option.label}</span>
                         </label>
                       );

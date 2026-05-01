@@ -37,11 +37,11 @@ function isUpdaterEnabled() {
 
 function logUpdaterError(context: string, error: unknown) {
   void backendRuntime.runFork(
-      Effect.logError(`[updater] ${context} failed`).pipe(
-        Effect.annotateLogs({
+    Effect.logError(`[updater] ${context} failed`).pipe(
+      Effect.annotateLogs({
         error: getErrorMessage(error),
-        }),
-      ),
+      }),
+    ),
   );
 }
 

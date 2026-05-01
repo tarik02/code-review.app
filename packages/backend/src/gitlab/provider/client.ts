@@ -30,10 +30,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
-import {
-  type GitLabClientError,
-  isGitLabClientError,
-} from '../client/errors.ts';
+import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
 import type { CreateGitLabDraftNoteInput } from '../client/client.ts';
 import {
   GitLabProviderClientFailure,
@@ -450,7 +447,9 @@ function discussionToReviewThread(
   const rootNote = notes[0];
   if (!rootNote) return null;
   if (rootNote.system) {
-    return isGitLabReviewSystemNote(rootNote) ? noteToGlobalReviewThread(accountId, rootNote) : null;
+    return isGitLabReviewSystemNote(rootNote)
+      ? noteToGlobalReviewThread(accountId, rootNote)
+      : null;
   }
 
   const position = rootNote.position ?? null;
@@ -1647,48 +1646,45 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         oldPath,
         newPath,
         oldLine:
-          input.oldLine ??
-          (input.line != null && input.side === 'LEFT' ? input.line : undefined),
+          input.oldLine ?? (input.line != null && input.side === 'LEFT' ? input.line : undefined),
         newLine:
-          input.newLine ??
-          (input.line != null && input.side !== 'LEFT' ? input.line : undefined),
-        lineRange: input.line != null
-          ? {
-              start: {
-                type:
-                  (input.startOldLine ?? input.oldLine) != null &&
-                  (input.startNewLine ?? input.newLine) != null
-                    ? null
-                    : (input.startSide ?? input.side) === 'LEFT'
-                      ? 'old'
-                      : 'new',
-                oldLine:
-                  input.startOldLine ??
-                  input.oldLine ??
-                  ((input.startSide ?? input.side) === 'LEFT'
-                    ? (input.startLine ?? input.line)
-                    : undefined),
-                newLine:
-                  input.startNewLine ??
-                  input.newLine ??
-                  ((input.startSide ?? input.side) !== 'LEFT'
-                    ? (input.startLine ?? input.line)
-                    : undefined),
-              },
-              end: {
-                type:
-                  input.oldLine != null && input.newLine != null
-                    ? null
-                    : input.side === 'LEFT'
-                      ? 'old'
-                      : 'new',
-                oldLine:
-                  input.oldLine ?? (input.side === 'LEFT' ? input.line : undefined),
-                newLine:
-                  input.newLine ?? (input.side !== 'LEFT' ? input.line : undefined),
-              },
-            }
-          : undefined,
+          input.newLine ?? (input.line != null && input.side !== 'LEFT' ? input.line : undefined),
+        lineRange:
+          input.line != null
+            ? {
+                start: {
+                  type:
+                    (input.startOldLine ?? input.oldLine) != null &&
+                    (input.startNewLine ?? input.newLine) != null
+                      ? null
+                      : (input.startSide ?? input.side) === 'LEFT'
+                        ? 'old'
+                        : 'new',
+                  oldLine:
+                    input.startOldLine ??
+                    input.oldLine ??
+                    ((input.startSide ?? input.side) === 'LEFT'
+                      ? (input.startLine ?? input.line)
+                      : undefined),
+                  newLine:
+                    input.startNewLine ??
+                    input.newLine ??
+                    ((input.startSide ?? input.side) !== 'LEFT'
+                      ? (input.startLine ?? input.line)
+                      : undefined),
+                },
+                end: {
+                  type:
+                    input.oldLine != null && input.newLine != null
+                      ? null
+                      : input.side === 'LEFT'
+                        ? 'old'
+                        : 'new',
+                  oldLine: input.oldLine ?? (input.side === 'LEFT' ? input.line : undefined),
+                  newLine: input.newLine ?? (input.side !== 'LEFT' ? input.line : undefined),
+                },
+              }
+            : undefined,
       },
     };
   };
@@ -1734,11 +1730,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         subjectType: input.subjectType,
       });
 
-      yield* api.createDiscussion(
-        repo.path,
-        number,
-        toDiscussionFormData(draftNote),
-      );
+      yield* api.createDiscussion(repo.path, number, toDiscussionFormData(draftNote));
     },
   );
 

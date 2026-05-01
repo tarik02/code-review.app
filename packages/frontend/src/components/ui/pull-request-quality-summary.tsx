@@ -74,7 +74,7 @@ function PullRequestQualitySummary({
   const notes = report.summary.notes ?? [];
 
   return (
-    <TopBar position='middle' className="border-b border-ink-200 px-4 pb-3 pt-3 app-region-drag">
+    <TopBar position="middle" className="border-b border-ink-200 px-4 pb-3 pt-3 app-region-drag">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-ink-900">{report.summary.providerLabel}</span>
         <span

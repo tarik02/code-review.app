@@ -287,7 +287,8 @@ function MainApp() {
     return (
       commandPaletteLocalPullRequests.find(
         (entry) =>
-          sameRepoIdentity(entry.repo, selectedPr) && entry.pullRequest.number === selectedPr.number,
+          sameRepoIdentity(entry.repo, selectedPr) &&
+          entry.pullRequest.number === selectedPr.number,
       )?.pullRequest ?? null
     );
   }, [commandPaletteLocalPullRequests, selectedPr]);

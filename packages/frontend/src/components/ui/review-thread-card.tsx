@@ -162,18 +162,9 @@ function getThreadEditorTarget(thread: ReviewThread): CommentEditorTarget {
   };
 }
 
-function CommentAvatar({
-  comment,
-  size = 'md',
-}: {
-  comment: ReviewComment;
-  size?: 'sm' | 'md';
-}) {
+function CommentAvatar({ comment, size = 'md' }: { comment: ReviewComment; size?: 'sm' | 'md' }) {
   const initials = comment.authorLogin.slice(0, 1).toUpperCase();
-  const avatarClassName =
-    size === 'sm'
-      ? 'size-6 text-[10px]'
-      : 'size-8 text-[11px]';
+  const avatarClassName = size === 'sm' ? 'size-6 text-[10px]' : 'size-8 text-[11px]';
   const imageClassName =
     size === 'sm'
       ? 'size-6 rounded-full border border-ink-200 object-cover'
@@ -657,7 +648,7 @@ function ReviewThreadCard({
           {isReviewEvent ? (
             <>
               <span className="font-sans font-medium text-current">
-                {(rootComment?.authorName ?? rootComment?.authorLogin ?? 'Someone')}{' '}
+                {rootComment?.authorName ?? rootComment?.authorLogin ?? 'Someone'}{' '}
                 {getReviewEventLabel(thread)}
               </span>
               {rootComment ? (

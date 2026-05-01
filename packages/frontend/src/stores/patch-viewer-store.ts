@@ -51,10 +51,7 @@ type PatchViewerStore = {
   setPendingScrollPath: (sessionKey: string | null, path: string | null) => void;
   setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
   setPendingReviewSummary: (sessionKey: string | null, summary: string) => void;
-  setPendingReviewAction: (
-    sessionKey: string | null,
-    action: PendingReviewSubmitAction,
-  ) => void;
+  setPendingReviewAction: (sessionKey: string | null, action: PendingReviewSubmitAction) => void;
   setPendingReviewTypeSelectOpen: (sessionKey: string | null, open: boolean) => void;
   resetPendingReviewInput: (sessionKey: string | null) => void;
   setThreadExpanded: (sessionKey: string | null, threadKey: string, expanded: boolean) => void;

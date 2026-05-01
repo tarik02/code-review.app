@@ -79,11 +79,11 @@ async function syncNativeThemeFromSettings() {
     applyNativeThemePreference(preference);
   } catch (error) {
     void backendRuntime.runFork(
-        Effect.logError('Failed to sync native theme from settings.').pipe(
-          Effect.annotateLogs({
+      Effect.logError('Failed to sync native theme from settings.').pipe(
+        Effect.annotateLogs({
           error: getErrorMessage(error),
-          }),
-        ),
+        }),
+      ),
     );
   }
 }
