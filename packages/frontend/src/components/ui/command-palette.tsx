@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Fuse, { type FuseOptionKey } from 'fuse.js';
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { Dialog, DialogContent } from './dialog';
@@ -159,19 +159,6 @@ function CommandPalette({
   const [uncontrolledQuery, setUncontrolledQuery] = useState('');
   const currentQuery = query ?? uncontrolledQuery;
   const currentFilterQuery = filterQuery ?? currentQuery;
-
-  useEffect(() => {
-    if (open) {
-      return;
-    }
-
-    if (query !== undefined) {
-      onQueryChange?.('');
-      return;
-    }
-
-    window.setTimeout(() => setUncontrolledQuery(''), 0);
-  }, [onQueryChange, open, query]);
 
   const filteredItems = useMemo(() => {
     if (filterMode === 'none' || !currentFilterQuery.trim()) {

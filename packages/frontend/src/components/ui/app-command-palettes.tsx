@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate } from '@tanstack/react-router';
@@ -39,7 +39,6 @@ import type { ReviewThread } from '../../lib/review-threads';
 import {
   applyProfileFilterChange,
   applyRepoFilterChange,
-  initialMainAppViewState,
   useMainAppViewStore,
 } from '../../stores/main-app-view-store';
 import { useCommandPaletteStore } from '../../stores/command-palette-store';
@@ -140,6 +139,8 @@ function PullRequestContentPalette({
   reviewThreads,
   selectedPr,
 }: PullRequestContentPaletteProps) {
+  const contentQuery = useCommandPaletteStore((state) => state.contentQuery);
+  const setContentQuery = useCommandPaletteStore((state) => state.setContentQuery);
   const items = useMemo(
     () =>
       selectedPr
@@ -171,6 +172,8 @@ function PullRequestContentPalette({
       open={open}
       onOpenChange={onOpenChange}
       placeholder="Search files and comments"
+      query={contentQuery}
+      onQueryChange={setContentQuery}
       searchKeys={[
         { name: 'title', weight: 0.8 },
         { name: 'keywords', weight: 0.5 },
@@ -187,13 +190,17 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
   const { repos: savedRepos = [] } = useSavedRepos();
   const trackedReposQuery = useQuery(trackedReposQueryOptions());
   const trackedRepos = useMemo(() => trackedReposQuery.data ?? [], [trackedReposQuery.data]);
-  const [browseFilters, setBrowseFilters] = useState({
-    ...initialMainAppViewState,
-    namespaceFilterPath: null as string | null,
-  });
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [pullRequestState, setPullRequestState] = useState<PullRequestSearchState>('all');
+  const browseFilters = useCommandPaletteStore((state) => state.browseFilters);
+  const query = useCommandPaletteStore((state) => state.browseQuery);
+  const debouncedQuery = useCommandPaletteStore((state) => state.browseDebouncedQuery);
+  const pullRequestState = useCommandPaletteStore((state) => state.browsePullRequestState);
+  const resetBrowseSearch = useCommandPaletteStore((state) => state.resetBrowseSearch);
+  const setBrowseDebouncedQuery = useCommandPaletteStore((state) => state.setBrowseDebouncedQuery);
+  const setBrowseFilters = useCommandPaletteStore((state) => state.setBrowseFilters);
+  const setBrowsePullRequestState = useCommandPaletteStore(
+    (state) => state.setBrowsePullRequestState,
+  );
+  const setBrowseQuery = useCommandPaletteStore((state) => state.setBrowseQuery);
   const profileFilterAccountId = browseFilters.profileFilterAccountId;
   const repoFilterKey = browseFilters.repoFilterKey;
   const namespaceFilterPath = browseFilters.namespaceFilterPath;
@@ -205,17 +212,9 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
 
   useEffect(() => {
     if (!open) {
-      window.setTimeout(() => {
-        setQuery('');
-        setDebouncedQuery('');
-        setPullRequestState('all');
-        setBrowseFilters({
-          ...initialMainAppViewState,
-          namespaceFilterPath: null,
-        });
-      }, 0);
+      resetBrowseSearch();
     }
-  }, [open]);
+  }, [open, resetBrowseSearch]);
 
   useEffect(() => {
     if (!open) {
@@ -223,13 +222,13 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     }
 
     const timeoutId = window.setTimeout(() => {
-      setDebouncedQuery(query);
+      setBrowseDebouncedQuery(query);
     }, BROWSE_QUERY_DEBOUNCE_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [open, query]);
+  }, [open, query, setBrowseDebouncedQuery]);
 
   const browseSearch = useBrowseSearch({
     accountIds: enabledAccountIds,
@@ -437,6 +436,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     profileFilterAccountId,
     repoAccountIdByKey,
     repoFilterKey,
+    setBrowseFilters,
   ]);
 
   const footer = useMemo(() => {
@@ -595,8 +595,8 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
             ...applyProfileFilterChange(current, account.id, repoAccountIdByKey),
             namespaceFilterPath: current.namespaceFilterPath,
           }));
-          setQuery('');
-          setDebouncedQuery('');
+          setBrowseQuery('');
+          setBrowseDebouncedQuery('');
         },
       });
     }
@@ -622,8 +622,8 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
             namespaceFilterPath: namespaceItem.namespacePath,
             repoFilterKey: null,
           }));
-          setQuery(namespaceItem.namespacePath);
-          setDebouncedQuery(namespaceItem.namespacePath);
+          setBrowseQuery(namespaceItem.namespacePath);
+          setBrowseDebouncedQuery(namespaceItem.namespacePath);
         },
       });
     }
@@ -655,8 +655,8 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
               ...applyRepoFilterChange(current, savedRepo),
               namespaceFilterPath: current.namespaceFilterPath,
             }));
-            setQuery('');
-            setDebouncedQuery('');
+            setBrowseQuery('');
+            setBrowseDebouncedQuery('');
           })();
         },
       });
@@ -731,6 +731,9 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     repoAccountIdByKey,
     repoFilterKey,
     savedRepos,
+    setBrowseDebouncedQuery,
+    setBrowseFilters,
+    setBrowseQuery,
   ]);
 
   return (
@@ -738,7 +741,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
       accessory={
         <Select
           value={pullRequestState}
-          onValueChange={(value) => setPullRequestState(value as PullRequestSearchState)}
+          onValueChange={(value) => setBrowsePullRequestState(value as PullRequestSearchState)}
         >
           <SelectTrigger
             className="h-8 min-w-[132px] border-neutral-300 bg-surface text-xs"
@@ -772,7 +775,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
       onOpenChange={onOpenChange}
       placeholder="Browse profiles, repositories, and pull requests"
       query={query}
-      onQueryChange={setQuery}
+      onQueryChange={setBrowseQuery}
       searchKeys={[
         { name: 'title', weight: 0.7 },
         { name: 'keywords', weight: 0.5 },
@@ -802,23 +805,14 @@ function HomeWorkflowPalette({
   const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
   const { discardPendingReviewMutation, publishPendingReviewMutation } =
     usePullRequestReviewCommentMutations(selectedPr);
-  const [submitReviewMode, setSubmitReviewMode] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'comment' | 'approve' | 'request_changes'>(
-    'comment',
-  );
-  const [submitSummary, setSubmitSummary] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      return;
-    }
-
-    window.setTimeout(() => {
-      setSubmitReviewMode(false);
-      setSubmitAction('comment');
-      setSubmitSummary('');
-    }, 0);
-  }, [open]);
+  const submitReviewMode = useCommandPaletteStore((state) => state.workflowSubmitReviewMode);
+  const setSubmitReviewMode = useCommandPaletteStore((state) => state.setWorkflowSubmitReviewMode);
+  const submitAction = useCommandPaletteStore((state) => state.workflowSubmitAction);
+  const setSubmitAction = useCommandPaletteStore((state) => state.setWorkflowSubmitAction);
+  const submitSummary = useCommandPaletteStore((state) => state.workflowSubmitSummary);
+  const setSubmitSummary = useCommandPaletteStore((state) => state.setWorkflowSubmitSummary);
+  const workflowQuery = useCommandPaletteStore((state) => state.workflowQuery);
+  const setWorkflowQuery = useCommandPaletteStore((state) => state.setWorkflowQuery);
 
   const items = useMemo(() => {
     if (submitReviewMode) {
@@ -1034,6 +1028,8 @@ function HomeWorkflowPalette({
     selectedPrKey,
     sidebarView,
     setSidebarView,
+    setSubmitAction,
+    setSubmitReviewMode,
     submitAction,
     submitReviewMode,
   ]);
@@ -1081,8 +1077,8 @@ function HomeWorkflowPalette({
       open={open}
       onOpenChange={onOpenChange}
       placeholder={submitReviewMode ? 'Optional notes' : 'Jump to sections and actions'}
-      query={submitReviewMode ? submitSummary : undefined}
-      onQueryChange={submitReviewMode ? setSubmitSummary : undefined}
+      query={submitReviewMode ? submitSummary : workflowQuery}
+      onQueryChange={submitReviewMode ? setSubmitSummary : setWorkflowQuery}
     />
   );
 }
@@ -1093,6 +1089,8 @@ function SettingsWorkflowPalette({
   onOpenChange,
 }: SettingsCommandPalettesProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const navigate = useNavigate();
+  const workflowQuery = useCommandPaletteStore((state) => state.workflowQuery);
+  const setWorkflowQuery = useCommandPaletteStore((state) => state.setWorkflowQuery);
 
   const items: CommandPaletteItem[] = [
     {
@@ -1144,6 +1142,8 @@ function SettingsWorkflowPalette({
       open={open}
       onOpenChange={onOpenChange}
       placeholder="Jump between settings sections"
+      query={workflowQuery}
+      onQueryChange={setWorkflowQuery}
     />
   );
 }
