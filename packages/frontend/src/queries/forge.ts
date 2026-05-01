@@ -1,6 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
-import { normalizeHostInput, parseForgeResourceUrl } from '../lib/forge-links';
 import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
@@ -33,7 +32,6 @@ import type {
 } from '../types/forge';
 
 const INITIAL_REPO_LIMIT = 5;
-const SEARCH_REPO_LIMIT = 20;
 
 const forgeKeys = {
   all: ['forge'] as const,
@@ -51,8 +49,6 @@ const forgeKeys = {
   reviewEditorSettings: () => [...forgeKeys.settings(), 'review-editor'] as const,
   savedRepos: () => [...forgeKeys.repos(), 'saved'] as const,
   initialRepos: (accountId: string) => [...forgeKeys.repos(), 'initial', accountId] as const,
-  searchRepos: (accountId: string, query: string) =>
-    [...forgeKeys.repos(), 'search', accountId, query] as const,
   viewerLogin: (accountId: string) => [...forgeKeys.repos(), 'viewer-login', accountId] as const,
   pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
@@ -281,55 +277,6 @@ function initialReposQueryOptions(accountId: string) {
         limit: INITIAL_REPO_LIMIT,
       }),
     staleTime: 5 * 60 * 1000,
-  });
-}
-
-function searchReposQueryOptions(query: string, accountId: string, provider: string, host: string) {
-  return queryOptions({
-    queryKey: forgeKeys.searchRepos(accountId, query),
-    queryFn: async () => {
-      const trimmedQuery = query.trim();
-      const parsedUrl = parseForgeResourceUrl(
-        trimmedQuery,
-        provider === 'gitlab' ? 'gitlab' : 'github',
-      );
-      const normalizedHost = normalizeHostInput(host);
-
-      if (parsedUrl && parsedUrl.provider === provider && parsedUrl.host === normalizedHost) {
-        const repo = await trpc.repos.tryValidate.query({
-          accountId,
-          repo: parsedUrl.repoPath,
-        });
-        return repo ? [repo] : [];
-      }
-
-      if (parsedUrl) {
-        return [];
-      }
-
-      const pathQuery = trimmedQuery.replace(/\.git$/, '');
-      const pathSegmentCount = pathQuery.split('/').filter(Boolean).length;
-      if (
-        ((provider === 'github' && pathSegmentCount === 2) ||
-          (provider === 'gitlab' && pathSegmentCount >= 2)) &&
-        !pathQuery.startsWith('/') &&
-        !pathQuery.endsWith('/')
-      ) {
-        const repo = await trpc.repos.tryValidate.query({
-          accountId,
-          repo: pathQuery,
-        });
-        return repo ? [repo] : [];
-      }
-
-      return trpc.repos.search.query({
-        accountId,
-        query,
-        limit: SEARCH_REPO_LIMIT,
-      });
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
   });
 }
 
@@ -680,7 +627,6 @@ export {
   replyToPullRequestReviewComment,
   reviewEditorSettingsQueryOptions,
   savedReposQueryOptions,
-  searchReposQueryOptions,
   setPullRequestReviewThreadResolved,
   setAccountVisibility,
   setAppearanceBackground,

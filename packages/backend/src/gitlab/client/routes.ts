@@ -2,8 +2,20 @@ import type { ProviderRepoIdentity } from '../../repo-id.ts';
 import { createBuildRoute } from '../../providers/route.ts';
 
 type GitLabOverviewMergeRequestScope = 'reviews_for_me' | 'assigned_to_me' | 'created_by_me';
+type GitLabSearchMergeRequestState = 'opened' | 'all';
 
 type GitlabRoutes = {
+  search: {
+    query: {
+      scope: 'merge_requests';
+      search: string;
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+      order_by?: 'created_at' | 'updated_at';
+      sort?: 'desc' | 'asc';
+      per_page?: number;
+      page?: number;
+    };
+  };
   user: {};
   projects: {
     query: {
@@ -13,23 +25,45 @@ type GitlabRoutes = {
       search?: string;
     };
   };
+  groups: {
+    query: {
+      all_available?: boolean;
+      search?: string;
+      order_by?: 'name' | 'path' | 'id';
+      sort?: 'asc' | 'desc';
+      per_page?: number;
+    };
+  };
+  'groups/:group/projects': {
+    query: {
+      include_subgroups?: boolean;
+      simple?: boolean;
+      order_by?: 'last_activity_at' | 'name' | 'path' | 'created_at' | 'updated_at';
+      sort?: 'asc' | 'desc';
+      per_page?: number;
+    };
+  };
   merge_requests: {
     query: {
-      scope: GitLabOverviewMergeRequestScope;
-      state: 'opened';
+      scope: GitLabOverviewMergeRequestScope | 'all';
+      state: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
       order_by: 'updated_at';
       sort: 'desc';
       non_archived: 'true';
       per_page: number;
+      search?: string;
+      in?: 'title';
     };
   };
   'projects/:project': {};
   'projects/:project/merge_requests': {
     query: {
-      state?: 'opened';
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
       order_by?: 'updated_at' | 'created_at';
       sort?: 'desc' | 'asc';
       per_page?: number;
+      search?: string;
+      in?: 'title';
     };
   };
   'projects/:project/merge_requests/:number': {};
@@ -80,4 +114,4 @@ function gitlabProjectPath(project: ProviderRepoIdentity | string) {
 }
 
 export { gitlabProjectPath, gitlabRoute };
-export type { GitLabOverviewMergeRequestScope, GitlabRoutes };
+export type { GitLabOverviewMergeRequestScope, GitLabSearchMergeRequestState, GitlabRoutes };

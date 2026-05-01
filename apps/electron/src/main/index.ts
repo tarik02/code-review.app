@@ -4,6 +4,7 @@ import { SettingsService, summarizeError } from '@code-review-app/backend';
 import { applyNativeThemePreference, createMainWindow } from './window';
 import { configureUpdater } from './updater';
 import { backendRuntime } from './backend-runtime';
+import { registerProviderImageProtocol } from './provider-image-protocol';
 import {
   emitDeepLink,
   emitOAuthCallback,
@@ -87,6 +88,7 @@ async function syncNativeThemeFromSettings() {
 }
 
 app.whenReady().then(async () => {
+  registerProviderImageProtocol();
   await syncNativeThemeFromSettings();
   configureUpdater();
   await createMainWindow();

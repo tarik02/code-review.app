@@ -6,32 +6,44 @@ class GitExecutableNotFound extends Data.TaggedError('GitExecutableNotFound')<{
 }> {}
 
 class GitAuthenticationFailed extends Data.TaggedError('GitAuthenticationFailed')<{
+  args: string[];
+  stdout: string;
   stderr: string;
   remoteUrl: string;
 }> {}
 
 class GitAuthorizationFailed extends Data.TaggedError('GitAuthorizationFailed')<{
+  args: string[];
+  stdout: string;
   stderr: string;
   remoteUrl: string;
 }> {}
 
 class GitRepositoryNotFound extends Data.TaggedError('GitRepositoryNotFound')<{
+  args: string[];
+  stdout: string;
   stderr: string;
   remoteUrl: string;
 }> {}
 
 class GitRefNotFound extends Data.TaggedError('GitRefNotFound')<{
+  args: string[];
   ref: string;
+  stdout: string;
   stderr: string;
 }> {}
 
 class GitPathNotFound extends Data.TaggedError('GitPathNotFound')<{
+  args: string[];
   ref: string;
   path: string;
+  stdout: string;
   stderr: string;
 }> {}
 
 class GitPartialCloneUnsupported extends Data.TaggedError('GitPartialCloneUnsupported')<{
+  args: string[];
+  stdout: string;
   stderr: string;
   remoteUrl: string;
 }> {}
@@ -39,6 +51,7 @@ class GitPartialCloneUnsupported extends Data.TaggedError('GitPartialCloneUnsupp
 class GitCommandTimedOut extends Data.TaggedError('GitCommandTimedOut')<{
   args: string[];
   timeoutMs: number;
+  stdout: string;
   stderr: string;
 }> {}
 

@@ -1,3 +1,4 @@
+import type { HttpClientRequest } from '@effect/platform';
 import type { Effect } from 'effect';
 import type { ProviderError } from '../errors.ts';
 import type { ProviderRepoIdentity } from '../repo-id.ts';
@@ -5,10 +6,12 @@ import type {
   PullRequestSummary,
   OverviewPullRequestSummary,
   PullRequestApprovalState,
+  PullRequestSearchState,
   PullRequestQualityReport,
   ProviderAuthStatus,
   PrChangedFile,
   RepoSummary,
+  NamespaceSummary,
   PendingReviewComment,
   PendingReviewSession,
   ReviewThread,
@@ -61,12 +64,31 @@ type GitRemoteSpec = {
 };
 
 type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = {
+  authorizeRequest(): Effect.Effect<
+    (request: HttpClientRequest.HttpClientRequest) => HttpClientRequest.HttpClientRequest,
+    Error,
+    Dependencies
+  >;
+  validateImageUrl(url: string): Effect.Effect<boolean, Error, Dependencies>;
   authStatus(): Effect.Effect<ProviderAuthStatus, Error, Dependencies>;
   viewerLogin(): Effect.Effect<string, Error, Dependencies>;
   listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
   searchRepos(query: string, limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  listNamespaceRepos(
+    namespacePath: string,
+    limit: number,
+  ): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  searchNamespaces(
+    query: string,
+    limit: number,
+  ): Effect.Effect<NamespaceSummary[], Error, Dependencies>;
   validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
   listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
+  searchPullRequests(
+    query: string,
+    limit: number,
+    states: PullRequestSearchState,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   listPullRequests(
     repo: ProviderRepoIdentity,
   ): Effect.Effect<PullRequestSummary[], Error, Dependencies>;

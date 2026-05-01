@@ -69,6 +69,13 @@ function summarizeError(error: unknown): unknown {
       message: error.message,
       stack: error.stack,
     };
+    for (const [key, value] of Object.entries(error)) {
+      if (key === 'name' || key === 'message' || key === 'stack' || key === 'cause') {
+        continue;
+      }
+
+      summary[key] = summarizeError(value);
+    }
     if (error.cause !== undefined) {
       summary.cause = summarizeError(error.cause);
     }

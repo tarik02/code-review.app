@@ -8,6 +8,7 @@ const reviewCommentSideSchema = z.enum(['LEFT', 'RIGHT']);
 const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
 const pendingReviewCommentSubjectTypeSchema = z.enum(['file', 'line', 'global']);
 const pendingReviewSubmitActionSchema = z.enum(['comment', 'approve', 'request_changes']);
+const pullRequestSearchStateSchema = z.enum(['open', 'draft_open', 'all']);
 const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
   'ok',
@@ -42,6 +43,18 @@ const repoSummarySchema = z.object({
   avatarUrl: z.string().nullable(),
 });
 
+const namespaceSummarySchema = z.object({
+  provider: forgeProviderKindSchema,
+  host: z.string(),
+  providerAccountId: z.string(),
+  providerAccountLabel: z.string(),
+  path: z.string(),
+  name: z.string(),
+  kind: z.enum(['user', 'organization', 'group']),
+  avatarUrl: z.string().nullable(),
+  webUrl: z.string().nullable(),
+});
+
 const pullRequestSummarySchema = z.object({
   number: z.number().int().nonnegative(),
   title: z.string(),
@@ -62,6 +75,29 @@ const pullRequestSummarySchema = z.object({
 const overviewPullRequestSummarySchema = z.object({
   repo: repoSummarySchema,
   pullRequest: pullRequestSummarySchema,
+});
+
+const browseSearchInputSchema = z.object({
+  accountIds: z.array(z.string()),
+  query: z.string(),
+  states: pullRequestSearchStateSchema,
+  profileFilterAccountId: z.string().nullable(),
+  repoFilterKey: z.string().nullable(),
+  namespaceFilterPath: z.string().nullable(),
+  repoLimit: z.number().int().positive().max(100),
+  namespaceLimit: z.number().int().positive().max(100),
+  pullRequestLimit: z.number().int().positive().max(100),
+});
+
+const browseSearchSnapshotSchema = z.object({
+  repos: z.array(repoSummarySchema),
+  namespaces: z.array(namespaceSummarySchema),
+  pullRequests: z.array(overviewPullRequestSummarySchema),
+  accountIds: z.array(z.string()),
+  pendingCount: z.number().int().nonnegative(),
+  completedCount: z.number().int().nonnegative(),
+  errors: z.array(z.string()),
+  loading: z.boolean(),
 });
 
 const providerHostSchema = z.object({
@@ -116,6 +152,12 @@ const repoIdentitySchema = z.object({
 
 const pullRequestInputSchema = repoIdentitySchema.extend({
   number: z.number().int().nonnegative(),
+});
+
+const pullRequestSearchInputSchema = providerAccountSchema.extend({
+  query: z.string(),
+  limit: z.number().int().positive().max(100).optional().default(20),
+  states: pullRequestSearchStateSchema,
 });
 
 const trackedPullRequestOrderEntrySchema = pullRequestInputSchema;
@@ -313,6 +355,8 @@ const deletePullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
 export {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
+  browseSearchInputSchema,
+  browseSearchSnapshotSchema,
   completeOAuthSchema,
   createPendingReviewGlobalInputSchema,
   createPendingReviewReplyInputSchema,
@@ -324,6 +368,7 @@ export {
   diffDataSettingsSchema,
   discardPendingReviewInputSchema,
   forgeProviderKindSchema,
+  namespaceSummarySchema,
   overviewPullRequestSummarySchema,
   pendingReviewCommentKindSchema,
   pendingReviewCommentSchema,
@@ -334,6 +379,8 @@ export {
   providerAccountSchema,
   providerProfileSchema,
   publishPendingReviewInputSchema,
+  pullRequestSearchInputSchema,
+  pullRequestSearchStateSchema,
   pullRequestApprovalActorSchema,
   pullRequestApprovalRemoveStrategySchema,
   pullRequestApprovalStateSchema,

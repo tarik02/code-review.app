@@ -1,11 +1,15 @@
+import { HttpClientRequest } from '@effect/platform';
 import { Effect } from 'effect';
+import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
   PullRequestApprovalState,
+  PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
+  NamespaceSummary,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -14,6 +18,7 @@ import type {
 import { summarizeError } from '../../errors.ts';
 import {
   createRepoIdentity,
+  hostNameFromHost,
   normalizeHost,
   normalizePath,
   type ProviderRepoIdentity,
@@ -38,6 +43,7 @@ import {
 import {
   GitLabApprovedByEntrySchema,
   type GitLabDiscussion,
+  type GitLabGroup,
   type GitLabMergeRequest,
   type GitLabMrVersion,
   type GitLabNote,
@@ -45,6 +51,7 @@ import {
   type GitLabProject,
 } from '../client/schemas.ts';
 import { mergeRequestWebUrl, OVERVIEW_MERGE_REQUEST_SCOPES, toChangedFile } from './schemas.ts';
+import { prepareGitLabProviderImageUrl } from './images.ts';
 
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
@@ -55,6 +62,10 @@ function isNotAuthenticatedMessage(message: string) {
     normalized.includes('401') ||
     normalized.includes('unauthorized')
   );
+}
+
+function basicAuthHeader(username: string, password: string) {
+  return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
@@ -114,8 +125,33 @@ function repoSummaryFromProject(
     nameWithOwner: project.path_with_namespace,
     description: project.description,
     isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== 'public',
-    avatarUrl: project.avatar_url,
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, project.avatar_url, {
+      path: project.path_with_namespace,
+      type: 'project',
+    }),
   } satisfies RepoSummary;
+}
+
+function namespaceSummaryFromGroup(
+  accountId: string,
+  host: string,
+  label: string,
+  group: GitLabGroup,
+) {
+  return {
+    provider: 'gitlab',
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
+    path: group.full_path,
+    name: group.name || group.path || group.full_path,
+    kind: 'group',
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, group.avatar_url, {
+      path: group.full_path,
+      type: 'group',
+    }),
+    webUrl: group.web_url ?? `https://${host}/${group.full_path}`,
+  } satisfies NamespaceSummary;
 }
 
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
@@ -168,14 +204,129 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
   };
 }
 
-function toApprovalActor(approval: typeof GitLabApprovedByEntrySchema.Type) {
+function toApprovalActor(accountId: string, approval: typeof GitLabApprovedByEntrySchema.Type) {
   return {
     login: approval.user.username,
     name: approval.user.name,
-    avatarUrl: approval.user.avatar_url ?? null,
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, approval.user.avatar_url),
     url: approval.user.web_url ?? null,
     approvedAt: approval.approved_at ?? null,
   } satisfies PullRequestApprovalState['approvedBy'][number];
+}
+
+function toGitLabSearchState(states: PullRequestSearchState) {
+  return states === 'all' ? 'all' : 'opened';
+}
+
+function parseGitLabMergeRequestUrl(input: string, expectedHost: string) {
+  try {
+    const url = new URL(input);
+    if (url.hostname.toLowerCase() !== hostNameFromHost(expectedHost)) {
+      return null;
+    }
+
+    const segments = url.pathname.split('/').filter(Boolean);
+    const markerIndex = segments.findIndex((segment) => segment === 'merge_requests');
+    if (markerIndex <= 0) {
+      return null;
+    }
+
+    const number = Number.parseInt(segments[markerIndex + 1] ?? '', 10);
+    if (!Number.isSafeInteger(number) || number < 0) {
+      return null;
+    }
+
+    const repoSegments =
+      segments[markerIndex - 1] === '-'
+        ? segments.slice(0, markerIndex - 1)
+        : segments.slice(0, markerIndex);
+    const projectPath = repoSegments.join('/');
+    return projectPath ? { projectPath, number } : null;
+  } catch {
+    return null;
+  }
+}
+
+function repoSummaryFromMergeRequestUrl(
+  accountId: string,
+  host: string,
+  label: string,
+  mergeRequest: GitLabMergeRequest,
+): RepoSummary | null {
+  try {
+    const url = new URL(mergeRequest.web_url);
+    const path = normalizePath(
+      url.pathname.replace(/\/-\/merge_requests\/\d+$/, '').replace(/\/merge_requests\/\d+$/, ''),
+    );
+    if (!path) {
+      return null;
+    }
+
+    const segments = path.split('/');
+    const name = segments.at(-1) ?? path;
+
+    return {
+      ...createRepoIdentity('gitlab', host, accountId, path),
+      provider: 'gitlab',
+      host,
+      providerAccountId: accountId,
+      providerAccountLabel: label,
+      name,
+      nameWithOwner: path,
+      description: null,
+      isPrivate: null,
+      avatarUrl: null,
+    } satisfies RepoSummary;
+  } catch {
+    return null;
+  }
+}
+
+function filterSearchMergeRequests(
+  mergeRequests: ReadonlyArray<GitLabMergeRequest>,
+  states: PullRequestSearchState,
+) {
+  if (states !== 'open') {
+    return mergeRequests;
+  }
+
+  return mergeRequests.filter((mergeRequest) =>
+    matchesSearchMergeRequestState(mergeRequest, states),
+  );
+}
+
+function matchesSearchMergeRequestState(
+  mergeRequest: GitLabMergeRequest,
+  states: PullRequestSearchState,
+) {
+  return (
+    states !== 'open' ||
+    (!(mergeRequest.draft ?? false) && !(mergeRequest.work_in_progress ?? false))
+  );
+}
+
+function filterSearchMergeRequestsByTitle(
+  mergeRequests: ReadonlyArray<GitLabMergeRequest>,
+  query: string,
+  limit: number,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return mergeRequests.slice(0, limit);
+  }
+
+  return mergeRequests
+    .filter((mergeRequest) => mergeRequest.title.toLowerCase().includes(normalizedQuery))
+    .slice(0, limit);
+}
+
+function dedupeMergeRequests(mergeRequests: ReadonlyArray<GitLabMergeRequest>) {
+  const deduped = new Map<string, GitLabMergeRequest>();
+  for (const mergeRequest of mergeRequests) {
+    deduped.set(mergeRequestKey(mergeRequest), mergeRequest);
+  }
+
+  return [...deduped.values()];
 }
 
 function gitlabQualitySeverity(
@@ -285,7 +436,10 @@ function pathFromPosition(position: GitLabPosition | null | undefined) {
   return position?.new_path ?? position?.old_path ?? '';
 }
 
-function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | null {
+function discussionToReviewThread(
+  accountId: string,
+  discussion: GitLabDiscussion,
+): ReviewThread | null {
   const notes = discussion.notes ?? [];
   const rootNote = notes[0];
   if (!rootNote || rootNote.system) return null;
@@ -298,7 +452,7 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
       id,
       databaseId: note.id,
       authorLogin: note.author?.username ?? 'unknown',
-      authorAvatarUrl: note.author?.avatar_url ?? null,
+      authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
       authorAssociation: null,
       body: note.body,
       createdAt: note.created_at,
@@ -332,7 +486,7 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
   };
 }
 
-function noteToGlobalReviewThread(note: GitLabNote): ReviewThread {
+function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewThread {
   return {
     id: String(note.id),
     provider: 'gitlab',
@@ -350,7 +504,7 @@ function noteToGlobalReviewThread(note: GitLabNote): ReviewThread {
         id: String(note.id),
         databaseId: note.id,
         authorLogin: note.author?.username ?? 'unknown',
-        authorAvatarUrl: note.author?.avatar_url ?? null,
+        authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
         authorAssociation: null,
         body: note.body,
         createdAt: note.created_at,
@@ -395,6 +549,44 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   );
 
 function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError> {
+  const authorizeRequest: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['authorizeRequest'] = providerEffect(
+    'GitLabProvider.authorizeRequest',
+    'authorizeRequest',
+    function* () {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.accessToken();
+      return (request: HttpClientRequest.HttpClientRequest) =>
+        request.pipe(
+          HttpClientRequest.bearerToken(token),
+          HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+        );
+    },
+  );
+
+  const validateImageUrl: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['validateImageUrl'] = providerEffect(
+    'GitLabProvider.validateImageUrl',
+    'validateImageUrl',
+    function* (url: string) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return false;
+      }
+
+      try {
+        return new URL(url).hostname.toLowerCase() === hostNameFromHost(token.host);
+      } catch {
+        return false;
+      }
+    },
+  );
+
   const viewerLogin: ForgeProviderEffectContract<
     GitLabApiClient,
     GitLabProviderError
@@ -435,7 +627,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
                     status: 'not_authenticated',
                     message: 'Sign in with GitLab again.',
                   } satisfies ProviderAuthStatus)
-                : ({ status: 'unknown_error', message } satisfies ProviderAuthStatus),
+                : ({
+                    status: 'unknown_error',
+                    message,
+                  } satisfies ProviderAuthStatus),
             ),
           ),
         );
@@ -497,9 +692,126 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         simple: true,
         perPage: limit,
       });
+      const groups = yield* api.groups({
+        allAvailable: false,
+        perPage: Math.min(limit, 5),
+        search: query.trim() || undefined,
+      });
+      const groupProjectGroups = yield* Effect.forEach(
+        groups,
+        (group) =>
+          api
+            .groupProjects({
+              group: group.full_path,
+              includeSubgroups: true,
+              simple: true,
+              perPage: limit,
+            })
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning('[gitlab] group project search failed').pipe(
+                  Effect.annotateLogs({
+                    accountId: token.id,
+                    host: token.host,
+                    group: group.full_path,
+                    query,
+                    error: summarizeError(error),
+                  }),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
+                ),
+              ),
+            ),
+        { concurrency: 4 },
+      );
+
+      const projectsByPath = new Map<string, GitLabProject>();
+      for (const project of [...projects, ...groupProjectGroups.flat()]) {
+        projectsByPath.set(project.path_with_namespace, project);
+      }
+
+      return [...projectsByPath.values()]
+        .slice(0, limit)
+        .map((project) => repoSummaryFromProject(token.id, token.host, label, project));
+    },
+  );
+
+  const listNamespaceRepos: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listNamespaceRepos'] = providerEffect(
+    'GitLabProvider.listNamespaceRepos',
+    'listNamespaceRepos',
+    function* (namespacePath: string, limit: number) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'listNamespaceRepos' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const projects = yield* api
+        .groupProjects({
+          group: namespacePath,
+          includeSubgroups: true,
+          simple: true,
+          perPage: limit,
+        })
+        .pipe(
+          Effect.catchAll(() =>
+            api
+              .projects({
+                membership: true,
+                search: namespacePath,
+                simple: true,
+                perPage: limit,
+              })
+              .pipe(
+                Effect.map((entries) =>
+                  entries.filter(
+                    (project) =>
+                      project.path_with_namespace === namespacePath ||
+                      project.path_with_namespace.startsWith(`${namespacePath}/`),
+                  ),
+                ),
+              ),
+          ),
+        );
       return projects.map((project) =>
         repoSummaryFromProject(token.id, token.host, label, project),
       );
+    },
+  );
+
+  const searchNamespaces: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['searchNamespaces'] = providerEffect(
+    'GitLabProvider.searchNamespaces',
+    'searchNamespaces',
+    function* (query: string, limit: number) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'searchNamespaces' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const groups = yield* api.groups({
+        allAvailable: false,
+        perPage: limit,
+        search: query.trim() || undefined,
+      });
+      return groups.map((group) => namespaceSummaryFromGroup(token.id, token.host, label, group));
     },
   );
 
@@ -528,7 +840,11 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
             message: 'Project URL host must match the selected GitLab account.',
             expectedHost: token.host,
             actualHost: validatedHost,
-            cause: { input, expectedHost: token.host, actualHost: validatedHost },
+            cause: {
+              input,
+              expectedHost: token.host,
+              actualHost: validatedHost,
+            },
           }),
         );
       }
@@ -551,7 +867,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         return yield* Effect.fail(
           new GitLabProviderNotAuthenticated({
             message: 'GitLab is not signed in.',
-            cause: { provider: 'gitlab', operation: 'listOverviewPullRequests' },
+            cause: {
+              provider: 'gitlab',
+              operation: 'listOverviewPullRequests',
+            },
           }),
         );
       }
@@ -560,8 +879,12 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const scopedResults = yield* Effect.forEach(
         OVERVIEW_MERGE_REQUEST_SCOPES,
         (scope) =>
-          api.overviewMergeRequests(scope).pipe(
-            Effect.map((mergeRequests) => ({ scope, mergeRequests, error: null })),
+          api.overviewMergeRequests({ scope }).pipe(
+            Effect.map((mergeRequests) => ({
+              scope,
+              mergeRequests,
+              error: null,
+            })),
             Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
           ),
         { concurrency: 'unbounded' },
@@ -650,6 +973,88 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     },
   );
 
+  const searchPullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['searchPullRequests'] = providerEffect(
+    'GitLabProvider.searchPullRequests',
+    'searchPullRequests',
+    function* (query, limit, states) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'searchPullRequests' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const trimmedQuery = query.trim();
+      const directMergeRequest = parseGitLabMergeRequestUrl(trimmedQuery, token.host);
+      if (directMergeRequest) {
+        const project = yield* api.project(directMergeRequest.projectPath);
+        const mergeRequest = yield* api.mergeRequest(
+          directMergeRequest.projectPath,
+          directMergeRequest.number,
+        );
+        return [
+          {
+            repo: repoSummaryFromProject(token.id, token.host, label, project),
+            pullRequest: toPullRequestSummary(mergeRequest),
+          } satisfies OverviewPullRequestSummary,
+        ];
+      }
+
+      const searchState = toGitLabSearchState(states);
+      const scopedMergeRequestGroups = yield* Effect.forEach(
+        OVERVIEW_MERGE_REQUEST_SCOPES,
+        (scope) =>
+          api
+            .overviewMergeRequests({
+              scope,
+              state: searchState,
+              perPage: limit,
+              search: trimmedQuery || undefined,
+              in: trimmedQuery ? 'title' : undefined,
+            })
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning('[gitlab] scoped merge request search failed').pipe(
+                  Effect.annotateLogs({
+                    accountId: token.id,
+                    host: token.host,
+                    scope,
+                    query: trimmedQuery,
+                    error: summarizeError(error),
+                  }),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
+                ),
+              ),
+            ),
+        { concurrency: 'unbounded' },
+      );
+      const mergeRequests = dedupeMergeRequests(scopedMergeRequestGroups.flat()).sort(
+        (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
+      );
+
+      return filterSearchMergeRequestsByTitle(
+        filterSearchMergeRequests(mergeRequests, states),
+        trimmedQuery,
+        limit,
+      ).flatMap((mergeRequest) => {
+        const repo = repoSummaryFromMergeRequestUrl(token.id, token.host, label, mergeRequest);
+        if (!repo) {
+          return [];
+        }
+
+        return [{ repo, pullRequest: toPullRequestSummary(mergeRequest) }];
+      });
+    },
+  );
+
   const getPullRequest: ForgeProviderEffectContract<
     GitLabApiClient,
     GitLabProviderError
@@ -672,9 +1077,21 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       const approvalState = yield* api.mergeRequestApprovals(repo.path, number);
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: {
+              provider: 'gitlab',
+              operation: 'getPullRequestApprovalState',
+            },
+          }),
+        );
+      }
       const currentViewerLogin = yield* viewerLogin();
       const approvedBy = (approvalState.approved_by ?? [])
-        .map(toApprovalActor)
+        .map((approval) => toApprovalActor(token.id, approval))
         .sort(
           (left, right) => Date.parse(right.approvedAt ?? '') - Date.parse(left.approvedAt ?? ''),
         );
@@ -945,11 +1362,12 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       return {
         url: `${repo.host}/${repo.path}.git`,
         auth: {
-          envConfig: [],
-          askPass: {
-            username: 'oauth2',
-            password: token,
-          },
+          envConfig: [
+            {
+              key: `http.${repo.host}/.extraheader`,
+              value: basicAuthHeader('oauth2', token),
+            },
+          ],
         },
       };
     });
@@ -962,6 +1380,15 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     'listReviewThreads',
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'listReviewThreads' },
+          }),
+        );
+      }
       const threads: ReviewThread[] = [];
       const discussionNoteIds = new Set<number>();
       let discussionsPage = 1;
@@ -977,7 +1404,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           for (const note of discussion.notes ?? []) {
             discussionNoteIds.add(note.id);
           }
-          const thread = discussionToReviewThread(discussion);
+          const thread = discussionToReviewThread(token.id, discussion);
           if (thread) threads.push(thread);
         }
         discussionsPage += 1;
@@ -999,7 +1426,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           if (discussionNoteIds.has(note.id)) continue;
           if (note.position != null) continue;
           if (note.type === 'DiffNote') continue;
-          threads.push(noteToGlobalReviewThread(note));
+          threads.push(noteToGlobalReviewThread(token.id, note));
         }
         notesPage += 1;
       }
@@ -1313,7 +1740,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       repo: ProviderRepoIdentity,
       number: number,
       _session: unknown,
-      input: { action?: 'approve' | 'request_changes' | 'comment'; summary?: string | null },
+      input: {
+        action?: 'approve' | 'request_changes' | 'comment';
+        summary?: string | null;
+      },
     ) {
       const api = yield* GitLabApiClient;
       const summary = input.summary ?? '';
@@ -1439,12 +1869,17 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
   );
 
   return {
+    authorizeRequest,
+    validateImageUrl,
     authStatus,
     viewerLogin,
     listInitialRepos,
     searchRepos,
+    listNamespaceRepos,
+    searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
+    searchPullRequests,
     listPullRequests,
     getPullRequest,
     getPullRequestApprovalState,

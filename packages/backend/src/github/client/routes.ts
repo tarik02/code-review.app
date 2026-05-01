@@ -23,6 +23,13 @@ type GithubRoutes = {
     };
   };
   '/repos/:owner/:name': {};
+  '/repos/:owner/:name/pulls': {
+    query: {
+      state?: 'open' | 'closed' | 'all';
+      per_page?: number;
+      page?: number;
+    };
+  };
   '/repos/:owner/:name/pulls/:number': {};
   '/repos/:owner/:name/pulls/:number/files': {
     query: {

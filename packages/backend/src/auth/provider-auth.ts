@@ -128,7 +128,7 @@ function oauthConfig(
     clientId: resolvedClientId,
     clientSecret: resolvedClientSecret || null,
     redirectUri: redirectUri(),
-    scopes: ['api'],
+    scopes: ['api', 'read_repository'],
     authorizeUrl: `${normalizedHost}/oauth/authorize`,
     tokenUrl: `${normalizedHost}/oauth/token`,
     deviceCodeUrl: null,

@@ -7,6 +7,7 @@ import type {
   ProviderAccount,
   ProviderAuthStatus,
   RepoSummary,
+  NamespaceSummary,
 } from '@code-review-app/shared';
 
 type RepoServiceShape = {
@@ -19,6 +20,16 @@ type RepoServiceShape = {
     query: string,
     limit?: number,
   ): Effect.Effect<RepoSummary[], Error>;
+  listNamespaceRepos(
+    accountId: string,
+    namespacePath: string,
+    limit?: number,
+  ): Effect.Effect<RepoSummary[], Error>;
+  searchNamespaces(
+    accountId: string,
+    query: string,
+    limit?: number,
+  ): Effect.Effect<NamespaceSummary[], Error>;
   validateRepo(accountId: string, repo: string): Effect.Effect<RepoSummary, Error>;
   listSavedRepos(): Effect.Effect<RepoSummary[], Error>;
   saveRepo(repo: RepoSummary): Effect.Effect<RepoSummary, Error>;
@@ -80,6 +91,20 @@ const makeRepoService = Effect.gen(function* () {
     },
   );
 
+  const listNamespaceRepos: RepoServiceShape['listNamespaceRepos'] = Effect.fn(
+    'RepoService.listNamespaceRepos',
+  )(function* (accountId, namespacePath, limit = 100) {
+    const provider = yield* providers.forAccount(accountId);
+    return yield* provider.listNamespaceRepos(namespacePath, limit);
+  });
+
+  const searchNamespaces: RepoServiceShape['searchNamespaces'] = Effect.fn(
+    'RepoService.searchNamespaces',
+  )(function* (accountId, query, limit = 20) {
+    const provider = yield* providers.forAccount(accountId);
+    return yield* provider.searchNamespaces(query, limit);
+  });
+
   const validateRepo: RepoServiceShape['validateRepo'] = Effect.fn('RepoService.validateRepo')(
     function* (accountId, repo) {
       const provider = yield* providers.forAccount(accountId);
@@ -113,6 +138,8 @@ const makeRepoService = Effect.gen(function* () {
     getProviderProfile,
     listInitialRepos,
     searchRepos,
+    listNamespaceRepos,
+    searchNamespaces,
     validateRepo,
     listSavedRepos,
     saveRepo,

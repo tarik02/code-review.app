@@ -37,6 +37,18 @@ type RepoSummary = RepoIdentity & {
   avatarUrl: string | null;
 };
 
+type NamespaceSummary = {
+  provider: ForgeProviderKind;
+  host: string;
+  providerAccountId: string;
+  providerAccountLabel: string;
+  path: string;
+  name: string;
+  kind: 'user' | 'organization' | 'group';
+  avatarUrl: string | null;
+  webUrl: string | null;
+};
+
 type PullRequestSummary = {
   number: number;
   title: string;
@@ -57,6 +69,31 @@ type PullRequestSummary = {
 type OverviewPullRequestSummary = {
   repo: RepoSummary;
   pullRequest: PullRequestSummary;
+};
+
+type PullRequestSearchState = 'open' | 'draft_open' | 'all';
+
+type BrowseSearchInput = {
+  accountIds: string[];
+  query: string;
+  states: PullRequestSearchState;
+  profileFilterAccountId: string | null;
+  repoFilterKey: string | null;
+  namespaceFilterPath: string | null;
+  repoLimit: number;
+  namespaceLimit: number;
+  pullRequestLimit: number;
+};
+
+type BrowseSearchSnapshot = {
+  repos: RepoSummary[];
+  namespaces: NamespaceSummary[];
+  pullRequests: OverviewPullRequestSummary[];
+  accountIds: string[];
+  pendingCount: number;
+  completedCount: number;
+  errors: string[];
+  loading: boolean;
 };
 
 type TrackedPullRequestOrderEntry = RepoIdentity & {
@@ -371,6 +408,13 @@ type DiscardPendingReviewInput = RepoIdentity & {
   headSha: string;
 };
 
+type PullRequestSearchInput = {
+  accountId: string;
+  query: string;
+  limit: number;
+  states: PullRequestSearchState;
+};
+
 type ReplyToPullRequestReviewCommentInput = RepoIdentity & {
   number: number;
   threadId: string;
@@ -416,6 +460,8 @@ export type {
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
   AvailableUpdate,
+  BrowseSearchInput,
+  BrowseSearchSnapshot,
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
@@ -426,6 +472,7 @@ export type {
   DiffDataSettings,
   DiscardPendingReviewInput,
   ForgeProviderKind,
+  NamespaceSummary,
   OverviewPullRequestSummary,
   PendingReviewComment,
   PendingReviewCommentKind,
@@ -445,6 +492,8 @@ export type {
   ProviderAuthStatus,
   ProviderAuthStatusKind,
   ProviderProfile,
+  PullRequestSearchInput,
+  PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityFindingAnchorState,
   PullRequestQualityFindingSeverity,

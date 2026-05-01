@@ -33,6 +33,8 @@ import {
   GitLabErrorBodySchema,
   graphQlResponseSchema,
   GitLabMergeRequestApprovalsSchema,
+  type GitLabGroup,
+  GitLabGroupSchema,
   type GitLabMergeRequest,
   GitLabMergeRequestSchema,
   type GitLabMrVersion,
@@ -43,7 +45,7 @@ import {
   GitLabProjectSchema,
   GitLabUserSchema,
 } from './schemas.ts';
-import { gitlabRoute } from './routes.ts';
+import { gitlabRoute, type GitLabSearchMergeRequestState } from './routes.ts';
 
 type GitLabClientEffect<Success> = Effect.Effect<Success, GitLabClientError>;
 
@@ -56,16 +58,39 @@ type GitLabApiClientShape = {
     perPage?: number;
     search?: string;
   }): GitLabClientEffect<ReadonlyArray<GitLabProject>>;
-  overviewMergeRequests(
-    scope: 'reviews_for_me' | 'assigned_to_me' | 'created_by_me',
-  ): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
+  groups(input: {
+    allAvailable?: boolean;
+    perPage?: number;
+    search?: string;
+  }): GitLabClientEffect<ReadonlyArray<GitLabGroup>>;
+  groupProjects(input: {
+    group: string;
+    includeSubgroups?: boolean;
+    simple?: boolean;
+    perPage?: number;
+  }): GitLabClientEffect<ReadonlyArray<GitLabProject>>;
+  overviewMergeRequests(input: {
+    scope: 'reviews_for_me' | 'assigned_to_me' | 'created_by_me';
+    state?: GitLabSearchMergeRequestState;
+    perPage?: number;
+    search?: string;
+    in?: 'title';
+  }): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
+  searchMergeRequests(input: {
+    state: GitLabSearchMergeRequestState;
+    perPage?: number;
+    page?: number;
+    search?: string;
+  }): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
   project(project: string | number): GitLabClientEffect<GitLabProject>;
   projectMergeRequests(input: {
     project: string;
-    state?: 'opened';
+    state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
     orderBy?: 'updated_at' | 'created_at';
     sort?: 'desc' | 'asc';
     perPage?: number;
+    search?: string;
+    in?: 'title';
   }): GitLabClientEffect<ReadonlyArray<GitLabMergeRequest>>;
   mergeRequest(project: string, number: number): GitLabClientEffect<GitLabMergeRequest>;
   mergeRequestApprovals(
@@ -339,6 +364,15 @@ const makeGitLabApiClient = (accountId: string) =>
       );
     };
 
+    const logApiResponse = (response: HttpClientResponse.HttpClientResponse) =>
+      Effect.logInfo('[gitlab api] request').pipe(
+        Effect.annotateLogs({
+          method: response.request.method,
+          url: response.request.url,
+          statusCode: response.status,
+        }),
+      );
+
     const send = (request: HttpClientRequest.HttpClientRequest) =>
       httpClient.execute(request).pipe(
         Effect.timeoutFail({
@@ -351,6 +385,7 @@ const makeGitLabApiClient = (accountId: string) =>
               cause: { url: request.url, timeout: API_REQUEST_TIMEOUT },
             }),
         }),
+        Effect.tap(logApiResponse),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
       );
@@ -427,20 +462,98 @@ const makeGitLabApiClient = (accountId: string) =>
       },
     );
 
+    const groups: GitLabApiClientShape['groups'] = Effect.fn('GitLabApiClient.groups')(
+      function* (input) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.get(
+          gitlabRoute('groups', {
+            query: {
+              all_available: input.allAvailable ?? false,
+              search: input.search,
+              order_by: 'name',
+              sort: 'asc',
+              per_page: input.perPage,
+            },
+          }),
+        ).pipe(
+          setDefaultHeaders,
+          prefixApiHost(token.host),
+          auth,
+          send,
+          decodeJsonBody(Schema.Array(GitLabGroupSchema)),
+        );
+      },
+    );
+
+    const groupProjects: GitLabApiClientShape['groupProjects'] = Effect.fn(
+      'GitLabApiClient.groupProjects',
+    )(function* (input) {
+      const token = yield* requireStoredToken();
+      const auth = yield* authorize();
+      return yield* HttpClientRequest.get(
+        gitlabRoute('groups/:group/projects', {
+          params: { group: input.group },
+          query: {
+            include_subgroups: input.includeSubgroups,
+            simple: input.simple,
+            order_by: 'last_activity_at',
+            sort: 'desc',
+            per_page: input.perPage,
+          },
+        }),
+      ).pipe(
+        setDefaultHeaders,
+        prefixApiHost(token.host),
+        auth,
+        send,
+        decodeJsonBody(Schema.Array(GitLabProjectSchema)),
+      );
+    });
+
     const overviewMergeRequests: GitLabApiClientShape['overviewMergeRequests'] = Effect.fn(
       'GitLabApiClient.overviewMergeRequests',
-    )(function* (scope) {
+    )(function* (input) {
       const token = yield* requireStoredToken();
       const auth = yield* authorize();
       return yield* HttpClientRequest.get(
         gitlabRoute('merge_requests', {
           query: {
-            scope,
-            state: 'opened',
+            scope: input.scope,
+            state: input.state ?? 'opened',
             order_by: 'updated_at',
             sort: 'desc',
             non_archived: 'true',
-            per_page: 100,
+            per_page: input.perPage ?? 100,
+            search: input.search,
+            in: input.in,
+          },
+        }),
+      ).pipe(
+        setDefaultHeaders,
+        prefixApiHost(token.host),
+        auth,
+        send,
+        decodeJsonBody(Schema.Array(GitLabMergeRequestSchema)),
+      );
+    });
+
+    const searchMergeRequests: GitLabApiClientShape['searchMergeRequests'] = Effect.fn(
+      'GitLabApiClient.searchMergeRequests',
+    )(function* (input) {
+      const token = yield* requireStoredToken();
+      const auth = yield* authorize();
+      const trimmedSearch = input.search?.trim() ?? '';
+      return yield* HttpClientRequest.get(
+        gitlabRoute('search', {
+          query: {
+            scope: 'merge_requests',
+            state: input.state,
+            order_by: 'updated_at',
+            sort: 'desc',
+            per_page: input.perPage ?? 20,
+            page: input.page,
+            search: trimmedSearch,
           },
         }),
       ).pipe(
@@ -483,6 +596,8 @@ const makeGitLabApiClient = (accountId: string) =>
             order_by: input.orderBy,
             sort: input.sort,
             per_page: input.perPage,
+            search: input.search,
+            in: input.in,
           },
         }),
       ).pipe(
@@ -1007,7 +1122,10 @@ query($fullPath: ID!, $iid: String!) {
       storedToken,
       user,
       projects,
+      groups,
+      groupProjects,
       overviewMergeRequests,
+      searchMergeRequests,
       project,
       projectMergeRequests,
       mergeRequest,

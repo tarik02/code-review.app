@@ -1,10 +1,15 @@
+import { HttpClientRequest } from '@effect/platform';
 import { Effect } from 'effect';
+import { Buffer } from 'node:buffer';
 import type {
+  OverviewPullRequestSummary,
   PendingReviewComment,
   PullRequestApprovalState,
+  PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
+  NamespaceSummary,
   RepoSummary,
   ReviewComment,
   ReviewThread,
@@ -12,6 +17,7 @@ import type {
 import { summarizeError } from '../../errors.ts';
 import {
   createRepoIdentity,
+  hostNameFromHost,
   normalizeHost,
   normalizePath,
   type ProviderRepoIdentity,
@@ -42,6 +48,7 @@ import {
   type GhGraphqlRepo,
   type GhPullRequest,
   type GhPullRequestReview,
+  type GhRestPullRequest,
   type GhRestRepo,
   type GhSearchRepo,
   GraphQlConversationCommentSchema,
@@ -49,6 +56,7 @@ import {
 } from '../client/schemas.ts';
 import { initialRepoAffiliations } from '../client/routes.ts';
 import { firstGraphQlErrorMessage, toChangedFile } from './schemas.ts';
+import { prepareGitHubProviderImageUrl } from './images.ts';
 
 type UserContext = {
   accountId: string;
@@ -124,6 +132,10 @@ function encodePath(path: string) {
     .join('/');
 }
 
+function basicAuthHeader(username: string, password: string) {
+  return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+}
+
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
   return (
@@ -197,7 +209,10 @@ function repoSummaryFromSearch(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.full_name,
+    }),
   };
 }
 
@@ -217,7 +232,10 @@ function repoSummaryFromRest(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.full_name,
+    }),
   };
 }
 
@@ -237,12 +255,75 @@ function repoSummaryFromGraphql(
     nameWithOwner: repo.nameWithOwner,
     description: repo.description,
     isPrivate: repo.isPrivate,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.nameWithOwner,
+    }),
   };
 }
 
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
   return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+}
+
+const PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS = ['author', 'assignee', 'review-requested'] as const;
+
+function buildPullRequestSearchQuery(query: string, states: PullRequestSearchState, scope: string) {
+  const qualifiers = ['is:pr', 'archived:false', 'in:title', scope, 'sort:updated-desc'];
+  if (states !== 'all') {
+    qualifiers.push('is:open');
+  }
+
+  const trimmedQuery = query.trim();
+  return trimmedQuery ? `${qualifiers.join(' ')} ${trimmedQuery}` : qualifiers.join(' ');
+}
+
+function parseGitHubPullRequestUrl(input: string, expectedHost: string) {
+  try {
+    const url = new URL(input);
+    if (url.hostname.toLowerCase() !== hostNameFromHost(expectedHost)) {
+      return null;
+    }
+
+    const [owner, name, kind, numberValue] = url.pathname.split('/').filter(Boolean);
+    if (!owner || !name || kind !== 'pull') {
+      return null;
+    }
+
+    const number = Number.parseInt(numberValue ?? '', 10);
+    if (!Number.isSafeInteger(number) || number < 0) {
+      return null;
+    }
+
+    return { owner, name, number };
+  } catch {
+    return null;
+  }
+}
+
+function dedupePullRequestSearchEntries(entries: ReadonlyArray<OverviewPullRequestSummary>) {
+  const deduped = new Map<string, OverviewPullRequestSummary>();
+  for (const entry of entries) {
+    deduped.set(`${entry.repo.nameWithOwner}#${entry.pullRequest.number}`, entry);
+  }
+
+  return [...deduped.values()].sort(
+    (left, right) =>
+      Date.parse(right.pullRequest.updatedAt) - Date.parse(left.pullRequest.updatedAt),
+  );
+}
+
+function filterSearchPullRequestsByState(
+  entries: OverviewPullRequestSummary[],
+  states: PullRequestSearchState,
+) {
+  if (states !== 'open') {
+    return entries;
+  }
+
+  return entries.filter(
+    (entry) => entry.pullRequest.state === 'OPEN' && !entry.pullRequest.isDraft,
+  );
 }
 
 function toPullRequestSummary(pullRequest: GhPullRequest) {
@@ -262,6 +343,26 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
     url: pullRequest.url,
     headSha: pullRequest.headRefOid,
     baseSha: pullRequest.baseRefOid ?? null,
+  };
+}
+
+function toPullRequestSummaryFromRest(pullRequest: GhRestPullRequest) {
+  const merged = pullRequest.merged_at != null;
+  return {
+    number: pullRequest.number,
+    title: pullRequest.title,
+    state: merged ? 'MERGED' : pullRequest.state.toUpperCase(),
+    isDraft: pullRequest.draft ?? false,
+    mergeStateStatus: 'UNKNOWN',
+    mergeable: 'UNKNOWN',
+    additions: pullRequest.additions ?? null,
+    deletions: pullRequest.deletions ?? null,
+    changeCount: null,
+    authorLogin: pullRequest.user?.login ?? 'unknown',
+    updatedAt: pullRequest.updated_at,
+    url: pullRequest.html_url,
+    headSha: pullRequest.head.sha,
+    baseSha: pullRequest.base.sha,
   };
 }
 
@@ -390,6 +491,44 @@ function toGitHubQualityFinding(
 }
 
 function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitHubProviderError> {
+  const authorizeRequest: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['authorizeRequest'] = providerEffect(
+    'GitHubProvider.authorizeRequest',
+    'authorizeRequest',
+    function* () {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.accessToken();
+      return (request: HttpClientRequest.HttpClientRequest) =>
+        request.pipe(
+          HttpClientRequest.bearerToken(token),
+          HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+        );
+    },
+  );
+
+  const validateImageUrl: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['validateImageUrl'] = providerEffect(
+    'GitHubProvider.validateImageUrl',
+    'validateImageUrl',
+    function* (url: string) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return false;
+      }
+
+      try {
+        return new URL(url).hostname.toLowerCase() === hostNameFromHost(token.host);
+      } catch {
+        return false;
+      }
+    },
+  );
+
   const ensureUserContext = providerEffect(
     'GitHubProvider.ensureUserContext',
     'ensureUserContext',
@@ -560,10 +699,14 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
 
       const owners = yield* ensureUserContext();
       const repos: GhSearchRepo[] = [];
+      const normalizedQuery = query.trim().toLowerCase();
       for (const owner of owners) {
         const qualifier = owner === userContext?.login ? 'user' : 'org';
+        const ownerMatchesQuery = owner.toLowerCase() === normalizedQuery;
         const response = yield* api.searchRepositories({
-          query: `${query} in:name ${qualifier}:${owner}`,
+          query: ownerMatchesQuery
+            ? `${qualifier}:${owner}`
+            : `${query} in:name ${qualifier}:${owner}`,
           perPage: limit,
         });
         repos.push(...response.items);
@@ -581,6 +724,61 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         seen.add(repo.full_name);
         return [repoSummaryFromSearch(token.id, token.host, label, repo)];
       });
+    },
+  );
+
+  const listNamespaceRepos: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['listNamespaceRepos'] = providerEffect(
+    'GitHubProvider.listNamespaceRepos',
+    'listNamespaceRepos',
+    function* (namespacePath: string, limit: number) {
+      return yield* searchRepos(namespacePath, limit);
+    },
+  );
+
+  const searchNamespaces: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['searchNamespaces'] = providerEffect(
+    'GitHubProvider.searchNamespaces',
+    'searchNamespaces',
+    function* (query: string, limit: number) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation: 'searchNamespaces' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      const owners = userContext?.owners ?? [];
+      const normalizedQuery = query.trim().toLowerCase();
+
+      return owners
+        .filter((owner) => !normalizedQuery || owner.toLowerCase().includes(normalizedQuery))
+        .slice(0, limit)
+        .map(
+          (owner) =>
+            ({
+              provider: 'github',
+              host: token.host,
+              providerAccountId: token.id,
+              providerAccountLabel: label,
+              path: owner,
+              name: owner,
+              kind: owner === login ? 'user' : 'organization',
+              avatarUrl: null,
+              webUrl: `https://${token.host}/${owner}`,
+            }) satisfies NamespaceSummary,
+        );
     },
   );
 
@@ -610,7 +808,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
             message: 'Repo URL host must match the selected GitHub account.',
             expectedHost: token.host,
             actualHost: validatedHost,
-            cause: { input, expectedHost: token.host, actualHost: validatedHost },
+            cause: {
+              input,
+              expectedHost: token.host,
+              actualHost: validatedHost,
+            },
           }),
         );
       }
@@ -634,7 +836,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return yield* Effect.fail(
           new GitHubProviderNotAuthenticated({
             message: 'GitHub is not signed in.',
-            cause: { provider: 'github', operation: 'listOverviewPullRequests' },
+            cause: {
+              provider: 'github',
+              operation: 'listOverviewPullRequests',
+            },
           }),
         );
       }
@@ -646,7 +851,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return yield* Effect.fail(
           new GitHubProviderViewerLoginUnavailable({
             message: 'Unable to determine GitHub viewer login',
-            cause: { provider: 'github', operation: 'listOverviewPullRequests' },
+            cause: {
+              provider: 'github',
+              operation: 'listOverviewPullRequests',
+            },
           }),
         );
       }
@@ -681,8 +889,94 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     function* (repo: ProviderRepoIdentity) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
-      const response = yield* api.repositoryPullRequests(owner, name);
-      return (response.data?.repository?.pullRequests.nodes ?? []).map(toPullRequestSummary);
+      const pullRequests = yield* api.repositoryOpenPullRequests(owner, name);
+      return pullRequests.map(toPullRequestSummaryFromRest);
+    },
+  );
+
+  const searchPullRequests: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['searchPullRequests'] = providerEffect(
+    'GitHubProvider.searchPullRequests',
+    'searchPullRequests',
+    function* (query, limit, states) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation: 'searchPullRequests' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const directPullRequest = parseGitHubPullRequestUrl(query, token.host);
+      if (directPullRequest) {
+        const repo = yield* api.repo(directPullRequest.owner, directPullRequest.name);
+        const response = yield* api.repositoryPullRequest(
+          directPullRequest.owner,
+          directPullRequest.name,
+          directPullRequest.number,
+        );
+        const pullRequest = response.data?.repository?.pullRequest;
+        if (!pullRequest) {
+          return [];
+        }
+
+        return [
+          {
+            repo: repoSummaryFromRest(token.id, token.host, label, repo),
+            pullRequest: toPullRequestSummary(pullRequest),
+          } satisfies OverviewPullRequestSummary,
+        ];
+      }
+
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      if (!login) {
+        return yield* Effect.fail(
+          new GitHubProviderViewerLoginUnavailable({
+            message: 'Unable to determine GitHub viewer login',
+            cause: { provider: 'github', operation: 'searchPullRequests' },
+          }),
+        );
+      }
+
+      const scopedEntries = yield* Effect.forEach(
+        PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS,
+        (qualifier) =>
+          api
+            .searchPullRequests(
+              buildPullRequestSearchQuery(query, states, `${qualifier}:${login}`),
+              limit,
+            )
+            .pipe(
+              Effect.map((response) =>
+                (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
+                  const repo = pullRequest?.repository;
+                  if (!pullRequest || !repo) {
+                    return [];
+                  }
+
+                  return [
+                    {
+                      repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
+                      pullRequest: toPullRequestSummary(pullRequest),
+                    } satisfies OverviewPullRequestSummary,
+                  ];
+                }),
+              ),
+            ),
+        { concurrency: 'unbounded' },
+      );
+
+      return filterSearchPullRequestsByState(
+        dedupePullRequestSearchEntries(scopedEntries.flat()),
+        states,
+      ).slice(0, limit);
     },
   );
 
@@ -866,7 +1160,13 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       let shouldContinue = true;
 
       while (shouldContinue) {
-        const items = yield* api.pullRequestFiles({ owner, name, number, perPage: 100, page });
+        const items = yield* api.pullRequestFiles({
+          owner,
+          name,
+          number,
+          perPage: 100,
+          page,
+        });
         if (items.length === 0) {
           shouldContinue = false;
         } else {
@@ -1052,11 +1352,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       return {
         url: `${repo.host}/${owner}/${name}.git`,
         auth: {
-          envConfig: [],
-          askPass: {
-            username: 'x-access-token',
-            password: token,
-          },
+          envConfig: [
+            {
+              key: `http.${repo.host}/.extraheader`,
+              value: basicAuthHeader('x-access-token', token),
+            },
+          ],
         },
       };
     });
@@ -1416,7 +1717,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       _repo: ProviderRepoIdentity,
       _number: number,
       session: { providerReviewId: string | null },
-      input: { action?: 'approve' | 'request_changes' | 'comment'; summary?: string | null },
+      input: {
+        action?: 'approve' | 'request_changes' | 'comment';
+        summary?: string | null;
+      },
     ) {
       const api = yield* GitHubApiClient;
       const event =
@@ -1546,12 +1850,17 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   );
 
   return {
+    authorizeRequest,
+    validateImageUrl,
     authStatus,
     viewerLogin,
     listInitialRepos,
     searchRepos,
+    listNamespaceRepos,
+    searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
+    searchPullRequests,
     listPullRequests,
     getPullRequest,
     getPullRequestApprovalState,
