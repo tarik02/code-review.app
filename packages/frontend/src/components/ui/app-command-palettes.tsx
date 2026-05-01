@@ -49,6 +49,7 @@ import { usePatchViewerStore } from '../../stores/patch-viewer-store';
 import { useReviewCommentEditorStore } from '../../stores/review-comment-editor-store';
 import type {
   OverviewPullRequestSummary,
+  NamespaceSummary,
   PendingReviewState,
   PullRequestApprovalState,
   PullRequestSearchState,
@@ -72,13 +73,7 @@ import {
   buildRepoNamespacePrefixes,
   repoMatchesNamespaceFilter,
 } from './app-command-palette-items';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
 type SidebarPullRequestView = 'overview' | 'tracked';
 const BROWSE_QUERY_DEBOUNCE_MS = 250;
@@ -115,7 +110,7 @@ type HomeWorkflowPaletteProps = {
   setSidebarView: (view: SidebarPullRequestView) => void;
 };
 
-type HomeCommandPalettesProps = PullRequestContentPaletteProps &
+type HomeCommandPalettesProps = Omit<PullRequestContentPaletteProps, 'open' | 'onOpenChange'> &
   Omit<HomeWorkflowPaletteProps, 'open' | 'onOpenChange'> & {
     localPullRequests: OverviewPullRequestSummary[];
   };
@@ -124,13 +119,7 @@ type SettingsCommandPalettesProps = {
   handleBackToPrs: () => void;
 };
 
-function FilterChipButton({
-  children,
-  onClear,
-}: {
-  children: ReactNode;
-  onClear: () => void;
-}) {
+function FilterChipButton({ children, onClear }: { children: ReactNode; onClear: () => void }) {
   return (
     <button
       className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-canvas px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
@@ -199,7 +188,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
   const { enabledAccountIds, enabledProviderAccounts } = useEnabledProviderAccounts();
   const { repos: savedRepos = [] } = useSavedRepos();
   const trackedReposQuery = useQuery(trackedReposQueryOptions());
-  const trackedRepos = trackedReposQuery.data ?? [];
+  const trackedRepos = useMemo(() => trackedReposQuery.data ?? [], [trackedReposQuery.data]);
   const [browseFilters, setBrowseFilters] = useState({
     ...initialMainAppViewState,
     namespaceFilterPath: null as string | null,
@@ -213,19 +202,20 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
   const hasQuery = query.trim().length > 0;
   const hasDebouncedQuery = debouncedQuery.trim().length > 0;
   const hasScopedPullRequestSource = Boolean(repoFilterKey || namespaceFilterPath);
-  const hasGlobalPullRequestSearch =
-    hasQuery && hasDebouncedQuery && !hasScopedPullRequestSource;
+  const hasGlobalPullRequestSearch = hasQuery && hasDebouncedQuery && !hasScopedPullRequestSource;
   const enabledAccountIdSet = useMemo(() => new Set(enabledAccountIds), [enabledAccountIds]);
 
   useEffect(() => {
     if (!open) {
-      setQuery('');
-      setDebouncedQuery('');
-      setPullRequestState('all');
-      setBrowseFilters({
-        ...initialMainAppViewState,
-        namespaceFilterPath: null,
-      });
+      window.setTimeout(() => {
+        setQuery('');
+        setDebouncedQuery('');
+        setPullRequestState('all');
+        setBrowseFilters({
+          ...initialMainAppViewState,
+          namespaceFilterPath: null,
+        });
+      }, 0);
     }
   }, [open]);
 
@@ -243,7 +233,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     };
   }, [open, query]);
 
-  const { availableRepos, isLoadingRepos } = useRepoPickerReposForAccounts(
+  const { availableRepos, availableNamespaces, isLoadingRepos } = useRepoPickerReposForAccounts(
     enabledProviderAccounts,
     enabledAccountIds,
     debouncedQuery,
@@ -300,10 +290,26 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
       {
         accountId: string;
         namespacePath: string;
+        kind: NamespaceSummary['kind'] | 'namespace';
         providerAccountLabel: string;
         repoCount: number;
       }
     >();
+
+    for (const namespace of availableNamespaces) {
+      if (profileFilterAccountId && namespace.providerAccountId !== profileFilterAccountId) {
+        continue;
+      }
+
+      const key = `${namespace.providerAccountId}:${namespace.path}`;
+      entries.set(key, {
+        accountId: namespace.providerAccountId,
+        namespacePath: namespace.path,
+        kind: namespace.kind,
+        providerAccountLabel: namespace.providerAccountLabel,
+        repoCount: 0,
+      });
+    }
 
     for (const repo of browseRepos) {
       if (profileFilterAccountId && repo.providerAccountId !== profileFilterAccountId) {
@@ -321,6 +327,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         entries.set(key, {
           accountId: repo.providerAccountId,
           namespacePath,
+          kind: 'namespace',
           providerAccountLabel: repo.providerAccountLabel,
           repoCount: 1,
         });
@@ -330,7 +337,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     return [...entries.values()].sort((left, right) =>
       left.namespacePath.localeCompare(right.namespacePath),
     );
-  }, [browseRepos, profileFilterAccountId]);
+  }, [availableNamespaces, browseRepos, profileFilterAccountId]);
   const filteredRepos = useMemo(
     () =>
       browseRepos.filter(
@@ -349,6 +356,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     queries: repoScopedPullRequestRepos.map((repo) => ({
       ...pullRequestListQueryOptions(repoIdentity(repo)),
       enabled: open && hasScopedPullRequestSource,
+      placeholderData: (previousData: PullRequestSummary[] | undefined) => previousData,
     })),
   });
   const repoScopedPullRequests = useMemo(() => {
@@ -368,8 +376,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         const existing = entriesByKey.get(key);
         if (
           !existing ||
-          Date.parse(pullRequest.updatedAt || '') >
-            Date.parse(existing.pullRequest.updatedAt || '')
+          Date.parse(pullRequest.updatedAt || '') > Date.parse(existing.pullRequest.updatedAt || '')
         ) {
           entriesByKey.set(key, entry);
         }
@@ -381,11 +388,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         Date.parse(right.pullRequest.updatedAt || '') -
         Date.parse(left.pullRequest.updatedAt || ''),
     );
-  }, [
-    pullRequestState,
-    repoScopedPullRequestQueries,
-    repoScopedPullRequestRepos,
-  ]);
+  }, [pullRequestState, repoScopedPullRequestQueries, repoScopedPullRequestRepos]);
   const repoScopedPullRequestErrors = useMemo(
     () =>
       repoScopedPullRequestQueries
@@ -570,52 +573,65 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     pullRequestSearch.pendingCount,
   ]);
 
-  const cacheSavedRepo = useCallback((repo: RepoSummary) => {
-    queryClient.setQueryData<RepoSummary[]>(savedReposQueryOptions().queryKey, (current) => {
-      if (!current) {
-        return [repo];
-      }
-      if (current.some((entry) => sameRepoIdentity(entry, repo))) {
-        return current;
-      }
-      return [...current, repo];
-    });
-  }, [queryClient]);
+  const cacheSavedRepo = useCallback(
+    (repo: RepoSummary) => {
+      queryClient.setQueryData<RepoSummary[]>(savedReposQueryOptions().queryKey, (current) => {
+        if (!current) {
+          return [repo];
+        }
+        if (current.some((entry) => sameRepoIdentity(entry, repo))) {
+          return current;
+        }
+        return [...current, repo];
+      });
+    },
+    [queryClient],
+  );
 
-  const cacheTrackedRepo = useCallback((repo: RepoSummary) => {
-    queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
-      if (!current) {
-        return [repo];
-      }
-      if (current.some((entry) => sameRepoIdentity(entry, repo))) {
-        return current;
-      }
-      return [...current, repo];
-    });
-  }, [queryClient]);
+  const cacheTrackedRepo = useCallback(
+    (repo: RepoSummary) => {
+      queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
+        if (!current) {
+          return [repo];
+        }
+        if (current.some((entry) => sameRepoIdentity(entry, repo))) {
+          return current;
+        }
+        return [...current, repo];
+      });
+    },
+    [queryClient],
+  );
 
-  const cacheTrackedPullRequest = useCallback((repo: RepoSummary, pullRequest: PullRequestSummary) => {
-    queryClient.setQueryData<PullRequestSummary[]>(
-      forgeKeys.trackedPullRequestList(repo),
-      (current) => {
-        const next = current ?? [];
-        return [pullRequest, ...next.filter((entry) => entry.number !== pullRequest.number)];
-      },
-    );
-  }, [queryClient]);
+  const cacheTrackedPullRequest = useCallback(
+    (repo: RepoSummary, pullRequest: PullRequestSummary) => {
+      queryClient.setQueryData<PullRequestSummary[]>(
+        forgeKeys.trackedPullRequestList(repo),
+        (current) => {
+          const next = current ?? [];
+          return [pullRequest, ...next.filter((entry) => entry.number !== pullRequest.number)];
+        },
+      );
+    },
+    [queryClient],
+  );
 
-  const moveTrackedPullRequestToTop = useCallback(async (repo: RepoSummary, pullRequest: PullRequestSummary) => {
-    const currentOrder =
-      queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(forgeKeys.trackedPullRequestOrder()) ??
-      (await trpc.tracked.getOrder.query());
-    const nextOrder = prependTrackedPullRequestOrderEntry(
-      currentOrder,
-      toTrackedPullRequestOrderEntry({ repo, pullRequest }),
-    );
-    queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), nextOrder);
-    const persisted = await setTrackedPullRequestOrder(nextOrder);
-    queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), persisted);
-  }, [queryClient]);
+  const moveTrackedPullRequestToTop = useCallback(
+    async (repo: RepoSummary, pullRequest: PullRequestSummary) => {
+      const currentOrder =
+        queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(
+          forgeKeys.trackedPullRequestOrder(),
+        ) ?? (await trpc.tracked.getOrder.query());
+      const nextOrder = prependTrackedPullRequestOrderEntry(
+        currentOrder,
+        toTrackedPullRequestOrderEntry({ repo, pullRequest }),
+      );
+      queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), nextOrder);
+      const persisted = await setTrackedPullRequestOrder(nextOrder);
+      queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), persisted);
+    },
+    [queryClient],
+  );
 
   const items = useMemo(() => {
     const profileItems: CommandPaletteItem[] = [];
@@ -668,7 +684,10 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         id: `namespace:${namespaceItem.accountId}:${namespaceItem.namespacePath}`,
         group: 'Groups and orgs',
         title: namespaceItem.namespacePath,
-        subtitle: `${namespaceItem.providerAccountLabel} · ${namespaceItem.repoCount} repo${namespaceItem.repoCount === 1 ? '' : 's'}`,
+        subtitle:
+          namespaceItem.repoCount > 0
+            ? `${namespaceItem.providerAccountLabel} · ${namespaceItem.repoCount} repo${namespaceItem.repoCount === 1 ? '' : 's'}`
+            : `${namespaceItem.providerAccountLabel} · ${namespaceItem.kind}`,
         keywords: [namespaceItem.providerAccountLabel],
         icon: <FolderGit2Icon className="size-4" />,
         onSelect: () => {
@@ -677,8 +696,8 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
             namespaceFilterPath: namespaceItem.namespacePath,
             repoFilterKey: null,
           }));
-          setQuery('');
-          setDebouncedQuery('');
+          setQuery(namespaceItem.namespacePath);
+          setDebouncedQuery(namespaceItem.namespacePath);
         },
       });
     }
@@ -791,8 +810,14 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
   return (
     <CommandPalette
       accessory={
-        <Select value={pullRequestState} onValueChange={(value) => setPullRequestState(value as PullRequestSearchState)}>
-          <SelectTrigger className="h-8 min-w-[132px] border-neutral-300 bg-surface text-xs" size="sm">
+        <Select
+          value={pullRequestState}
+          onValueChange={(value) => setPullRequestState(value as PullRequestSearchState)}
+        >
+          <SelectTrigger
+            className="h-8 min-w-[132px] border-neutral-300 bg-surface text-xs"
+            size="sm"
+          >
             <SelectValue>{PULL_REQUEST_STATE_LABELS[pullRequestState]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -806,13 +831,15 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         hasQuery || hasScopedPullRequestSource
           ? isSearchPending
             ? 'Results will appear as repositories and pull requests come back.'
-          : (hasScopedPullRequestSource
-              ? repoScopedPullRequestErrors[0]
-              : pullRequestSearch.errors[0]) ??
-            'Try a repository name, pull request title, author, or number.'
+            : ((hasScopedPullRequestSource
+                ? repoScopedPullRequestErrors[0]
+                : pullRequestSearch.errors[0]) ??
+              'Try a repository name, pull request title, author, or number.')
           : 'Tracked and overview pull requests appear locally. Start typing to search globally.'
       }
-      emptyTitle={isSearchPending ? 'Searching...' : 'No matching profiles, repositories, or pull requests'}
+      emptyTitle={
+        isSearchPending ? 'Searching...' : 'No matching profiles, repositories, or pull requests'
+      }
       footer={footer}
       inputFooter={inputFooter}
       items={items}
@@ -852,7 +879,9 @@ function HomeWorkflowPalette({
   const { discardPendingReviewMutation, publishPendingReviewMutation } =
     usePullRequestReviewCommentMutations(selectedPr);
   const [submitReviewMode, setSubmitReviewMode] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'comment' | 'approve' | 'request_changes'>('comment');
+  const [submitAction, setSubmitAction] = useState<'comment' | 'approve' | 'request_changes'>(
+    'comment',
+  );
   const [submitSummary, setSubmitSummary] = useState('');
 
   useEffect(() => {
@@ -860,9 +889,11 @@ function HomeWorkflowPalette({
       return;
     }
 
-    setSubmitReviewMode(false);
-    setSubmitAction('comment');
-    setSubmitSummary('');
+    window.setTimeout(() => {
+      setSubmitReviewMode(false);
+      setSubmitAction('comment');
+      setSubmitSummary('');
+    }, 0);
   }, [open]);
 
   const items = useMemo(() => {
@@ -888,7 +919,8 @@ function HomeWorkflowPalette({
           id: 'submit-review-request-changes',
           group: 'Review type',
           title: 'Request changes',
-          badge: submitAction === 'request_changes' ? <CheckIcon className="size-3.5" /> : undefined,
+          badge:
+            submitAction === 'request_changes' ? <CheckIcon className="size-3.5" /> : undefined,
           icon: <FilterXIcon className="size-4" />,
           onSelect: () => setSubmitAction('request_changes'),
         },
@@ -1278,8 +1310,4 @@ function SettingsCommandPalettes({ handleBackToPrs }: SettingsCommandPalettesPro
   );
 }
 
-export {
-  HomeCommandPalettes,
-  SettingsCommandPalettes,
-  buildPullRequestContentPaletteItems,
-};
+export { HomeCommandPalettes, SettingsCommandPalettes, buildPullRequestContentPaletteItems };

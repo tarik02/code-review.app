@@ -8,6 +8,7 @@ import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
+  NamespaceSummary,
   PullRequestSummary,
   RepoSummary,
   ReviewComment,
@@ -27,12 +28,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
-import {
-  GitLabClientRequestTimeoutError,
-  GitLabClientResponseError,
-  type GitLabClientError,
-  isGitLabClientError,
-} from '../client/errors.ts';
+import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
 import {
   GitLabProviderClientFailure,
   type GitLabProviderError,
@@ -45,6 +41,7 @@ import {
 import {
   GitLabApprovedByEntrySchema,
   type GitLabDiscussion,
+  type GitLabGroup,
   type GitLabMergeRequest,
   type GitLabMrVersion,
   type GitLabNote,
@@ -129,6 +126,25 @@ function repoSummaryFromProject(
   } satisfies RepoSummary;
 }
 
+function namespaceSummaryFromGroup(
+  accountId: string,
+  host: string,
+  label: string,
+  group: GitLabGroup,
+) {
+  return {
+    provider: 'gitlab',
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
+    path: group.full_path,
+    name: group.name || group.path || group.full_path,
+    kind: 'group',
+    avatarUrl: group.avatar_url ?? null,
+    webUrl: group.web_url ?? `https://${host}/${group.full_path}`,
+  } satisfies NamespaceSummary;
+}
+
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
   return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
 }
@@ -201,7 +217,9 @@ function repoSummaryFromMergeRequestUrl(
 ): RepoSummary | null {
   try {
     const url = new URL(mergeRequest.web_url);
-    const path = normalizePath(url.pathname.replace(/\/-\/merge_requests\/\d+$/, ''));
+    const path = normalizePath(
+      url.pathname.replace(/\/-\/merge_requests\/\d+$/, '').replace(/\/merge_requests\/\d+$/, ''),
+    );
     if (!path) {
       return null;
     }
@@ -234,16 +252,43 @@ function filterSearchMergeRequests(
     return mergeRequests;
   }
 
-  return mergeRequests.filter(
-    (mergeRequest) => !(mergeRequest.draft ?? false) && !(mergeRequest.work_in_progress ?? false),
+  return mergeRequests.filter((mergeRequest) =>
+    matchesSearchMergeRequestState(mergeRequest, states),
   );
 }
 
-function isGitLabSearchTimeoutError(error: GitLabClientError) {
+function matchesSearchMergeRequestState(
+  mergeRequest: GitLabMergeRequest,
+  states: PullRequestSearchState,
+) {
   return (
-    error instanceof GitLabClientRequestTimeoutError ||
-    (error instanceof GitLabClientResponseError && error.status === 408)
+    states !== 'open' ||
+    (!(mergeRequest.draft ?? false) && !(mergeRequest.work_in_progress ?? false))
   );
+}
+
+function filterSearchMergeRequestsByTitle(
+  mergeRequests: ReadonlyArray<GitLabMergeRequest>,
+  query: string,
+  limit: number,
+) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return mergeRequests.slice(0, limit);
+  }
+
+  return mergeRequests
+    .filter((mergeRequest) => mergeRequest.title.toLowerCase().includes(normalizedQuery))
+    .slice(0, limit);
+}
+
+function dedupeMergeRequests(mergeRequests: ReadonlyArray<GitLabMergeRequest>) {
+  const deduped = new Map<string, GitLabMergeRequest>();
+  for (const mergeRequest of mergeRequests) {
+    deduped.set(mergeRequestKey(mergeRequest), mergeRequest);
+  }
+
+  return [...deduped.values()];
 }
 
 function gitlabQualitySeverity(
@@ -565,9 +610,74 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         simple: true,
         perPage: limit,
       });
-      return projects.map((project) =>
-        repoSummaryFromProject(token.id, token.host, label, project),
+      const groups = yield* api.groups({
+        allAvailable: false,
+        perPage: Math.min(limit, 5),
+        search: query.trim() || undefined,
+      });
+      const groupProjectGroups = yield* Effect.forEach(
+        groups,
+        (group) =>
+          api
+            .groupProjects({
+              group: group.full_path,
+              includeSubgroups: true,
+              simple: true,
+              perPage: limit,
+            })
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning('[gitlab] group project search failed').pipe(
+                  Effect.annotateLogs({
+                    accountId: token.id,
+                    host: token.host,
+                    group: group.full_path,
+                    query,
+                    error: summarizeError(error),
+                  }),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
+                ),
+              ),
+            ),
+        { concurrency: 4 },
       );
+
+      const projectsByPath = new Map<string, GitLabProject>();
+      for (const project of [...projects, ...groupProjectGroups.flat()]) {
+        projectsByPath.set(project.path_with_namespace, project);
+      }
+
+      return [...projectsByPath.values()]
+        .slice(0, limit)
+        .map((project) => repoSummaryFromProject(token.id, token.host, label, project));
+    },
+  );
+
+  const searchNamespaces: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['searchNamespaces'] = providerEffect(
+    'GitLabProvider.searchNamespaces',
+    'searchNamespaces',
+    function* (query: string, limit: number) {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'searchNamespaces' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const groups = yield* api.groups({
+        allAvailable: false,
+        perPage: limit,
+        search: query.trim() || undefined,
+      });
+      return groups.map((group) => namespaceSummaryFromGroup(token.id, token.host, label, group));
     },
   );
 
@@ -628,7 +738,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const scopedResults = yield* Effect.forEach(
         OVERVIEW_MERGE_REQUEST_SCOPES,
         (scope) =>
-          api.overviewMergeRequests(scope).pipe(
+          api.overviewMergeRequests({ scope }).pipe(
             Effect.map((mergeRequests) => ({ scope, mergeRequests, error: null })),
             Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
           ),
@@ -739,101 +849,42 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const label = labelForToken(token);
       const trimmedQuery = query.trim();
       const searchState = toGitLabSearchState(states);
-      const mergeRequests = yield* api
-        .searchMergeRequests({
-          state: searchState,
-          perPage: limit,
-          search: trimmedQuery,
-        })
-        .pipe(
-          Effect.catchAll((error) => {
-            if (!isGitLabSearchTimeoutError(error)) {
-              return Effect.fail(error);
-            }
-
-            return Effect.logWarning('[gitlab] global merge request search timed out, falling back to project-scoped search').pipe(
-              Effect.annotateLogs({
-                accountId: token.id,
-                host: token.host,
-                query: trimmedQuery,
-                limit,
-                state: searchState,
-                error: summarizeError(error),
-              }),
-              Effect.zipRight(
-                Effect.gen(function* () {
-                  const projects = yield* api.projects({
-                    membership: true,
-                    simple: true,
-                    perPage: Math.min(limit, 6),
-                    search: trimmedQuery,
-                  });
-
-                  if (projects.length === 0) {
-                    return [] as ReadonlyArray<GitLabMergeRequest>;
-                  }
-
-                  const perProjectLimit = Math.max(
-                    1,
-                    Math.min(4, Math.ceil(limit / projects.length)),
-                  );
-
-                  const projectResults = yield* Effect.forEach(
-                    projects,
-                    (project) =>
-                      api
-                        .projectMergeRequests({
-                          project: project.path_with_namespace,
-                          state: searchState,
-                          orderBy: 'updated_at',
-                          sort: 'desc',
-                          perPage: perProjectLimit,
-                          search: trimmedQuery,
-                          in: 'title',
-                        })
-                        .pipe(
-                          Effect.map((mergeRequests) => ({ project, mergeRequests })),
-                          Effect.catchAll((projectError) =>
-                            Effect.logWarning('[gitlab] project-scoped merge request fallback failed').pipe(
-                              Effect.annotateLogs({
-                                accountId: token.id,
-                                host: token.host,
-                                project: project.path_with_namespace,
-                                query: trimmedQuery,
-                                error: summarizeError(projectError),
-                              }),
-                              Effect.zipRight(
-                                Effect.succeed({
-                                  project,
-                                  mergeRequests: [] as ReadonlyArray<GitLabMergeRequest>,
-                                }),
-                              ),
-                            ),
-                          ),
-                        ),
-                    { concurrency: 4 },
-                  );
-
-                  const deduped = new Map<string, GitLabMergeRequest>();
-                  for (const result of projectResults) {
-                    for (const mergeRequest of result.mergeRequests) {
-                      deduped.set(mergeRequestKey(mergeRequest), mergeRequest);
-                    }
-                  }
-
-                  return [...deduped.values()]
-                    .sort(
-                      (left, right) =>
-                        Date.parse(right.updated_at) - Date.parse(left.updated_at),
-                    )
-                    .slice(0, limit);
-                }),
+      const scopedMergeRequestGroups = yield* Effect.forEach(
+        OVERVIEW_MERGE_REQUEST_SCOPES,
+        (scope) =>
+          api
+            .overviewMergeRequests({
+              scope,
+              state: searchState,
+              perPage: limit,
+              search: trimmedQuery || undefined,
+              in: trimmedQuery ? 'title' : undefined,
+            })
+            .pipe(
+              Effect.catchAll((error) =>
+                Effect.logWarning('[gitlab] scoped merge request search failed').pipe(
+                  Effect.annotateLogs({
+                    accountId: token.id,
+                    host: token.host,
+                    scope,
+                    query: trimmedQuery,
+                    error: summarizeError(error),
+                  }),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
+                ),
               ),
-            );
-          }),
-        );
+            ),
+        { concurrency: 'unbounded' },
+      );
+      const mergeRequests = dedupeMergeRequests(scopedMergeRequestGroups.flat()).sort(
+        (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
+      );
 
-      return filterSearchMergeRequests(mergeRequests, states).flatMap((mergeRequest) => {
+      return filterSearchMergeRequestsByTitle(
+        filterSearchMergeRequests(mergeRequests, states),
+        trimmedQuery,
+        limit,
+      ).flatMap((mergeRequest) => {
         const repo = repoSummaryFromMergeRequestUrl(token.id, token.host, label, mergeRequest);
         if (!repo) {
           return [];
@@ -1638,6 +1689,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     viewerLogin,
     listInitialRepos,
     searchRepos,
+    searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
     searchPullRequests,

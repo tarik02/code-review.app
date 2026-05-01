@@ -21,6 +21,7 @@ import {
   replyToPullRequestReviewComment,
   publishPendingReview,
   savedReposQueryOptions,
+  searchNamespacesQueryOptions,
   searchReposQueryOptions,
   setPullRequestReviewThreadResolved,
   trackedPullRequestListQueryOptions,
@@ -38,6 +39,7 @@ import type {
   DiffDataMode,
   DiscardPendingReviewInput,
   ForgeProviderKind,
+  NamespaceSummary,
   OverviewPullRequestSummary,
   PendingReviewState,
   PublishPendingReviewInput,
@@ -261,6 +263,14 @@ function useRepoPickerReposForAccounts(
     queries: searchableAccounts.map((account) => ({
       ...searchReposQueryOptions(debouncedQuery, account.id, account.provider, account.host),
       enabled: shouldQuery && isSearching,
+      placeholderData: (previousData: RepoSummary[] | undefined) => previousData,
+    })),
+  });
+  const searchNamespaceQueries = useQueries({
+    queries: searchableAccounts.map((account) => ({
+      ...searchNamespacesQueryOptions(debouncedQuery, account.id),
+      enabled: shouldQuery && isSearching,
+      placeholderData: (previousData: NamespaceSummary[] | undefined) => previousData,
     })),
   });
 
@@ -292,7 +302,22 @@ function useRepoPickerReposForAccounts(
     return [...byId.values()];
   }, [activeQueries, isSearching, searchableAccounts, trimmedQuery]);
   const isLoadingRepos =
-    shouldQuery && activeQueries.some((query) => query.isPending || query.isFetching);
+    shouldQuery &&
+    (activeQueries.some((query) => query.isPending || query.isFetching) ||
+      (isSearching && searchNamespaceQueries.some((query) => query.isPending || query.isFetching)));
+  const availableNamespaces = useMemo(() => {
+    const byId = new Map<string, NamespaceSummary>();
+    if (!isSearching) {
+      return [];
+    }
+
+    for (const query of searchNamespaceQueries) {
+      for (const namespace of query.data ?? []) {
+        byId.set(`${namespace.providerAccountId}:${namespace.path}`, namespace);
+      }
+    }
+    return [...byId.values()];
+  }, [isSearching, searchNamespaceQueries]);
   const availableReposError = useMemo(() => {
     if (!shouldQuery || isLoadingRepos) {
       return null;
@@ -311,9 +336,9 @@ function useRepoPickerReposForAccounts(
 
     return null;
   }, [activeQueries, availableRepos.length, isLoadingRepos, shouldQuery]);
-
   return {
     availableRepos,
+    availableNamespaces,
     availableReposError,
     isLoadingRepos,
   };
@@ -486,6 +511,7 @@ function usePullRequestSearchForAccounts(args: {
             return [{ repo, pullRequest }] satisfies OverviewPullRequestSummary[];
           },
           enabled,
+          placeholderData: (previousData: OverviewPullRequestSummary[] | undefined) => previousData,
           staleTime: 0,
           retry: false,
         };
@@ -494,6 +520,7 @@ function usePullRequestSearchForAccounts(args: {
       return {
         ...pullRequestSearchQueryOptions(accountId, query, states, limit),
         enabled,
+        placeholderData: (previousData: OverviewPullRequestSummary[] | undefined) => previousData,
       };
     }),
   });
@@ -526,7 +553,6 @@ function usePullRequestSearchForAccounts(args: {
     () => searchQueries.filter((queryResult) => queryResult.data !== undefined).length,
     [searchQueries],
   );
-
   return {
     accountIds,
     completedCount,
@@ -783,8 +809,8 @@ function useSelectedPullRequestData(
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
   const changedFiles =
     diffDataMode === 'git'
-      ? selectedPatch?.fileDiffs.map((fileDiff) => fileDiff.name) ?? []
-      : (changedFilesQuery.data as string[] | undefined) ?? [];
+      ? (selectedPatch?.fileDiffs.map((fileDiff) => fileDiff.name) ?? [])
+      : ((changedFilesQuery.data as string[] | undefined) ?? []);
   const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
   const pendingReview = (pendingReviewQuery.data as PendingReviewState | undefined) ?? {
     session: null,

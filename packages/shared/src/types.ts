@@ -37,6 +37,18 @@ type RepoSummary = RepoIdentity & {
   avatarUrl: string | null;
 };
 
+type NamespaceSummary = {
+  provider: ForgeProviderKind;
+  host: string;
+  providerAccountId: string;
+  providerAccountLabel: string;
+  path: string;
+  name: string;
+  kind: 'user' | 'organization' | 'group';
+  avatarUrl: string | null;
+  webUrl: string | null;
+};
+
 type PullRequestSummary = {
   number: number;
   title: string;
@@ -435,6 +447,7 @@ export type {
   DiffDataSettings,
   DiscardPendingReviewInput,
   ForgeProviderKind,
+  NamespaceSummary,
   OverviewPullRequestSummary,
   PendingReviewComment,
   PendingReviewCommentKind,

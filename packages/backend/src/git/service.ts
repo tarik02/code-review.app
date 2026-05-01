@@ -137,7 +137,9 @@ function authConfigArgs(remoteSpec: GitRemoteSpec) {
   return [
     ['credential.helper', ''],
     ['core.askPass', ''],
-    ...remoteSpec.auth.envConfig.map((entry) => [entry.key, entry.value] satisfies [string, string]),
+    ...remoteSpec.auth.envConfig.map(
+      (entry) => [entry.key, entry.value] satisfies [string, string],
+    ),
   ].flatMap(([key, value]) => ['-c', `${key}=${value}`]);
 }
 
@@ -566,10 +568,9 @@ const makeGitService = Effect.gen(function* () {
         return;
       }
 
-      const refsToFetch = [
-        hasBaseSha ? null : baseSha,
-        hasHeadSha ? null : headSha,
-      ].filter((ref): ref is string => Boolean(ref));
+      const refsToFetch = [hasBaseSha ? null : baseSha, hasHeadSha ? null : headSha].filter(
+        (ref): ref is string => Boolean(ref),
+      );
 
       yield* Effect.logInfo('[git] fetch refs start').pipe(
         Effect.annotateLogs({

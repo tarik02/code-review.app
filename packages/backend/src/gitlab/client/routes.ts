@@ -10,9 +10,10 @@ type GitlabRoutes = {
       scope: 'merge_requests';
       search: string;
       state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
-      order_by?: 'created_at';
+      order_by?: 'created_at' | 'updated_at';
       sort?: 'desc' | 'asc';
       per_page?: number;
+      page?: number;
     };
   };
   user: {};
@@ -22,6 +23,24 @@ type GitlabRoutes = {
       simple?: boolean;
       per_page?: number;
       search?: string;
+    };
+  };
+  groups: {
+    query: {
+      all_available?: boolean;
+      search?: string;
+      order_by?: 'name' | 'path' | 'id';
+      sort?: 'asc' | 'desc';
+      per_page?: number;
+    };
+  };
+  'groups/:group/projects': {
+    query: {
+      include_subgroups?: boolean;
+      simple?: boolean;
+      order_by?: 'last_activity_at' | 'name' | 'path' | 'created_at' | 'updated_at';
+      sort?: 'asc' | 'desc';
+      per_page?: number;
     };
   };
   merge_requests: {

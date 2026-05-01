@@ -19,6 +19,15 @@ const GitLabProjectSchema = Schema.Struct({
   avatar_url: NullableString,
 });
 
+const GitLabGroupSchema = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  path: Schema.String,
+  full_path: Schema.String,
+  avatar_url: NullableString,
+  web_url: OptionalNullableString,
+});
+
 const GitLabDiffRefsSchema = Schema.Struct({
   base_sha: OptionalNullableString,
   head_sha: OptionalNullableString,
@@ -183,6 +192,7 @@ const GitLabCodeQualityGraphqlQueryDataSchema = Schema.Struct({
 });
 
 type GitLabProject = typeof GitLabProjectSchema.Type;
+type GitLabGroup = typeof GitLabGroupSchema.Type;
 type GitLabMergeRequest = typeof GitLabMergeRequestSchema.Type;
 type GitLabMrVersion = typeof GitLabMrVersionSchema.Type;
 type GitLabPosition = typeof GitLabPositionSchema.Type;
@@ -206,6 +216,7 @@ export {
   GitLabDraftNoteSchema,
   GitLabErrorBodySchema,
   GitLabGraphQlErrorSchema,
+  GitLabGroupSchema,
   GitLabMergeRequestApprovalsSchema,
   GitLabMergeRequestSchema,
   GitLabMrVersionSchema,
@@ -219,6 +230,7 @@ export type {
   GitLabDiff,
   GitLabDiscussion,
   GitLabDraftNote,
+  GitLabGroup,
   GitLabMergeRequest,
   GitLabMrVersion,
   GitLabNote,

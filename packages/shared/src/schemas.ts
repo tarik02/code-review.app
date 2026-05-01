@@ -43,6 +43,18 @@ const repoSummarySchema = z.object({
   avatarUrl: z.string().nullable(),
 });
 
+const namespaceSummarySchema = z.object({
+  provider: forgeProviderKindSchema,
+  host: z.string(),
+  providerAccountId: z.string(),
+  providerAccountLabel: z.string(),
+  path: z.string(),
+  name: z.string(),
+  kind: z.enum(['user', 'organization', 'group']),
+  avatarUrl: z.string().nullable(),
+  webUrl: z.string().nullable(),
+});
+
 const pullRequestSummarySchema = z.object({
   number: z.number().int().nonnegative(),
   title: z.string(),
@@ -331,6 +343,7 @@ export {
   diffDataSettingsSchema,
   discardPendingReviewInputSchema,
   forgeProviderKindSchema,
+  namespaceSummarySchema,
   overviewPullRequestSummarySchema,
   pendingReviewCommentKindSchema,
   pendingReviewCommentSchema,

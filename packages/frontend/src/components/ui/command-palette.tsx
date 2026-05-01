@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
-import Fuse from 'fuse.js';
+import Fuse, { type FuseOptionKey } from 'fuse.js';
 import { Autocomplete } from '@base-ui/react/autocomplete';
 import { Dialog, DialogContent } from './dialog';
 import { ScrollArea } from './scroll-area';
@@ -23,6 +23,7 @@ type CommandPaletteProps = {
   dialogClassName?: string;
   emptyDescription?: string;
   emptyTitle: string;
+  filterQuery?: string;
   filterMode?: 'fuse' | 'none';
   footer?: ReactNode;
   inputFooter?: ReactNode;
@@ -32,11 +33,11 @@ type CommandPaletteProps = {
   onOpenChange: (open: boolean) => void;
   placeholder: string;
   query?: string;
-  searchKeys?: ReadonlyArray<Fuse.FuseOptionKey<CommandPaletteItem>>;
+  searchKeys?: ReadonlyArray<FuseOptionKey<CommandPaletteItem>>;
   onQueryChange?: (value: string) => void;
 };
 
-const DEFAULT_SEARCH_KEYS: ReadonlyArray<Fuse.FuseOptionKey<CommandPaletteItem>> = [
+const DEFAULT_SEARCH_KEYS: ReadonlyArray<FuseOptionKey<CommandPaletteItem>> = [
   { name: 'title', weight: 0.7 },
   { name: 'keywords', weight: 0.5 },
   { name: 'subtitle', weight: 0.2 },
@@ -142,6 +143,7 @@ function CommandPalette({
   dialogClassName,
   emptyDescription,
   emptyTitle,
+  filterQuery,
   filterMode = 'fuse',
   footer,
   inputFooter,
@@ -156,6 +158,7 @@ function CommandPalette({
 }: CommandPaletteProps) {
   const [uncontrolledQuery, setUncontrolledQuery] = useState('');
   const currentQuery = query ?? uncontrolledQuery;
+  const currentFilterQuery = filterQuery ?? currentQuery;
 
   useEffect(() => {
     if (open) {
@@ -167,24 +170,24 @@ function CommandPalette({
       return;
     }
 
-    setUncontrolledQuery('');
+    window.setTimeout(() => setUncontrolledQuery(''), 0);
   }, [onQueryChange, open, query]);
 
   const filteredItems = useMemo(() => {
-    if (filterMode === 'none' || !currentQuery.trim()) {
+    if (filterMode === 'none' || !currentFilterQuery.trim()) {
       return items;
     }
 
     const fuse = new Fuse(items, {
       includeScore: true,
-      keys: searchKeys,
+      keys: [...searchKeys],
       threshold: 0.35,
       ignoreLocation: true,
       minMatchCharLength: 1,
     });
 
-    return fuse.search(currentQuery.trim()).map((result) => result.item);
-  }, [currentQuery, filterMode, items, searchKeys]);
+    return fuse.search(currentFilterQuery.trim()).map((result) => result.item);
+  }, [currentFilterQuery, filterMode, items, searchKeys]);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<
@@ -317,10 +320,12 @@ function CommandPalette({
               <Autocomplete.List className="flex flex-col gap-1">
                 {groupedItems.map((group, groupIndex) => (
                   <div key={group.group}>
-                    <div className={cx(
-                      'px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500',
-                      groupIndex === 0 ? 'pt-1' : 'pt-3',
-                    )}>
+                    <div
+                      className={cx(
+                        'px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500',
+                        groupIndex === 0 ? 'pt-1' : 'pt-3',
+                      )}
+                    >
                       {group.group}
                     </div>
                     {group.entries.map(({ index, item }) => {
@@ -345,13 +350,13 @@ function CommandPalette({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <p className="select-none truncate text-sm font-medium text-ink-900">
-                                {renderHighlightedText(item.title, currentQuery)}
+                                {renderHighlightedText(item.title, currentFilterQuery)}
                               </p>
                               {item.badge ? <div className="shrink-0">{item.badge}</div> : null}
                             </div>
                             {item.subtitle ? (
                               <p className="select-none truncate text-xs text-ink-500">
-                                {renderHighlightedText(item.subtitle, currentQuery)}
+                                {renderHighlightedText(item.subtitle, currentFilterQuery)}
                               </p>
                             ) : null}
                           </div>

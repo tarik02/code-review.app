@@ -707,7 +707,8 @@ function MainApp() {
             view={sidebarView}
             selectedPrKey={selectedPrKey}
             trackedRepoCount={
-              new Set(filteredTrackedPullRequestEntries.map((entry) => repoIdentityKey(entry.repo))).size
+              new Set(filteredTrackedPullRequestEntries.map((entry) => repoIdentityKey(entry.repo)))
+                .size
             }
             trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
             emptyState={

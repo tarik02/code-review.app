@@ -14,6 +14,7 @@ import type {
   DiffDataMode,
   DiffDataSettings,
   DiscardPendingReviewInput,
+  NamespaceSummary,
   PendingReviewState,
   PullRequestSearchState,
   PrFileChangeType,
@@ -35,6 +36,7 @@ import type {
 
 const INITIAL_REPO_LIMIT = 5;
 const SEARCH_REPO_LIMIT = 20;
+const SEARCH_NAMESPACE_LIMIT = 20;
 
 const forgeKeys = {
   all: ['forge'] as const,
@@ -54,6 +56,8 @@ const forgeKeys = {
   initialRepos: (accountId: string) => [...forgeKeys.repos(), 'initial', accountId] as const,
   searchRepos: (accountId: string, query: string) =>
     [...forgeKeys.repos(), 'search', accountId, query] as const,
+  searchNamespaces: (accountId: string, query: string) =>
+    [...forgeKeys.repos(), 'search-namespaces', accountId, query] as const,
   viewerLogin: (accountId: string) => [...forgeKeys.repos(), 'viewer-login', accountId] as const,
   pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
@@ -326,7 +330,9 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
           accountId,
           repo: pathQuery,
         });
-        return repo ? [repo] : [];
+        if (repo) {
+          return [repo];
+        }
       }
 
       return trpc.repos.search.query({
@@ -335,6 +341,20 @@ function searchReposQueryOptions(query: string, accountId: string, provider: str
         limit: SEARCH_REPO_LIMIT,
       });
     },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+function searchNamespacesQueryOptions(query: string, accountId: string) {
+  return queryOptions({
+    queryKey: forgeKeys.searchNamespaces(accountId, query),
+    queryFn: (): Promise<NamespaceSummary[]> =>
+      trpc.repos.searchNamespaces.query({
+        accountId,
+        query,
+        limit: SEARCH_NAMESPACE_LIMIT,
+      }),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -708,6 +728,7 @@ export {
   replyToPullRequestReviewComment,
   reviewEditorSettingsQueryOptions,
   savedReposQueryOptions,
+  searchNamespacesQueryOptions,
   searchReposQueryOptions,
   setPullRequestReviewThreadResolved,
   setAccountVisibility,

@@ -8,6 +8,7 @@ import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
   ProviderAuthStatus,
+  NamespaceSummary,
   RepoSummary,
   ReviewComment,
   ReviewThread,
@@ -253,14 +254,28 @@ function labelForToken(token: { viewerLogin: string | null; host: string }) {
   return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
 }
 
-function buildPullRequestSearchQuery(query: string, states: PullRequestSearchState) {
-  const qualifiers = ['is:pr', 'archived:false', 'sort:updated-desc'];
+const PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS = ['author', 'assignee', 'review-requested'] as const;
+
+function buildPullRequestSearchQuery(query: string, states: PullRequestSearchState, scope: string) {
+  const qualifiers = ['is:pr', 'archived:false', 'in:title', scope, 'sort:updated-desc'];
   if (states !== 'all') {
     qualifiers.push('is:open');
   }
 
   const trimmedQuery = query.trim();
   return trimmedQuery ? `${qualifiers.join(' ')} ${trimmedQuery}` : qualifiers.join(' ');
+}
+
+function dedupePullRequestSearchEntries(entries: ReadonlyArray<OverviewPullRequestSummary>) {
+  const deduped = new Map<string, OverviewPullRequestSummary>();
+  for (const entry of entries) {
+    deduped.set(`${entry.repo.nameWithOwner}#${entry.pullRequest.number}`, entry);
+  }
+
+  return [...deduped.values()].sort(
+    (left, right) =>
+      Date.parse(right.pullRequest.updatedAt) - Date.parse(left.pullRequest.updatedAt),
+  );
 }
 
 function filterSearchPullRequestsByState(
@@ -611,10 +626,14 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
 
       const owners = yield* ensureUserContext();
       const repos: GhSearchRepo[] = [];
+      const normalizedQuery = query.trim().toLowerCase();
       for (const owner of owners) {
         const qualifier = owner === userContext?.login ? 'user' : 'org';
+        const ownerMatchesQuery = owner.toLowerCase() === normalizedQuery;
         const response = yield* api.searchRepositories({
-          query: `${query} in:name ${qualifier}:${owner}`,
+          query: ownerMatchesQuery
+            ? `${qualifier}:${owner}`
+            : `${query} in:name ${qualifier}:${owner}`,
           perPage: limit,
         });
         repos.push(...response.items);
@@ -632,6 +651,50 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         seen.add(repo.full_name);
         return [repoSummaryFromSearch(token.id, token.host, label, repo)];
       });
+    },
+  );
+
+  const searchNamespaces: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['searchNamespaces'] = providerEffect(
+    'GitHubProvider.searchNamespaces',
+    'searchNamespaces',
+    function* (query: string, limit: number) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation: 'searchNamespaces' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      const owners = userContext?.owners ?? [];
+      const normalizedQuery = query.trim().toLowerCase();
+
+      return owners
+        .filter((owner) => !normalizedQuery || owner.toLowerCase().includes(normalizedQuery))
+        .slice(0, limit)
+        .map(
+          (owner) =>
+            ({
+              provider: 'github',
+              host: token.host,
+              providerAccountId: token.id,
+              providerAccountLabel: label,
+              path: owner,
+              name: owner,
+              kind: owner === login ? 'user' : 'organization',
+              avatarUrl: null,
+              webUrl: `https://${token.host}/${owner}`,
+            }) satisfies NamespaceSummary,
+        );
     },
   );
 
@@ -756,22 +819,49 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       }
 
       const label = labelForToken(token);
-      const response = yield* api.searchPullRequests(buildPullRequestSearchQuery(query, states), limit);
-      const entries = (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
-        const repo = pullRequest?.repository;
-        if (!pullRequest || !repo) {
-          return [];
-        }
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      if (!login) {
+        return yield* Effect.fail(
+          new GitHubProviderViewerLoginUnavailable({
+            message: 'Unable to determine GitHub viewer login',
+            cause: { provider: 'github', operation: 'searchPullRequests' },
+          }),
+        );
+      }
 
-        return [
-          {
-            repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
-            pullRequest: toPullRequestSummary(pullRequest),
-          } satisfies OverviewPullRequestSummary,
-        ];
-      });
+      const scopedEntries = yield* Effect.forEach(
+        PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS,
+        (qualifier) =>
+          api
+            .searchPullRequests(
+              buildPullRequestSearchQuery(query, states, `${qualifier}:${login}`),
+              limit,
+            )
+            .pipe(
+              Effect.map((response) =>
+                (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
+                  const repo = pullRequest?.repository;
+                  if (!pullRequest || !repo) {
+                    return [];
+                  }
 
-      return filterSearchPullRequestsByState(entries, states);
+                  return [
+                    {
+                      repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
+                      pullRequest: toPullRequestSummary(pullRequest),
+                    } satisfies OverviewPullRequestSummary,
+                  ];
+                }),
+              ),
+            ),
+        { concurrency: 'unbounded' },
+      );
+
+      return filterSearchPullRequestsByState(
+        dedupePullRequestSearchEntries(scopedEntries.flat()),
+        states,
+      ).slice(0, limit);
     },
   );
 
@@ -1640,6 +1730,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     viewerLogin,
     listInitialRepos,
     searchRepos,
+    searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
     searchPullRequests,

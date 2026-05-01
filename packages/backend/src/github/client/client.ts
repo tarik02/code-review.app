@@ -371,6 +371,15 @@ const makeGitHubApiClient = (accountId: string) =>
       );
     };
 
+    const logApiResponse = (response: HttpClientResponse.HttpClientResponse) =>
+      Effect.logInfo('[github api] request').pipe(
+        Effect.annotateLogs({
+          method: response.request.method,
+          url: response.request.url,
+          statusCode: response.status,
+        }),
+      );
+
     const send = (request: HttpClientRequest.HttpClientRequest) =>
       httpClient.execute(request).pipe(
         Effect.timeoutFail({
@@ -383,6 +392,7 @@ const makeGitHubApiClient = (accountId: string) =>
               cause: { url: request.url, timeout: API_REQUEST_TIMEOUT },
             }),
         }),
+        Effect.tap(logApiResponse),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
       );

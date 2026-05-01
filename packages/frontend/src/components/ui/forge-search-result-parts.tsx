@@ -51,7 +51,8 @@ function RepoMetaLabel({ repo }: { repo: RepoSummary }) {
   return (
     <>
       {getRepoProviderLabel(repo)}
-      {hostNameFromInput(repo.host) === 'github.com' || hostNameFromInput(repo.host) === 'gitlab.com'
+      {hostNameFromInput(repo.host) === 'github.com' ||
+      hostNameFromInput(repo.host) === 'gitlab.com'
         ? ''
         : ` · ${repo.host}`}
     </>

@@ -2341,8 +2341,10 @@ function PatchViewerMain({
       return;
     }
 
-    performThreadNavigation(navigationIntent);
-    clearNavigationIntent(patchViewerSessionKey, navigationIntentVersion);
+    window.setTimeout(() => {
+      performThreadNavigation(navigationIntent);
+      clearNavigationIntent(patchViewerSessionKey, navigationIntentVersion);
+    }, 0);
   }, [
     clearNavigationIntent,
     navigationIntent,

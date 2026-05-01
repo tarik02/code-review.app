@@ -10,6 +10,7 @@ import type {
   ProviderAuthStatus,
   PrChangedFile,
   RepoSummary,
+  NamespaceSummary,
   PendingReviewComment,
   PendingReviewSession,
   ReviewThread,
@@ -66,6 +67,10 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
   viewerLogin(): Effect.Effect<string, Error, Dependencies>;
   listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
   searchRepos(query: string, limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  searchNamespaces(
+    query: string,
+    limit: number,
+  ): Effect.Effect<NamespaceSummary[], Error, Dependencies>;
   validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
   listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   searchPullRequests(

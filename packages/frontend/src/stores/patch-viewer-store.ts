@@ -56,10 +56,7 @@ type PatchViewerStore = {
     direction: HunkExpansionDirection,
     lineCount: number,
   ) => void;
-  requestNavigationIntent: (
-    sessionKey: string | null,
-    intent: PatchViewerNavigationIntent,
-  ) => void;
+  requestNavigationIntent: (sessionKey: string | null, intent: PatchViewerNavigationIntent) => void;
   selectFile: (sessionKey: string | null, path: string) => void;
   resetNavigation: (sessionKey: string | null) => void;
 };

@@ -23,7 +23,7 @@ function applyProfileFilterChange(
 ): MainAppViewState {
   const nextProfileFilterAccountId = accountId?.trim() || null;
   const repoOwnerAccountId = state.repoFilterKey
-    ? repoAccountIdByKey[state.repoFilterKey] ?? null
+    ? (repoAccountIdByKey[state.repoFilterKey] ?? null)
     : null;
 
   return {

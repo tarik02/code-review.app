@@ -331,6 +331,21 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             }),
           ),
         ),
+      searchNamespaces: t.procedure
+        .input(
+          providerAccountSchema.extend({
+            query: z.string(),
+            limit: z.number().int().positive().optional(),
+          }),
+        )
+        .query(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* RepoService;
+              return yield* service.searchNamespaces(input.accountId, input.query, input.limit);
+            }),
+          ),
+        ),
       validate: t.procedure
         .input(providerAccountSchema.extend({ repo: z.string() }))
         .query(({ input }) =>

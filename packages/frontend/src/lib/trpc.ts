@@ -5,7 +5,7 @@ import type { AppRouter } from '@code-review-app/backend/router';
 const trpc = createTRPCProxyClient<AppRouter>({
   links: [
     wsLink({
-      client: createWorkerClient({ worker: window }),
+      client: createWorkerClient({ worker: globalThis.window ?? globalThis }),
     }),
   ],
 });

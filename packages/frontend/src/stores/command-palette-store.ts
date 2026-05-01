@@ -13,7 +13,9 @@ type CommandPaletteStore = {
   setWorkflowOpen(open: boolean): void;
 };
 
-function withExclusiveOpenState(next: Partial<Pick<CommandPaletteStore, 'browseOpen' | 'contentOpen' | 'workflowOpen'>>) {
+function withExclusiveOpenState(
+  next: Partial<Pick<CommandPaletteStore, 'browseOpen' | 'contentOpen' | 'workflowOpen'>>,
+) {
   return {
     browseOpen: false,
     contentOpen: false,
