@@ -3,8 +3,9 @@ import type { Effect } from 'effect';
 import type { ProviderError } from '../errors.ts';
 import type { ProviderRepoIdentity } from '../repo-id.ts';
 import type {
-  PullRequestSummary,
   OverviewPullRequestSummary,
+  PullRequest,
+  PullRequestListItem,
   PullRequestApprovalState,
   PullRequestSearchState,
   PullRequestQualityReport,
@@ -95,11 +96,11 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
   ): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   listPullRequests(
     repo: ProviderRepoIdentity,
-  ): Effect.Effect<PullRequestSummary[], Error, Dependencies>;
+  ): Effect.Effect<PullRequestListItem[], Error, Dependencies>;
   getPullRequest(
     repo: ProviderRepoIdentity,
     number: number,
-  ): Effect.Effect<PullRequestSummary, Error, Dependencies>;
+  ): Effect.Effect<PullRequest, Error, Dependencies>;
   getPullRequestApprovalState(
     repo: ProviderRepoIdentity,
     number: number,

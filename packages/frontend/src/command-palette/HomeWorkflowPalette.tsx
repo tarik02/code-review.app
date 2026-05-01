@@ -19,6 +19,7 @@ import { usePatchViewerStore } from '../stores/patch-viewer-store';
 import { useReviewCommentEditorStore } from '../stores/review-comment-editor-store';
 import type {
   PendingReviewState,
+  PullRequest,
   PullRequestApprovalState,
   PullRequestSummary,
   SelectedPullRequest,
@@ -39,6 +40,17 @@ type HomeWorkflowPaletteProps = {
   sidebarView: SidebarPullRequestView;
   setSidebarView: (view: SidebarPullRequestView) => void;
 };
+
+function readReviewCapabilities(pullRequest: PullRequestSummary | PullRequest | null) {
+  if (!pullRequest || !('canApprove' in pullRequest) || !('canRequestChanges' in pullRequest)) {
+    return { canApprove: true, canRequestChanges: true };
+  }
+
+  return {
+    canApprove: pullRequest.canApprove,
+    canRequestChanges: pullRequest.canRequestChanges,
+  };
+}
 
 function HomeWorkflowPalette({
   approvalState,
@@ -72,8 +84,7 @@ function HomeWorkflowPalette({
   const setSubmitSummary = useCommandPaletteStore((state) => state.setWorkflowSubmitSummary);
   const workflowQuery = useCommandPaletteStore((state) => state.workflowQuery);
   const setWorkflowQuery = useCommandPaletteStore((state) => state.setWorkflowQuery);
-  const canApprove = selectedPullRequestSummary?.canApprove ?? true;
-  const canRequestChanges = selectedPullRequestSummary?.canRequestChanges ?? true;
+  const { canApprove, canRequestChanges } = readReviewCapabilities(selectedPullRequestSummary);
   const effectiveSubmitAction =
     submitAction === 'approve' && !canApprove
       ? 'comment'
@@ -138,6 +149,17 @@ function HomeWorkflowPalette({
         badge: sidebarView === 'tracked' ? <ActiveBadge /> : undefined,
         onSelect: () => {
           setSidebarView('tracked');
+          setWorkflowOpen(false);
+        },
+      },
+      {
+        id: 'section-recent',
+        group: 'Sections',
+        title: 'Recent items',
+        icon: <GitPullRequestIcon className="size-4" />,
+        badge: sidebarView === 'recent' ? <ActiveBadge /> : undefined,
+        onSelect: () => {
+          setSidebarView('recent');
           setWorkflowOpen(false);
         },
       },

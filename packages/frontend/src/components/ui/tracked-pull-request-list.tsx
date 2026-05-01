@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { Bars3Icon } from '@heroicons/react/20/solid';
-import { ArchiveBoxXMarkIcon } from '@heroicons/react/24/outline';
 import {
   attachClosestEdge,
   extractClosestEdge,
@@ -18,6 +17,7 @@ import { pointerOutsideOfPreview } from '@atlaskit/pragmatic-drag-and-drop/eleme
 import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview';
 import { reorder } from '@atlaskit/pragmatic-drag-and-drop/reorder';
 import { cx } from '../../lib/cx';
+import { repoIdentityKey } from '../../lib/repo-identity';
 import {
   toTrackedPullRequestOrderEntry,
   trackedPullRequestOrderEntryKey,
@@ -25,13 +25,16 @@ import {
 } from '../../lib/tracked-pull-request-order';
 import type { PullRequestSummary, RepoSummary } from '../../types/forge';
 import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
+import { PullRequestTrackButton } from './pull-request-track-button';
 
 type TrackedPullRequestListProps = {
   entries: TrackedPullRequestListEntry[];
   repoErrors: Array<{ repo: RepoSummary; error: string }>;
   selectedPrKey: string | null;
+  trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   emptyState?: string;
   onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
+  onTrackPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
   onRemovePr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
   onReorder: (entries: TrackedPullRequestListEntry[]) => void | Promise<void>;
 };
@@ -80,7 +83,9 @@ type TrackedPullRequestListItemProps = {
   index: number;
   instanceId: symbol;
   selectedPrKey: string | null;
+  trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
+  onTrackPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
   onRemovePr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
 };
 
@@ -97,7 +102,9 @@ function TrackedPullRequestListItem({
   index,
   instanceId,
   selectedPrKey,
+  trackedPullRequestNumbersByRepo,
   onSelectPr,
+  onTrackPr,
   onRemovePr,
 }: TrackedPullRequestListItemProps) {
   const itemRef = useRef<HTMLDivElement | null>(null);
@@ -116,14 +123,26 @@ function TrackedPullRequestListItem({
     </button>
   );
   const removeAction = (
-    <button
-      aria-label={`Remove PR #${entry.pullRequest.number}`}
-      className="rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100"
-      onClick={() => onRemovePr(entry.repo, entry.pullRequest)}
-      type="button"
-    >
-      <ArchiveBoxXMarkIcon className="size-4 shrink-0" />
-    </button>
+    <PullRequestTrackButton
+      tracked={
+        trackedPullRequestNumbersByRepo[repoIdentityKey(entry.repo)]?.has(
+          entry.pullRequest.number,
+        ) ?? false
+      }
+      onClick={() => {
+        const isTracked =
+          trackedPullRequestNumbersByRepo[repoIdentityKey(entry.repo)]?.has(
+            entry.pullRequest.number,
+          ) ?? false;
+
+        if (isTracked) {
+          onRemovePr(entry.repo, entry.pullRequest);
+          return;
+        }
+
+        onTrackPr(entry.repo, entry.pullRequest);
+      }}
+    />
   );
 
   useEffect(() => {
@@ -214,6 +233,7 @@ function TrackedPullRequestListItem({
         onSelectPr={onSelectPr}
         leadingActions={dragHandle}
         trailingActions={removeAction}
+        trailingActionsAlwaysVisible
       />
       {draggableState.type === 'preview'
         ? ReactDOM.createPortal(
@@ -232,11 +252,8 @@ function TrackedPullRequestListItem({
                     <Bars3Icon className="size-4 shrink-0" />
                   </div>
                 }
-                trailingActions={
-                  <div className="rounded p-1 text-ink-500 opacity-0">
-                    <ArchiveBoxXMarkIcon className="size-4 shrink-0" />
-                  </div>
-                }
+                trailingActions={<PullRequestTrackButton tracked onClick={() => {}} />}
+                trailingActionsAlwaysVisible
               />
             </div>,
             draggableState.container,
@@ -250,8 +267,10 @@ function TrackedPullRequestList({
   entries,
   repoErrors,
   selectedPrKey,
-  emptyState = 'No tracked PRs or MRs yet. Add one with +.',
+  trackedPullRequestNumbersByRepo,
+  emptyState = 'No tracked PRs or MRs yet. Use the star to add one.',
   onSelectPr,
+  onTrackPr,
   onRemovePr,
   onReorder,
 }: TrackedPullRequestListProps) {
@@ -317,6 +336,8 @@ function TrackedPullRequestList({
           instanceId={instanceId}
           key={trackedPullRequestOrderEntryKey(toTrackedPullRequestOrderEntry(entry))}
           selectedPrKey={selectedPrKey}
+          trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
+          onTrackPr={onTrackPr}
           onRemovePr={onRemovePr}
           onSelectPr={onSelectPr}
         />

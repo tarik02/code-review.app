@@ -5,27 +5,17 @@ import { useNavigate } from '@tanstack/react-router';
 import { FolderGit2Icon, GitPullRequestIcon, UserCircle2Icon } from 'lucide-react';
 import { dedupeOverviewPullRequestEntries, useSavedRepos } from '../hooks/use-forge-queries';
 import { useEnabledProviderAccounts } from '../hooks/use-enabled-provider-accounts';
-import {
-  forgeKeys,
-  savedReposQueryOptions,
-  setTrackedPullRequestOrder,
-  trackedReposQueryOptions,
-} from '../queries/forge';
+import { savedReposQueryOptions, trackedReposQueryOptions } from '../queries/forge';
 import { trpc } from '../lib/trpc';
-import { repoIdentity, repoIdentityKey, sameRepoIdentity } from '../lib/repo-identity';
-import {
-  prependTrackedPullRequestOrderEntry,
-  toTrackedPullRequestOrderEntry,
-} from '../lib/tracked-pull-request-order';
+import { repoIdentityKey, sameRepoIdentity } from '../lib/repo-identity';
 import { applyProfileFilterChange, applyRepoFilterChange } from '../stores/main-app-view-store';
 import type {
   OverviewPullRequestSummary,
   PullRequestSearchState,
-  PullRequestSummary,
   RepoSummary,
-  TrackedPullRequestOrderEntry,
 } from '../types/forge';
 import { CommandPalette, type CommandPaletteItem } from '../components/ui/command-palette';
+import { PullRequestTrackButton } from '../components/ui/pull-request-track-button';
 import {
   PullRequestStatusIcon,
   RepoAvatar,
@@ -60,9 +50,18 @@ const PULL_REQUEST_STATE_LABELS: Record<PullRequestSearchState, string> = {
 
 type BrowsePaletteProps = {
   localPullRequests?: OverviewPullRequestSummary[];
+  trackedPullRequestNumbersByRepo?: Record<string, Set<number>>;
+  onToggleTrackedPullRequest?: (
+    entry: OverviewPullRequestSummary,
+    tracked: boolean,
+  ) => void | Promise<void>;
 };
 
-function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
+function BrowsePalette({
+  localPullRequests = [],
+  trackedPullRequestNumbersByRepo = {},
+  onToggleTrackedPullRequest,
+}: BrowsePaletteProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { enabledAccountIds, enabledProviderAccounts } = useEnabledProviderAccounts();
@@ -211,7 +210,7 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
       return (
         <p className="text-xs text-ink-500">
           {filteredPullRequests.length > 0
-            ? `Showing ${filteredPullRequests.length} locally available pull request${filteredPullRequests.length === 1 ? '' : 's'} from tracked and overview lists.`
+            ? `Showing ${filteredPullRequests.length} locally available pull request${filteredPullRequests.length === 1 ? '' : 's'} from tracked, recent, and overview lists.`
             : 'No local pull requests available. Type to search pull requests across enabled profiles.'}
         </p>
       );
@@ -265,42 +264,6 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
     });
   }
 
-  function cacheTrackedRepo(repo: RepoSummary) {
-    queryClient.setQueryData<RepoSummary[]>(forgeKeys.trackedRepos(), (current) => {
-      if (!current) {
-        return [repo];
-      }
-      if (current.some((entry) => sameRepoIdentity(entry, repo))) {
-        return current;
-      }
-      return [...current, repo];
-    });
-  }
-
-  function cacheTrackedPullRequest(repo: RepoSummary, pullRequest: PullRequestSummary) {
-    queryClient.setQueryData<PullRequestSummary[]>(
-      forgeKeys.trackedPullRequestList(repo),
-      (current) => {
-        const next = current ?? [];
-        return [pullRequest, ...next.filter((entry) => entry.number !== pullRequest.number)];
-      },
-    );
-  }
-
-  async function moveTrackedPullRequestToTop(repo: RepoSummary, pullRequest: PullRequestSummary) {
-    const currentOrder =
-      queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(
-        forgeKeys.trackedPullRequestOrder(),
-      ) ?? (await trpc.tracked.getOrder.query());
-    const nextOrder = prependTrackedPullRequestOrderEntry(
-      currentOrder,
-      toTrackedPullRequestOrderEntry({ repo, pullRequest }),
-    );
-    queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), nextOrder);
-    const persisted = await setTrackedPullRequestOrder(nextOrder);
-    queryClient.setQueryData(forgeKeys.trackedPullRequestOrder(), persisted);
-  }
-
   const items = (() => {
     const profileItems: CommandPaletteItem[] = [];
     const namespaceFilterItems: CommandPaletteItem[] = [];
@@ -312,7 +275,8 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
         id: 'local-pull-request-search-hint',
         group: 'Pull requests',
         title: 'No local pull requests',
-        subtitle: 'Tracked and overview pull requests appear here before global search starts.',
+        subtitle:
+          'Tracked, recent, and overview pull requests appear here before global search starts.',
         icon: <GitPullRequestIcon className="size-4" />,
         disabled: true,
         onSelect: () => {},
@@ -405,6 +369,11 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
     }
 
     for (const entry of filteredPullRequests) {
+      const isTracked =
+        trackedPullRequestNumbersByRepo[repoIdentityKey(entry.repo)]?.has(
+          entry.pullRequest.number,
+        ) ?? false;
+
       pullRequestItems.push({
         id: `pr:${repoIdentityKey(entry.repo)}#${entry.pullRequest.number}`,
         group: 'Pull requests',
@@ -418,26 +387,26 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
         ],
         icon: <PullRequestStatusIcon status={getPullRequestStatus(entry.pullRequest).status} />,
         badge: <PullRequestStatusBadge pullRequest={entry.pullRequest} />,
+        trailing: onToggleTrackedPullRequest ? (
+          <PullRequestTrackButton
+            tracked={isTracked}
+            onClick={() => {
+              void onToggleTrackedPullRequest(entry, isTracked);
+            }}
+          />
+        ) : undefined,
         onSelect: () => {
           void (async () => {
             const savedRepo =
               savedRepos.find((candidate) => sameRepoIdentity(candidate, entry.repo)) ??
               (await trpc.repos.save.mutate({ repo: entry.repo }));
             await cacheSavedRepo(savedRepo);
-
-            const trackedPullRequest = await trpc.tracked.track.mutate({
-              ...repoIdentity(savedRepo),
-              pullRequest: entry.pullRequest,
-            });
-            await cacheTrackedRepo(savedRepo);
-            await cacheTrackedPullRequest(savedRepo, trackedPullRequest);
-            await moveTrackedPullRequestToTop(savedRepo, trackedPullRequest);
             await navigate({
               to: '/',
               search: {
                 providerId: savedRepo.providerId,
                 repoKey: savedRepo.repoKey,
-                pr: trackedPullRequest.number,
+                pr: entry.pullRequest.number,
               },
             });
             setBrowseOpen(false);
@@ -492,7 +461,7 @@ function BrowsePalette({ localPullRequests = [] }: BrowsePaletteProps) {
             ? 'Results will appear as repositories and pull requests come back.'
             : (browseSearch.errors[0] ??
               'Try a repository name, pull request title, author, or number.')
-          : 'Tracked and overview pull requests appear locally. Start typing to search globally.'
+          : 'Tracked, recent, and overview pull requests appear locally. Start typing to search globally.'
       }
       emptyTitle={
         isSearchPending ? 'Searching...' : 'No matching profiles, repositories, or pull requests'

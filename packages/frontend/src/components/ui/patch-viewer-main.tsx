@@ -191,6 +191,17 @@ type PatchViewerMainProps = {
   isDark: boolean;
 };
 
+function readReviewCapabilities(pullRequest: PullRequestSummary | null) {
+  if (!pullRequest || !('canApprove' in pullRequest) || !('canRequestChanges' in pullRequest)) {
+    return { canApprove: true, canRequestChanges: true };
+  }
+
+  return {
+    canApprove: pullRequest.canApprove === true,
+    canRequestChanges: pullRequest.canRequestChanges === true,
+  };
+}
+
 type PatchFileDiffItemContextValue = {
   defaultReviewEditorMode: CommentEditorMode;
   deletingCommentIds: ReadonlySet<string>;
@@ -2847,8 +2858,7 @@ function PatchViewerMain({
   }
 
   const pendingReviewCount = pendingReview.comments.length;
-  const canApprove = selectedPullRequestSummary?.canApprove ?? true;
-  const canRequestChanges = selectedPullRequestSummary?.canRequestChanges ?? true;
+  const { canApprove, canRequestChanges } = readReviewCapabilities(selectedPullRequestSummary);
 
   if (!hasSelection) {
     return (

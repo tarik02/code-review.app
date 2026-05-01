@@ -30,10 +30,11 @@ import {
   publishPendingReviewInputSchema,
   pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
+  pullRequestListItemSchema,
   pullRequestSearchInputSchema,
   pullRequestQualityReportSchema,
   pullRequestInputSchema,
-  pullRequestSummarySchema,
+  pullRequestSchema,
   pullRequestVersionedInputSchema,
   replyToPullRequestReviewCommentInputSchema,
   repoIdentitySchema,
@@ -55,7 +56,7 @@ import type {
   OverviewPullRequestSummary,
   ProviderAccount,
   ProviderProfile,
-  PullRequestSummary,
+  PullRequestListItem,
   RepoSummary,
   ThemePreference,
   UpdateEvent,
@@ -124,7 +125,7 @@ function repoMatchesNamespace(repo: RepoSummary, namespacePath: string | null) {
 }
 
 function matchesPullRequestSearchState(
-  pullRequest: PullRequestSummary,
+  pullRequest: PullRequestListItem,
   state: 'open' | 'draft_open' | 'all',
 ) {
   if (state === 'all') return true;
@@ -716,6 +717,15 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     }),
 
     pullRequests: t.router({
+      listRecent: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            const pullRequests = yield* service.listRecent();
+            return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
+          }),
+        ),
+      ),
       listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -746,6 +756,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
+      remember: t.procedure
+        .input(repoIdentitySchema.extend({ pullRequest: pullRequestListItemSchema }))
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* PullRequestService;
+              yield* service.remember(input, input.pullRequest);
+            }),
+          ),
+        ),
       search: t.procedure.input(pullRequestSearchInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -758,7 +778,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         runEffect(
           Effect.gen(function* () {
             const service = yield* PullRequestService;
-            return yield* service.get(input, input.number);
+            return pullRequestSchema.parse(yield* service.get(input, input.number));
           }),
         ),
       ),
@@ -766,9 +786,10 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         runEffect(
           Effect.gen(function* () {
             const service = yield* PullRequestService;
-            return yield* service
+            const pullRequest = yield* service
               .get(input, input.number)
               .pipe(Effect.catchAll(() => Effect.succeed(null)));
+            return pullRequest ? pullRequestSchema.parse(pullRequest) : null;
           }),
         ),
       ),
@@ -833,7 +854,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         ),
       ),
       track: t.procedure
-        .input(repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }))
+        .input(repoIdentitySchema.extend({ pullRequest: pullRequestListItemSchema }))
         .mutation(({ input }) =>
           runEffect(
             Effect.gen(function* () {

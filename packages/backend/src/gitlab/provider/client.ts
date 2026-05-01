@@ -4,7 +4,9 @@ import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
+  PullRequest,
   PullRequestApprovalState,
+  PullRequestListItem,
   PullRequestSearchState,
   PullRequestQualityFinding,
   PullRequestQualityReport,
@@ -199,11 +201,26 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     changeCount: parseChangeCount(mr.changes_count),
     authorLogin: mr.author?.username ?? 'unknown',
     updatedAt: mr.updated_at,
-    url: mr.web_url,
     headSha: mr.sha ?? diffRefs?.head_sha ?? '',
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
+  };
+}
+
+function withGitLabReviewCapabilities(pullRequest: PullRequestSummary): PullRequest {
+  return {
+    ...pullRequest,
     canApprove: true,
     canRequestChanges: true,
+  };
+}
+
+function toOverviewPullRequestSummary(
+  repo: OverviewPullRequestSummary['repo'],
+  pullRequest: PullRequestListItem,
+): OverviewPullRequestSummary {
+  return {
+    repo,
+    pullRequest,
   };
 }
 
@@ -1137,7 +1154,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           return [];
         }
 
-        return [{ repo, pullRequest: toPullRequestSummary(mergeRequest) }];
+        return [toOverviewPullRequestSummary(repo, toPullRequestSummary(mergeRequest))];
       });
     },
   );
@@ -1151,7 +1168,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       const mergeRequest = yield* api.mergeRequest(repo.path, number);
-      return toPullRequestSummary(mergeRequest);
+      return withGitLabReviewCapabilities(toPullRequestSummary(mergeRequest));
     },
   );
 

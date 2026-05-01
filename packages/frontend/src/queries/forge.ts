@@ -53,6 +53,7 @@ const forgeKeys = {
   pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
     [...forgeKeys.pullRequests(), 'overview', accountId] as const,
+  pullRequestRecentList: () => [...forgeKeys.pullRequests(), 'recent'] as const,
   pullRequestList: (repo: RepoIdentity) =>
     [...forgeKeys.pullRequests(), 'list', repo.providerId, repo.repoKey] as const,
   pullRequestCachedList: (repo: RepoIdentity) =>
@@ -292,6 +293,14 @@ function pullRequestOverviewQueryOptions(accountId: string) {
   return queryOptions({
     queryKey: forgeKeys.pullRequestOverview(accountId),
     queryFn: () => trpc.pullRequests.listOverview.query({ accountId }),
+    staleTime: 0,
+  });
+}
+
+function pullRequestRecentListQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestRecentList(),
+    queryFn: () => trpc.pullRequests.listRecent.query(),
     staleTime: 0,
   });
 }
@@ -622,6 +631,7 @@ export {
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,
   pullRequestOverviewQueryOptions,
+  pullRequestRecentListQueryOptions,
   pullRequestPatchQueryOptions,
   pullRequestApprovalStateQueryOptions,
   pullRequestPendingReviewQueryOptions,

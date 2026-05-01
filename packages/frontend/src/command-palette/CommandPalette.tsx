@@ -13,6 +13,11 @@ import { useCommandPaletteStore } from './store';
 type HomeCommandPalettesProps = PullRequestContentPaletteProps &
   HomeWorkflowPaletteProps & {
     localPullRequests: OverviewPullRequestSummary[];
+    trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
+    onToggleTrackedPullRequest: (
+      entry: OverviewPullRequestSummary,
+      tracked: boolean,
+    ) => void | Promise<void>;
   };
 
 function HomeCommandPalettes(props: HomeCommandPalettesProps) {
@@ -47,7 +52,11 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
         sidebarView={props.sidebarView}
         setSidebarView={props.setSidebarView}
       />
-      <BrowsePalette localPullRequests={props.localPullRequests} />
+      <BrowsePalette
+        localPullRequests={props.localPullRequests}
+        trackedPullRequestNumbersByRepo={props.trackedPullRequestNumbersByRepo}
+        onToggleTrackedPullRequest={props.onToggleTrackedPullRequest}
+      />
     </>
   );
 }

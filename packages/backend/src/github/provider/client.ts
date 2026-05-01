@@ -4,7 +4,9 @@ import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
+  PullRequest,
   PullRequestApprovalState,
+  PullRequestListItem,
   PullRequestSummary,
   PullRequestSearchState,
   PullRequestQualityFinding,
@@ -341,7 +343,6 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
     changeCount: null,
     authorLogin: pullRequest.author?.login ?? 'unknown',
     updatedAt: pullRequest.updatedAt,
-    url: pullRequest.url,
     headSha: pullRequest.headRefOid,
     baseSha: pullRequest.baseRefOid ?? null,
   };
@@ -350,7 +351,7 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
 function withGitHubReviewCapabilities(
   pullRequest: PullRequestSummary,
   viewerLogin: string | null,
-): PullRequestSummary {
+): PullRequest {
   const isOwnPullRequest =
     viewerLogin != null && viewerLogin.length > 0 && pullRequest.authorLogin === viewerLogin;
 
@@ -375,9 +376,18 @@ function toPullRequestSummaryFromRest(pullRequest: GhRestPullRequest) {
     changeCount: null,
     authorLogin: pullRequest.user?.login ?? 'unknown',
     updatedAt: pullRequest.updated_at,
-    url: pullRequest.html_url,
     headSha: pullRequest.head.sha,
     baseSha: pullRequest.base.sha,
+  };
+}
+
+function toOverviewPullRequestSummary(
+  repo: OverviewPullRequestSummary['repo'],
+  pullRequest: PullRequestListItem,
+): OverviewPullRequestSummary {
+  return {
+    repo,
+    pullRequest,
   };
 }
 
@@ -886,10 +896,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         }
 
         return [
-          {
-            repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
-            pullRequest: withGitHubReviewCapabilities(toPullRequestSummary(pullRequest), login),
-          },
+          toOverviewPullRequestSummary(
+            repoSummaryFromGraphql(token.id, token.host, label, repo),
+            toPullRequestSummary(pullRequest),
+          ),
         ];
       });
     },
@@ -904,12 +914,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     function* (repo: ProviderRepoIdentity) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
-      yield* ensureUserContext();
-      const login = userContext?.login ?? null;
       const pullRequests = yield* api.repositoryOpenPullRequests(owner, name);
-      return pullRequests.map((pullRequest) =>
-        withGitHubReviewCapabilities(toPullRequestSummaryFromRest(pullRequest), login),
-      );
+      return pullRequests.map((pullRequest) => toPullRequestSummaryFromRest(pullRequest));
     },
   );
 
@@ -957,10 +963,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         }
 
         return [
-          {
-            repo: repoSummaryFromRest(token.id, token.host, label, repo),
-            pullRequest: withGitHubReviewCapabilities(toPullRequestSummary(pullRequest), login),
-          } satisfies OverviewPullRequestSummary,
+          toOverviewPullRequestSummary(
+            repoSummaryFromRest(token.id, token.host, label, repo),
+            toPullRequestSummary(pullRequest),
+          ),
         ];
       }
 
@@ -981,13 +987,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
                   }
 
                   return [
-                    {
-                      repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
-                      pullRequest: withGitHubReviewCapabilities(
-                        toPullRequestSummary(pullRequest),
-                        login,
-                      ),
-                    } satisfies OverviewPullRequestSummary,
+                    toOverviewPullRequestSummary(
+                      repoSummaryFromGraphql(token.id, token.host, label, repo),
+                      toPullRequestSummary(pullRequest),
+                    ),
                   ];
                 }),
               ),

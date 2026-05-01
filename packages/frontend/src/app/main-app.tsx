@@ -33,6 +33,7 @@ import {
   accountVisibilityQueryOptions,
   diffDataSettingsQueryOptions,
   forgeKeys,
+  pullRequestRecentListQueryOptions,
   savedReposQueryOptions,
   setTrackedPullRequestOrder,
   trackedReposQueryOptions,
@@ -48,6 +49,15 @@ import type {
   SelectedPullRequest,
   TrackedPullRequestOrderEntry,
 } from '../types/forge';
+
+function isSamePullRequestEntry(
+  left: OverviewPullRequestSummary,
+  right: OverviewPullRequestSummary,
+) {
+  return (
+    sameRepoIdentity(left.repo, right.repo) && left.pullRequest.number === right.pullRequest.number
+  );
+}
 
 function MainApp() {
   const { providerAccounts, providerStatuses } = useAuthSession();
@@ -76,6 +86,7 @@ function MainApp() {
   const [deepLinkMessage, setDeepLinkMessage] = useState<string | null>(null);
   const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>('overview');
   const refreshedReposRef = useRef<Set<string>>(new Set());
+  const lastRememberedPrKeyRef = useRef<string | null>(null);
 
   const { repos: savedRepos = [] } = useSavedRepos();
   const trackedReposQuery = useQuery(trackedReposQueryOptions());
@@ -121,6 +132,7 @@ function MainApp() {
     enabledAccountIds,
     sidebarView === 'overview',
   );
+  const recentPullRequestsQuery = useQuery(pullRequestRecentListQueryOptions());
   const readyOverviewAccountCount = readyProviderAccounts.length;
   const overviewStatusMessage = useMemo(() => {
     if (sidebarView !== 'overview') return null;
@@ -160,13 +172,61 @@ function MainApp() {
       ) ?? null
     );
   }, [activePullRequestNumber, activeRepoLookupKey, trackedPrsByRepo]);
+  const activeRecentEntry = useMemo(() => {
+    if (!activeRepoIdentity || activePullRequestNumber === null) {
+      return null;
+    }
+
+    return (
+      (recentPullRequestsQuery.data ?? []).find(
+        (entry) =>
+          sameRepoIdentity(entry.repo, activeRepoIdentity) &&
+          entry.pullRequest.number === activePullRequestNumber,
+      ) ?? null
+    );
+  }, [activePullRequestNumber, activeRepoIdentity, recentPullRequestsQuery.data]);
+  const activeFallbackPullRequestQuery = useQuery({
+    queryKey:
+      activeRepoIdentity && activePullRequestNumber !== null
+        ? [
+            ...forgeKeys.pullRequests(),
+            'selected-fallback',
+            activeRepoIdentity.providerId,
+            activeRepoIdentity.repoKey,
+            activePullRequestNumber,
+          ]
+        : [...forgeKeys.pullRequests(), 'selected-fallback', 'idle'],
+    queryFn: () => {
+      if (!activeRepoIdentity || activePullRequestNumber === null) {
+        throw new Error('No pull request selected');
+      }
+
+      return trpc.pullRequests.tryGet.query({
+        ...activeRepoIdentity,
+        number: activePullRequestNumber,
+      });
+    },
+    enabled:
+      activeRepoIdentity !== null &&
+      activePullRequestNumber !== null &&
+      activeOverviewEntry === null &&
+      activeTrackedPullRequest === null &&
+      activeRecentEntry === null,
+    staleTime: 0,
+  });
+  const activeFallbackPullRequest = activeFallbackPullRequestQuery.data ?? null;
   const selectedPr = useMemo<SelectedPullRequest | null>(() => {
     if (!activeRepoIdentity || activePullRequestNumber === null) {
       return null;
     }
 
     const overviewPullRequest = activeOverviewEntry?.pullRequest ?? null;
-    const pullRequest = activeTrackedPullRequest ?? overviewPullRequest;
+    const recentPullRequest = activeRecentEntry?.pullRequest ?? null;
+    const pullRequest =
+      activeTrackedPullRequest ??
+      overviewPullRequest ??
+      recentPullRequest ??
+      activeFallbackPullRequest;
     if (!pullRequest) {
       return null;
     }
@@ -177,10 +237,18 @@ function MainApp() {
       headSha: pullRequest.headSha,
       baseSha: pullRequest.baseSha ?? overviewPullRequest?.baseSha ?? null,
     };
-  }, [activeOverviewEntry, activePullRequestNumber, activeRepoIdentity, activeTrackedPullRequest]);
+  }, [
+    activeFallbackPullRequest,
+    activeOverviewEntry,
+    activePullRequestNumber,
+    activeRecentEntry,
+    activeRepoIdentity,
+    activeTrackedPullRequest,
+  ]);
   const selectedRepo = activeRepoIdentity
     ? (savedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
       trackedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
+      activeRecentEntry?.repo ??
       activeOverviewEntry?.repo ??
       null)
     : null;
@@ -247,37 +315,23 @@ function MainApp() {
     [profileFilterAccountId, repoFilterKey],
   );
   const filteredOverviewPullRequests = useMemo(() => {
-    const entries = overviewPullRequests.filter((entry) => matchesSidebarFilters(entry.repo));
-    if (
-      activeOverviewEntry &&
-      !entries.some(
-        (entry) =>
-          sameRepoIdentity(entry.repo, activeOverviewEntry.repo) &&
-          entry.pullRequest.number === activeOverviewEntry.pullRequest.number,
-      )
-    ) {
-      return [...entries, activeOverviewEntry];
-    }
-    return entries;
-  }, [activeOverviewEntry, matchesSidebarFilters, overviewPullRequests]);
+    return overviewPullRequests.filter((entry) => matchesSidebarFilters(entry.repo));
+  }, [matchesSidebarFilters, overviewPullRequests]);
   const filteredTrackedPullRequestEntries = useMemo(() => {
-    const entries = trackedPullRequestEntries.filter((entry) => matchesSidebarFilters(entry.repo));
-    if (
-      activeTrackedPullRequest &&
-      selectedRepo &&
-      !entries.some(
-        (entry) =>
-          sameRepoIdentity(entry.repo, selectedRepo) &&
-          entry.pullRequest.number === activeTrackedPullRequest.number,
-      )
-    ) {
-      return [...entries, { repo: selectedRepo, pullRequest: activeTrackedPullRequest }];
-    }
-    return entries;
-  }, [activeTrackedPullRequest, matchesSidebarFilters, selectedRepo, trackedPullRequestEntries]);
+    return trackedPullRequestEntries.filter((entry) => matchesSidebarFilters(entry.repo));
+  }, [matchesSidebarFilters, trackedPullRequestEntries]);
+  const filteredRecentPullRequests = useMemo(() => {
+    return (recentPullRequestsQuery.data ?? []).filter((entry) =>
+      matchesSidebarFilters(entry.repo),
+    );
+  }, [matchesSidebarFilters, recentPullRequestsQuery.data]);
   const commandPaletteLocalPullRequests = useMemo(
-    () => [...trackedPullRequestEntries, ...overviewPullRequests],
-    [overviewPullRequests, trackedPullRequestEntries],
+    () => [
+      ...trackedPullRequestEntries,
+      ...(recentPullRequestsQuery.data ?? []),
+      ...overviewPullRequests,
+    ],
+    [overviewPullRequests, recentPullRequestsQuery.data, trackedPullRequestEntries],
   );
   const selectedPullRequestSummary = useMemo(() => {
     if (!selectedPr) {
@@ -289,9 +343,39 @@ function MainApp() {
         (entry) =>
           sameRepoIdentity(entry.repo, selectedPr) &&
           entry.pullRequest.number === selectedPr.number,
-      )?.pullRequest ?? null
+      )?.pullRequest ??
+      activeFallbackPullRequest ??
+      null
     );
-  }, [commandPaletteLocalPullRequests, selectedPr]);
+  }, [activeFallbackPullRequest, commandPaletteLocalPullRequests, selectedPr]);
+  const activePinnedSidebarEntry = useMemo(() => {
+    if (
+      !selectedRepo ||
+      !selectedPullRequestSummary ||
+      selectedPullRequestSummary.state !== 'OPEN'
+    ) {
+      return null;
+    }
+
+    const entry = { repo: selectedRepo, pullRequest: selectedPullRequestSummary };
+    const currentEntries =
+      sidebarView === 'overview'
+        ? filteredOverviewPullRequests
+        : sidebarView === 'recent'
+          ? filteredRecentPullRequests
+          : filteredTrackedPullRequestEntries;
+
+    return currentEntries.some((candidate) => isSamePullRequestEntry(candidate, entry))
+      ? null
+      : entry;
+  }, [
+    filteredOverviewPullRequests,
+    filteredRecentPullRequests,
+    filteredTrackedPullRequestEntries,
+    selectedPullRequestSummary,
+    selectedRepo,
+    sidebarView,
+  ]);
 
   const selectedPrKey = selectedPr
     ? `${repoIdentityKey(selectedPr)}#${selectedPr.number}@${selectedPr.headSha}`
@@ -470,6 +554,65 @@ function MainApp() {
     [queryClient],
   );
 
+  const promoteRecentPullRequest = useCallback(
+    (repo: RepoSummary, pullRequest: PullRequestSummary) => {
+      queryClient.setQueryData<OverviewPullRequestSummary[]>(
+        forgeKeys.pullRequestRecentList(),
+        (current) => {
+          const entry = { repo, pullRequest };
+          const next = current ?? [];
+          return [entry, ...next.filter((candidate) => !isSamePullRequestEntry(candidate, entry))];
+        },
+      );
+    },
+    [queryClient],
+  );
+
+  const rememberPullRequest = useCallback(
+    async (repo: RepoSummary, pullRequest: PullRequestSummary) => {
+      promoteRecentPullRequest(repo, pullRequest);
+      await trpc.pullRequests.remember.mutate({
+        ...repoIdentity(repo),
+        pullRequest,
+      });
+    },
+    [promoteRecentPullRequest],
+  );
+
+  useEffect(() => {
+    if (!selectedPr || !selectedPullRequestSummary || selectedPullRequestSummary.state !== 'OPEN') {
+      lastRememberedPrKeyRef.current = null;
+      return;
+    }
+
+    const repo =
+      selectedRepo ??
+      recentPullRequestsQuery.data?.find((entry) => sameRepoIdentity(entry.repo, selectedPr))
+        ?.repo ??
+      overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, selectedPr))?.repo ??
+      trackedRepos.find((entry) => sameRepoIdentity(entry, selectedPr)) ??
+      null;
+    if (!repo) {
+      return;
+    }
+
+    const rememberKey = `${repoIdentityKey(selectedPr)}#${selectedPullRequestSummary.number}@${selectedPullRequestSummary.headSha}`;
+    if (lastRememberedPrKeyRef.current === rememberKey) {
+      return;
+    }
+
+    lastRememberedPrKeyRef.current = rememberKey;
+    void rememberPullRequest(repo, selectedPullRequestSummary);
+  }, [
+    overviewPullRequests,
+    recentPullRequestsQuery.data,
+    rememberPullRequest,
+    selectedPr,
+    selectedPullRequestSummary,
+    selectedRepo,
+    trackedRepos,
+  ]);
+
   const getTrackedPullRequestOrder = useCallback(async () => {
     const cachedOrder = queryClient.getQueryData<TrackedPullRequestOrderEntry[]>(
       forgeKeys.trackedPullRequestOrder(),
@@ -582,15 +725,7 @@ function MainApp() {
         ...repoIdentity(savedRepo),
         number: parsed.number,
       });
-      const trackedPullRequest = await trpc.tracked.track.mutate({
-        ...repoIdentity(savedRepo),
-        pullRequest,
-      });
-      cacheTrackedRepo(savedRepo);
-      cacheTrackedPullRequest(savedRepo, trackedPullRequest);
-      await moveTrackedPullRequestToTop(savedRepo, trackedPullRequest);
-
-      setActivePullRequest(savedRepo, trackedPullRequest);
+      setActivePullRequest(savedRepo, pullRequest);
       setDeepLinkMessage(null);
     }
 
@@ -606,15 +741,7 @@ function MainApp() {
     });
 
     return () => subscription.unsubscribe();
-  }, [
-    cacheSavedRepo,
-    cacheTrackedRepo,
-    cacheTrackedPullRequest,
-    enabledAccountIdSet,
-    moveTrackedPullRequestToTop,
-    readyProviderAccounts,
-    setActivePullRequest,
-  ]);
+  }, [cacheSavedRepo, enabledAccountIdSet, readyProviderAccounts, setActivePullRequest]);
 
   async function handleRemoveTrackedPullRequest(
     repo: RepoIdentity,
@@ -651,7 +778,9 @@ function MainApp() {
   ) {
     const repo =
       sidebarRepos.find((candidate) => sameRepoIdentity(candidate, repoIdentityInput)) ??
-      overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))?.repo;
+      overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))?.repo ??
+      recentPullRequestsQuery.data?.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))
+        ?.repo;
     if (repo && !savedRepos.some((candidate) => sameRepoIdentity(candidate, repo))) {
       const savedRepo = await trpc.repos.save.mutate({ repo });
       cacheSavedRepo(savedRepo);
@@ -663,9 +792,22 @@ function MainApp() {
     });
     if (repo) {
       cacheTrackedRepo(repo);
+      promoteRecentPullRequest(repo, trackedPullRequest);
     }
     cacheTrackedPullRequest(repoIdentityInput, trackedPullRequest);
     await moveTrackedPullRequestToTop(repoIdentityInput, trackedPullRequest);
+  }
+
+  async function handleToggleTrackedPullRequest(
+    entry: OverviewPullRequestSummary,
+    tracked: boolean,
+  ) {
+    if (tracked) {
+      await handleRemoveTrackedPullRequest(entry.repo, entry.pullRequest);
+      return;
+    }
+
+    await handleTrackFromOverview(entry.repo, entry.pullRequest);
   }
 
   const activeFilterChips = useMemo(() => {
@@ -713,10 +855,12 @@ function MainApp() {
             repos={sidebarRepos}
             repoErrors={sidebarView === 'tracked' ? trackedRepoErrors : {}}
             overviewPullRequests={filteredOverviewPullRequests}
+            recentPullRequests={filteredRecentPullRequests}
             trackedPullRequests={filteredTrackedPullRequestEntries}
             overviewErrors={overviewErrors}
             isOverviewLoading={isOverviewLoading}
             overviewStatusMessage={overviewStatusMessage}
+            pinnedEntry={activePinnedSidebarEntry}
             view={sidebarView}
             selectedPrKey={selectedPrKey}
             trackedRepoCount={
@@ -790,6 +934,10 @@ function MainApp() {
         diffSessionKey={patchViewerSessionKey}
         patchViewerSessionKey={patchViewerSessionKey}
         localPullRequests={commandPaletteLocalPullRequests}
+        trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
+        onToggleTrackedPullRequest={(entry, tracked) =>
+          void handleToggleTrackedPullRequest(entry, tracked)
+        }
         pendingReview={pendingReview}
         reviewThreads={reviewThreads}
         selectedPr={selectedPr}

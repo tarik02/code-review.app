@@ -1,6 +1,5 @@
 import { Link } from '@tanstack/react-router';
 import { Cog6ToothIcon } from '@heroicons/react/20/solid';
-import { PlusIcon as OutlinePlusIcon } from '@heroicons/react/24/outline';
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { repoIdentityKey } from '../../lib/repo-identity';
 import type {
@@ -11,11 +10,12 @@ import type {
 import { AppUpdater } from './app-updater';
 import { CommandPaletteLaunchers } from '../../command-palette/Launchers';
 import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
+import { PullRequestTrackButton } from './pull-request-track-button';
 import { ScrollArea } from './scroll-area';
 import { TopBar } from './top-bar';
 import { TrackedPullRequestList } from './tracked-pull-request-list';
 
-type SidebarPullRequestView = 'overview' | 'tracked';
+type SidebarPullRequestView = 'overview' | 'recent' | 'tracked';
 
 type RepoSidebarProps = {
   activeFilters?: Array<{
@@ -26,10 +26,12 @@ type RepoSidebarProps = {
   repos: RepoSummary[];
   repoErrors: Record<string, string>;
   overviewPullRequests: OverviewPullRequestSummary[];
+  recentPullRequests: OverviewPullRequestSummary[];
   trackedPullRequests: OverviewPullRequestSummary[];
   overviewErrors: string[];
   isOverviewLoading: boolean;
   overviewStatusMessage: string | null;
+  pinnedEntry: OverviewPullRequestSummary | null;
   view: SidebarPullRequestView;
   selectedPrKey: string | null;
   trackedRepoCount: number;
@@ -52,10 +54,12 @@ function RepoSidebar({
   activeFilters = [],
   repoErrors,
   overviewPullRequests,
+  recentPullRequests,
   trackedPullRequests,
   overviewErrors,
   isOverviewLoading,
   overviewStatusMessage,
+  pinnedEntry,
   view,
   selectedPrKey,
   trackedRepoCount,
@@ -77,6 +81,13 @@ function RepoSidebar({
       ),
     [overviewPullRequests],
   );
+  const sortedRecentPullRequests = useMemo(
+    () =>
+      [...recentPullRequests].sort(
+        (a, b) => toTimestamp(b.pullRequest.updatedAt) - toTimestamp(a.pullRequest.updatedAt),
+      ),
+    [recentPullRequests],
+  );
   const repoErrorEntries = useMemo(
     () =>
       repos.flatMap((repo) => {
@@ -86,6 +97,7 @@ function RepoSidebar({
     [repoErrors, repos],
   );
   const isOverview = view === 'overview';
+  const isRecent = view === 'recent';
 
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-ink-300 bg-canvas md:border-b-0">
@@ -119,10 +131,10 @@ function RepoSidebar({
 
         <div className="border-b border-neutral-300 bg-canvas px-3 py-2 dark:border-neutral-700">
           <div
-            className="grid grid-cols-2 rounded-md bg-canvasDark p-0.5 text-xs font-medium text-ink-600"
+            className="grid grid-cols-3 rounded-md bg-canvasDark p-0.5 text-xs font-medium text-ink-600"
             style={noDragRegionStyle}
           >
-            {(['overview', 'tracked'] as const).map((candidate) => {
+            {(['overview', 'recent', 'tracked'] as const).map((candidate) => {
               const isSelected = view === candidate;
               return (
                 <button
@@ -168,65 +180,159 @@ function RepoSidebar({
         orientation="vertical"
         viewportClassName="bg-canvas"
       >
-        {!isOverview && trackedRepoCount === 0 && trackedPullRequests.length === 0 ? (
+        {view === 'tracked' &&
+        trackedRepoCount === 0 &&
+        trackedPullRequests.length === 0 &&
+        !pinnedEntry ? (
           (emptyState ?? null)
-        ) : isOverview ? (
+        ) : isOverview || isRecent ? (
           <div className="flex flex-col">
-            {sortedOverviewPullRequests.length === 0 &&
-            overviewErrors.length === 0 &&
-            repoErrorEntries.length === 0 &&
-            !isOverviewLoading ? (
-              <div className="px-3 py-2.5 text-sm text-ink-500">
-                {overviewStatusMessage ?? 'No open PRs or MRs.'}
+            {pinnedEntry ? (
+              <div className="mb-2">
+                <PullRequestListCard
+                  className="border-b border-t border-neutral-300/70 dark:border-neutral-700/70"
+                  repo={pinnedEntry.repo}
+                  pullRequest={pinnedEntry.pullRequest}
+                  selectedPrKey={selectedPrKey}
+                  repoLabel={getRepoLabel(pinnedEntry.repo)}
+                  trailingActions={
+                    <PullRequestTrackButton
+                      tracked={
+                        trackedPullRequestNumbersByRepo[repoIdentityKey(pinnedEntry.repo)]?.has(
+                          pinnedEntry.pullRequest.number,
+                        ) ?? false
+                      }
+                      onClick={() => {
+                        const isTracked =
+                          trackedPullRequestNumbersByRepo[repoIdentityKey(pinnedEntry.repo)]?.has(
+                            pinnedEntry.pullRequest.number,
+                          ) ?? false;
+
+                        if (isTracked) {
+                          onRemovePr(pinnedEntry.repo, pinnedEntry.pullRequest);
+                          return;
+                        }
+
+                        onTrackPr(pinnedEntry.repo, pinnedEntry.pullRequest);
+                      }}
+                    />
+                  }
+                  trailingActionsAlwaysVisible
+                  onSelectPr={onSelectPr}
+                />
               </div>
             ) : null}
-            {sortedOverviewPullRequests.length === 0 && isOverviewLoading ? (
+            {(isOverview ? sortedOverviewPullRequests : sortedRecentPullRequests).length === 0 &&
+            (!isOverview || overviewErrors.length === 0) &&
+            repoErrorEntries.length === 0 &&
+            (!isOverview || !isOverviewLoading) ? (
+              <div className="px-3 py-2.5 text-sm text-ink-500">
+                {isOverview
+                  ? (overviewStatusMessage ?? 'No open PRs or MRs.')
+                  : 'No recent PRs or MRs.'}
+              </div>
+            ) : null}
+            {isOverview && sortedOverviewPullRequests.length === 0 && isOverviewLoading ? (
               <div className="px-3 py-2.5 text-sm text-ink-500">Loading pull requests...</div>
             ) : null}
-            {sortedOverviewPullRequests.map(({ repo, pullRequest }) => (
-              <PullRequestListCard
-                key={`${repoIdentityKey(repo)}#${pullRequest.number}`}
-                repo={repo}
-                pullRequest={pullRequest}
-                selectedPrKey={selectedPrKey}
-                repoLabel={getRepoLabel(repo)}
-                onSelectPr={onSelectPr}
-                trailingActions={
-                  trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
-                    pullRequest.number,
-                  ) ? null : (
-                    <button
-                      aria-label={`Track PR #${pullRequest.number}`}
-                      className="rounded p-1 text-ink-500 opacity-0 transition hover:bg-surface hover:text-ink-700 group-hover:opacity-100 group-focus-within:opacity-100"
-                      onClick={() => onTrackPr(repo, pullRequest)}
-                      type="button"
-                    >
-                      <OutlinePlusIcon className="size-4 shrink-0" />
-                    </button>
-                  )
-                }
-              />
-            ))}
-            {overviewErrors.map((error, index) => (
-              <div className="px-3 py-2.5 text-sm text-danger-600" key={`${index}:${error}`}>
-                {error}
-              </div>
-            ))}
-            {repoErrorEntries.map(({ repo, error }) => (
-              <div className="px-3 py-2.5 text-sm text-danger-600" key={repoIdentityKey(repo)}>
-                {getRepoLabel(repo)}: {error}
-              </div>
-            ))}
+            {(isOverview ? sortedOverviewPullRequests : sortedRecentPullRequests).map(
+              ({ repo, pullRequest }) => (
+                <PullRequestListCard
+                  key={`${repoIdentityKey(repo)}#${pullRequest.number}`}
+                  repo={repo}
+                  pullRequest={pullRequest}
+                  selectedPrKey={selectedPrKey}
+                  repoLabel={getRepoLabel(repo)}
+                  onSelectPr={onSelectPr}
+                  trailingActions={
+                    <PullRequestTrackButton
+                      tracked={
+                        trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
+                          pullRequest.number,
+                        ) ?? false
+                      }
+                      onClick={() => {
+                        const isTracked =
+                          trackedPullRequestNumbersByRepo[repoIdentityKey(repo)]?.has(
+                            pullRequest.number,
+                          ) ?? false;
+
+                        if (isTracked) {
+                          onRemovePr(repo, pullRequest);
+                          return;
+                        }
+
+                        onTrackPr(repo, pullRequest);
+                      }}
+                    />
+                  }
+                  trailingActionsAlwaysVisible
+                />
+              ),
+            )}
+            {isOverview
+              ? overviewErrors.map((error, index) => (
+                  <div className="px-3 py-2.5 text-sm text-danger-600" key={`${index}:${error}`}>
+                    {error}
+                  </div>
+                ))
+              : null}
+            {isOverview
+              ? repoErrorEntries.map(({ repo, error }) => (
+                  <div className="px-3 py-2.5 text-sm text-danger-600" key={repoIdentityKey(repo)}>
+                    {getRepoLabel(repo)}: {error}
+                  </div>
+                ))
+              : null}
           </div>
         ) : (
-          <TrackedPullRequestList
-            entries={trackedPullRequests}
-            repoErrors={repoErrorEntries}
-            selectedPrKey={selectedPrKey}
-            onRemovePr={onRemovePr}
-            onReorder={onReorderTrackedPullRequests}
-            onSelectPr={onSelectPr}
-          />
+          <div className="flex flex-col">
+            {pinnedEntry ? (
+              <div className="mb-2">
+                <PullRequestListCard
+                  className="border-b border-t border-neutral-300/70 dark:border-neutral-700/70"
+                  repo={pinnedEntry.repo}
+                  pullRequest={pinnedEntry.pullRequest}
+                  selectedPrKey={selectedPrKey}
+                  repoLabel={getRepoLabel(pinnedEntry.repo)}
+                  trailingActions={
+                    <PullRequestTrackButton
+                      tracked={
+                        trackedPullRequestNumbersByRepo[repoIdentityKey(pinnedEntry.repo)]?.has(
+                          pinnedEntry.pullRequest.number,
+                        ) ?? false
+                      }
+                      onClick={() => {
+                        const isTracked =
+                          trackedPullRequestNumbersByRepo[repoIdentityKey(pinnedEntry.repo)]?.has(
+                            pinnedEntry.pullRequest.number,
+                          ) ?? false;
+
+                        if (isTracked) {
+                          onRemovePr(pinnedEntry.repo, pinnedEntry.pullRequest);
+                          return;
+                        }
+
+                        onTrackPr(pinnedEntry.repo, pinnedEntry.pullRequest);
+                      }}
+                    />
+                  }
+                  trailingActionsAlwaysVisible
+                  onSelectPr={onSelectPr}
+                />
+              </div>
+            ) : null}
+            <TrackedPullRequestList
+              entries={trackedPullRequests}
+              repoErrors={repoErrorEntries}
+              selectedPrKey={selectedPrKey}
+              trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
+              onRemovePr={onRemovePr}
+              onTrackPr={onTrackPr}
+              onReorder={onReorderTrackedPullRequests}
+              onSelectPr={onSelectPr}
+            />
+          </div>
         )}
       </ScrollArea>
     </aside>

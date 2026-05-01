@@ -9,12 +9,15 @@ import type {
   PrFileContents,
   PrPatch,
   PullRequestSearchState,
+  PullRequest,
+  PullRequestListItem,
   RepoIdentity,
-  PullRequestSummary,
 } from '@code-review-app/shared';
 
 type PullRequestServiceShape = {
-  listCached(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
+  listCached(repo: RepoIdentity): Effect.Effect<PullRequestListItem[], Error>;
+  listRecent(): Effect.Effect<OverviewPullRequestSummary[], Error>;
+  remember(repo: RepoIdentity, pullRequest: PullRequestListItem): Effect.Effect<void, Error>;
   listOverview(accountId: string): Effect.Effect<OverviewPullRequestSummary[], Error>;
   search(
     accountId: string,
@@ -22,8 +25,8 @@ type PullRequestServiceShape = {
     limit: number,
     states: PullRequestSearchState,
   ): Effect.Effect<OverviewPullRequestSummary[], Error>;
-  list(repo: RepoIdentity): Effect.Effect<PullRequestSummary[], Error>;
-  get(repo: RepoIdentity, number: number): Effect.Effect<PullRequestSummary, Error>;
+  list(repo: RepoIdentity): Effect.Effect<PullRequestListItem[], Error>;
+  get(repo: RepoIdentity, number: number): Effect.Effect<PullRequest, Error>;
   getPatch(repo: RepoIdentity, number: number, headSha: string): Effect.Effect<PrPatch, Error>;
   listChangedFiles(
     repo: RepoIdentity,
@@ -79,6 +82,20 @@ const makePullRequestService = Effect.gen(function* () {
     return yield* provider.listOverviewPullRequests();
   });
 
+  const listRecent: PullRequestServiceShape['listRecent'] = Effect.fn(
+    'PullRequestService.listRecent',
+  )(function* () {
+    return yield* cache.listRecentPullRequests();
+  });
+
+  const remember: PullRequestServiceShape['remember'] = Effect.fn('PullRequestService.remember')(
+    function* (repoInput, pullRequest) {
+      const repoIdentity = requireRepo(repoInput);
+      yield* cache.ensureRepo(repoIdentity);
+      yield* cache.cachePullRequest(repoIdentity, pullRequest);
+    },
+  );
+
   const list: PullRequestServiceShape['list'] = Effect.fn('PullRequestService.list')(
     function* (repoInput) {
       const repoIdentity = requireRepo(repoInput);
@@ -94,7 +111,9 @@ const makePullRequestService = Effect.gen(function* () {
     function* (repoInput, number) {
       const repoIdentity = requireRepo(repoInput);
       const { provider, repo } = yield* providers.forRepo(repoIdentity);
-      return yield* provider.getPullRequest(repo, number);
+      const pullRequest = yield* provider.getPullRequest(repo, number);
+      yield* cache.cachePullRequest(repoIdentity, pullRequest);
+      return pullRequest;
     },
   );
 
@@ -132,6 +151,8 @@ const makePullRequestService = Effect.gen(function* () {
 
   return {
     listCached,
+    listRecent,
+    remember,
     listOverview,
     search,
     list,
