@@ -306,7 +306,7 @@ function classifyGitResult(
     combined.includes('http basic: access denied') ||
     /\b401\b/.test(combined)
   ) {
-    return new GitAuthenticationFailed({ stderr, remoteUrl });
+    return new GitAuthenticationFailed({ args: input.args, stdout, stderr, remoteUrl });
   }
 
   if (
@@ -315,7 +315,7 @@ function classifyGitResult(
     combined.includes('not permitted') ||
     (combined.includes('permission denied') && combined.includes('http'))
   ) {
-    return new GitAuthorizationFailed({ stderr, remoteUrl });
+    return new GitAuthorizationFailed({ args: input.args, stdout, stderr, remoteUrl });
   }
 
   if (
@@ -324,7 +324,7 @@ function classifyGitResult(
     combined.includes('the requested url returned error: 404') ||
     /repository .* not found/.test(combined)
   ) {
-    return new GitRepositoryNotFound({ stderr, remoteUrl });
+    return new GitRepositoryNotFound({ args: input.args, stdout, stderr, remoteUrl });
   }
 
   if (
@@ -332,7 +332,7 @@ function classifyGitResult(
     combined.includes('filter capability not advertised') ||
     combined.includes('filter-spec')
   ) {
-    return new GitPartialCloneUnsupported({ stderr, remoteUrl });
+    return new GitPartialCloneUnsupported({ args: input.args, stdout, stderr, remoteUrl });
   }
 
   if (
@@ -343,8 +343,10 @@ function classifyGitResult(
       combined.includes('invalid object name'))
   ) {
     return new GitPathNotFound({
+      args: input.args,
       ref: refFromArgs(input.args, input.ref),
       path: pathFromShowArgs(input.args, input.filePath),
+      stdout,
       stderr,
     });
   }
@@ -356,7 +358,9 @@ function classifyGitResult(
     combined.includes('unknown revision or path not in the working tree')
   ) {
     return new GitRefNotFound({
+      args: input.args,
       ref: refFromArgs(input.args, input.ref),
+      stdout,
       stderr,
     });
   }
@@ -453,6 +457,7 @@ const makeGitService = Effect.gen(function* () {
           new GitCommandTimedOut({
             args: input.args,
             timeoutMs: Duration.toMillis(input.timeout),
+            stdout: '',
             stderr: '',
           }),
       }),
@@ -621,7 +626,12 @@ const makeGitService = Effect.gen(function* () {
       const resolved = output.stdout.trim();
       if (!resolved) {
         return yield* Effect.fail(
-          new GitRefNotFound({ ref: baseSha, stderr: 'merge-base returned no output' }),
+          new GitRefNotFound({
+            args: ['-C', handle.path, 'merge-base', baseSha, headSha],
+            ref: baseSha,
+            stdout: output.stdout,
+            stderr: 'merge-base returned no output',
+          }),
         );
       }
       return resolved;

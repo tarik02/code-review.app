@@ -30,6 +30,52 @@ type ResolvedRefs = {
   source: 'input' | 'provider';
 };
 
+const MAX_GIT_OUTPUT_LENGTH = 6000;
+
+function truncateGitOutput(value: string) {
+  if (value.length <= MAX_GIT_OUTPUT_LENGTH) {
+    return value;
+  }
+
+  const omitted = value.length - MAX_GIT_OUTPUT_LENGTH;
+  return `${value.slice(0, MAX_GIT_OUTPUT_LENGTH)}\n... ${omitted} chars truncated`;
+}
+
+function getGitOutput(error: GitError) {
+  return {
+    args: 'args' in error && Array.isArray(error.args) ? error.args : [],
+    stdout: 'stdout' in error && typeof error.stdout === 'string' ? error.stdout.trimEnd() : '',
+    stderr: 'stderr' in error && typeof error.stderr === 'string' ? error.stderr.trimEnd() : '',
+  };
+}
+
+function formatGitOutputDetails(error: GitError) {
+  const { args, stdout, stderr } = getGitOutput(error);
+  const sections: string[] = [];
+
+  if (args.length > 0) {
+    sections.push(`command:\ngit ${args.join(' ')}`);
+  }
+
+  if (stdout) {
+    sections.push(`stdout:\n${truncateGitOutput(stdout)}`);
+  }
+
+  if (stderr) {
+    sections.push(`stderr:\n${truncateGitOutput(stderr)}`);
+  }
+
+  if (sections.length === 0) {
+    return '';
+  }
+
+  return `\n\nGit command output:\n${sections.join('\n\n')}`;
+}
+
+function gitProviderError(message: string, error: GitError) {
+  return new ProviderError(`${message}${formatGitOutputDetails(error)}`, { cause: error });
+}
+
 function gitErrorToProviderError(error: GitError) {
   if (error instanceof GitExecutableNotFound) {
     return new ProviderError('Git mode requires git to be installed and available on PATH.', {
@@ -37,39 +83,33 @@ function gitErrorToProviderError(error: GitError) {
     });
   }
   if (error instanceof GitAuthenticationFailed) {
-    return new ProviderError(
+    return gitProviderError(
       'Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.',
-      { cause: error },
+      error,
     );
   }
   if (error instanceof GitAuthorizationFailed) {
-    return new ProviderError('Your account cannot fetch this repository with git.', {
-      cause: error,
-    });
+    return gitProviderError('Your account cannot fetch this repository with git.', error);
   }
   if (error instanceof GitRepositoryNotFound) {
-    return new ProviderError('Git could not find this repository.', { cause: error });
+    return gitProviderError('Git could not find this repository.', error);
   }
   if (error instanceof GitRefNotFound) {
-    return new ProviderError('Git could not fetch one of the PR refs.', { cause: error });
+    return gitProviderError('Git could not fetch one of the PR refs.', error);
   }
   if (error instanceof GitPathNotFound) {
-    return new ProviderError('Git could not find this file at the requested ref.', {
-      cause: error,
-    });
+    return gitProviderError('Git could not find this file at the requested ref.', error);
   }
   if (error instanceof GitPartialCloneUnsupported) {
-    return new ProviderError('This git server does not support blobless partial clone.', {
-      cause: error,
-    });
+    return gitProviderError('This git server does not support blobless partial clone.', error);
   }
   if (error instanceof GitCommandTimedOut) {
-    return new ProviderError('Git command timed out.', { cause: error });
+    return gitProviderError('Git command timed out.', error);
   }
   if (error instanceof GitCommandFailed) {
-    return new ProviderError(
-      `Git command failed: ${firstLine(error.stderr) || 'unknown git error'}`,
-      { cause: error },
+    return gitProviderError(
+      `Git command failed: ${firstLine(error.stderr) || firstLine(error.stdout) || 'unknown git error'}`,
+      error,
     );
   }
   if (error instanceof GitUnknownCommandError) {
