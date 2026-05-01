@@ -1231,10 +1231,6 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       return {
         url: `${repo.host}/${owner}/${name}.git`,
         auth: {
-          askPass: {
-            username: 'x-access-token',
-            password: token,
-          },
           envConfig: [
             {
               key: `http.${repo.host}/.extraheader`,

@@ -1190,10 +1190,6 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       return {
         url: `${repo.host}/${repo.path}.git`,
         auth: {
-          askPass: {
-            username: 'oauth2',
-            password: token,
-          },
           envConfig: [
             {
               key: `http.${repo.host}/.extraheader`,
