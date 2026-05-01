@@ -1,6 +1,8 @@
 import { FileCode2Icon, PanelsTopLeftIcon, SearchIcon } from 'lucide-react';
-import { useCommandPaletteStore } from '../../stores/command-palette-store';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+import { useEnabledProviderAccounts } from '../hooks/use-enabled-provider-accounts';
+import { useCommandPaletteStore } from './store';
+import { Button } from '../components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 
 type CommandPaletteLauncherScope = 'home' | 'settings';
 
@@ -13,6 +15,7 @@ type LauncherConfig = {
 };
 
 function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope }) {
+  const { enabledAccountIds } = useEnabledProviderAccounts();
   const openBrowse = useCommandPaletteStore((state) => state.openBrowse);
   const openContent = useCommandPaletteStore((state) => state.openContent);
   const openWorkflow = useCommandPaletteStore((state) => state.openWorkflow);
@@ -38,7 +41,7 @@ function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope
             id: 'browse',
             icon: SearchIcon,
             label: 'Browse profiles, repos, and PRs',
-            onClick: openBrowse,
+            onClick: () => openBrowse(enabledAccountIds),
             shortcut: 'Mod+K',
           },
         ]
@@ -54,7 +57,7 @@ function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope
             id: 'browse',
             icon: SearchIcon,
             label: 'Browse profiles, repos, and PRs',
-            onClick: openBrowse,
+            onClick: () => openBrowse(enabledAccountIds),
             shortcut: 'Mod+K',
           },
         ];
@@ -69,14 +72,16 @@ function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope
             <Tooltip key={launcher.id}>
               <TooltipTrigger
                 render={
-                  <button
+                  <Button
                     aria-label={`${launcher.label} (${launcher.shortcut})`}
-                    className="inline-flex size-8 items-center justify-center rounded-md text-ink-500 transition hover:bg-canvasDark hover:text-ink-900"
+                    className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
                     onClick={launcher.onClick}
+                    size="icon"
                     type="button"
+                    variant="ghost"
                   >
                     <Icon className="size-4" />
-                  </button>
+                  </Button>
                 }
               />
               <TooltipContent>

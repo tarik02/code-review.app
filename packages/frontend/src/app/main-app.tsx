@@ -4,7 +4,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { GitStatusEntry } from '@pierre/trees';
 import { RepoSidebar, type SidebarPullRequestView } from '../components/ui/repo-sidebar';
-import { HomeCommandPalettes } from '../components/ui/app-command-palettes';
+import { HomeCommandPalettes } from '../command-palette/CommandPalette';
 import { PatchViewerMain } from '../components/ui/patch-viewer-main';
 import {
   getErrorMessage,

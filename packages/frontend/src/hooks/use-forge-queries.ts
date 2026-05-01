@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReviewThread } from '../lib/review-threads';
 import { trpc } from '../lib/trpc';
@@ -39,7 +39,6 @@ import type {
   PendingReviewState,
   PublishPendingReviewInput,
   PullRequestApprovalState,
-  PullRequestSearchState,
   PrPatch,
   ProviderAccount,
   PullRequestQualityReport,
@@ -57,89 +56,11 @@ import {
   repoIdentity,
   repoIdentityKey,
 } from '../lib/repo-identity';
-import { useCommandPaletteStore } from '../stores/command-palette-store';
 
 function getErrorMessage(error: unknown): string {
   if (!error) return '';
   if (error instanceof Error) return error.message;
   return String(error);
-}
-
-function useBrowseSearch(args: {
-  accountIds: string[];
-  query: string;
-  states: PullRequestSearchState;
-  profileFilterAccountId: string | null;
-  repoFilterKey: string | null;
-  namespaceFilterPath: string | null;
-  enabled?: boolean;
-}) {
-  const {
-    accountIds,
-    query,
-    states,
-    profileFilterAccountId,
-    repoFilterKey,
-    namespaceFilterPath,
-    enabled = true,
-  } = args;
-  const snapshot = useCommandPaletteStore((state) => state.browseSearchSnapshot);
-  const failBrowseSearch = useCommandPaletteStore((state) => state.failBrowseSearch);
-  const resetBrowseSearchSnapshot = useCommandPaletteStore(
-    (state) => state.resetBrowseSearchSnapshot,
-  );
-  const setBrowseSearchLoading = useCommandPaletteStore((state) => state.setBrowseSearchLoading);
-  const updateBrowseSearchSnapshot = useCommandPaletteStore(
-    (state) => state.updateBrowseSearchSnapshot,
-  );
-  const accountIdKey = useMemo(() => accountIds.join('\0'), [accountIds]);
-
-  useEffect(() => {
-    if (!enabled || accountIds.length === 0) {
-      resetBrowseSearchSnapshot(accountIds);
-      return;
-    }
-
-    setBrowseSearchLoading(accountIds);
-    const subscription = trpc.browse.search.subscribe(
-      {
-        accountIds,
-        query,
-        states,
-        profileFilterAccountId,
-        repoFilterKey,
-        namespaceFilterPath,
-        repoLimit: 20,
-        namespaceLimit: 20,
-        pullRequestLimit: 12,
-      },
-      {
-        onData: (nextSnapshot) => {
-          updateBrowseSearchSnapshot(nextSnapshot);
-        },
-        onError: (error) => {
-          failBrowseSearch(accountIds, getErrorMessage(error));
-        },
-      },
-    );
-
-    return () => subscription.unsubscribe();
-  }, [
-    accountIdKey,
-    accountIds,
-    enabled,
-    failBrowseSearch,
-    namespaceFilterPath,
-    profileFilterAccountId,
-    query,
-    resetBrowseSearchSnapshot,
-    repoFilterKey,
-    setBrowseSearchLoading,
-    states,
-    updateBrowseSearchSnapshot,
-  ]);
-
-  return snapshot;
 }
 
 function useSavedRepos() {
@@ -727,7 +648,6 @@ export {
   getErrorMessage,
   dedupeOverviewPullRequestEntries,
   useAccountOverviewPullRequests,
-  useBrowseSearch,
   useInitialReposForAccounts,
   usePullRequestApprovalMutations,
   useOverviewPullRequests,

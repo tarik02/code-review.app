@@ -1,3 +1,4 @@
+import type { HttpClientRequest } from '@effect/platform';
 import type { Effect } from 'effect';
 import type { ProviderError } from '../errors.ts';
 import type { ProviderRepoIdentity } from '../repo-id.ts';
@@ -63,6 +64,11 @@ type GitRemoteSpec = {
 };
 
 type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = {
+  authorizeRequest(): Effect.Effect<
+    (request: HttpClientRequest.HttpClientRequest) => HttpClientRequest.HttpClientRequest,
+    Error,
+    Dependencies
+  >;
   authStatus(): Effect.Effect<ProviderAuthStatus, Error, Dependencies>;
   viewerLogin(): Effect.Effect<string, Error, Dependencies>;
   listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;

@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
-import { getOwnerAvatarUrl, getOwnerInitials, getOwnerLogin } from '../../lib/forge-owner';
+import { useState, type ReactNode } from 'react';
+import { getOwnerInitials, getOwnerLogin } from '../../lib/forge-owner';
 import { hostNameFromInput } from '../../lib/forge-links';
+import { cx } from '../../lib/cx';
 import {
   formatPullRequestDisplayTitle,
   getDraftIndicatorLabel,
@@ -26,22 +27,75 @@ function getRepoProviderLabel(repo: RepoSummary) {
   return `${repo.provider === 'github' ? 'GitHub' : 'GitLab'} · ${repo.providerAccountLabel}`;
 }
 
-function RepoAvatar({ repo }: { repo: RepoSummary }) {
-  const avatarUrl =
-    repo.avatarUrl ?? getOwnerAvatarUrl(repo.nameWithOwner, repo.provider, repo.host);
-  if (!avatarUrl) {
-    return (
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
-        {getOwnerInitials(repo.nameWithOwner)}
-      </div>
-    );
+function AvatarFallback({ className, initials }: { className?: string; initials: string }) {
+  return (
+    <div
+      className={cx(
+        'flex size-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700',
+        className,
+      )}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function AvatarImage({
+  alt,
+  fallback,
+  src,
+}: {
+  alt: string;
+  fallback: ReactNode;
+  src: string | null;
+}) {
+  if (!src) {
+    return fallback;
   }
 
+  return <AvatarImageInner alt={alt} fallback={fallback} key={src} src={src} />;
+}
+
+function AvatarImageInner({
+  alt,
+  fallback,
+  src,
+}: {
+  alt: string;
+  fallback: ReactNode;
+  src: string;
+}) {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+
   return (
-    <img
+    <div className="relative size-7 shrink-0">
+      {status !== 'loaded' ? fallback : null}
+      <img
+        alt={alt}
+        className={cx(
+          'absolute inset-0 size-7 rounded-full object-cover transition-opacity',
+          status === 'loaded' ? 'opacity-100' : 'opacity-0',
+        )}
+        loading="lazy"
+        onError={() => {
+          setStatus('error');
+        }}
+        onLoad={() => {
+          setStatus('loaded');
+        }}
+        src={src}
+      />
+    </div>
+  );
+}
+
+function RepoAvatar({ repo }: { repo: RepoSummary }) {
+  const avatarUrl = repo.avatarUrl;
+  const initials = getOwnerInitials(repo.nameWithOwner);
+  return (
+    <AvatarImage
       alt={`${getOwnerLogin(repo.nameWithOwner)} avatar`}
-      className="size-7 shrink-0 rounded-full object-cover"
-      loading="lazy"
+      fallback={<AvatarFallback initials={initials} />}
       src={avatarUrl}
     />
   );

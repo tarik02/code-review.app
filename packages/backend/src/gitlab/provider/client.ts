@@ -1,3 +1,4 @@
+import { HttpClientRequest } from '@effect/platform';
 import { Effect } from 'effect';
 import { Buffer } from 'node:buffer';
 import type {
@@ -49,6 +50,7 @@ import {
   type GitLabProject,
 } from '../client/schemas.ts';
 import { mergeRequestWebUrl, OVERVIEW_MERGE_REQUEST_SCOPES, toChangedFile } from './schemas.ts';
+import { prepareGitLabProviderImageUrl } from './images.ts';
 
 function isNotAuthenticatedMessage(message: string) {
   const normalized = message.toLowerCase();
@@ -122,7 +124,10 @@ function repoSummaryFromProject(
     nameWithOwner: project.path_with_namespace,
     description: project.description,
     isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== 'public',
-    avatarUrl: project.avatar_url,
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, project.avatar_url, {
+      path: project.path_with_namespace,
+      type: 'project',
+    }),
   } satisfies RepoSummary;
 }
 
@@ -140,7 +145,10 @@ function namespaceSummaryFromGroup(
     path: group.full_path,
     name: group.name || group.path || group.full_path,
     kind: 'group',
-    avatarUrl: group.avatar_url ?? null,
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, group.avatar_url, {
+      path: group.full_path,
+      type: 'group',
+    }),
     webUrl: group.web_url ?? `https://${host}/${group.full_path}`,
   } satisfies NamespaceSummary;
 }
@@ -195,11 +203,11 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
   };
 }
 
-function toApprovalActor(approval: typeof GitLabApprovedByEntrySchema.Type) {
+function toApprovalActor(accountId: string, approval: typeof GitLabApprovedByEntrySchema.Type) {
   return {
     login: approval.user.username,
     name: approval.user.name,
-    avatarUrl: approval.user.avatar_url ?? null,
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, approval.user.avatar_url),
     url: approval.user.web_url ?? null,
     approvedAt: approval.approved_at ?? null,
   } satisfies PullRequestApprovalState['approvedBy'][number];
@@ -398,7 +406,10 @@ function pathFromPosition(position: GitLabPosition | null | undefined) {
   return position?.new_path ?? position?.old_path ?? '';
 }
 
-function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | null {
+function discussionToReviewThread(
+  accountId: string,
+  discussion: GitLabDiscussion,
+): ReviewThread | null {
   const notes = discussion.notes ?? [];
   const rootNote = notes[0];
   if (!rootNote || rootNote.system) return null;
@@ -411,7 +422,7 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
       id,
       databaseId: note.id,
       authorLogin: note.author?.username ?? 'unknown',
-      authorAvatarUrl: note.author?.avatar_url ?? null,
+      authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
       authorAssociation: null,
       body: note.body,
       createdAt: note.created_at,
@@ -445,7 +456,7 @@ function discussionToReviewThread(discussion: GitLabDiscussion): ReviewThread | 
   };
 }
 
-function noteToGlobalReviewThread(note: GitLabNote): ReviewThread {
+function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewThread {
   return {
     id: String(note.id),
     provider: 'gitlab',
@@ -463,7 +474,7 @@ function noteToGlobalReviewThread(note: GitLabNote): ReviewThread {
         id: String(note.id),
         databaseId: note.id,
         authorLogin: note.author?.username ?? 'unknown',
-        authorAvatarUrl: note.author?.avatar_url ?? null,
+        authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
         authorAssociation: null,
         body: note.body,
         createdAt: note.created_at,
@@ -508,6 +519,23 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   );
 
 function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError> {
+  const authorizeRequest: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['authorizeRequest'] = providerEffect(
+    'GitLabProvider.authorizeRequest',
+    'authorizeRequest',
+    function* () {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.accessToken();
+      return (request: HttpClientRequest.HttpClientRequest) =>
+        request.pipe(
+          HttpClientRequest.bearerToken(token),
+          HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+        );
+    },
+  );
+
   const viewerLogin: ForgeProviderEffectContract<
     GitLabApiClient,
     GitLabProviderError
@@ -917,9 +945,18 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
       const approvalState = yield* api.mergeRequestApprovals(repo.path, number);
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'getPullRequestApprovalState' },
+          }),
+        );
+      }
       const currentViewerLogin = yield* viewerLogin();
       const approvedBy = (approvalState.approved_by ?? [])
-        .map(toApprovalActor)
+        .map((approval) => toApprovalActor(token.id, approval))
         .sort(
           (left, right) => Date.parse(right.approvedAt ?? '') - Date.parse(left.approvedAt ?? ''),
         );
@@ -1208,6 +1245,15 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     'listReviewThreads',
     function* (repo: ProviderRepoIdentity, number: number) {
       const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'listReviewThreads' },
+          }),
+        );
+      }
       const threads: ReviewThread[] = [];
       const discussionNoteIds = new Set<number>();
       let discussionsPage = 1;
@@ -1223,7 +1269,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           for (const note of discussion.notes ?? []) {
             discussionNoteIds.add(note.id);
           }
-          const thread = discussionToReviewThread(discussion);
+          const thread = discussionToReviewThread(token.id, discussion);
           if (thread) threads.push(thread);
         }
         discussionsPage += 1;
@@ -1245,7 +1291,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           if (discussionNoteIds.has(note.id)) continue;
           if (note.position != null) continue;
           if (note.type === 'DiffNote') continue;
-          threads.push(noteToGlobalReviewThread(note));
+          threads.push(noteToGlobalReviewThread(token.id, note));
         }
         notesPage += 1;
       }
@@ -1685,6 +1731,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
   );
 
   return {
+    authorizeRequest,
     authStatus,
     viewerLogin,
     listInitialRepos,

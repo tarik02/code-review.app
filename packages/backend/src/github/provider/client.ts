@@ -1,3 +1,4 @@
+import { HttpClientRequest } from '@effect/platform';
 import { Effect } from 'effect';
 import { Buffer } from 'node:buffer';
 import type {
@@ -54,6 +55,7 @@ import {
 } from '../client/schemas.ts';
 import { initialRepoAffiliations } from '../client/routes.ts';
 import { firstGraphQlErrorMessage, toChangedFile } from './schemas.ts';
+import { prepareGitHubProviderImageUrl } from './images.ts';
 
 type UserContext = {
   accountId: string;
@@ -206,7 +208,10 @@ function repoSummaryFromSearch(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.full_name,
+    }),
   };
 }
 
@@ -226,7 +231,10 @@ function repoSummaryFromRest(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.full_name,
+    }),
   };
 }
 
@@ -246,7 +254,10 @@ function repoSummaryFromGraphql(
     nameWithOwner: repo.nameWithOwner,
     description: repo.description,
     isPrivate: repo.isPrivate,
-    avatarUrl: repo.owner?.avatarUrl ?? repo.owner?.avatar_url ?? null,
+    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
+      host,
+      nameWithOwner: repo.nameWithOwner,
+    }),
   };
 }
 
@@ -456,6 +467,23 @@ function toGitHubQualityFinding(
 }
 
 function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitHubProviderError> {
+  const authorizeRequest: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['authorizeRequest'] = providerEffect(
+    'GitHubProvider.authorizeRequest',
+    'authorizeRequest',
+    function* () {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.accessToken();
+      return (request: HttpClientRequest.HttpClientRequest) =>
+        request.pipe(
+          HttpClientRequest.bearerToken(token),
+          HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+        );
+    },
+  );
+
   const ensureUserContext = providerEffect(
     'GitHubProvider.ensureUserContext',
     'ensureUserContext',
@@ -1726,6 +1754,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   );
 
   return {
+    authorizeRequest,
     authStatus,
     viewerLogin,
     listInitialRepos,

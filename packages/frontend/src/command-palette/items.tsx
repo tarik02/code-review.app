@@ -1,6 +1,6 @@
 import { FileCode2Icon, MessageSquareMoreIcon } from 'lucide-react';
-import { usePatchViewerStore } from '../../stores/patch-viewer-store';
-import type { PullRequestSummary, RepoSummary } from '../../types/forge';
+import type { PatchViewerNavigationIntent } from '../stores/patch-viewer-store';
+import type { PullRequestSummary } from '../types/forge';
 import {
   getReviewThreadRefKey,
   getThreadRootComment,
@@ -9,9 +9,9 @@ import {
   isGlobalReviewThread,
   normalizePath,
   type ReviewThread,
-} from '../../lib/review-threads';
-import { getPullRequestStatus } from './forge-search-result-parts';
-import type { CommandPaletteItem } from './command-palette';
+} from '../lib/review-threads';
+import { getPullRequestStatus } from '../components/ui/forge-search-result-parts';
+import type { CommandPaletteItem } from '../components/ui/command-palette';
 
 function ActiveBadge({ label = 'Active' }: { label?: string }) {
   return (
@@ -44,37 +44,12 @@ function formatThreadLocation(thread: ReviewThread) {
   return `${normalizePath(thread.path)} · ${lineLabel}`;
 }
 
-function buildRepoNamespacePrefixes(nameWithOwner: string) {
-  const segments = nameWithOwner.split('/').filter(Boolean);
-  if (segments.length < 2) {
-    return [];
-  }
-
-  const prefixes: string[] = [];
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    prefixes.push(segments.slice(0, index + 1).join('/'));
-  }
-
-  return prefixes;
-}
-
-function repoMatchesNamespaceFilter(
-  repo: Pick<RepoSummary, 'nameWithOwner'>,
-  namespacePath: string | null,
-) {
-  if (!namespacePath) {
-    return true;
-  }
-
-  return repo.nameWithOwner === namespacePath || repo.nameWithOwner.startsWith(`${namespacePath}/`);
-}
-
 function buildPullRequestContentPaletteItems(args: {
   changedFiles: string[];
   patchViewerSessionKey: string | null;
+  requestNavigationIntent: (sessionKey: string | null, intent: PatchViewerNavigationIntent) => void;
   reviewThreads: ReviewThread[];
 }) {
-  const requestNavigationIntent = usePatchViewerStore.getState().requestNavigationIntent;
   const fileItems: CommandPaletteItem[] = args.changedFiles.map((path) => {
     const basename = path.split('/').at(-1) ?? path;
     return {
@@ -89,7 +64,7 @@ function buildPullRequestContentPaletteItems(args: {
           return;
         }
 
-        requestNavigationIntent(args.patchViewerSessionKey, {
+        args.requestNavigationIntent(args.patchViewerSessionKey, {
           kind: 'file',
           path,
         });
@@ -133,7 +108,7 @@ function buildPullRequestContentPaletteItems(args: {
           return;
         }
 
-        requestNavigationIntent(args.patchViewerSessionKey, {
+        args.requestNavigationIntent(args.patchViewerSessionKey, {
           kind: 'thread',
           threadKey: getReviewThreadRefKey(thread),
           filePath: isGlobalReviewThread(thread) ? null : normalizePath(thread.path),
@@ -147,10 +122,4 @@ function buildPullRequestContentPaletteItems(args: {
   return [...fileItems, ...threadItems];
 }
 
-export {
-  ActiveBadge,
-  PullRequestStatusBadge,
-  buildPullRequestContentPaletteItems,
-  buildRepoNamespacePrefixes,
-  repoMatchesNamespaceFilter,
-};
+export { ActiveBadge, PullRequestStatusBadge, buildPullRequestContentPaletteItems };

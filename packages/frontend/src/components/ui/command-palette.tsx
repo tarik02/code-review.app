@@ -199,7 +199,11 @@ function CommandPalette({
     return [...groups.values()];
   }, [filteredItems]);
 
-  function handleQueryChange(value: string) {
+  function handleQueryChange(value: string, eventDetails: { reason: string }) {
+    if (eventDetails.reason !== 'input-change' && eventDetails.reason !== 'input-clear') {
+      return;
+    }
+
     if (query !== undefined) {
       onQueryChange?.(value);
       return;

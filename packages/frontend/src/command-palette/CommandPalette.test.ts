@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { buildPullRequestContentPaletteItems } from './app-command-palettes';
+import { buildPullRequestContentPaletteItems } from './items';
 
 describe('buildPullRequestContentPaletteItems', () => {
+  const requestNavigationIntent = () => {};
+
   it('builds file items before comment items', () => {
     const items = buildPullRequestContentPaletteItems({
       changedFiles: ['src/app.ts', 'src/lib/utils.ts'],
       patchViewerSessionKey: 'pr-1',
+      requestNavigationIntent,
       reviewThreads: [],
     });
 
@@ -19,6 +22,7 @@ describe('buildPullRequestContentPaletteItems', () => {
     const items = buildPullRequestContentPaletteItems({
       changedFiles: [],
       patchViewerSessionKey: 'pr-1',
+      requestNavigationIntent,
       reviewThreads: [
         {
           id: 'thread-1',

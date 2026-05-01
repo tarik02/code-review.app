@@ -9,7 +9,7 @@ import type {
   RepoSummary,
 } from '../../types/forge';
 import { AppUpdater } from './app-updater';
-import { CommandPaletteLaunchers } from './command-palette-launchers';
+import { CommandPaletteLaunchers } from '../../command-palette/Launchers';
 import { PullRequestListCard, getRepoLabel } from './pull-request-list-card';
 import { ScrollArea } from './scroll-area';
 import { TopBar } from './top-bar';

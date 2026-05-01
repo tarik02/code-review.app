@@ -1,7 +1,7 @@
 import { Link, Outlet, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { ArrowLeftIcon } from 'lucide-react';
-import { SettingsCommandPalettes } from '../../components/ui/app-command-palettes';
+import { SettingsCommandPalettes } from '../../command-palette/CommandPalette';
 import { Button } from '../../components/ui/button';
 import { TopBar } from '../../components/ui/top-bar';
 import { SETTINGS_RETURN_HREF_STORAGE_KEY } from '../../lib/settings-return-location';
