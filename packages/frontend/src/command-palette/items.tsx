@@ -1,4 +1,5 @@
 import { FileCode2Icon, MessageSquareMoreIcon } from 'lucide-react';
+import { getCommentPreviewText } from '../lib/comment-preview';
 import type { PatchViewerNavigationIntent } from '../stores/patch-viewer-store';
 import type { PullRequestSummary } from '../types/forge';
 import {
@@ -74,7 +75,7 @@ function buildPullRequestContentPaletteItems(args: {
 
   const threadItems: CommandPaletteItem[] = args.reviewThreads.map((thread) => {
     const rootComment = getThreadRootComment(thread);
-    const preview = rootComment?.body.trim() || 'Open comment thread';
+    const preview = getCommentPreviewText(rootComment?.body ?? '') || 'Open comment thread';
     const author = rootComment?.authorLogin ?? 'unknown';
     const statusLabel = [
       isGlobalReviewThread(thread) ? 'global' : null,

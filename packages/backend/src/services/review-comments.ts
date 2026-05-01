@@ -135,10 +135,28 @@ const makeReviewCommentService = Effect.gen(function* () {
   ) {
     const mergedThreads = threads.map((thread) => ({
       ...thread,
-      comments: [...thread.comments],
+      comments: thread.comments.map((comment) => ({ ...comment })),
     }));
+    const existingCommentsById = new Map<
+      string,
+      { thread: ReviewThread; comment: ReviewComment }
+    >();
+    for (const thread of mergedThreads) {
+      for (const comment of thread.comments) {
+        existingCommentsById.set(comment.id, { thread, comment });
+      }
+    }
 
     for (const pending of pendingComments) {
+      if (pending.providerCommentId) {
+        const existingComment = existingCommentsById.get(pending.providerCommentId);
+        if (existingComment) {
+          existingComment.comment.isPending = true;
+          existingComment.thread.isPending = true;
+          continue;
+        }
+      }
+
       if (pending.kind !== 'reply' || !pending.replyToThreadId) {
         const targetThread =
           pending.kind === 'reply' && pending.replyToCommentId != null
@@ -151,17 +169,30 @@ const makeReviewCommentService = Effect.gen(function* () {
             targetThread.comments.find((comment) => comment.replyToId === null)?.id ??
             targetThread.comments[0]?.id ??
             null;
-          targetThread.comments.push(pendingToReviewComment(pending, viewerLogin, rootCommentId));
+          const pendingComment = pendingToReviewComment(pending, viewerLogin, rootCommentId);
+          targetThread.comments.push(pendingComment);
+          existingCommentsById.set(pendingComment.id, {
+            thread: targetThread,
+            comment: pendingComment,
+          });
           continue;
         }
 
-        mergedThreads.push(pendingToReviewThread(pending, viewerLogin));
+        const pendingThread = pendingToReviewThread(pending, viewerLogin);
+        mergedThreads.push(pendingThread);
+        for (const comment of pendingThread.comments) {
+          existingCommentsById.set(comment.id, { thread: pendingThread, comment });
+        }
         continue;
       }
 
       const targetThread = mergedThreads.find((thread) => thread.id === pending.replyToThreadId);
       if (!targetThread) {
-        mergedThreads.push(pendingToReviewThread(pending, viewerLogin));
+        const pendingThread = pendingToReviewThread(pending, viewerLogin);
+        mergedThreads.push(pendingThread);
+        for (const comment of pendingThread.comments) {
+          existingCommentsById.set(comment.id, { thread: pendingThread, comment });
+        }
         continue;
       }
 
@@ -169,7 +200,12 @@ const makeReviewCommentService = Effect.gen(function* () {
         targetThread.comments.find((comment) => comment.replyToId === null)?.id ??
         targetThread.comments[0]?.id ??
         null;
-      targetThread.comments.push(pendingToReviewComment(pending, viewerLogin, rootCommentId));
+      const pendingComment = pendingToReviewComment(pending, viewerLogin, rootCommentId);
+      targetThread.comments.push(pendingComment);
+      existingCommentsById.set(pendingComment.id, {
+        thread: targetThread,
+        comment: pendingComment,
+      });
     }
 
     return mergedThreads;
@@ -267,8 +303,12 @@ const makeReviewCommentService = Effect.gen(function* () {
       newPath: input.newPath,
       line: input.line,
       side: input.side,
+      oldLine: input.oldLine,
+      newLine: input.newLine,
       startLine: input.startLine,
       startSide: input.startSide,
+      startOldLine: input.startOldLine,
+      startNewLine: input.startNewLine,
       subjectType: input.subjectType,
     });
   });
@@ -347,8 +387,12 @@ const makeReviewCommentService = Effect.gen(function* () {
         newPath: input.newPath,
         line: input.line,
         side: input.side,
+        oldLine: input.oldLine,
+        newLine: input.newLine,
         startLine: input.startLine,
         startSide: input.startSide,
+        startOldLine: input.startOldLine,
+        startNewLine: input.startNewLine,
         subjectType: input.subjectType,
       });
     },

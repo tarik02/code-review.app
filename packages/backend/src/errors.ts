@@ -62,41 +62,6 @@ function ensureError(error: unknown): Error {
   return new Error(String(error), { cause: error });
 }
 
-function summarizeError(error: unknown): unknown {
-  if (error instanceof Error) {
-    const summary: Record<string, unknown> = {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    };
-    for (const [key, value] of Object.entries(error)) {
-      if (key === 'name' || key === 'message' || key === 'stack' || key === 'cause') {
-        continue;
-      }
-
-      summary[key] = summarizeError(value);
-    }
-    if (error.cause !== undefined) {
-      summary.cause = summarizeError(error.cause);
-    }
-    return summary;
-  }
-
-  if (Array.isArray(error)) {
-    return error.map((value) => summarizeError(value));
-  }
-
-  if (typeof error === 'object' && error !== null) {
-    return Object.fromEntries(
-      Object.entries(error).map(([key, value]): [string, unknown] => [key, summarizeError(value)]),
-    );
-  }
-
-  return {
-    message: String(error),
-  };
-}
-
 function formatLogDetails(details: unknown): string {
   return inspect(details, {
     depth: null,
@@ -116,7 +81,6 @@ export {
   ensureError,
   formatLogDetails,
   ProviderError,
-  summarizeError,
   UpdateError,
   ValidationError,
   getErrorMessage,

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PendingReviewSubmitAction } from '../types/forge';
 
 const MAX_PATCH_VIEWER_SESSIONS = 20;
 
@@ -29,6 +30,9 @@ type PatchViewerSessionState = {
   selectedFilePath: string | null;
   pendingScrollPath: string | null;
   scrollTop: number | null;
+  pendingReviewSummary: string;
+  pendingReviewAction: PendingReviewSubmitAction;
+  isPendingReviewTypeSelectOpen: boolean;
   threadExpansionByKey: Record<string, boolean | undefined>;
   highlightedThreadKey: string | null;
   highlightedThreadVersion: number;
@@ -46,6 +50,10 @@ type PatchViewerStore = {
   setSelectedFilePath: (sessionKey: string | null, path: string | null) => void;
   setPendingScrollPath: (sessionKey: string | null, path: string | null) => void;
   setScrollTop: (sessionKey: string | null, scrollTop: number | null) => void;
+  setPendingReviewSummary: (sessionKey: string | null, summary: string) => void;
+  setPendingReviewAction: (sessionKey: string | null, action: PendingReviewSubmitAction) => void;
+  setPendingReviewTypeSelectOpen: (sessionKey: string | null, open: boolean) => void;
+  resetPendingReviewInput: (sessionKey: string | null) => void;
   setThreadExpanded: (sessionKey: string | null, threadKey: string, expanded: boolean) => void;
   highlightThread: (sessionKey: string | null, threadKey: string | null) => void;
   clearNavigationIntent: (sessionKey: string | null, version: number) => void;
@@ -66,6 +74,9 @@ function createPatchViewerSessionState(): PatchViewerSessionState {
     selectedFilePath: null,
     pendingScrollPath: null,
     scrollTop: null,
+    pendingReviewSummary: '',
+    pendingReviewAction: 'comment',
+    isPendingReviewTypeSelectOpen: false,
     threadExpansionByKey: {},
     highlightedThreadKey: null,
     highlightedThreadVersion: 0,
@@ -181,6 +192,25 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
   },
   setScrollTop(sessionKey, scrollTop) {
     set((state) => updateSession(state, sessionKey, () => ({ scrollTop })));
+  },
+  setPendingReviewSummary(sessionKey, summary) {
+    set((state) => updateSession(state, sessionKey, () => ({ pendingReviewSummary: summary })));
+  },
+  setPendingReviewAction(sessionKey, action) {
+    set((state) => updateSession(state, sessionKey, () => ({ pendingReviewAction: action })));
+  },
+  setPendingReviewTypeSelectOpen(sessionKey, open) {
+    set((state) =>
+      updateSession(state, sessionKey, () => ({ isPendingReviewTypeSelectOpen: open })),
+    );
+  },
+  resetPendingReviewInput(sessionKey) {
+    set((state) =>
+      updateSession(state, sessionKey, () => ({
+        pendingReviewSummary: '',
+        isPendingReviewTypeSelectOpen: false,
+      })),
+    );
   },
   setThreadExpanded(sessionKey, threadKey, expanded) {
     set((state) =>

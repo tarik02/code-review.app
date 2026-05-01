@@ -4,6 +4,7 @@ type ReviewComment = {
   id: string;
   databaseId: number | null;
   authorLogin: string;
+  authorName?: string | null;
   authorAvatarUrl: string | null;
   authorAssociation: string | null;
   body: string;
@@ -27,6 +28,7 @@ type ReviewThread = {
   side: 'LEFT' | 'RIGHT' | null;
   startSide: 'LEFT' | 'RIGHT' | null;
   subjectType: 'line' | 'file' | 'global' | null;
+  eventType?: 'commented' | 'approved' | 'requested_changes';
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
@@ -100,6 +102,10 @@ function isActiveReviewThread(thread: ReviewThread) {
 
 function isGlobalReviewThread(thread: ReviewThread) {
   return thread.subjectType === 'global';
+}
+
+function isReviewEventThread(thread: ReviewThread) {
+  return thread.eventType != null;
 }
 
 function isFileReviewThread(thread: ReviewThread) {
@@ -228,6 +234,7 @@ export {
   isActiveReviewThread,
   isFileReviewThread,
   isGlobalReviewThread,
+  isReviewEventThread,
   normalizePath,
 };
 export type { FileReviewThreads, ReviewComment, ReviewThread, ReviewThreadAnnotation };

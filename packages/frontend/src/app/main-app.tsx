@@ -279,6 +279,19 @@ function MainApp() {
     () => [...trackedPullRequestEntries, ...overviewPullRequests],
     [overviewPullRequests, trackedPullRequestEntries],
   );
+  const selectedPullRequestSummary = useMemo(() => {
+    if (!selectedPr) {
+      return null;
+    }
+
+    return (
+      commandPaletteLocalPullRequests.find(
+        (entry) =>
+          sameRepoIdentity(entry.repo, selectedPr) &&
+          entry.pullRequest.number === selectedPr.number,
+      )?.pullRequest ?? null
+    );
+  }, [commandPaletteLocalPullRequests, selectedPr]);
 
   const selectedPrKey = selectedPr
     ? `${repoIdentityKey(selectedPr)}#${selectedPr.number}@${selectedPr.headSha}`
@@ -731,6 +744,7 @@ function MainApp() {
           <PatchViewerMain
             selectedPrKey={selectedPrKey}
             selectedPr={selectedPr}
+            selectedPullRequestSummary={selectedPullRequestSummary}
             selectedPatch={selectedPatch}
             selectedBaseSha={selectedPr?.baseSha ?? null}
             isGitDiffMode={diffDataMode === 'git'}
@@ -779,6 +793,7 @@ function MainApp() {
         pendingReview={pendingReview}
         reviewThreads={reviewThreads}
         selectedPr={selectedPr}
+        selectedPullRequestSummary={selectedPullRequestSummary}
         selectedPrKey={selectedPrKey}
         sidebarView={sidebarView}
         setSidebarView={setSidebarView}

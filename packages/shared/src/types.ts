@@ -64,6 +64,8 @@ type PullRequestSummary = {
   url: string;
   headSha: string;
   baseSha: string | null;
+  canApprove?: boolean;
+  canRequestChanges?: boolean;
 };
 
 type OverviewPullRequestSummary = {
@@ -212,6 +214,7 @@ type ReviewComment = {
   id: string;
   databaseId: number | null;
   authorLogin: string;
+  authorName?: string | null;
   authorAvatarUrl: string | null;
   authorAssociation: string | null;
   body: string;
@@ -235,6 +238,7 @@ type ReviewThread = {
   side: ReviewCommentSide | null;
   startSide: ReviewCommentSide | null;
   subjectType: 'file' | 'line' | 'global' | null;
+  eventType?: 'commented' | 'approved' | 'requested_changes';
   comments: ReviewComment[];
   isPending?: boolean;
   isOptimistic?: boolean;
@@ -345,8 +349,12 @@ type CreatePullRequestReviewCommentInput = RepoIdentity & {
   newPath: string;
   line: number | null;
   side: ReviewCommentSide | null;
+  oldLine: number | null;
+  newLine: number | null;
   startLine: number | null;
   startSide: ReviewCommentSide | null;
+  startOldLine: number | null;
+  startNewLine: number | null;
   subjectType: 'file' | 'line' | 'global';
 };
 
@@ -359,8 +367,12 @@ type CreatePendingReviewThreadInput = RepoIdentity & {
   newPath: string;
   line: number | null;
   side: ReviewCommentSide | null;
+  oldLine: number | null;
+  newLine: number | null;
   startLine: number | null;
   startSide: ReviewCommentSide | null;
+  startOldLine: number | null;
+  startNewLine: number | null;
   subjectType: 'file' | 'line';
 };
 

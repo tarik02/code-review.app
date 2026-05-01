@@ -29,6 +29,7 @@ export default defineConfig({
     },
     build: {
       externalizeDeps: false,
+      sourcemap: true,
       rolldownOptions: {
         external: nativeExternalPackages,
         input: resolve('src/main/index.ts'),
@@ -38,6 +39,7 @@ export default defineConfig({
   preload: {
     build: {
       externalizeDeps: false,
+      sourcemap: true,
       rolldownOptions: {
         input: resolve('src/preload/index.ts'),
         output: {

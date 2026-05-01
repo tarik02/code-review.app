@@ -15,6 +15,7 @@ import type { PullRequestApprovalActor, PullRequestApprovalState } from '../../t
 
 type PullRequestApprovalSummaryProps = {
   approvalState: PullRequestApprovalState | null;
+  canApprove: boolean;
   isLoading: boolean;
   error: string;
   isApprovePending: boolean;
@@ -62,6 +63,7 @@ function ApprovalAvatar({
 
 function PullRequestApprovalSummary({
   approvalState,
+  canApprove,
   isLoading,
   error,
   isApprovePending,
@@ -89,7 +91,7 @@ function PullRequestApprovalSummary({
 
   return (
     <>
-      <div className="border-b border-ink-200 px-4 pb-3 pt-3">
+      <div className="px-3 pb-3 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -134,11 +136,11 @@ function PullRequestApprovalSummary({
 
           {approvalState ? (
             <div className="flex shrink-0 items-center gap-2">
-              {!approvalState.viewerApproved ? (
+              {!approvalState.viewerApproved && canApprove ? (
                 <Button disabled={isBusy} onClick={() => void onApprove()} size="sm" type="button">
                   {isApprovePending ? 'Approving...' : 'Approve'}
                 </Button>
-              ) : (
+              ) : approvalState.viewerApproved ? (
                 <Button
                   disabled={isBusy}
                   onClick={() => {
@@ -154,7 +156,7 @@ function PullRequestApprovalSummary({
                 >
                   {isRemovePending ? 'Removing...' : 'Remove approval'}
                 </Button>
-              )}
+              ) : null}
             </div>
           ) : null}
         </div>

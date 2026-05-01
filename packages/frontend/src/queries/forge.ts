@@ -441,8 +441,12 @@ async function createPendingReviewThread(input: CreatePendingReviewThreadInput) 
     newPath: input.newPath,
     line: input.line,
     side: input.side,
+    oldLine: input.oldLine,
+    newLine: input.newLine,
     startLine: input.startLine,
     startSide: input.startSide,
+    startOldLine: input.startOldLine,
+    startNewLine: input.startNewLine,
     subjectType: input.subjectType,
   });
 }
@@ -526,8 +530,12 @@ async function createPullRequestReviewComment(input: CreatePullRequestReviewComm
     newPath: input.newPath,
     line: input.line,
     side: input.side,
+    oldLine: input.oldLine,
+    newLine: input.newLine,
     startLine: input.startLine,
     startSide: input.startSide,
+    startOldLine: input.startOldLine,
+    startNewLine: input.startNewLine,
     subjectType: input.subjectType,
   });
 }

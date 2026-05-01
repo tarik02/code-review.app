@@ -30,12 +30,11 @@ import { FileDiff, VirtualizerContext } from '@pierre/diffs/react';
 import { ChangedFilesTree } from './changed-files-tree';
 import { AppearanceBackground } from './appearance-background';
 import { PatchScrollVirtualizer } from './patch-scroll-virtualizer';
-import { PullRequestApprovalSummary } from './pull-request-approval-summary';
+import { PendingReviewBar } from './pending-review-bar';
 import { PullRequestQualitySummary } from './pull-request-quality-summary';
 import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-editor';
 import { ReviewThreadCard } from './review-thread-card';
 import { ScrollArea } from './scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 import { TopBar, TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
   usePullRequestApprovalMutations,
@@ -70,6 +69,7 @@ import {
 import type {
   FileStatsEntry,
   ForgeProviderKind,
+  PullRequestSummary,
   PrFileChangeType,
   PrFileContents,
   PendingReviewState,
@@ -155,6 +155,7 @@ type PatchLineAnnotation =
 type PatchViewerMainProps = {
   selectedPrKey: string | null;
   selectedPr: SelectedPullRequest | null;
+  selectedPullRequestSummary: PullRequestSummary | null;
   selectedPatch: SelectedPatch | null;
   selectedBaseSha: string | null;
   isGitDiffMode: boolean;
@@ -409,6 +410,62 @@ function getDiffLineContent(fileDiff: FileDiffMetadata, side: ReviewCommentSide,
 
     if (line >= startLine && line < startLine + lineCount) {
       return normalizeDiffLineText(lines[lineIndex + line - startLine] ?? '');
+    }
+  }
+
+  return null;
+}
+
+function resolveDiffLinePosition(
+  fileDiff: FileDiffMetadata,
+  side: ReviewCommentSide,
+  line: number,
+): { oldLine: number | null; newLine: number | null } | null {
+  for (const hunk of fileDiff.hunks) {
+    for (const content of hunk.hunkContent) {
+      if (content.type === 'context') {
+        const additionStartLine = content.additionLineIndex + 1;
+        const deletionStartLine = content.deletionLineIndex + 1;
+        const additionEndLine = additionStartLine + content.lines - 1;
+        const deletionEndLine = deletionStartLine + content.lines - 1;
+
+        if (side === 'RIGHT' && line >= additionStartLine && line <= additionEndLine) {
+          const offset = line - additionStartLine;
+          return {
+            oldLine: deletionStartLine + offset,
+            newLine: additionStartLine + offset,
+          };
+        }
+
+        if (side === 'LEFT' && line >= deletionStartLine && line <= deletionEndLine) {
+          const offset = line - deletionStartLine;
+          return {
+            oldLine: deletionStartLine + offset,
+            newLine: additionStartLine + offset,
+          };
+        }
+
+        continue;
+      }
+
+      const additionStartLine = content.additionLineIndex + 1;
+      const deletionStartLine = content.deletionLineIndex + 1;
+      const additionEndLine = additionStartLine + content.additions - 1;
+      const deletionEndLine = deletionStartLine + content.deletions - 1;
+
+      if (side === 'RIGHT' && line >= additionStartLine && line <= additionEndLine) {
+        return {
+          oldLine: null,
+          newLine: line,
+        };
+      }
+
+      if (side === 'LEFT' && line >= deletionStartLine && line <= deletionEndLine) {
+        return {
+          oldLine: line,
+          newLine: null,
+        };
+      }
     }
   }
 
@@ -1224,123 +1281,6 @@ function ReviewThreadsPanel({
   );
 }
 
-function PendingReviewBar({
-  count,
-  error,
-  isLoading,
-  isPublishing,
-  isDiscarding,
-  provider,
-  onPublish,
-  onDiscard,
-}: {
-  count: number;
-  error: string;
-  isLoading: boolean;
-  isPublishing: boolean;
-  isDiscarding: boolean;
-  provider: ForgeProviderKind;
-  onPublish: (action: PendingReviewSubmitAction, summary: string) => void;
-  onDiscard: () => void;
-}) {
-  const [action, setAction] = useState<PendingReviewSubmitAction>('comment');
-  const [summary, setSummary] = useState('');
-  const [isReviewTypeSelectOpen, setReviewTypeSelectOpen] = useState(false);
-
-  const isGitLab = provider === 'gitlab';
-  const submitReviewTypeOptions: Array<{ value: PendingReviewSubmitAction; label: string }> = [
-    { value: 'comment', label: 'Comment' },
-    { value: 'approve', label: 'Approve' },
-    { value: 'request_changes', label: 'Request changes' },
-  ];
-
-  function publishReview() {
-    onPublish(action, summary);
-  }
-
-  if (count === 0 && !error) {
-    return null;
-  }
-
-  return (
-    <div className="group pointer-events-auto flex w-[min(44rem,calc(100vw-3rem))] flex-col gap-0 overflow-hidden rounded-lg border border-ink-200 bg-canvas/95 text-sm shadow-lg backdrop-blur transition-all duration-150 ease-out">
-      {isGitLab ? (
-        <div
-          className={cx(
-            'grid max-h-0 grid-rows-[0fr] border-b border-transparent px-3 opacity-0 transition-all duration-150 ease-out group-focus-within:max-h-64 group-focus-within:grid-rows-[1fr] group-focus-within:border-ink-200 group-focus-within:pb-3 group-focus-within:pt-3 group-focus-within:opacity-100 group-hover:max-h-64 group-hover:grid-rows-[1fr] group-hover:border-ink-200 group-hover:pb-3 group-hover:pt-3 group-hover:opacity-100',
-            isReviewTypeSelectOpen &&
-              'max-h-64 grid-rows-[1fr] border-ink-200 pb-3 pt-3 opacity-100',
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div className="grid grid-cols-[11rem_minmax(0,1fr)] gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-ink-600">Review type</span>
-                <Select
-                  disabled={isPublishing || isDiscarding}
-                  items={submitReviewTypeOptions}
-                  open={isReviewTypeSelectOpen}
-                  value={action}
-                  onOpenChange={(open) => setReviewTypeSelectOpen(open)}
-                  onValueChange={(value) => setAction(value as PendingReviewSubmitAction)}
-                >
-                  <SelectTrigger className="w-full bg-canvas text-ink-900" size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="start">
-                    {submitReviewTypeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="flex min-w-0 flex-col gap-1.5">
-                <span className="text-xs font-medium text-ink-600">Notes</span>
-                <textarea
-                  className="min-h-20 resize-y rounded-md border border-ink-200 bg-canvas px-2 py-1.5 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus:border-ink-400"
-                  disabled={isPublishing || isDiscarding}
-                  placeholder="Add notes"
-                  value={summary}
-                  onChange={(event) => setSummary(event.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="font-medium text-ink-900">
-            {count} pending review {count === 1 ? 'comment' : 'comments'}
-          </span>
-          {isLoading ? <span className="text-xs text-ink-500">Refreshing...</span> : null}
-          {error ? <span className="text-xs text-danger-600">{error}</span> : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="rounded-md border border-ink-200 bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:bg-canvasDark disabled:opacity-60"
-            disabled={count === 0 || isPublishing || isDiscarding}
-            onClick={onDiscard}
-            type="button"
-          >
-            {isDiscarding ? 'Discarding...' : 'Discard'}
-          </button>
-          <button
-            className="rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-60 dark:bg-neutral-100 dark:text-neutral-950 dark:hover:bg-neutral-200"
-            disabled={count === 0 || isPublishing || isDiscarding}
-            onClick={publishReview}
-            type="button"
-          >
-            {isPublishing ? 'Submitting...' : 'Submit review'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PatchFileDiffItem({
   fileDiff,
   fileIndex,
@@ -1496,14 +1436,20 @@ function PatchFileDiffItem({
     const startGithubSide = toGithubSide(startsFirst ? startSide : endSide);
     const endLine = startsFirst ? range.end : range.start;
     const endGithubSide = toGithubSide(startsFirst ? endSide : startSide);
+    const startPosition = resolveDiffLinePosition(fileDiff, startGithubSide, startLine);
+    const endPosition = resolveDiffLinePosition(fileDiff, endGithubSide, endLine);
 
     openNewEditor(reviewEditorSessionKey, {
       type: 'line',
       path: fileDiff.name,
       line: endLine,
       side: endGithubSide,
+      oldLine: endPosition?.oldLine ?? null,
+      newLine: endPosition?.newLine ?? null,
       startLine: startLine !== endLine ? startLine : null,
       startSide: startLine !== endLine ? startGithubSide : null,
+      startOldLine: startLine !== endLine ? (startPosition?.oldLine ?? null) : null,
+      startNewLine: startLine !== endLine ? (startPosition?.newLine ?? null) : null,
     });
   }
 
@@ -1974,6 +1920,7 @@ function PatchFileDiffItem({
 function PatchViewerMain({
   selectedPrKey,
   selectedPr,
+  selectedPullRequestSummary,
   selectedPatch,
   selectedBaseSha,
   isGitDiffMode,
@@ -2020,6 +1967,7 @@ function PatchViewerMain({
   const setScrollTop = usePatchViewerStore((state) => state.setScrollTop);
   const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
   const recordHunkExpansion = usePatchViewerStore((state) => state.recordHunkExpansion);
+  const resetPendingReviewInput = usePatchViewerStore((state) => state.resetPendingReviewInput);
   const setEditorError = useReviewCommentEditorStore((state) => state.setEditorError);
   const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
@@ -2552,8 +2500,12 @@ function PatchViewerMain({
           newPath: '',
           line: null,
           side: null,
+          oldLine: null,
+          newLine: null,
           startLine: null,
           startSide: null,
+          startOldLine: null,
+          startNewLine: null,
           subjectType: 'global',
         });
       } else if (target.type === 'global') {
@@ -2576,8 +2528,12 @@ function PatchViewerMain({
           newPath: target.type === 'file' ? target.newPath : target.path,
           line: target.type === 'line' ? target.line : null,
           side: target.type === 'line' ? target.side : null,
+          oldLine: target.type === 'line' ? target.oldLine : null,
+          newLine: target.type === 'line' ? target.newLine : null,
           startLine: target.type === 'line' ? target.startLine : null,
           startSide: target.type === 'line' ? target.startSide : null,
+          startOldLine: target.type === 'line' ? target.startOldLine : null,
+          startNewLine: target.type === 'line' ? target.startNewLine : null,
           subjectType: target.type,
         });
       }
@@ -2626,8 +2582,12 @@ function PatchViewerMain({
           target.type === 'file' ? target.newPath : target.type === 'line' ? target.path : '',
         line: target.type === 'line' ? target.line : null,
         side: target.type === 'line' ? target.side : null,
+        oldLine: target.type === 'line' ? target.oldLine : null,
+        newLine: target.type === 'line' ? target.newLine : null,
         startLine: target.type === 'line' ? target.startLine : null,
         startSide: target.type === 'line' ? target.startSide : null,
+        startOldLine: target.type === 'line' ? target.startOldLine : null,
+        startNewLine: target.type === 'line' ? target.startNewLine : null,
         subjectType: target.type,
       });
       closeEditor(reviewEditorSessionKey, editorId);
@@ -2666,8 +2626,12 @@ function PatchViewerMain({
           newPath: '',
           line: null,
           side: null,
+          oldLine: null,
+          newLine: null,
           startLine: null,
           startSide: null,
+          startOldLine: null,
+          startNewLine: null,
           subjectType: 'global',
         });
         return;
@@ -2712,8 +2676,12 @@ function PatchViewerMain({
         newPath: '',
         line: null,
         side: null,
+        oldLine: null,
+        newLine: null,
         startLine: null,
         startSide: null,
+        startOldLine: null,
+        startNewLine: null,
         subjectType: 'global',
       });
       return;
@@ -2865,6 +2833,7 @@ function PatchViewerMain({
       number: selectedPatch.number,
       summary,
     });
+    resetPendingReviewInput(patchViewerSessionKey);
   }
 
   async function handleDiscardPendingReview() {
@@ -2878,6 +2847,8 @@ function PatchViewerMain({
   }
 
   const pendingReviewCount = pendingReview.comments.length;
+  const canApprove = selectedPullRequestSummary?.canApprove ?? true;
+  const canRequestChanges = selectedPullRequestSummary?.canRequestChanges ?? true;
 
   if (!hasSelection) {
     return (
@@ -2934,30 +2905,6 @@ function PatchViewerMain({
                   </div>
                 ) : null}
 
-                {hasSelection ? (
-                  <PullRequestApprovalSummary
-                    approvalState={approvalState}
-                    error={approvalStateError}
-                    isApprovePending={approveMutation.isPending}
-                    isLoading={isApprovalStateLoading}
-                    isRemovePending={removeApprovalMutation.isPending}
-                    onApprove={async () => {
-                      if (!selectedPr) {
-                        return;
-                      }
-
-                      await approveMutation.mutateAsync(selectedPr);
-                    }}
-                    onRemoveApproval={async () => {
-                      if (!selectedPr) {
-                        return;
-                      }
-
-                      await removeApprovalMutation.mutateAsync(selectedPr);
-                    }}
-                  />
-                ) : null}
-
                 {hasSelection && !isPatchLoading ? (
                   <PullRequestQualitySummary
                     displayedFileCount={displayedQualityFileCount}
@@ -2980,112 +2927,132 @@ function PatchViewerMain({
                 ) : null}
 
                 {!isPatchLoading && !patchError && selectedPatch ? (
-                  <div className="flex h-full min-h-[50vh] flex-col md:min-h-full">
-                    <PatchFileDiffItemContext.Provider
-                      value={{
-                        defaultReviewEditorMode,
-                        deletingCommentIds,
-                        patchViewerSessionKey,
-                        resolvingThreadId,
-                        diffNavigator: navigator.diff,
-                        isInactiveFileCommentsExpanded,
-                        parsedFileDiffs: parsedPatch.fileDiffs,
-                        qualityFindingsByFile,
-                        registerFileCommentsSection,
-                        registerThreadAnchor,
-                        reviewEditorSessionKey,
-                        reviewThreadsByFile,
-                        scrollToFileCommentsSection,
-                        selectedBaseSha,
-                        selectedPatch,
-                        selectedProvider,
-                        setInactiveFileCommentsExpanded,
-                        handleDeleteComment,
-                        viewerLogin,
-                        handleDeletePendingComment,
-                        handleEditComment,
-                        handleFileDiffPostRender,
-                        handleReplyToThread,
-                        handleReplyToThreadNow,
-                        handleSetThreadResolved,
-                        handleSubmitDraftComment,
-                        handleSubmitDraftCommentNow,
-                      }}
-                    >
-                      <div className="flex flex-col bg-white dark:bg-surface">
-                        <GlobalCommentsSection
-                          defaultReviewEditorMode={defaultReviewEditorMode}
-                          deletingCommentIds={deletingCommentIds}
-                          patchViewerSessionKey={patchViewerSessionKey}
-                          resolvingThreadId={resolvingThreadId}
-                          onDeleteComment={handleDeleteComment}
-                          isLoading={isReviewThreadsLoading}
-                          onDeletePendingComment={handleDeletePendingComment}
-                          onEditComment={handleEditComment}
-                          onOpenNewComment={() => {
-                            useReviewCommentEditorStore
-                              .getState()
-                              .openNewEditor(reviewEditorSessionKey, {
-                                type: 'global',
-                              });
-                            globalCommentsSectionNodeRef.current?.scrollIntoView({
-                              behavior: 'auto',
-                              block: 'start',
-                              inline: 'nearest',
+                  <PatchFileDiffItemContext.Provider
+                    value={{
+                      defaultReviewEditorMode,
+                      deletingCommentIds,
+                      patchViewerSessionKey,
+                      resolvingThreadId,
+                      diffNavigator: navigator.diff,
+                      isInactiveFileCommentsExpanded,
+                      parsedFileDiffs: parsedPatch.fileDiffs,
+                      qualityFindingsByFile,
+                      registerFileCommentsSection,
+                      registerThreadAnchor,
+                      reviewEditorSessionKey,
+                      reviewThreadsByFile,
+                      scrollToFileCommentsSection,
+                      selectedBaseSha,
+                      selectedPatch,
+                      selectedProvider,
+                      setInactiveFileCommentsExpanded,
+                      handleDeleteComment,
+                      viewerLogin,
+                      handleDeletePendingComment,
+                      handleEditComment,
+                      handleFileDiffPostRender,
+                      handleReplyToThread,
+                      handleReplyToThreadNow,
+                      handleSetThreadResolved,
+                      handleSubmitDraftComment,
+                      handleSubmitDraftCommentNow,
+                    }}
+                  >
+                    <div className="grow flex flex-col bg-white dark:bg-surface">
+                      <GlobalCommentsSection
+                        defaultReviewEditorMode={defaultReviewEditorMode}
+                        deletingCommentIds={deletingCommentIds}
+                        patchViewerSessionKey={patchViewerSessionKey}
+                        resolvingThreadId={resolvingThreadId}
+                        onDeleteComment={handleDeleteComment}
+                        isLoading={isReviewThreadsLoading}
+                        onDeletePendingComment={handleDeletePendingComment}
+                        onEditComment={handleEditComment}
+                        onOpenNewComment={() => {
+                          useReviewCommentEditorStore
+                            .getState()
+                            .openNewEditor(reviewEditorSessionKey, {
+                              type: 'global',
                             });
-                          }}
-                          onReplyToThread={handleReplyToThread}
-                          onReplyToThreadNow={handleReplyToThreadNow}
-                          onSetThreadResolved={handleSetThreadResolved}
-                          onSubmitDraftComment={handleSubmitDraftComment}
-                          onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
-                          portalRootId={globalCommentsPortalRootId}
-                          provider={selectedProvider}
-                          registerSection={registerGlobalCommentsSection}
-                          registerThreadAnchor={registerThreadAnchor}
-                          reviewEditorSessionKey={reviewEditorSessionKey}
-                          threads={globalReviewThreads}
-                          viewerLogin={viewerLogin}
-                        />
+                          globalCommentsSectionNodeRef.current?.scrollIntoView({
+                            behavior: 'auto',
+                            block: 'start',
+                            inline: 'nearest',
+                          });
+                        }}
+                        onReplyToThread={handleReplyToThread}
+                        onReplyToThreadNow={handleReplyToThreadNow}
+                        onSetThreadResolved={handleSetThreadResolved}
+                        onSubmitDraftComment={handleSubmitDraftComment}
+                        onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
+                        portalRootId={globalCommentsPortalRootId}
+                        provider={selectedProvider}
+                        registerSection={registerGlobalCommentsSection}
+                        registerThreadAnchor={registerThreadAnchor}
+                        reviewEditorSessionKey={reviewEditorSessionKey}
+                        threads={globalReviewThreads}
+                        viewerLogin={viewerLogin}
+                      />
 
-                        {parsedPatch.parseError ? (
-                          <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
-                            {parsedPatch.parseError}
-                          </div>
-                        ) : parsedPatch.fileDiffs.length === 0 ? (
-                          <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
-                            No diff content.
-                          </div>
-                        ) : (
-                          parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
-                            <PatchFileDiffItem
-                              fileDiff={fileDiff}
-                              fileIndex={fileIndex}
-                              key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
-                            />
-                          ))
-                        )}
+                      {parsedPatch.parseError ? (
+                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
+                          {parsedPatch.parseError}
+                        </div>
+                      ) : parsedPatch.fileDiffs.length === 0 ? (
+                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
+                          No diff content.
+                        </div>
+                      ) : (
+                        parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
+                          <PatchFileDiffItem
+                            fileDiff={fileDiff}
+                            fileIndex={fileIndex}
+                            key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
+                          />
+                        ))
+                      )}
+
+                      <div className="grow" />
+
+                      <div className="sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
+                        <PendingReviewBar
+                          approvalState={approvalState}
+                          approvalStateError={approvalStateError}
+                          canApprove={canApprove}
+                          canRequestChanges={canRequestChanges}
+                          count={pendingReviewCount}
+                          error={pendingReviewError}
+                          isApprovalStateLoading={isApprovalStateLoading}
+                          isApprovePending={approveMutation.isPending}
+                          isRemovePending={removeApprovalMutation.isPending}
+                          isDiscarding={discardPendingReviewMutation.isPending}
+                          isLoading={isPendingReviewLoading}
+                          isPublishing={publishPendingReviewMutation.isPending}
+                          sessionKey={patchViewerSessionKey}
+                          onApprove={() => {
+                            if (!selectedPr) {
+                              return;
+                            }
+
+                            void approveMutation.mutateAsync(selectedPr);
+                          }}
+                          onDiscard={() => void handleDiscardPendingReview()}
+                          onRemoveApproval={() => {
+                            if (!selectedPr) {
+                              return;
+                            }
+
+                            void removeApprovalMutation.mutateAsync(selectedPr);
+                          }}
+                          onPublish={(action, summary) =>
+                            void handlePublishPendingReview(action, summary)
+                          }
+                        />
                       </div>
-                    </PatchFileDiffItemContext.Provider>
-                  </div>
+                    </div>
+                  </PatchFileDiffItemContext.Provider>
                 ) : null}
               </PatchScrollVirtualizer>
-              {pendingReviewCount > 0 || pendingReviewError ? (
-                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-40 flex justify-center px-4">
-                  <PendingReviewBar
-                    count={pendingReviewCount}
-                    error={pendingReviewError}
-                    isDiscarding={discardPendingReviewMutation.isPending}
-                    isLoading={isPendingReviewLoading}
-                    isPublishing={publishPendingReviewMutation.isPending}
-                    provider={selectedProvider}
-                    onDiscard={() => void handleDiscardPendingReview()}
-                    onPublish={(action, summary) =>
-                      void handlePublishPendingReview(action, summary)
-                    }
-                  />
-                </div>
-              ) : null}
             </div>
           </div>
           <div className="min-h-0 w-1/3 min-w-[15%] shrink-0">

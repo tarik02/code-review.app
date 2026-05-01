@@ -49,6 +49,44 @@ import { gitlabRoute, type GitLabSearchMergeRequestState } from './routes.ts';
 
 type GitLabClientEffect<Success> = Effect.Effect<Success, GitLabClientError>;
 
+export type CreateGitLabDraftNoteInput = {
+  note: string;
+  inReplyToDiscussionId?: string;
+  position?:
+    | {
+        positionType: 'file';
+        baseSha: string;
+        headSha: string;
+        startSha: string;
+        oldPath: string;
+        newPath: string;
+      }
+    | {
+        positionType: 'text';
+        baseSha: string;
+        headSha: string;
+        startSha: string;
+        oldPath: string;
+        newPath: string;
+        lineRange?: {
+          start: {
+            type?: 'new' | 'old' | null;
+            oldLine?: number;
+            newLine?: number;
+            lineCode?: string;
+          };
+          end: {
+            type?: 'new' | 'old' | null;
+            oldLine?: number;
+            newLine?: number;
+            lineCode?: string;
+          };
+        };
+        oldLine?: number;
+        newLine?: number;
+      };
+};
+
 type GitLabApiClientShape = {
   storedToken(): GitLabClientEffect<StoredAuthToken | null>;
   user(): GitLabClientEffect<typeof GitLabUserSchema.Type>;
@@ -141,7 +179,8 @@ type GitLabApiClientShape = {
     project: string,
     number: number,
     body: string,
-  ): GitLabClientEffect<GitLabNote>;
+    internal?: boolean,
+  ): GitLabClientEffect<unknown>;
   createDiscussion(
     project: string,
     number: number,
@@ -150,7 +189,7 @@ type GitLabApiClientShape = {
   createDraftNote(
     project: string,
     number: number,
-    formData: Array<[string, string]>,
+    input: CreateGitLabDraftNoteInput,
   ): GitLabClientEffect<GitLabDraftNote>;
   updateDraftNote(
     project: string,
@@ -302,7 +341,7 @@ const makeGitLabApiClient = (accountId: string) =>
       return HttpClientRequest.bearerToken(token);
     });
 
-    const formRequestBody = (formData: Array<[string, string]>) =>
+    const formRequestBody = (formData: ReadonlyArray<readonly [string, string]>) =>
       HttpClientRequest.bodyUrlParams(formData);
 
     const jsonRequestBody = (body: unknown) => (request: HttpClientRequest.HttpClientRequest) =>
@@ -880,9 +919,13 @@ query($fullPath: ID!, $iid: String!) {
 
     const createMergeRequestNote: GitLabApiClientShape['createMergeRequestNote'] = Effect.fn(
       'GitLabApiClient.createMergeRequestNote',
-    )(function* (project, number, body) {
+    )(function* (project, number, body, internal) {
       const token = yield* requireStoredToken();
       const auth = yield* authorize();
+      const requestBody = {
+        body,
+        ...(internal !== undefined ? { internal } : {}),
+      };
       return yield* HttpClientRequest.post(
         gitlabRoute('projects/:project/merge_requests/:number/notes', {
           params: { project, number },
@@ -891,9 +934,21 @@ query($fullPath: ID!, $iid: String!) {
         setDefaultHeaders,
         prefixApiHost(token.host),
         auth,
-        formRequestBody([['body', body]]),
+        jsonRequestBody(requestBody),
         send,
-        decodeJsonBody(GitLabNoteSchema),
+        decodeJsonBody(Schema.Unknown),
+        Effect.tapError((error) =>
+          Effect.logError('[gitlab] createMergeRequestNote failed').pipe(
+            Effect.annotateLogs({
+              host: token.host,
+              project,
+              number,
+              contentType: 'application/json',
+              requestBody: JSON.stringify(requestBody),
+              error: getErrorMessage(error),
+            }),
+          ),
+        ),
       );
     });
 
@@ -918,9 +973,58 @@ query($fullPath: ID!, $iid: String!) {
 
     const createDraftNote: GitLabApiClientShape['createDraftNote'] = Effect.fn(
       'GitLabApiClient.createDraftNote',
-    )(function* (project, number, formData) {
+    )(function* (project, number, input) {
       const token = yield* requireStoredToken();
       const auth = yield* authorize();
+      const formData: Array<[string, string]> = [['note', input.note]];
+      if (input.inReplyToDiscussionId) {
+        formData.push(['in_reply_to_discussion_id', input.inReplyToDiscussionId]);
+      }
+      if (input.position) {
+        formData.push(
+          ['position[base_sha]', input.position.baseSha],
+          ['position[head_sha]', input.position.headSha],
+          ['position[start_sha]', input.position.startSha],
+          ['position[old_path]', input.position.oldPath],
+          ['position[new_path]', input.position.newPath],
+          ['position[position_type]', input.position.positionType],
+        );
+        if (input.position.positionType === 'text') {
+          if (input.position.oldLine != null) {
+            formData.push(['position[old_line]', String(input.position.oldLine)]);
+          }
+          if (input.position.newLine != null) {
+            formData.push(['position[new_line]', String(input.position.newLine)]);
+          }
+          if (input.position.lineRange) {
+            const { start, end } = input.position.lineRange;
+            if (start.type != null) {
+              formData.push(['position[line_range][start][type]', start.type]);
+            }
+            if (end.type != null) {
+              formData.push(['position[line_range][end][type]', end.type]);
+            }
+            if (start.oldLine != null) {
+              formData.push(['position[line_range][start][old_line]', String(start.oldLine)]);
+            }
+            if (start.newLine != null) {
+              formData.push(['position[line_range][start][new_line]', String(start.newLine)]);
+            }
+            if (start.lineCode) {
+              formData.push(['position[line_range][start][line_code]', start.lineCode]);
+            }
+            if (end.oldLine != null) {
+              formData.push(['position[line_range][end][old_line]', String(end.oldLine)]);
+            }
+            if (end.newLine != null) {
+              formData.push(['position[line_range][end][new_line]', String(end.newLine)]);
+            }
+            if (end.lineCode) {
+              formData.push(['position[line_range][end][line_code]', end.lineCode]);
+            }
+          }
+        }
+      }
       return yield* HttpClientRequest.post(
         gitlabRoute('projects/:project/merge_requests/:number/draft_notes', {
           params: { project, number },

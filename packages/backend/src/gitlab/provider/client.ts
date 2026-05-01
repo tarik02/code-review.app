@@ -15,7 +15,7 @@ import type {
   ReviewComment,
   ReviewThread,
 } from '@code-review-app/shared';
-import { summarizeError } from '../../errors.ts';
+import { getErrorMessage } from '../../errors.ts';
 import {
   createRepoIdentity,
   hostNameFromHost,
@@ -31,6 +31,7 @@ import type {
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
 import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
+import type { CreateGitLabDraftNoteInput } from '../client/client.ts';
 import {
   GitLabProviderClientFailure,
   type GitLabProviderError,
@@ -201,6 +202,8 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     url: mr.web_url,
     headSha: mr.sha ?? diffRefs?.head_sha ?? '',
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
+    canApprove: true,
+    canRequestChanges: true,
   };
 }
 
@@ -442,7 +445,12 @@ function discussionToReviewThread(
 ): ReviewThread | null {
   const notes = discussion.notes ?? [];
   const rootNote = notes[0];
-  if (!rootNote || rootNote.system) return null;
+  if (!rootNote) return null;
+  if (rootNote.system) {
+    return isGitLabReviewSystemNote(rootNote)
+      ? noteToGlobalReviewThread(accountId, rootNote)
+      : null;
+  }
 
   const position = rootNote.position ?? null;
   const rootId = String(rootNote.id);
@@ -452,6 +460,7 @@ function discussionToReviewThread(
       id,
       databaseId: note.id,
       authorLogin: note.author?.username ?? 'unknown',
+      authorName: null,
       authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
       authorAssociation: null,
       body: note.body,
@@ -487,6 +496,16 @@ function discussionToReviewThread(
 }
 
 function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewThread {
+  const body = note.body.trim().toLowerCase();
+  const eventType =
+    body === 'approved this merge request'
+      ? 'approved'
+      : body === 'requested changes'
+        ? 'requested_changes'
+        : body === 'left review comments'
+          ? 'commented'
+          : undefined;
+
   return {
     id: String(note.id),
     provider: 'gitlab',
@@ -499,11 +518,13 @@ function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewTh
     side: null,
     startSide: null,
     subjectType: 'global',
+    eventType,
     comments: [
       {
         id: String(note.id),
         databaseId: note.id,
         authorLogin: note.author?.username ?? 'unknown',
+        authorName: null,
         authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
         authorAssociation: null,
         body: note.body,
@@ -516,8 +537,74 @@ function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewTh
   };
 }
 
+function isGitLabReviewSystemNote(note: GitLabNote) {
+  if (!note.system) {
+    return false;
+  }
+
+  const body = note.body.trim().toLowerCase();
+  return (
+    body === 'requested changes' ||
+    body === 'left review comments' ||
+    body === 'approved this merge request'
+  );
+}
+
 function unixTimestampNow() {
   return Math.floor(Date.now() / 1000);
+}
+
+function toDiscussionFormData(input: CreateGitLabDraftNoteInput): Array<[string, string]> {
+  const formData: Array<[string, string]> = [['body', input.note]];
+
+  if (input.position) {
+    formData.push(
+      ['position[base_sha]', input.position.baseSha],
+      ['position[head_sha]', input.position.headSha],
+      ['position[start_sha]', input.position.startSha],
+      ['position[old_path]', input.position.oldPath],
+      ['position[new_path]', input.position.newPath],
+      ['position[position_type]', input.position.positionType],
+    );
+
+    if (input.position.positionType === 'text') {
+      if (input.position.oldLine != null) {
+        formData.push(['position[old_line]', String(input.position.oldLine)]);
+      }
+      if (input.position.newLine != null) {
+        formData.push(['position[new_line]', String(input.position.newLine)]);
+      }
+      if (input.position.lineRange) {
+        const { start, end } = input.position.lineRange;
+        if (start.type != null) {
+          formData.push(['position[line_range][start][type]', start.type]);
+        }
+        if (end.type != null) {
+          formData.push(['position[line_range][end][type]', end.type]);
+        }
+        if (start.oldLine != null) {
+          formData.push(['position[line_range][start][old_line]', String(start.oldLine)]);
+        }
+        if (start.newLine != null) {
+          formData.push(['position[line_range][start][new_line]', String(start.newLine)]);
+        }
+        if (start.lineCode) {
+          formData.push(['position[line_range][start][line_code]', start.lineCode]);
+        }
+        if (end.oldLine != null) {
+          formData.push(['position[line_range][end][old_line]', String(end.oldLine)]);
+        }
+        if (end.newLine != null) {
+          formData.push(['position[line_range][end][new_line]', String(end.newLine)]);
+        }
+        if (end.lineCode) {
+          formData.push(['position[line_range][end][line_code]', end.lineCode]);
+        }
+      }
+    }
+  }
+
+  return formData;
 }
 
 const mapProviderError =
@@ -618,7 +705,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         return Effect.logWarning('[gitlab] auth status check failed').pipe(
           Effect.annotateLogs({
             message,
-            error: summarizeError(error),
+            error: getErrorMessage(error),
           }),
           Effect.zipRight(
             Effect.succeed(
@@ -715,7 +802,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
                     host: token.host,
                     group: group.full_path,
                     query,
-                    error: summarizeError(error),
+                    error: getErrorMessage(error),
                   }),
                   Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
                 ),
@@ -1028,7 +1115,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
                     host: token.host,
                     scope,
                     query: trimmedQuery,
-                    error: summarizeError(error),
+                    error: getErrorMessage(error),
                   }),
                   Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
                 ),
@@ -1422,10 +1509,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         });
         if (notes.length === 0) break;
         for (const note of notes) {
-          if (note.system) continue;
           if (discussionNoteIds.has(note.id)) continue;
           if (note.position != null) continue;
           if (note.type === 'DiffNote') continue;
+          if (note.system && !isGitLabReviewSystemNote(note)) continue;
           threads.push(noteToGlobalReviewThread(token.id, note));
         }
         notesPage += 1;
@@ -1522,31 +1609,84 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       newPath: string;
       line: number | null;
       side: string | null;
+      oldLine: number | null;
+      newLine: number | null;
+      startLine: number | null;
+      startSide: string | null;
+      startOldLine: number | null;
+      startNewLine: number | null;
       subjectType: 'file' | 'line' | 'global';
       body: string;
     },
-  ) => {
+  ): CreateGitLabDraftNoteInput => {
     const oldPath = input.oldPath || input.path;
     const newPath = input.newPath || input.path;
-    const forms: Array<[string, string]> = [
-      ['note', input.body],
-      ['position[base_sha]', version.base_commit_sha],
-      ['position[head_sha]', version.head_commit_sha],
-      ['position[start_sha]', version.start_commit_sha],
-      ['position[old_path]', oldPath],
-      ['position[new_path]', newPath],
-    ];
+
     if (input.subjectType === 'file') {
-      forms.push(['position[position_type]', 'file']);
-    } else {
-      forms.push(['position[position_type]', 'text']);
-      if (input.line != null && input.side === 'LEFT') {
-        forms.push(['position[old_line]', String(input.line)]);
-      } else if (input.line != null) {
-        forms.push(['position[new_line]', String(input.line)]);
-      }
+      return {
+        note: input.body,
+        position: {
+          positionType: 'file',
+          baseSha: version.base_commit_sha,
+          headSha: version.head_commit_sha,
+          startSha: version.start_commit_sha,
+          oldPath,
+          newPath,
+        },
+      };
     }
-    return forms;
+
+    return {
+      note: input.body,
+      position: {
+        positionType: 'text',
+        baseSha: version.base_commit_sha,
+        headSha: version.head_commit_sha,
+        startSha: version.start_commit_sha,
+        oldPath,
+        newPath,
+        oldLine:
+          input.oldLine ?? (input.line != null && input.side === 'LEFT' ? input.line : undefined),
+        newLine:
+          input.newLine ?? (input.line != null && input.side !== 'LEFT' ? input.line : undefined),
+        lineRange:
+          input.line != null
+            ? {
+                start: {
+                  type:
+                    (input.startOldLine ?? input.oldLine) != null &&
+                    (input.startNewLine ?? input.newLine) != null
+                      ? null
+                      : (input.startSide ?? input.side) === 'LEFT'
+                        ? 'old'
+                        : 'new',
+                  oldLine:
+                    input.startOldLine ??
+                    input.oldLine ??
+                    ((input.startSide ?? input.side) === 'LEFT'
+                      ? (input.startLine ?? input.line)
+                      : undefined),
+                  newLine:
+                    input.startNewLine ??
+                    input.newLine ??
+                    ((input.startSide ?? input.side) !== 'LEFT'
+                      ? (input.startLine ?? input.line)
+                      : undefined),
+                },
+                end: {
+                  type:
+                    input.oldLine != null && input.newLine != null
+                      ? null
+                      : input.side === 'LEFT'
+                        ? 'old'
+                        : 'new',
+                  oldLine: input.oldLine ?? (input.side === 'LEFT' ? input.line : undefined),
+                  newLine: input.newLine ?? (input.side !== 'LEFT' ? input.line : undefined),
+                },
+              }
+            : undefined,
+      },
+    };
   };
 
   const createReviewThread: ForgeProviderEffectContract<
@@ -1574,19 +1714,23 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         );
       }
 
-      yield* api.createDiscussion(
-        repo.path,
-        number,
-        buildDraftLineForm(version, {
-          body: input.body,
-          path: input.path,
-          oldPath: input.oldPath,
-          newPath: input.newPath,
-          line: input.line,
-          side: input.side,
-          subjectType: input.subjectType,
-        }).map(([key, value]) => [key.replace(/^note$/, 'body'), value]),
-      );
+      const draftNote = buildDraftLineForm(version, {
+        body: input.body,
+        path: input.path,
+        oldPath: input.oldPath,
+        newPath: input.newPath,
+        line: input.line,
+        side: input.side,
+        oldLine: input.oldLine,
+        newLine: input.newLine,
+        startLine: input.startLine,
+        startSide: input.startSide,
+        startOldLine: input.startOldLine,
+        startNewLine: input.startNewLine,
+        subjectType: input.subjectType,
+      });
+
+      yield* api.createDiscussion(repo.path, number, toDiscussionFormData(draftNote));
     },
   );
 
@@ -1645,6 +1789,12 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           newPath: input.newPath,
           line: input.line,
           side: input.side,
+          oldLine: input.oldLine,
+          newLine: input.newLine,
+          startLine: input.startLine,
+          startSide: input.startSide,
+          startOldLine: input.startOldLine,
+          startNewLine: input.startNewLine,
           subjectType: input.subjectType,
         }),
       );
@@ -1670,10 +1820,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       body: string,
     ) {
       const api = yield* GitLabApiClient;
-      const draftNote = yield* api.createDraftNote(repo.path, number, [
-        ['note', body],
-        ['in_reply_to_discussion_id', threadId],
-      ]);
+      const draftNote = yield* api.createDraftNote(repo.path, number, {
+        note: body,
+        inReplyToDiscussionId: threadId,
+      });
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? threadId,
@@ -1689,7 +1839,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     'createPendingGlobalComment',
     function* (repo: ProviderRepoIdentity, number: number, _session: unknown, body: string) {
       const api = yield* GitLabApiClient;
-      const draftNote = yield* api.createDraftNote(repo.path, number, [['note', body]]);
+      const draftNote = yield* api.createDraftNote(repo.path, number, { note: body });
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
@@ -1746,34 +1896,19 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       },
     ) {
       const api = yield* GitLabApiClient;
-      const summary = input.summary ?? '';
-      const reviewSummary =
-        input.action === 'request_changes'
-          ? summary
-            ? `${summary}\n\n/submit_review requested_changes`
-            : '/submit_review requested_changes'
-          : summary;
+      const summary = input.summary?.trim() ?? '';
+      const submitReviewCommand =
+        input.action === 'approve'
+          ? '/submit_review approve'
+          : input.action === 'request_changes'
+            ? '/submit_review requested_changes'
+            : '/submit_review';
 
-      if (reviewSummary) {
-        yield* api.createDraftNote(repo.path, number, [['note', reviewSummary]]);
+      if (summary) {
+        yield* api.createDraftNote(repo.path, number, { note: summary });
       }
 
-      yield* api.bulkPublishDraftNotes(repo.path, number).pipe(
-        Effect.catchAll(() =>
-          Effect.gen(function* () {
-            const draftNotes = yield* api.draftNotes(repo.path, number);
-            if (draftNotes.length === 0) return;
-            yield* Effect.forEach(draftNotes, (draftNote) =>
-              api.publishDraftNote(repo.path, number, draftNote.id),
-            );
-          }),
-        ),
-      );
-
-      if (input.action === 'approve') {
-        const pullRequest = yield* getPullRequest(repo, number);
-        yield* api.approveMergeRequest(repo.path, number, pullRequest.headSha);
-      }
+      yield* api.createMergeRequestNote(repo.path, number, submitReviewCommand);
     },
   );
 

@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import { app } from 'electron';
 import { Effect } from 'effect';
 import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
-import { summarizeError } from '@code-review-app/backend';
+import { getErrorMessage } from '@code-review-app/backend';
 import { backendRuntime } from './backend-runtime';
 
 const updateEvents = new EventEmitter();
@@ -39,7 +39,7 @@ function logUpdaterError(context: string, error: unknown) {
   void backendRuntime.runFork(
     Effect.logError(`[updater] ${context} failed`).pipe(
       Effect.annotateLogs({
-        error: summarizeError(error),
+        error: getErrorMessage(error),
       }),
     ),
   );

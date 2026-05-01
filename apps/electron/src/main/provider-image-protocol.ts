@@ -2,8 +2,8 @@ import { protocol } from 'electron';
 import {
   PROVIDER_IMAGE_PROTOCOL,
   fetchProviderImage,
+  getErrorMessage,
   parseProviderImageUrl,
-  summarizeError,
 } from '@code-review-app/backend';
 import { Effect } from 'effect';
 import { backendRuntime } from './backend-runtime';
@@ -48,7 +48,7 @@ function registerProviderImageProtocol() {
         Effect.logError('Failed to load provider image.').pipe(
           Effect.annotateLogs({
             requestUrl: request.url,
-            error: summarizeError(error),
+            error: getErrorMessage(error),
           }),
         ),
       );
