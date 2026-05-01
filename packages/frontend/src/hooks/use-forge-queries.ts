@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReviewThread } from '../lib/review-threads';
 import { trpc } from '../lib/trpc';
@@ -30,6 +30,7 @@ import {
   viewerLoginQueryOptions,
 } from '../queries/forge';
 import type {
+  BrowseSearchSnapshot,
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,
@@ -74,6 +75,104 @@ function getErrorMessage(error: unknown): string {
 type ParsedPullRequestUrl = NonNullable<ReturnType<typeof parseForgeResourceUrl>> & {
   number: number;
 };
+
+function emptyBrowseSearchSnapshot(accountIds: string[] = []): BrowseSearchSnapshot {
+  return {
+    repos: [],
+    namespaces: [],
+    pullRequests: [],
+    accountIds,
+    pendingCount: 0,
+    completedCount: 0,
+    errors: [],
+    loading: false,
+  };
+}
+
+function useBrowseSearch(args: {
+  accountIds: string[];
+  query: string;
+  states: PullRequestSearchState;
+  profileFilterAccountId: string | null;
+  repoFilterKey: string | null;
+  namespaceFilterPath: string | null;
+  enabled?: boolean;
+}) {
+  const {
+    accountIds,
+    query,
+    states,
+    profileFilterAccountId,
+    repoFilterKey,
+    namespaceFilterPath,
+    enabled = true,
+  } = args;
+  const [snapshot, setSnapshot] = useState<BrowseSearchSnapshot>(() =>
+    emptyBrowseSearchSnapshot(accountIds),
+  );
+  const accountIdKey = useMemo(() => accountIds.join('\0'), [accountIds]);
+
+  useEffect(() => {
+    if (!enabled || accountIds.length === 0) {
+      window.setTimeout(() => setSnapshot(emptyBrowseSearchSnapshot(accountIds)), 0);
+      return;
+    }
+
+    window.setTimeout(() => {
+      setSnapshot((current) => ({ ...current, accountIds, loading: true }));
+    }, 0);
+    const subscription = trpc.browse.search.subscribe(
+      {
+        accountIds,
+        query,
+        states,
+        profileFilterAccountId,
+        repoFilterKey,
+        namespaceFilterPath,
+        repoLimit: 20,
+        namespaceLimit: 20,
+        pullRequestLimit: 12,
+      },
+      {
+        onData: (nextSnapshot) => {
+          setSnapshot((current) => {
+            if (nextSnapshot.loading && nextSnapshot.completedCount === 0) {
+              return {
+                ...nextSnapshot,
+                repos: current.repos,
+                namespaces: current.namespaces,
+                pullRequests: current.pullRequests,
+              };
+            }
+            return nextSnapshot;
+          });
+        },
+        onError: (error) => {
+          setSnapshot((current) => ({
+            ...current,
+            accountIds,
+            errors: [...current.errors, getErrorMessage(error)],
+            loading: false,
+            pendingCount: 0,
+          }));
+        },
+      },
+    );
+
+    return () => subscription.unsubscribe();
+  }, [
+    accountIdKey,
+    accountIds,
+    enabled,
+    namespaceFilterPath,
+    profileFilterAccountId,
+    query,
+    repoFilterKey,
+    states,
+  ]);
+
+  return snapshot;
+}
 
 function filterAccountsForRepoSearch(accounts: ProviderAccount[], query: string) {
   const trimmedQuery = query.trim();
@@ -1036,6 +1135,7 @@ export {
   getErrorMessage,
   dedupeOverviewPullRequestEntries,
   useAccountOverviewPullRequests,
+  useBrowseSearch,
   useInitialReposForAccounts,
   usePullRequestApprovalMutations,
   usePullRequestSearchForAccounts,

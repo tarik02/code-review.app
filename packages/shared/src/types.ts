@@ -73,6 +73,29 @@ type OverviewPullRequestSummary = {
 
 type PullRequestSearchState = 'open' | 'draft_open' | 'all';
 
+type BrowseSearchInput = {
+  accountIds: string[];
+  query: string;
+  states: PullRequestSearchState;
+  profileFilterAccountId: string | null;
+  repoFilterKey: string | null;
+  namespaceFilterPath: string | null;
+  repoLimit: number;
+  namespaceLimit: number;
+  pullRequestLimit: number;
+};
+
+type BrowseSearchSnapshot = {
+  repos: RepoSummary[];
+  namespaces: NamespaceSummary[];
+  pullRequests: OverviewPullRequestSummary[];
+  accountIds: string[];
+  pendingCount: number;
+  completedCount: number;
+  errors: string[];
+  loading: boolean;
+};
+
 type TrackedPullRequestOrderEntry = RepoIdentity & {
   number: number;
 };
@@ -437,6 +460,8 @@ export type {
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
   AvailableUpdate,
+  BrowseSearchInput,
+  BrowseSearchSnapshot,
   CreatePendingReviewGlobalInput,
   CreatePendingReviewReplyInput,
   CreatePendingReviewThreadInput,

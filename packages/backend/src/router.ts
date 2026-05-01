@@ -11,6 +11,8 @@ import { TrackedPullRequestService } from './services/tracked-pull-requests.ts';
 import {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
+  browseSearchInputSchema,
+  browseSearchSnapshotSchema,
   completeOAuthSchema,
   createPendingReviewGlobalInputSchema,
   createPendingReviewReplyInputSchema,
@@ -48,7 +50,13 @@ import { completeOAuth, pollDeviceOAuth, startOAuth } from './auth/oauth.ts';
 import { AuthTokenStore } from './auth/token-store.ts';
 import type {
   AvailableUpdate,
+  BrowseSearchSnapshot,
+  NamespaceSummary,
+  OverviewPullRequestSummary,
+  ProviderAccount,
   ProviderProfile,
+  PullRequestSummary,
+  RepoSummary,
   ThemePreference,
   UpdateEvent,
 } from '@code-review-app/shared';
@@ -74,6 +82,77 @@ type CreateAppRouterOptions = {
 };
 
 const t = initTRPC.create();
+
+function dedupeRepos(repos: ReadonlyArray<RepoSummary>) {
+  const entries = new Map<string, RepoSummary>();
+  for (const repo of repos) {
+    entries.set(`${repo.providerId}:${repo.repoKey}`, repo);
+  }
+  return [...entries.values()];
+}
+
+function dedupeNamespaces(namespaces: ReadonlyArray<NamespaceSummary>) {
+  const entries = new Map<string, NamespaceSummary>();
+  for (const namespace of namespaces) {
+    entries.set(`${namespace.providerAccountId}:${namespace.path}`, namespace);
+  }
+  return [...entries.values()];
+}
+
+function dedupeOverviewPullRequests(pullRequests: ReadonlyArray<OverviewPullRequestSummary>) {
+  const entries = new Map<string, OverviewPullRequestSummary>();
+  for (const entry of pullRequests) {
+    const key = `${entry.repo.providerId}:${entry.repo.repoKey}#${entry.pullRequest.number}`;
+    const existing = entries.get(key);
+    if (
+      !existing ||
+      Date.parse(entry.pullRequest.updatedAt || '') >
+        Date.parse(existing.pullRequest.updatedAt || '')
+    ) {
+      entries.set(key, entry);
+    }
+  }
+  return [...entries.values()].sort(
+    (left, right) =>
+      Date.parse(right.pullRequest.updatedAt || '') - Date.parse(left.pullRequest.updatedAt || ''),
+  );
+}
+
+function repoMatchesNamespace(repo: RepoSummary, namespacePath: string | null) {
+  if (!namespacePath) return true;
+  return repo.nameWithOwner === namespacePath || repo.nameWithOwner.startsWith(`${namespacePath}/`);
+}
+
+function matchesPullRequestSearchState(
+  pullRequest: PullRequestSummary,
+  state: 'open' | 'draft_open' | 'all',
+) {
+  if (state === 'all') return true;
+  if (pullRequest.state !== 'OPEN') return false;
+  return state === 'draft_open' || !pullRequest.isDraft;
+}
+
+function parseRepoUrl(input: string, fallbackProvider: ProviderAccount['provider']) {
+  try {
+    const url = new URL(input);
+    const host = url.hostname.toLowerCase();
+    const provider = host === 'github.com' ? 'github' : fallbackProvider;
+    if (provider === 'github') {
+      const [owner, name] = url.pathname.split('/').filter(Boolean);
+      return owner && name ? { host, provider, path: `${owner}/${name}` } : null;
+    }
+
+    const path = url.pathname
+      .replace(/\/-\/merge_requests\/\d+$/, '')
+      .replace(/\/merge_requests\/\d+$/, '')
+      .split('/')
+      .filter(Boolean)
+      .join('/');
+    return path ? { host, provider, path } : null;
+  } catch {
+    return null;
+  }
+}
 
 function mapError(error: unknown): TRPCError {
   if (error instanceof TRPCError) return error;
@@ -118,6 +197,49 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       ),
     );
     throw mapError(error);
+  }
+
+  async function searchReposForAccount(account: ProviderAccount, query: string, limit: number) {
+    const trimmedQuery = query.trim();
+    const serviceEffect = Effect.gen(function* () {
+      const service = yield* RepoService;
+
+      if (!trimmedQuery) {
+        return yield* service.listInitialRepos(account.id, limit);
+      }
+
+      const parsedUrl = parseRepoUrl(trimmedQuery, account.provider);
+      if (parsedUrl) {
+        if (parsedUrl.provider !== account.provider || parsedUrl.host !== account.host) {
+          return [];
+        }
+        return yield* service.validateRepo(account.id, parsedUrl.path).pipe(
+          Effect.map((repo) => [repo]),
+          Effect.catchAll(() => Effect.succeed([])),
+        );
+      }
+
+      const pathQuery = trimmedQuery.replace(/\.git$/, '');
+      const pathSegmentCount = pathQuery.split('/').filter(Boolean).length;
+      if (
+        ((account.provider === 'github' && pathSegmentCount === 2) ||
+          (account.provider === 'gitlab' && pathSegmentCount >= 2)) &&
+        !pathQuery.startsWith('/') &&
+        !pathQuery.endsWith('/')
+      ) {
+        const validated = yield* service.validateRepo(account.id, pathQuery).pipe(
+          Effect.map((repo) => [repo]),
+          Effect.catchAll(() => Effect.succeed(null)),
+        );
+        if (validated) {
+          return validated;
+        }
+      }
+
+      return yield* service.searchRepos(account.id, trimmedQuery, limit);
+    });
+
+    return runEffect(serviceEffect, 'browse.searchRepos');
   }
 
   return t.router({
@@ -301,6 +423,174 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         observable<string>((emit) => {
           const unsubscribe = platform.subscribeToDeepLinks((url) => emit.next(url));
           return unsubscribe;
+        }),
+      ),
+    }),
+
+    browse: t.router({
+      search: t.procedure.input(browseSearchInputSchema).subscription(({ input }) =>
+        observable<BrowseSearchSnapshot>((emit) => {
+          let cancelled = false;
+          let pendingCount = 0;
+          let completedCount = 0;
+          let accountIds: string[] = [];
+          let repos: RepoSummary[] = [];
+          let namespaces: NamespaceSummary[] = [];
+          let pullRequests: OverviewPullRequestSummary[] = [];
+          const errors: string[] = [];
+
+          const scopedSearch = Boolean(input.repoFilterKey || input.namespaceFilterPath);
+
+          const emitSnapshot = () => {
+            if (cancelled) return;
+            emit.next(
+              browseSearchSnapshotSchema.parse({
+                repos: dedupeRepos(repos),
+                namespaces: dedupeNamespaces(namespaces),
+                pullRequests: dedupeOverviewPullRequests(pullRequests),
+                accountIds,
+                pendingCount,
+                completedCount,
+                errors,
+                loading: pendingCount > 0,
+              }),
+            );
+          };
+
+          const applyAccountResults = (accountRepos: RepoSummary[]) => {
+            repos = dedupeRepos([...repos, ...accountRepos]);
+            emitSnapshot();
+          };
+
+          void (async () => {
+            try {
+              const accounts = await runEffect(
+                Effect.gen(function* () {
+                  const service = yield* RepoService;
+                  return yield* service.listProviderAccounts();
+                }),
+                'browse.listProviderAccounts',
+              );
+              const enabledAccountIds = new Set(input.accountIds);
+              const activeAccounts = accounts.filter((account) =>
+                enabledAccountIds.has(account.id),
+              );
+              accountIds = activeAccounts.map((account) => account.id);
+              pendingCount = activeAccounts.length;
+              emitSnapshot();
+
+              await Promise.all(
+                activeAccounts.map(async (account) => {
+                  try {
+                    const accountRepos = await searchReposForAccount(
+                      account,
+                      input.query,
+                      input.repoLimit,
+                    );
+                    applyAccountResults(accountRepos);
+
+                    if (input.query.trim()) {
+                      try {
+                        const accountNamespaces = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* RepoService;
+                            return yield* service.searchNamespaces(
+                              account.id,
+                              input.query,
+                              input.namespaceLimit,
+                            );
+                          }),
+                          'browse.searchNamespaces',
+                        );
+                        namespaces = dedupeNamespaces([...namespaces, ...accountNamespaces]);
+                        emitSnapshot();
+                      } catch (error) {
+                        errors.push(getErrorMessage(error));
+                        emitSnapshot();
+                      }
+                    }
+
+                    if (scopedSearch) {
+                      const visibleRepos = accountRepos.filter(
+                        (repo) =>
+                          (!input.profileFilterAccountId ||
+                            repo.providerAccountId === input.profileFilterAccountId) &&
+                          (!input.repoFilterKey || repo.repoKey === input.repoFilterKey) &&
+                          repoMatchesNamespace(repo, input.namespaceFilterPath),
+                      );
+                      const repoPullRequestGroups = await Promise.all(
+                        visibleRepos.map(async (repo) => {
+                          try {
+                            const repoPullRequests = await runEffect(
+                              Effect.gen(function* () {
+                                const service = yield* PullRequestService;
+                                return yield* service.list(repo);
+                              }),
+                              'browse.listPullRequests',
+                            );
+                            return repoPullRequests
+                              .filter((pullRequest) =>
+                                matchesPullRequestSearchState(pullRequest, input.states),
+                              )
+                              .map(
+                                (pullRequest) =>
+                                  ({ repo, pullRequest }) satisfies OverviewPullRequestSummary,
+                              );
+                          } catch (error) {
+                            errors.push(getErrorMessage(error));
+                            return [];
+                          }
+                        }),
+                      );
+                      pullRequests = dedupeOverviewPullRequests([
+                        ...pullRequests,
+                        ...repoPullRequestGroups.flat(),
+                      ]).slice(0, input.pullRequestLimit);
+                      emitSnapshot();
+                    } else if (input.query.trim()) {
+                      try {
+                        const accountPullRequests = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* PullRequestService;
+                            return yield* service.search(
+                              account.id,
+                              input.query,
+                              input.pullRequestLimit,
+                              input.states,
+                            );
+                          }),
+                          'browse.searchPullRequests',
+                        );
+                        pullRequests = dedupeOverviewPullRequests([
+                          ...pullRequests,
+                          ...accountPullRequests,
+                        ]).slice(0, input.pullRequestLimit);
+                        emitSnapshot();
+                      } catch (error) {
+                        errors.push(getErrorMessage(error));
+                        emitSnapshot();
+                      }
+                    }
+                  } catch (error) {
+                    errors.push(getErrorMessage(error));
+                    emitSnapshot();
+                  } finally {
+                    completedCount += 1;
+                    pendingCount = Math.max(0, pendingCount - 1);
+                    emitSnapshot();
+                  }
+                }),
+              );
+
+              emit.complete();
+            } catch (error) {
+              emit.error(mapError(error));
+            }
+          })();
+
+          return () => {
+            cancelled = true;
+          };
         }),
       ),
     }),

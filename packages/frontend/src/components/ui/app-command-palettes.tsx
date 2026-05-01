@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useHotkey } from '@tanstack/react-hotkeys';
 import { useNavigate } from '@tanstack/react-router';
 import {
@@ -17,15 +17,13 @@ import {
 import {
   usePullRequestApprovalMutations,
   usePullRequestReviewCommentMutations,
-  usePullRequestSearchForAccounts,
-  useRepoPickerReposForAccounts,
+  useBrowseSearch,
   useSavedRepos,
   dedupeOverviewPullRequestEntries,
 } from '../../hooks/use-forge-queries';
 import { useEnabledProviderAccounts } from '../../hooks/use-enabled-provider-accounts';
 import {
   forgeKeys,
-  pullRequestListQueryOptions,
   savedReposQueryOptions,
   setTrackedPullRequestOrder,
   trackedReposQueryOptions,
@@ -233,19 +231,14 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     };
   }, [open, query]);
 
-  const { availableRepos, availableNamespaces, isLoadingRepos } = useRepoPickerReposForAccounts(
-    enabledProviderAccounts,
-    enabledAccountIds,
-    debouncedQuery,
-    open,
-  );
-  const pullRequestSearch = usePullRequestSearchForAccounts({
-    accounts: enabledProviderAccounts,
-    enabledAccountIds,
+  const browseSearch = useBrowseSearch({
+    accountIds: enabledAccountIds,
     query: debouncedQuery,
     states: pullRequestState,
-    enabled: open && hasGlobalPullRequestSearch,
-    limit: 12,
+    profileFilterAccountId,
+    repoFilterKey,
+    namespaceFilterPath,
+    enabled: open,
   });
   const localPullRequestEntries = useMemo(
     () => dedupeOverviewPullRequestEntries(localPullRequests),
@@ -257,7 +250,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     for (const repo of [
       ...trackedRepos,
       ...savedRepos,
-      ...availableRepos,
+      ...browseSearch.repos,
       ...localPullRequestEntries.map((entry) => entry.repo),
     ]) {
       if (!enabledAccountIdSet.has(repo.providerAccountId)) {
@@ -271,19 +264,19 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     }
 
     return [...reposByIdentity.values()];
-  }, [availableRepos, enabledAccountIdSet, localPullRequestEntries, savedRepos, trackedRepos]);
+  }, [browseSearch.repos, enabledAccountIdSet, localPullRequestEntries, savedRepos, trackedRepos]);
 
   const repoAccountIdByKey = useMemo(() => {
     const entries = new Map<string, string>();
     for (const repo of [
       ...browseRepos,
       ...localPullRequestEntries.map((entry) => entry.repo),
-      ...pullRequestSearch.pullRequests.map((entry) => entry.repo),
+      ...browseSearch.pullRequests.map((entry) => entry.repo),
     ]) {
       entries.set(repo.repoKey, repo.providerAccountId);
     }
     return Object.fromEntries(entries);
-  }, [browseRepos, localPullRequestEntries, pullRequestSearch.pullRequests]);
+  }, [browseRepos, browseSearch.pullRequests, localPullRequestEntries]);
   const namespaceItems = useMemo(() => {
     const entries = new Map<
       string,
@@ -296,7 +289,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
       }
     >();
 
-    for (const namespace of availableNamespaces) {
+    for (const namespace of browseSearch.namespaces) {
       if (profileFilterAccountId && namespace.providerAccountId !== profileFilterAccountId) {
         continue;
       }
@@ -337,7 +330,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     return [...entries.values()].sort((left, right) =>
       left.namespacePath.localeCompare(right.namespacePath),
     );
-  }, [availableNamespaces, browseRepos, profileFilterAccountId]);
+  }, [browseSearch.namespaces, browseRepos, profileFilterAccountId]);
   const filteredRepos = useMemo(
     () =>
       browseRepos.filter(
@@ -348,77 +341,17 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
       ),
     [browseRepos, namespaceFilterPath, profileFilterAccountId, repoFilterKey],
   );
-  const repoScopedPullRequestRepos = useMemo(
-    () => (hasScopedPullRequestSource ? filteredRepos : []),
-    [filteredRepos, hasScopedPullRequestSource],
-  );
-  const repoScopedPullRequestQueries = useQueries({
-    queries: repoScopedPullRequestRepos.map((repo) => ({
-      ...pullRequestListQueryOptions(repoIdentity(repo)),
-      enabled: open && hasScopedPullRequestSource,
-      placeholderData: (previousData: PullRequestSummary[] | undefined) => previousData,
-    })),
-  });
-  const repoScopedPullRequests = useMemo(() => {
-    const entriesByKey = new Map<string, OverviewPullRequestSummary>();
-
-    for (let index = 0; index < repoScopedPullRequestRepos.length; index += 1) {
-      const repo = repoScopedPullRequestRepos[index];
-      const pullRequests = repoScopedPullRequestQueries[index]?.data ?? [];
-
-      for (const pullRequest of pullRequests) {
-        if (!matchesPullRequestSearchState(pullRequest, pullRequestState)) {
-          continue;
-        }
-
-        const entry = { repo, pullRequest } satisfies OverviewPullRequestSummary;
-        const key = `${repoIdentityKey(repo)}#${pullRequest.number}`;
-        const existing = entriesByKey.get(key);
-        if (
-          !existing ||
-          Date.parse(pullRequest.updatedAt || '') > Date.parse(existing.pullRequest.updatedAt || '')
-        ) {
-          entriesByKey.set(key, entry);
-        }
-      }
-    }
-
-    return [...entriesByKey.values()].sort(
-      (left, right) =>
-        Date.parse(right.pullRequest.updatedAt || '') -
-        Date.parse(left.pullRequest.updatedAt || ''),
-    );
-  }, [pullRequestState, repoScopedPullRequestQueries, repoScopedPullRequestRepos]);
-  const repoScopedPullRequestErrors = useMemo(
-    () =>
-      repoScopedPullRequestQueries
-        .map((queryResult) => queryResult.error)
-        .filter((error): error is Error => error instanceof Error)
-        .map((error) => error.message),
-    [repoScopedPullRequestQueries],
-  );
-  const repoScopedPullRequestsLoading =
-    open &&
-    hasScopedPullRequestSource &&
-    repoScopedPullRequestQueries.some(
-      (queryResult) => queryResult.isPending || queryResult.isFetching,
-    );
   const pullRequestEntries = useMemo(() => {
-    if (hasScopedPullRequestSource) {
-      return repoScopedPullRequests;
-    }
-
-    if (hasGlobalPullRequestSearch) {
-      return pullRequestSearch.pullRequests;
+    if (hasScopedPullRequestSource || hasGlobalPullRequestSearch) {
+      return browseSearch.pullRequests;
     }
 
     return localPullRequestEntries;
   }, [
+    browseSearch.pullRequests,
     hasGlobalPullRequestSearch,
     hasScopedPullRequestSource,
     localPullRequestEntries,
-    pullRequestSearch.pullRequests,
-    repoScopedPullRequests,
   ]);
   const filteredPullRequests = useMemo(
     () =>
@@ -440,10 +373,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     ],
   );
   const isSearchPending =
-    (hasQuery || hasScopedPullRequestSource) &&
-    (query !== debouncedQuery ||
-      isLoadingRepos ||
-      (hasScopedPullRequestSource ? repoScopedPullRequestsLoading : pullRequestSearch.isLoading));
+    (hasQuery || hasScopedPullRequestSource) && (query !== debouncedQuery || browseSearch.loading);
   const inputFooter = useMemo(() => {
     const filterButtons: ReactNode[] = [];
 
@@ -521,25 +451,23 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     }
 
     const statusParts: string[] = [];
-    const searchErrors = hasScopedPullRequestSource
-      ? repoScopedPullRequestErrors
-      : pullRequestSearch.errors;
+    const searchErrors = browseSearch.errors;
 
     if (query !== debouncedQuery) {
       statusParts.push('Updating search...');
     }
 
-    if (hasScopedPullRequestSource ? repoScopedPullRequestsLoading : pullRequestSearch.isLoading) {
+    if (browseSearch.loading) {
       statusParts.push(
         hasScopedPullRequestSource
-          ? `Loading pull requests for ${repoScopedPullRequestRepos.length} matching repos...`
-          : `Searching ${pullRequestSearch.pendingCount} of ${pullRequestSearch.accountIds.length} profile${pullRequestSearch.accountIds.length === 1 ? '' : 's'}...`,
+          ? `Loading pull requests for ${filteredRepos.length} matching repos...`
+          : `Searching ${browseSearch.pendingCount} of ${browseSearch.accountIds.length} profile${browseSearch.accountIds.length === 1 ? '' : 's'}...`,
       );
     } else if (hasDebouncedQuery || hasScopedPullRequestSource) {
       statusParts.push(
         hasScopedPullRequestSource
-          ? `Loaded pull requests for ${repoScopedPullRequestRepos.length} matching repos.`
-          : `Loaded pull requests for ${pullRequestSearch.completedCount} of ${pullRequestSearch.accountIds.length} profile${pullRequestSearch.accountIds.length === 1 ? '' : 's'}.`,
+          ? `Loaded pull requests for ${filteredRepos.length} matching repos.`
+          : `Loaded pull requests for ${browseSearch.completedCount} of ${browseSearch.accountIds.length} profile${browseSearch.accountIds.length === 1 ? '' : 's'}.`,
       );
     }
 
@@ -561,16 +489,14 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
     hasDebouncedQuery,
     hasQuery,
     hasScopedPullRequestSource,
+    browseSearch.accountIds.length,
+    browseSearch.completedCount,
+    browseSearch.errors,
+    browseSearch.loading,
+    browseSearch.pendingCount,
+    filteredRepos.length,
     filteredPullRequests.length,
     query,
-    repoScopedPullRequestErrors,
-    repoScopedPullRequestRepos.length,
-    repoScopedPullRequestsLoading,
-    pullRequestSearch.accountIds.length,
-    pullRequestSearch.completedCount,
-    pullRequestSearch.errors,
-    pullRequestSearch.isLoading,
-    pullRequestSearch.pendingCount,
   ]);
 
   const cacheSavedRepo = useCallback(
@@ -831,9 +757,7 @@ function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePal
         hasQuery || hasScopedPullRequestSource
           ? isSearchPending
             ? 'Results will appear as repositories and pull requests come back.'
-            : ((hasScopedPullRequestSource
-                ? repoScopedPullRequestErrors[0]
-                : pullRequestSearch.errors[0]) ??
+            : (browseSearch.errors[0] ??
               'Try a repository name, pull request title, author, or number.')
           : 'Tracked and overview pull requests appear locally. Start typing to search globally.'
       }

@@ -77,6 +77,29 @@ const overviewPullRequestSummarySchema = z.object({
   pullRequest: pullRequestSummarySchema,
 });
 
+const browseSearchInputSchema = z.object({
+  accountIds: z.array(z.string()),
+  query: z.string(),
+  states: pullRequestSearchStateSchema,
+  profileFilterAccountId: z.string().nullable(),
+  repoFilterKey: z.string().nullable(),
+  namespaceFilterPath: z.string().nullable(),
+  repoLimit: z.number().int().positive().max(100),
+  namespaceLimit: z.number().int().positive().max(100),
+  pullRequestLimit: z.number().int().positive().max(100),
+});
+
+const browseSearchSnapshotSchema = z.object({
+  repos: z.array(repoSummarySchema),
+  namespaces: z.array(namespaceSummarySchema),
+  pullRequests: z.array(overviewPullRequestSummarySchema),
+  accountIds: z.array(z.string()),
+  pendingCount: z.number().int().nonnegative(),
+  completedCount: z.number().int().nonnegative(),
+  errors: z.array(z.string()),
+  loading: z.boolean(),
+});
+
 const providerHostSchema = z.object({
   provider: forgeProviderKindSchema,
   host: z.string(),
@@ -332,6 +355,8 @@ const deletePullRequestReviewCommentInputSchema = pullRequestInputSchema.extend(
 export {
   accountVisibilitySettingsSchema,
   appearanceBackgroundInputSchema,
+  browseSearchInputSchema,
+  browseSearchSnapshotSchema,
   completeOAuthSchema,
   createPendingReviewGlobalInputSchema,
   createPendingReviewReplyInputSchema,
