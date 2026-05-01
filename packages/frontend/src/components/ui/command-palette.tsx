@@ -1,6 +1,7 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Fuse, { type FuseOptionKey } from 'fuse.js';
 import { Autocomplete } from '@base-ui/react/autocomplete';
+import { useHotkey, useHotkeys, type UseHotkeyDefinition } from '@tanstack/react-hotkeys';
 import { Dialog, DialogContent } from './dialog';
 import { ScrollArea } from './scroll-area';
 import { cx } from '../../lib/cx';
@@ -67,54 +68,6 @@ function renderHighlightedText(value: string, query: string) {
       {value.slice(matchEnd)}
     </>
   );
-}
-
-function handleEscapeKeyDown(
-  event: KeyboardEvent<HTMLDivElement>,
-  onOpenChange: (open: boolean) => void,
-) {
-  if (event.key !== 'Escape') {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-  onOpenChange(false);
-}
-
-function matchesShortcut(event: KeyboardEvent<HTMLDivElement>, shortcut: string) {
-  const parts = shortcut
-    .split('+')
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  const key = parts.at(-1);
-  if (!key) {
-    return false;
-  }
-
-  const wantsMod = parts.includes('mod');
-  const wantsCtrl = parts.includes('ctrl');
-  const wantsMeta = parts.includes('meta') || parts.includes('cmd');
-  const wantsShift = parts.includes('shift');
-  const wantsAlt = parts.includes('alt') || parts.includes('option');
-
-  if (wantsMod && !(event.metaKey || event.ctrlKey)) {
-    return false;
-  }
-  if (wantsCtrl && !event.ctrlKey) {
-    return false;
-  }
-  if (wantsMeta && !event.metaKey) {
-    return false;
-  }
-  if (event.shiftKey !== wantsShift) {
-    return false;
-  }
-  if (event.altKey !== wantsAlt) {
-    return false;
-  }
-
-  return event.key.toLowerCase() === key;
 }
 
 function isMacPlatform() {
@@ -220,38 +173,6 @@ function CommandPalette({
     item.onSelect();
   }
 
-  function handleKeyDownCapture(event: KeyboardEvent<HTMLDivElement>) {
-    handleEscapeKeyDown(event, onOpenChange);
-
-    const shortcutItem = filteredItems.find(
-      (item) => item.shortcut && !item.disabled && matchesShortcut(event, item.shortcut),
-    );
-    if (shortcutItem) {
-      event.preventDefault();
-      event.stopPropagation();
-      selectItem(shortcutItem);
-      return;
-    }
-
-    if (!numberedShortcuts || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
-      return;
-    }
-
-    const numericKey = event.key === '0' ? 10 : Number.parseInt(event.key, 10);
-    if (!Number.isInteger(numericKey) || numericKey < 1 || numericKey > 9) {
-      return;
-    }
-
-    const item = filteredItems[numericKey - 1];
-    if (!item || item.disabled) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    selectItem(item);
-  }
-
   function getItemShortcut(item: CommandPaletteItem, index: number) {
     if (item.shortcut) {
       return item.shortcut;
@@ -264,6 +185,42 @@ function CommandPalette({
     return null;
   }
 
+  const itemHotkeys: UseHotkeyDefinition[] = filteredItems.flatMap((item, index) => {
+    const shortcut = getItemShortcut(item, index);
+    if (!shortcut || item.disabled) {
+      return [];
+    }
+
+    return [
+      {
+        hotkey: shortcut as UseHotkeyDefinition['hotkey'],
+        callback: () => {
+          selectItem(item);
+        },
+      },
+    ];
+  });
+
+  useHotkeys(itemHotkeys, {
+    conflictBehavior: 'allow',
+    enabled: open,
+    ignoreInputs: false,
+    preventDefault: true,
+    stopPropagation: true,
+  });
+
+  useHotkey(
+    'Escape',
+    () => {
+      onOpenChange(false);
+    },
+    {
+      enabled: open,
+      preventDefault: true,
+      stopPropagation: true,
+    },
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -271,7 +228,6 @@ function CommandPalette({
           'max-h-[calc(100vh-2rem)] max-w-[760px] overflow-hidden border border-neutral-400 p-0 dark:border-neutral-700',
           dialogClassName,
         )}
-        onKeyDownCapture={handleKeyDownCapture}
       >
         <Autocomplete.Root<CommandPaletteItem>
           autoHighlight="always"
@@ -287,7 +243,6 @@ function CommandPalette({
                 autoFocus
                 className="min-w-0 flex-1 bg-transparent text-sm text-ink-900 outline-none placeholder:text-ink-500"
                 placeholder={placeholder}
-                onKeyDown={(event) => event.stopPropagation()}
               />
               {accessory ? <div className="shrink-0">{accessory}</div> : null}
             </Autocomplete.InputGroup>
