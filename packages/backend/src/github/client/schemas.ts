@@ -33,6 +33,25 @@ const GhRestRepoSchema = Schema.Struct({
   owner: Schema.optional(Schema.NullOr(GhActorSchema)),
 });
 
+const GhRestPullRequestRefSchema = Schema.Struct({
+  sha: Schema.String,
+});
+
+const GhRestPullRequestSchema = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  state: Schema.String,
+  draft: Schema.optional(Schema.Boolean),
+  additions: OptionalNullableNumber,
+  deletions: OptionalNullableNumber,
+  user: Schema.optional(Schema.NullOr(GhActorSchema)),
+  updated_at: Schema.String,
+  html_url: Schema.String,
+  head: GhRestPullRequestRefSchema,
+  base: GhRestPullRequestRefSchema,
+  merged_at: OptionalNullableString,
+});
+
 const GhGraphqlRepoSchema = Schema.Struct({
   name: Schema.String,
   nameWithOwner: Schema.String,
@@ -335,6 +354,7 @@ const GitHubErrorBodySchema = Schema.Struct({
 });
 
 type GhSearchRepo = typeof GhSearchRepoSchema.Type;
+type GhRestPullRequest = typeof GhRestPullRequestSchema.Type;
 type GhRestRepo = typeof GhRestRepoSchema.Type;
 type GhGraphqlRepo = typeof GhGraphqlRepoSchema.Type;
 type GhPullRequest = typeof GhPullRequestSchema.Type;
@@ -360,6 +380,7 @@ export {
   GhPendingReviewCommentSchema,
   GhPullRequestReviewSchema,
   GhPullRequestSchema,
+  GhRestPullRequestSchema,
   GhRestRepoSchema,
   GhRestUserSchema,
   GhSearchRepoSchema,
@@ -385,6 +406,7 @@ export type {
   GhPendingReviewComment,
   GhPullRequest,
   GhPullRequestReview,
+  GhRestPullRequest,
   GhRestRepo,
   GhSearchRepo,
   GraphQlResponse,

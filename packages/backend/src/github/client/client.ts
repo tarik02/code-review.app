@@ -36,6 +36,8 @@ import {
   GhPendingReviewCommentSchema,
   type GhPullRequestReview,
   GhPullRequestReviewSchema,
+  type GhRestPullRequest,
+  GhRestPullRequestSchema,
   type GhRestRepo,
   GhRestRepoSchema,
   GhRestUserSchema,
@@ -82,6 +84,10 @@ type GitHubApiClientShape = {
     owner: string,
     name: string,
   ): GitHubClientEffect<GraphQlResponse<typeof ListPullRequestsQueryDataSchema.Type>>;
+  repositoryOpenPullRequests(
+    owner: string,
+    name: string,
+  ): GitHubClientEffect<ReadonlyArray<GhRestPullRequest>>;
   repositoryPullRequest(
     owner: string,
     name: string,
@@ -199,6 +205,10 @@ const API_REQUEST_TIMEOUT = '30 seconds';
 function parseGitHubErrorBody(text: string) {
   if (!text) {
     return '';
+  }
+
+  if (/<html[\s>]/i.test(text) && /bad gateway/i.test(text)) {
+    return 'GitHub returned 502 Bad Gateway.';
   }
 
   try {
@@ -597,6 +607,27 @@ query($owner: String!, $name: String!) {
         decodeGraphqlBody(ListPullRequestsQueryDataSchema),
       );
     });
+
+    const repositoryOpenPullRequests: GitHubApiClientShape['repositoryOpenPullRequests'] =
+      Effect.fn('GitHubApiClient.repositoryOpenPullRequests')(function* (owner, name) {
+        const token = yield* requireStoredToken();
+        const auth = yield* authorize();
+        return yield* HttpClientRequest.get(
+          githubRoute('/repos/:owner/:name/pulls', {
+            params: { owner, name },
+            query: {
+              state: 'open',
+              per_page: 100,
+            },
+          }),
+        ).pipe(
+          setDefaultHeaders,
+          prefixApiHost(token.host),
+          auth,
+          send,
+          decodeJsonBody(Schema.Array(GhRestPullRequestSchema)),
+        );
+      });
 
     const repositoryPullRequest: GitHubApiClientShape['repositoryPullRequest'] = Effect.fn(
       'GitHubApiClient.repositoryPullRequest',
@@ -1330,6 +1361,7 @@ mutation($id: ID!) {
       repo,
       searchPullRequests,
       repositoryPullRequests,
+      repositoryOpenPullRequests,
       repositoryPullRequest,
       pullRequestNodeId,
       pullRequestReviews,

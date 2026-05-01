@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
@@ -44,6 +45,7 @@ import {
   type GhGraphqlRepo,
   type GhPullRequest,
   type GhPullRequestReview,
+  type GhRestPullRequest,
   type GhRestRepo,
   type GhSearchRepo,
   GraphQlConversationCommentSchema,
@@ -124,6 +126,10 @@ function encodePath(path: string) {
     .split('/')
     .map((segment) => encodeURIComponent(segment))
     .join('/');
+}
+
+function basicAuthHeader(username: string, password: string) {
+  return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
 function isNotAuthenticatedMessage(message: string) {
@@ -287,6 +293,26 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
     url: pullRequest.url,
     headSha: pullRequest.headRefOid,
     baseSha: pullRequest.baseRefOid ?? null,
+  };
+}
+
+function toPullRequestSummaryFromRest(pullRequest: GhRestPullRequest) {
+  const merged = pullRequest.merged_at != null;
+  return {
+    number: pullRequest.number,
+    title: pullRequest.title,
+    state: merged ? 'MERGED' : pullRequest.state.toUpperCase(),
+    isDraft: pullRequest.draft ?? false,
+    mergeStateStatus: 'UNKNOWN',
+    mergeable: 'UNKNOWN',
+    additions: pullRequest.additions ?? null,
+    deletions: pullRequest.deletions ?? null,
+    changeCount: null,
+    authorLogin: pullRequest.user?.login ?? 'unknown',
+    updatedAt: pullRequest.updated_at,
+    url: pullRequest.html_url,
+    headSha: pullRequest.head.sha,
+    baseSha: pullRequest.base.sha,
   };
 }
 
@@ -706,8 +732,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     function* (repo: ProviderRepoIdentity) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
-      const response = yield* api.repositoryPullRequests(owner, name);
-      return (response.data?.repository?.pullRequests.nodes ?? []).map(toPullRequestSummary);
+      const pullRequests = yield* api.repositoryOpenPullRequests(owner, name);
+      return pullRequests.map(toPullRequestSummaryFromRest);
     },
   );
 
@@ -1115,11 +1141,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       return {
         url: `${repo.host}/${owner}/${name}.git`,
         auth: {
-          envConfig: [],
-          askPass: {
-            username: 'x-access-token',
-            password: token,
-          },
+          envConfig: [
+            {
+              key: `http.${repo.host}/.extraheader`,
+              value: basicAuthHeader('x-access-token', token),
+            },
+          ],
         },
       };
     });

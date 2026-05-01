@@ -61,12 +61,17 @@ import {
   repoIdentityKey,
 } from '../lib/repo-identity';
 import { normalizeHostInput, parseForgeResourceUrl } from '../lib/forge-links';
+import { matchesPullRequestSearchState } from '../lib/pull-request-search';
 
 function getErrorMessage(error: unknown): string {
   if (!error) return '';
   if (error instanceof Error) return error.message;
   return String(error);
 }
+
+type ParsedPullRequestUrl = NonNullable<ReturnType<typeof parseForgeResourceUrl>> & {
+  number: number;
+};
 
 function filterAccountsForRepoSearch(accounts: ProviderAccount[], query: string) {
   const trimmedQuery = query.trim();
@@ -367,34 +372,6 @@ function useAccountOverviewPullRequests(
     })),
   });
 
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    console.log(`[overview] configured for ${accountIds.length} enabled provider account(s)`, {
-      accountIds,
-    });
-
-    if (accountIds.length === 0) {
-      return;
-    }
-
-    for (let i = 0; i < accountIds.length; i += 1) {
-      const query = overviewQueries[i];
-      if (!query) continue;
-      if (query.error) {
-        console.error(`[overview] failed for account ${accountIds[i]}`, {
-          error: query.error,
-        });
-        continue;
-      }
-      if (query.data) {
-        console.log(`[overview] loaded ${query.data.length} PRs/MRs for account ${accountIds[i]}`);
-      }
-    }
-  }, [accountIds, enabled, overviewQueries]);
-
   const pullRequests = useMemo(() => {
     const entries: OverviewPullRequestSummary[] = [];
     for (const query of overviewQueries) {
@@ -425,7 +402,7 @@ function dedupeOverviewPullRequestEntries(entries: OverviewPullRequestSummary[])
   const byKey = new Map<string, OverviewPullRequestSummary>();
 
   for (const entry of entries) {
-    const key = `${entry.repo.providerId}:${entry.repo.repoKey}#${entry.pullRequest.number}`;
+    const key = `${repoIdentityKey(entry.repo)}#${entry.pullRequest.number}`;
     const existing = byKey.get(key);
     if (!existing) {
       byKey.set(key, entry);
@@ -455,19 +432,70 @@ function usePullRequestSearchForAccounts(args: {
   limit?: number;
 }) {
   const { accounts, enabledAccountIds, query, states, enabled = true, limit = 10 } = args;
+  const parsedPullRequestUrl = useMemo<ParsedPullRequestUrl | null>(() => {
+    const parsedUrl = parseForgeResourceUrl(query.trim());
+    if (!parsedUrl || parsedUrl.number === null) {
+      return null;
+    }
+
+    return parsedUrl as ParsedPullRequestUrl;
+  }, [query]);
   const accountIds = useMemo(
     () =>
-      accounts
-        .map((account) => account.id)
-        .filter((accountId) => enabledAccountIds.includes(accountId)),
-    [accounts, enabledAccountIds],
+      accounts.flatMap((account) => {
+        if (!enabledAccountIds.includes(account.id)) {
+          return [];
+        }
+
+        if (
+          parsedPullRequestUrl &&
+          (account.provider !== parsedPullRequestUrl.provider ||
+            normalizeHostInput(account.host) !== parsedPullRequestUrl.host)
+        ) {
+          return [];
+        }
+
+        return [account.id];
+      }),
+    [accounts, enabledAccountIds, parsedPullRequestUrl],
   );
 
   const searchQueries = useQueries({
-    queries: accountIds.map((accountId) => ({
-      ...pullRequestSearchQueryOptions(accountId, query, states, limit),
-      enabled,
-    })),
+    queries: accountIds.map((accountId) => {
+      if (parsedPullRequestUrl) {
+        return {
+          queryKey: forgeKeys.pullRequestSearch(accountId, query, states, limit),
+          queryFn: async () => {
+            const repo = await trpc.repos.tryValidate.query({
+              accountId,
+              repo: parsedPullRequestUrl.repoPath,
+            });
+            if (!repo) {
+              return [];
+            }
+
+            const pullRequest = await trpc.pullRequests.get.query({
+              ...repoIdentity(repo),
+              number: parsedPullRequestUrl.number,
+            });
+
+            if (!matchesPullRequestSearchState(pullRequest, states)) {
+              return [];
+            }
+
+            return [{ repo, pullRequest }] satisfies OverviewPullRequestSummary[];
+          },
+          enabled,
+          staleTime: 0,
+          retry: false,
+        };
+      }
+
+      return {
+        ...pullRequestSearchQueryOptions(accountId, query, states, limit),
+        enabled,
+      };
+    }),
   });
 
   const pullRequests = useMemo(() => {
@@ -651,6 +679,7 @@ function useSelectedPullRequestData(
       });
     },
     enabled: selectedPr !== null,
+    retry: false,
   });
 
   const changedFilesQuery = useQuery({
@@ -669,7 +698,8 @@ function useSelectedPullRequestData(
         headSha: selectedPr.headSha,
       });
     },
-    enabled: selectedPr !== null,
+    enabled: selectedPr !== null && diffDataMode !== 'git',
+    retry: false,
   });
 
   const reviewThreadsQuery = useQuery({
@@ -751,7 +781,10 @@ function useSelectedPullRequestData(
   });
 
   const selectedPatch = (selectedPatchQuery.data as PrPatch | undefined) ?? null;
-  const changedFiles = (changedFilesQuery.data as string[] | undefined) ?? [];
+  const changedFiles =
+    diffDataMode === 'git'
+      ? selectedPatch?.fileDiffs.map((fileDiff) => fileDiff.name) ?? []
+      : (changedFilesQuery.data as string[] | undefined) ?? [];
   const reviewThreads = (reviewThreadsQuery.data as ReviewThread[] | undefined) ?? [];
   const pendingReview = (pendingReviewQuery.data as PendingReviewState | undefined) ?? {
     session: null,
@@ -765,7 +798,9 @@ function useSelectedPullRequestData(
     (selectedPatchQuery.isPending || (selectedPatchQuery.isFetching && !selectedPatchQuery.data));
   const isChangedFilesLoading =
     selectedPr !== null &&
-    (changedFilesQuery.isPending || (changedFilesQuery.isFetching && !changedFilesQuery.data));
+    (diffDataMode === 'git'
+      ? isPatchLoading
+      : changedFilesQuery.isPending || (changedFilesQuery.isFetching && !changedFilesQuery.data));
   const isReviewThreadsLoading =
     selectedPr !== null &&
     (reviewThreadsQuery.isPending || (reviewThreadsQuery.isFetching && !reviewThreadsQuery.data));
@@ -783,7 +818,10 @@ function useSelectedPullRequestData(
     approvalState,
     approvalStateError: getErrorMessage(approvalStateQuery.error),
     changedFiles,
-    changedFilesError: getErrorMessage(changedFilesQuery.error),
+    changedFilesError:
+      diffDataMode === 'git'
+        ? getErrorMessage(selectedPatchQuery.error)
+        : getErrorMessage(changedFilesQuery.error),
     isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,

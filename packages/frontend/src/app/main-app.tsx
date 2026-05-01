@@ -275,6 +275,10 @@ function MainApp() {
     }
     return entries;
   }, [activeTrackedPullRequest, matchesSidebarFilters, selectedRepo, trackedPullRequestEntries]);
+  const commandPaletteLocalPullRequests = useMemo(
+    () => [...trackedPullRequestEntries, ...overviewPullRequests],
+    [overviewPullRequests, trackedPullRequestEntries],
+  );
 
   const selectedPrKey = selectedPr
     ? `${repoIdentityKey(selectedPr)}#${selectedPr.number}@${selectedPr.headSha}`
@@ -770,6 +774,7 @@ function MainApp() {
         changedFiles={changedFiles}
         diffSessionKey={patchViewerSessionKey}
         patchViewerSessionKey={patchViewerSessionKey}
+        localPullRequests={commandPaletteLocalPullRequests}
         pendingReview={pendingReview}
         reviewThreads={reviewThreads}
         selectedPr={selectedPr}

@@ -1,8 +1,9 @@
 import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
-import { ValidationError } from '../errors.ts';
+import { summarizeError, ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 import { AppSettingsService } from './app-settings.ts';
+import { repoIdentityCacheKey } from '../repo-id.ts';
 import { trackedPullRequestOrderEntrySchema } from '@code-review-app/shared';
 import type {
   PullRequestSummary,
@@ -132,7 +133,22 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
     const tracked = yield* cache.readTrackedPullRequests(repoIdentity);
     if (tracked.length === 0) return [];
 
-    const openPullRequests = yield* provider.listPullRequests(repo);
+    const openPullRequests = yield* provider.listPullRequests(repo).pipe(
+      Effect.catchAll((error) =>
+        Effect.logWarning('[tracked] refresh failed; returning cached pull requests').pipe(
+          Effect.annotateLogs({
+            repo: repoIdentityCacheKey(repoIdentity),
+            error: summarizeError(error),
+          }),
+          Effect.zipRight(Effect.succeed<PullRequestSummary[] | null>(null)),
+        ),
+      ),
+    );
+    if (!openPullRequests) {
+      yield* cache.updateRepoAccessTimestamp(repoIdentity);
+      return tracked;
+    }
+
     const openByNumber = new Map(
       openPullRequests.map((pullRequest) => [pullRequest.number, pullRequest]),
     );

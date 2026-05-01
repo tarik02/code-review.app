@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
   PendingReviewComment,
@@ -61,6 +62,10 @@ function isNotAuthenticatedMessage(message: string) {
     normalized.includes('401') ||
     normalized.includes('unauthorized')
   );
+}
+
+function basicAuthHeader(username: string, password: string) {
+  return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
 function parseGitLabRepoInput(host: string, input: string): [string, string] {
@@ -1134,11 +1139,12 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       return {
         url: `${repo.host}/${repo.path}.git`,
         auth: {
-          envConfig: [],
-          askPass: {
-            username: 'oauth2',
-            password: token,
-          },
+          envConfig: [
+            {
+              key: `http.${repo.host}/.extraheader`,
+              value: basicAuthHeader('oauth2', token),
+            },
+          ],
         },
       };
     });

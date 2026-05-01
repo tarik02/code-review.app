@@ -13,6 +13,7 @@ type CommandPaletteItem = {
   keywords?: string[];
   icon?: ReactNode;
   badge?: ReactNode;
+  shortcut?: string;
   disabled?: boolean;
   onSelect: () => void;
 };
@@ -26,6 +27,7 @@ type CommandPaletteProps = {
   footer?: ReactNode;
   inputFooter?: ReactNode;
   items: CommandPaletteItem[];
+  numberedShortcuts?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   placeholder: string;
@@ -79,6 +81,62 @@ function handleEscapeKeyDown(
   onOpenChange(false);
 }
 
+function matchesShortcut(event: KeyboardEvent<HTMLDivElement>, shortcut: string) {
+  const parts = shortcut
+    .split('+')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  const key = parts.at(-1);
+  if (!key) {
+    return false;
+  }
+
+  const wantsMod = parts.includes('mod');
+  const wantsCtrl = parts.includes('ctrl');
+  const wantsMeta = parts.includes('meta') || parts.includes('cmd');
+  const wantsShift = parts.includes('shift');
+  const wantsAlt = parts.includes('alt') || parts.includes('option');
+
+  if (wantsMod && !(event.metaKey || event.ctrlKey)) {
+    return false;
+  }
+  if (wantsCtrl && !event.ctrlKey) {
+    return false;
+  }
+  if (wantsMeta && !event.metaKey) {
+    return false;
+  }
+  if (event.shiftKey !== wantsShift) {
+    return false;
+  }
+  if (event.altKey !== wantsAlt) {
+    return false;
+  }
+
+  return event.key.toLowerCase() === key;
+}
+
+function isMacPlatform() {
+  const platform = navigator.platform.toLowerCase();
+  return platform.includes('mac') || platform.includes('iphone') || platform.includes('ipad');
+}
+
+function formatShortcut(shortcut: string) {
+  const isMac = isMacPlatform();
+  return shortcut
+    .split('+')
+    .map((part) => {
+      const normalized = part.trim().toLowerCase();
+      if (normalized === 'mod') return isMac ? '⌘' : 'Ctrl';
+      if (normalized === 'cmd' || normalized === 'meta') return '⌘';
+      if (normalized === 'ctrl') return 'Ctrl';
+      if (normalized === 'shift') return isMac ? '⇧' : 'Shift';
+      if (normalized === 'alt' || normalized === 'option') return isMac ? '⌥' : 'Alt';
+      return part.trim().toUpperCase();
+    })
+    .join(isMac ? '' : '+');
+}
+
 function CommandPalette({
   accessory,
   dialogClassName,
@@ -88,6 +146,7 @@ function CommandPalette({
   footer,
   inputFooter,
   items,
+  numberedShortcuts = false,
   open,
   onOpenChange,
   placeholder,
@@ -159,14 +218,66 @@ function CommandPalette({
     setUncontrolledQuery(value);
   }
 
+  function selectItem(item: CommandPaletteItem) {
+    if (item.disabled) {
+      return;
+    }
+
+    item.onSelect();
+  }
+
+  function handleKeyDownCapture(event: KeyboardEvent<HTMLDivElement>) {
+    handleEscapeKeyDown(event, onOpenChange);
+
+    const shortcutItem = filteredItems.find(
+      (item) => item.shortcut && !item.disabled && matchesShortcut(event, item.shortcut),
+    );
+    if (shortcutItem) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectItem(shortcutItem);
+      return;
+    }
+
+    if (!numberedShortcuts || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+      return;
+    }
+
+    const numericKey = event.key === '0' ? 10 : Number.parseInt(event.key, 10);
+    if (!Number.isInteger(numericKey) || numericKey < 1 || numericKey > 9) {
+      return;
+    }
+
+    const item = filteredItems[numericKey - 1];
+    if (!item || item.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    selectItem(item);
+  }
+
+  function getItemShortcut(item: CommandPaletteItem, index: number) {
+    if (item.shortcut) {
+      return item.shortcut;
+    }
+
+    if (numberedShortcuts && !item.disabled && index < 9) {
+      return `Mod+${index + 1}`;
+    }
+
+    return null;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cx(
-          'max-w-[760px] overflow-hidden border border-neutral-400 p-0 dark:border-neutral-700',
+          'max-h-[calc(100vh-2rem)] max-w-[760px] overflow-hidden border border-neutral-400 p-0 dark:border-neutral-700',
           dialogClassName,
         )}
-        onKeyDownCapture={(event) => handleEscapeKeyDown(event, onOpenChange)}
+        onKeyDownCapture={handleKeyDownCapture}
       >
         <Autocomplete.Root<CommandPaletteItem>
           autoHighlight="always"
@@ -193,7 +304,7 @@ function CommandPalette({
             className="bg-surface"
             contentClassName="p-2"
             orientation="vertical"
-            viewportClassName="max-h-[60vh] h-auto bg-surface"
+            viewportClassName="h-auto max-h-[calc(100vh-12rem)] bg-surface"
           >
             {filteredItems.length === 0 ? (
               <div className="rounded-lg border border-dashed border-neutral-300 bg-canvas px-4 py-8 text-center dark:border-neutral-700">
@@ -212,43 +323,47 @@ function CommandPalette({
                     )}>
                       {group.group}
                     </div>
-                    {group.entries.map(({ index, item }) => (
-                      <Autocomplete.Item
-                        className={cx(
-                          'flex items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition hover:bg-canvas hover:text-ink-900 data-[highlighted]:bg-canvas dark:hover:bg-canvasDark dark:data-[highlighted]:bg-canvasDark',
-                          item.disabled && 'pointer-events-none opacity-50',
-                        )}
-                        disabled={item.disabled}
-                        index={index}
-                        key={item.id}
-                        value={item}
-                        onClick={() => {
-                          if (item.disabled) {
-                            return;
-                          }
+                    {group.entries.map(({ index, item }) => {
+                      const shortcut = getItemShortcut(item, index);
 
-                          item.onSelect();
-                        }}
-                      >
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-ink-600 dark:bg-canvasDark">
-                          {item.icon}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-medium text-ink-900">
-                              {renderHighlightedText(item.title, currentQuery)}
-                            </p>
-                            {item.badge ? <div className="shrink-0">{item.badge}</div> : null}
+                      return (
+                        <Autocomplete.Item
+                          className={cx(
+                            'flex items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition hover:bg-canvas hover:text-ink-900 data-[highlighted]:bg-canvas dark:hover:bg-canvasDark dark:data-[highlighted]:bg-canvasDark',
+                            item.disabled && 'pointer-events-none opacity-50',
+                          )}
+                          disabled={item.disabled}
+                          index={index}
+                          key={item.id}
+                          value={item}
+                          onClick={() => selectItem(item)}
+                        >
+                          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-canvas text-ink-600 dark:bg-canvasDark">
+                            {item.icon}
                           </div>
-                          {item.subtitle ? (
-                            <p className="truncate text-xs text-ink-500">
-                              {renderHighlightedText(item.subtitle, currentQuery)}
-                            </p>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="select-none truncate text-sm font-medium text-ink-900">
+                                {renderHighlightedText(item.title, currentQuery)}
+                              </p>
+                              {item.badge ? <div className="shrink-0">{item.badge}</div> : null}
+                            </div>
+                            {item.subtitle ? (
+                              <p className="select-none truncate text-xs text-ink-500">
+                                {renderHighlightedText(item.subtitle, currentQuery)}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          {shortcut ? (
+                            <div className="shrink-0 select-none rounded border border-neutral-300 bg-surface px-1.5 py-0.5 text-[11px] font-medium text-ink-500 dark:border-neutral-700">
+                              {formatShortcut(shortcut)}
+                            </div>
                           ) : null}
-                        </div>
-                      </Autocomplete.Item>
-                    ))}
+                        </Autocomplete.Item>
+                      );
+                    })}
                   </div>
                 ))}
               </Autocomplete.List>

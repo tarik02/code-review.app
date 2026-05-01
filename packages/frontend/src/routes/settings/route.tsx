@@ -3,7 +3,6 @@ import { useHotkey } from '@tanstack/react-hotkeys';
 import { ArrowLeftIcon } from 'lucide-react';
 import { SettingsCommandPalettes } from '../../components/ui/app-command-palettes';
 import { Button } from '../../components/ui/button';
-import { CommandPaletteLaunchers } from '../../components/ui/command-palette-launchers';
 import { TopBar } from '../../components/ui/top-bar';
 import { SETTINGS_RETURN_HREF_STORAGE_KEY } from '../../lib/settings-return-location';
 
@@ -32,9 +31,6 @@ function SettingsLayout() {
 
         <div className="grow flex flex-col justify-between px-3 py-4">
           <div className="mb-6 px-2">
-            <div className="mb-3">
-              <CommandPaletteLaunchers scope="settings" />
-            </div>
             <h1 className="mt-1 text-lg font-semibold text-ink-900">Settings</h1>
           </div>
 

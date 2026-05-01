@@ -5,7 +5,6 @@ import { useNavigate } from '@tanstack/react-router';
 import {
   CheckIcon,
   EyeIcon,
-  FileCode2Icon,
   FilterXIcon,
   FolderGit2Icon,
   GitPullRequestIcon,
@@ -15,7 +14,14 @@ import {
   Settings2Icon,
   UserCircle2Icon,
 } from 'lucide-react';
-import { usePullRequestApprovalMutations, usePullRequestReviewCommentMutations, usePullRequestSearchForAccounts, useRepoPickerReposForAccounts, useSavedRepos } from '../../hooks/use-forge-queries';
+import {
+  usePullRequestApprovalMutations,
+  usePullRequestReviewCommentMutations,
+  usePullRequestSearchForAccounts,
+  useRepoPickerReposForAccounts,
+  useSavedRepos,
+  dedupeOverviewPullRequestEntries,
+} from '../../hooks/use-forge-queries';
 import { useEnabledProviderAccounts } from '../../hooks/use-enabled-provider-accounts';
 import {
   forgeKeys,
@@ -26,8 +32,12 @@ import {
 } from '../../queries/forge';
 import { trpc } from '../../lib/trpc';
 import { repoIdentity, repoIdentityKey, sameRepoIdentity } from '../../lib/repo-identity';
-import { prependTrackedPullRequestOrderEntry, toTrackedPullRequestOrderEntry } from '../../lib/tracked-pull-request-order';
-import { getReviewThreadRefKey, getThreadRootComment, isActiveReviewThread, isGlobalReviewThread, isFileReviewThread, normalizePath, type ReviewThread } from '../../lib/review-threads';
+import { matchesPullRequestSearchState } from '../../lib/pull-request-search';
+import {
+  prependTrackedPullRequestOrderEntry,
+  toTrackedPullRequestOrderEntry,
+} from '../../lib/tracked-pull-request-order';
+import type { ReviewThread } from '../../lib/review-threads';
 import {
   applyProfileFilterChange,
   applyRepoFilterChange,
@@ -56,6 +66,13 @@ import {
   getPullRequestStatus,
 } from './forge-search-result-parts';
 import {
+  ActiveBadge,
+  PullRequestStatusBadge,
+  buildPullRequestContentPaletteItems,
+  buildRepoNamespacePrefixes,
+  repoMatchesNamespaceFilter,
+} from './app-command-palette-items';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -80,6 +97,12 @@ type PullRequestContentPaletteProps = {
   selectedPr: SelectedPullRequest | null;
 };
 
+type BrowsePaletteProps = {
+  localPullRequests?: OverviewPullRequestSummary[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
 type HomeWorkflowPaletteProps = {
   approvalState: PullRequestApprovalState | null;
   diffSessionKey: string | null;
@@ -93,185 +116,33 @@ type HomeWorkflowPaletteProps = {
 };
 
 type HomeCommandPalettesProps = PullRequestContentPaletteProps &
-  Omit<HomeWorkflowPaletteProps, 'open' | 'onOpenChange'>;
+  Omit<HomeWorkflowPaletteProps, 'open' | 'onOpenChange'> & {
+    localPullRequests: OverviewPullRequestSummary[];
+  };
 
 type SettingsCommandPalettesProps = {
   handleBackToPrs: () => void;
 };
 
-function createStatusBadge(pullRequest: PullRequestSummary) {
-  const status = getPullRequestStatus(pullRequest);
-  return (
-    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${status.className}`}>
-      {status.label}
-    </span>
-  );
-}
-
-function matchesPullRequestSearchState(
-  pullRequest: PullRequestSummary,
-  state: PullRequestSearchState,
-) {
-  if (state === 'all') {
-    return true;
-  }
-
-  if (pullRequest.state !== 'OPEN') {
-    return false;
-  }
-
-  return state === 'draft_open' || !pullRequest.isDraft;
-}
-
-function formatThreadLocation(thread: ReviewThread) {
-  if (isGlobalReviewThread(thread)) {
-    return 'Global comment';
-  }
-
-  const lineLabel =
-    thread.line !== null ? `line ${thread.line}` : isFileReviewThread(thread) ? 'file comment' : 'comment';
-  return `${normalizePath(thread.path)} · ${lineLabel}`;
-}
-
-function buildFileSearchKeywords(path: string) {
-  const normalizedPath = normalizePath(path);
-  const basename = normalizedPath.split('/').at(-1) ?? normalizedPath;
-  const basenameWithoutExtension = basename.replace(/\.[^.]+$/, '');
-  const pathWithoutExtension = normalizedPath.replace(/\.[^.]+$/, '');
-  const variants = new Set<string>([
-    normalizedPath,
-    basename,
-    basenameWithoutExtension,
-    pathWithoutExtension,
-  ]);
-
-  for (const value of [normalizedPath, basename, basenameWithoutExtension, pathWithoutExtension]) {
-    variants.add(value.replace(/[-_.\\/]+/g, ' '));
-    variants.add(value.replace(/[^a-z0-9]+/gi, ''));
-  }
-
-  for (const segment of normalizedPath.split(/[\\/]+/)) {
-    if (!segment) {
-      continue;
-    }
-
-    variants.add(segment);
-    variants.add(segment.replace(/\.[^.]+$/, ''));
-    variants.add(segment.replace(/[-_.]+/g, ' '));
-    variants.add(segment.replace(/[^a-z0-9]+/gi, ''));
-  }
-
-  return [...variants];
-}
-
-function buildSearchTextVariants(value: string) {
-  const trimmedValue = value.trim();
-  const variants = new Set<string>([trimmedValue]);
-
-  variants.add(trimmedValue.replace(/[-_.\\/]+/g, ' '));
-  variants.add(trimmedValue.replace(/[^a-z0-9]+/gi, ''));
-
-  return [...variants].filter(Boolean);
-}
-
-function buildRepoNamespacePrefixes(nameWithOwner: string) {
-  const segments = nameWithOwner.split('/').filter(Boolean);
-  if (segments.length < 2) {
-    return [];
-  }
-
-  const prefixes: string[] = [];
-  for (let index = 0; index < segments.length - 1; index += 1) {
-    prefixes.push(segments.slice(0, index + 1).join('/'));
-  }
-
-  return prefixes;
-}
-
-function repoMatchesNamespaceFilter(repo: Pick<RepoSummary, 'nameWithOwner'>, namespacePath: string | null) {
-  if (!namespacePath) {
-    return true;
-  }
-
-  return repo.nameWithOwner === namespacePath || repo.nameWithOwner.startsWith(`${namespacePath}/`);
-}
-
-function buildPullRequestContentPaletteItems(args: {
-  changedFiles: string[];
-  patchViewerSessionKey: string | null;
-  reviewThreads: ReviewThread[];
+function FilterChipButton({
+  children,
+  onClear,
+}: {
+  children: ReactNode;
+  onClear: () => void;
 }) {
-  const requestNavigationIntent = usePatchViewerStore.getState().requestNavigationIntent;
-  const fileItems: CommandPaletteItem[] = args.changedFiles.map((path) => {
-    const basename = path.split('/').at(-1) ?? path;
-    return {
-      id: `file:${path}`,
-      group: 'Files',
-      title: path,
-      subtitle: basename === path ? null : basename,
-      keywords: buildFileSearchKeywords(path),
-      icon: <FileCode2Icon className="size-4" />,
-      onSelect: () => {
-        if (!args.patchViewerSessionKey) {
-          return;
-        }
-
-        requestNavigationIntent(args.patchViewerSessionKey, {
-          kind: 'file',
-          path,
-        });
-      },
-    };
-  });
-
-  const threadItems: CommandPaletteItem[] = args.reviewThreads.map((thread) => {
-    const rootComment = getThreadRootComment(thread);
-    const preview = rootComment?.body.trim() || 'Open comment thread';
-    const author = rootComment?.authorLogin ?? 'unknown';
-    const statusLabel = [
-      isGlobalReviewThread(thread) ? 'global' : null,
-      thread.isResolved ? 'resolved' : null,
-      thread.isOutdated ? 'outdated' : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-
-    return {
-      id: `thread:${getReviewThreadRefKey(thread)}`,
-      group: 'Comments',
-      title: preview,
-      subtitle: `${formatThreadLocation(thread)} · ${author}${statusLabel ? ` · ${statusLabel}` : ''}`,
-      keywords: [
-        preview,
-        normalizePath(thread.path),
-        author,
-        String(thread.line ?? ''),
-        thread.isResolved ? 'resolved' : 'unresolved',
-        thread.isOutdated ? 'outdated' : 'active',
-      ],
-      icon: <MessageSquareMoreIcon className="size-4" />,
-      badge: !isActiveReviewThread(thread) ? (
-        <span className="rounded border border-ink-300 px-1.5 py-0.5 text-[10px] font-semibold text-ink-600">
-          {thread.isResolved ? 'Resolved' : 'Outdated'}
-        </span>
-      ) : undefined,
-      onSelect: () => {
-        if (!args.patchViewerSessionKey) {
-          return;
-        }
-
-        requestNavigationIntent(args.patchViewerSessionKey, {
-          kind: 'thread',
-          threadKey: getReviewThreadRefKey(thread),
-          filePath: isGlobalReviewThread(thread) ? null : normalizePath(thread.path),
-          isGlobal: isGlobalReviewThread(thread),
-          expandInactiveComments: isFileReviewThread(thread) && !isActiveReviewThread(thread),
-        });
-      },
-    };
-  });
-
-  return [...fileItems, ...threadItems];
+  return (
+    <button
+      className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-canvas px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
+      onClick={onClear}
+      type="button"
+    >
+      <span>{children}</span>
+      <span aria-hidden="true" className="text-ink-500">
+        x
+      </span>
+    </button>
+  );
 }
 
 function PullRequestContentPalette({
@@ -309,6 +180,7 @@ function PullRequestContentPalette({
       }
       emptyTitle={selectedPr ? 'No matches' : 'No pull request selected'}
       items={items}
+      numberedShortcuts
       open={open}
       onOpenChange={onOpenChange}
       placeholder="Search files and comments"
@@ -321,7 +193,7 @@ function PullRequestContentPalette({
   );
 }
 
-function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function BrowsePalette({ localPullRequests = [], open, onOpenChange }: BrowsePaletteProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { enabledAccountIds, enabledProviderAccounts } = useEnabledProviderAccounts();
@@ -341,6 +213,8 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const hasQuery = query.trim().length > 0;
   const hasDebouncedQuery = debouncedQuery.trim().length > 0;
   const hasScopedPullRequestSource = Boolean(repoFilterKey || namespaceFilterPath);
+  const hasGlobalPullRequestSearch =
+    hasQuery && hasDebouncedQuery && !hasScopedPullRequestSource;
   const enabledAccountIdSet = useMemo(() => new Set(enabledAccountIds), [enabledAccountIds]);
 
   useEffect(() => {
@@ -380,13 +254,22 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     enabledAccountIds,
     query: debouncedQuery,
     states: pullRequestState,
-    enabled: open && hasDebouncedQuery,
+    enabled: open && hasGlobalPullRequestSearch,
     limit: 12,
   });
+  const localPullRequestEntries = useMemo(
+    () => dedupeOverviewPullRequestEntries(localPullRequests),
+    [localPullRequests],
+  );
   const browseRepos = useMemo(() => {
     const reposByIdentity = new Map<string, RepoSummary>();
 
-    for (const repo of [...trackedRepos, ...savedRepos, ...availableRepos]) {
+    for (const repo of [
+      ...trackedRepos,
+      ...savedRepos,
+      ...availableRepos,
+      ...localPullRequestEntries.map((entry) => entry.repo),
+    ]) {
       if (!enabledAccountIdSet.has(repo.providerAccountId)) {
         continue;
       }
@@ -398,18 +281,19 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     }
 
     return [...reposByIdentity.values()];
-  }, [availableRepos, enabledAccountIdSet, savedRepos, trackedRepos]);
+  }, [availableRepos, enabledAccountIdSet, localPullRequestEntries, savedRepos, trackedRepos]);
 
   const repoAccountIdByKey = useMemo(() => {
     const entries = new Map<string, string>();
     for (const repo of [
       ...browseRepos,
+      ...localPullRequestEntries.map((entry) => entry.repo),
       ...pullRequestSearch.pullRequests.map((entry) => entry.repo),
     ]) {
       entries.set(repo.repoKey, repo.providerAccountId);
     }
     return Object.fromEntries(entries);
-  }, [browseRepos, pullRequestSearch.pullRequests]);
+  }, [browseRepos, localPullRequestEntries, pullRequestSearch.pullRequests]);
   const namespaceItems = useMemo(() => {
     const entries = new Map<
       string,
@@ -464,7 +348,7 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   const repoScopedPullRequestQueries = useQueries({
     queries: repoScopedPullRequestRepos.map((repo) => ({
       ...pullRequestListQueryOptions(repoIdentity(repo)),
-      enabled: open && (hasQuery || hasScopedPullRequestSource),
+      enabled: open && hasScopedPullRequestSource,
     })),
   });
   const repoScopedPullRequests = useMemo(() => {
@@ -512,22 +396,45 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   );
   const repoScopedPullRequestsLoading =
     open &&
-    (hasQuery || hasScopedPullRequestSource) &&
+    hasScopedPullRequestSource &&
     repoScopedPullRequestQueries.some(
       (queryResult) => queryResult.isPending || queryResult.isFetching,
     );
-  const pullRequestEntries = hasScopedPullRequestSource
-    ? repoScopedPullRequests
-    : pullRequestSearch.pullRequests;
+  const pullRequestEntries = useMemo(() => {
+    if (hasScopedPullRequestSource) {
+      return repoScopedPullRequests;
+    }
+
+    if (hasGlobalPullRequestSearch) {
+      return pullRequestSearch.pullRequests;
+    }
+
+    return localPullRequestEntries;
+  }, [
+    hasGlobalPullRequestSearch,
+    hasScopedPullRequestSource,
+    localPullRequestEntries,
+    pullRequestSearch.pullRequests,
+    repoScopedPullRequests,
+  ]);
   const filteredPullRequests = useMemo(
     () =>
       pullRequestEntries.filter(
         (entry) =>
+          enabledAccountIdSet.has(entry.repo.providerAccountId) &&
           (!profileFilterAccountId || entry.repo.providerAccountId === profileFilterAccountId) &&
           (!repoFilterKey || entry.repo.repoKey === repoFilterKey) &&
-          repoMatchesNamespaceFilter(entry.repo, namespaceFilterPath),
+          repoMatchesNamespaceFilter(entry.repo, namespaceFilterPath) &&
+          matchesPullRequestSearchState(entry.pullRequest, pullRequestState),
       ),
-    [namespaceFilterPath, profileFilterAccountId, pullRequestEntries, repoFilterKey],
+    [
+      namespaceFilterPath,
+      enabledAccountIdSet,
+      profileFilterAccountId,
+      pullRequestEntries,
+      pullRequestState,
+      repoFilterKey,
+    ],
   );
   const isSearchPending =
     (hasQuery || hasScopedPullRequestSource) &&
@@ -540,64 +447,49 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     if (profileFilterAccountId) {
       const account = enabledProviderAccounts.find((entry) => entry.id === profileFilterAccountId);
       filterButtons.push(
-        <button
-          className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-canvas px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
+        <FilterChipButton
           key="profile-filter"
-          onClick={() => {
+          onClear={() => {
             setBrowseFilters((current) => ({
               ...applyProfileFilterChange(current, null, repoAccountIdByKey),
               namespaceFilterPath: current.namespaceFilterPath,
             }));
           }}
-          type="button"
         >
-          <span>{`profile: ${account?.label ?? profileFilterAccountId}`}</span>
-          <span aria-hidden="true" className="text-ink-500">
-            x
-          </span>
-        </button>,
+          {`profile: ${account?.label ?? profileFilterAccountId}`}
+        </FilterChipButton>,
       );
     }
 
     if (repoFilterKey) {
       filterButtons.push(
-        <button
-          className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-canvas px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
+        <FilterChipButton
           key="repo-filter"
-          onClick={() => {
+          onClear={() => {
             setBrowseFilters((current) => ({
               ...current,
               repoFilterKey: null,
             }));
           }}
-          type="button"
         >
-          <span>{`repo: ${repoFilterKey}`}</span>
-          <span aria-hidden="true" className="text-ink-500">
-            x
-          </span>
-        </button>,
+          {`repo: ${repoFilterKey}`}
+        </FilterChipButton>,
       );
     }
 
     if (namespaceFilterPath) {
       filterButtons.push(
-        <button
-          className="inline-flex items-center gap-1 rounded-full border border-neutral-300 bg-canvas px-2 py-1 text-[11px] font-medium text-ink-700 transition hover:border-neutral-400 dark:border-neutral-700"
+        <FilterChipButton
           key="namespace-filter"
-          onClick={() => {
+          onClear={() => {
             setBrowseFilters((current) => ({
               ...current,
               namespaceFilterPath: null,
             }));
           }}
-          type="button"
         >
-          <span>{`group/org: ${namespaceFilterPath}`}</span>
-          <span aria-hidden="true" className="text-ink-500">
-            x
-          </span>
-        </button>,
+          {`group/org: ${namespaceFilterPath}`}
+        </FilterChipButton>,
       );
     }
 
@@ -616,7 +508,13 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
 
   const footer = useMemo(() => {
     if (!hasQuery && !hasScopedPullRequestSource) {
-      return <p className="text-xs text-ink-500">Type to search pull requests across enabled profiles.</p>;
+      return (
+        <p className="text-xs text-ink-500">
+          {filteredPullRequests.length > 0
+            ? `Showing ${filteredPullRequests.length} locally available pull request${filteredPullRequests.length === 1 ? '' : 's'} from tracked and overview lists.`
+            : 'No local pull requests available. Type to search pull requests across enabled profiles.'}
+        </p>
+      );
     }
 
     const statusParts: string[] = [];
@@ -660,6 +558,7 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     hasDebouncedQuery,
     hasQuery,
     hasScopedPullRequestSource,
+    filteredPullRequests.length,
     query,
     repoScopedPullRequestErrors,
     repoScopedPullRequestRepos.length,
@@ -719,14 +618,17 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
   }, [queryClient]);
 
   const items = useMemo(() => {
-    const nextItems: CommandPaletteItem[] = [];
+    const profileItems: CommandPaletteItem[] = [];
+    const namespaceFilterItems: CommandPaletteItem[] = [];
+    const repoItems: CommandPaletteItem[] = [];
+    const pullRequestItems: CommandPaletteItem[] = [];
 
     if (!hasQuery && !hasScopedPullRequestSource && filteredPullRequests.length === 0) {
-      nextItems.push({
-        id: 'pull-request-search-hint',
+      pullRequestItems.push({
+        id: 'local-pull-request-search-hint',
         group: 'Pull requests',
-        title: 'Type to search pull requests',
-        subtitle: 'Global pull request search starts after you enter a query.',
+        title: 'No local pull requests',
+        subtitle: 'Tracked and overview pull requests appear here before global search starts.',
         icon: <GitPullRequestIcon className="size-4" />,
         disabled: true,
         onSelect: () => {},
@@ -738,19 +640,14 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         continue;
       }
 
-      nextItems.push({
+      profileItems.push({
         id: `profile:${account.id}`,
         group: 'Profiles',
         title: account.label,
         subtitle: `${account.provider} · ${account.host}`,
         keywords: [account.label, account.provider, account.host, account.viewerLogin ?? ''],
         icon: <UserCircle2Icon className="size-4" />,
-        badge:
-          profileFilterAccountId === account.id ? (
-            <span className="rounded border border-ink-300 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700">
-              Active
-            </span>
-          ) : undefined,
+        badge: profileFilterAccountId === account.id ? <ActiveBadge /> : undefined,
         onSelect: () => {
           setBrowseFilters((current) => ({
             ...applyProfileFilterChange(current, account.id, repoAccountIdByKey),
@@ -767,15 +664,12 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         continue;
       }
 
-      nextItems.push({
+      namespaceFilterItems.push({
         id: `namespace:${namespaceItem.accountId}:${namespaceItem.namespacePath}`,
         group: 'Groups and orgs',
         title: namespaceItem.namespacePath,
         subtitle: `${namespaceItem.providerAccountLabel} · ${namespaceItem.repoCount} repo${namespaceItem.repoCount === 1 ? '' : 's'}`,
-        keywords: [
-          ...buildSearchTextVariants(namespaceItem.namespacePath),
-          namespaceItem.providerAccountLabel,
-        ],
+        keywords: [namespaceItem.providerAccountLabel],
         icon: <FolderGit2Icon className="size-4" />,
         onSelect: () => {
           setBrowseFilters((current) => ({
@@ -794,24 +688,18 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         continue;
       }
 
-      nextItems.push({
+      repoItems.push({
         id: `repo:${repoIdentityKey(repo)}`,
         group: 'Repositories',
         title: repo.nameWithOwner,
         subtitle: `${repo.description ? `${repo.description} · ` : ''}${repo.providerAccountLabel}`,
         keywords: [
-          ...buildSearchTextVariants(repo.nameWithOwner),
           ...buildRepoNamespacePrefixes(repo.nameWithOwner),
           repo.description ?? '',
           repo.providerAccountLabel,
         ],
         icon: <RepoAvatar repo={repo} />,
-        badge:
-          repoFilterKey === repo.repoKey ? (
-            <span className="rounded border border-ink-300 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700">
-              Active
-            </span>
-          ) : undefined,
+        badge: repoFilterKey === repo.repoKey ? <ActiveBadge /> : undefined,
         onSelect: () => {
           void (async () => {
             const savedRepo =
@@ -830,20 +718,19 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     }
 
     for (const entry of filteredPullRequests) {
-      nextItems.push({
+      pullRequestItems.push({
         id: `pr:${repoIdentityKey(entry.repo)}#${entry.pullRequest.number}`,
         group: 'Pull requests',
         title: formatPullRequestDisplayTitle(entry.pullRequest.title),
         subtitle: `${entry.repo.nameWithOwner} · #${entry.pullRequest.number} · ${entry.pullRequest.authorLogin}`,
         keywords: [
-          ...buildSearchTextVariants(entry.repo.nameWithOwner),
           ...buildRepoNamespacePrefixes(entry.repo.nameWithOwner),
           String(entry.pullRequest.number),
           entry.pullRequest.authorLogin,
           entry.pullRequest.title,
         ],
         icon: <PullRequestStatusIcon status={getPullRequestStatus(entry.pullRequest).status} />,
-        badge: createStatusBadge(entry.pullRequest),
+        badge: <PullRequestStatusBadge pullRequest={entry.pullRequest} />,
         onSelect: () => {
           void (async () => {
             const savedRepo =
@@ -872,7 +759,15 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
       });
     }
 
-    return nextItems;
+    return [
+      ...(profileFilterAccountId ? [] : profileItems),
+      ...(namespaceFilterPath ? [] : namespaceFilterItems),
+      ...(repoFilterKey ? [] : repoItems),
+      ...pullRequestItems,
+      ...(repoFilterKey ? repoItems : []),
+      ...(namespaceFilterPath ? namespaceFilterItems : []),
+      ...(profileFilterAccountId ? profileItems : []),
+    ];
   }, [
     enabledProviderAccounts,
     filteredPullRequests,
@@ -911,16 +806,17 @@ function BrowsePalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         hasQuery || hasScopedPullRequestSource
           ? isSearchPending
             ? 'Results will appear as repositories and pull requests come back.'
-            : (hasScopedPullRequestSource
-                ? repoScopedPullRequestErrors[0]
-                : pullRequestSearch.errors[0]) ??
-              'Try a repository name, pull request title, author, or number.'
-          : 'Select a profile filter, choose a repository, or start typing to search globally.'
+          : (hasScopedPullRequestSource
+              ? repoScopedPullRequestErrors[0]
+              : pullRequestSearch.errors[0]) ??
+            'Try a repository name, pull request title, author, or number.'
+          : 'Tracked and overview pull requests appear locally. Start typing to search globally.'
       }
       emptyTitle={isSearchPending ? 'Searching...' : 'No matching profiles, repositories, or pull requests'}
       footer={footer}
       inputFooter={inputFooter}
       items={items}
+      numberedShortcuts
       open={open}
       onOpenChange={onOpenChange}
       placeholder="Browse profiles, repositories, and pull requests"
@@ -1005,12 +901,7 @@ function HomeWorkflowPalette({
         group: 'Sections',
         title: 'Overview',
         icon: <PanelsTopLeftIcon className="size-4" />,
-        badge:
-          sidebarView === 'overview' ? (
-            <span className="rounded border border-ink-300 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700">
-              Active
-            </span>
-          ) : undefined,
+        badge: sidebarView === 'overview' ? <ActiveBadge /> : undefined,
         onSelect: () => {
           setSidebarView('overview');
           onOpenChange(false);
@@ -1021,12 +912,7 @@ function HomeWorkflowPalette({
         group: 'Sections',
         title: 'Tracked items',
         icon: <GitPullRequestIcon className="size-4" />,
-        badge:
-          sidebarView === 'tracked' ? (
-            <span className="rounded border border-ink-300 px-1.5 py-0.5 text-[10px] font-semibold text-ink-700">
-              Active
-            </span>
-          ) : undefined,
+        badge: sidebarView === 'tracked' ? <ActiveBadge /> : undefined,
         onSelect: () => {
           setSidebarView('tracked');
           onOpenChange(false);
@@ -1073,19 +959,11 @@ function HomeWorkflowPalette({
         },
       },
       {
-        id: 'action-add-repo',
-        group: 'Actions',
-        title: 'Add repo',
-        icon: <FolderGit2Icon className="size-4" />,
-        onSelect: () => {
-          openBrowse();
-        },
-      },
-      {
         id: 'action-add-tracked-pr',
         group: 'Actions',
         title: 'Add tracked PR/MR',
         icon: <GitPullRequestIcon className="size-4" />,
+        shortcut: 'Mod+K',
         onSelect: () => {
           openBrowse();
         },
@@ -1361,7 +1239,11 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
         sidebarView={props.sidebarView}
         setSidebarView={props.setSidebarView}
       />
-      <BrowsePalette open={browseOpen} onOpenChange={setBrowseOpen} />
+      <BrowsePalette
+        localPullRequests={props.localPullRequests}
+        open={browseOpen}
+        onOpenChange={setBrowseOpen}
+      />
     </>
   );
 }
