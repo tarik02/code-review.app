@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- 63f9dc6: Add code appearance settings for diff typography, ligatures, and syntax theme presets, plus a reusable number field control for numeric settings.
+- 07cb391: Add provider-native pending review comments with local persistence and bulk submit controls.
+
+### Patch Changes
+
+- d222f43: Refactor the frontend router to TanStack file-based routing with generated route trees.
+
 ## 0.1.1
 
 ### Patch Changes
