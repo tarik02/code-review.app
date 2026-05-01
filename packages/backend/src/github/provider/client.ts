@@ -17,6 +17,7 @@ import type {
 import { summarizeError } from '../../errors.ts';
 import {
   createRepoIdentity,
+  hostNameFromHost,
   normalizeHost,
   normalizePath,
   type ProviderRepoIdentity,
@@ -28,7 +29,10 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitHubApiClient } from '../client/client.ts';
-import { type GitHubClientError, isGitHubClientError } from '../client/errors.ts';
+import {
+  type GitHubClientError,
+  isGitHubClientError,
+} from '../client/errors.ts';
 import {
   GitHubProviderClientFailure,
   type GitHubProviderError,
@@ -73,7 +77,8 @@ function parseOwnerRepoEffect(value: string) {
     try: () => parseOwnerRepo(value),
     catch: (cause) =>
       new GitHubProviderInvalidRepoInput({
-        message: typeof cause === 'string' ? cause : `Enter a repo as owner/name`,
+        message:
+          typeof cause === 'string' ? cause : `Enter a repo as owner/name`,
         input: value,
         cause,
       }),
@@ -162,12 +167,18 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   name: string,
   operation: string,
   effect: (...args: Args) => Generator<any, Success, any>,
-): ((...args: Args) => Effect.Effect<Success, GitHubProviderError, GitHubApiClient>) =>
+): ((
+  ...args: Args
+) => Effect.Effect<Success, GitHubProviderError, GitHubApiClient>) =>
   Effect.fn(name)((...args: Args) =>
     (
       Effect.gen(function* () {
         return yield* effect(...args);
-      }) as Effect.Effect<Success, GitHubClientError | GitHubProviderError, GitHubApiClient>
+      }) as Effect.Effect<
+        Success,
+        GitHubClientError | GitHubProviderError,
+        GitHubApiClient
+      >
     ).pipe(
       Effect.mapError((error: GitHubClientError | GitHubProviderError) =>
         mapProviderError(operation)(error),
@@ -176,13 +187,16 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   );
 
 function toGitHubReviewComment(
-  comment: typeof GraphQlReviewCommentSchema.Type | typeof GraphQlConversationCommentSchema.Type,
+  comment:
+    | typeof GraphQlReviewCommentSchema.Type
+    | typeof GraphQlConversationCommentSchema.Type,
 ): ReviewComment {
   return {
     id: comment.id,
     databaseId: comment.databaseId ?? null,
     authorLogin: comment.author?.login ?? 'unknown',
-    authorAvatarUrl: comment.author?.avatarUrl ?? comment.author?.avatar_url ?? null,
+    authorAvatarUrl:
+      comment.author?.avatarUrl ?? comment.author?.avatar_url ?? null,
     authorAssociation: comment.authorAssociation ?? null,
     body: comment.body,
     createdAt: comment.createdAt,
@@ -208,10 +222,13 @@ function repoSummaryFromSearch(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
-      host,
-      nameWithOwner: repo.full_name,
-    }),
+    avatarUrl: prepareGitHubProviderImageUrl(
+      repo.owner?.avatarUrl ?? repo.owner?.avatar_url,
+      {
+        host,
+        nameWithOwner: repo.full_name,
+      },
+    ),
   };
 }
 
@@ -231,10 +248,13 @@ function repoSummaryFromRest(
     nameWithOwner: repo.full_name,
     description: repo.description,
     isPrivate: repo.private,
-    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
-      host,
-      nameWithOwner: repo.full_name,
-    }),
+    avatarUrl: prepareGitHubProviderImageUrl(
+      repo.owner?.avatarUrl ?? repo.owner?.avatar_url,
+      {
+        host,
+        nameWithOwner: repo.full_name,
+      },
+    ),
   };
 }
 
@@ -254,38 +274,90 @@ function repoSummaryFromGraphql(
     nameWithOwner: repo.nameWithOwner,
     description: repo.description,
     isPrivate: repo.isPrivate,
-    avatarUrl: prepareGitHubProviderImageUrl(repo.owner?.avatarUrl ?? repo.owner?.avatar_url, {
-      host,
-      nameWithOwner: repo.nameWithOwner,
-    }),
+    avatarUrl: prepareGitHubProviderImageUrl(
+      repo.owner?.avatarUrl ?? repo.owner?.avatar_url,
+      {
+        host,
+        nameWithOwner: repo.nameWithOwner,
+      },
+    ),
   };
 }
 
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
-  return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
+  return token.viewerLogin
+    ? `${token.viewerLogin} @ ${token.host}`
+    : token.host;
 }
 
-const PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS = ['author', 'assignee', 'review-requested'] as const;
+const PULL_REQUEST_SEARCH_SCOPE_QUALIFIERS = [
+  'author',
+  'assignee',
+  'review-requested',
+] as const;
 
-function buildPullRequestSearchQuery(query: string, states: PullRequestSearchState, scope: string) {
-  const qualifiers = ['is:pr', 'archived:false', 'in:title', scope, 'sort:updated-desc'];
+function buildPullRequestSearchQuery(
+  query: string,
+  states: PullRequestSearchState,
+  scope: string,
+) {
+  const qualifiers = [
+    'is:pr',
+    'archived:false',
+    'in:title',
+    scope,
+    'sort:updated-desc',
+  ];
   if (states !== 'all') {
     qualifiers.push('is:open');
   }
 
   const trimmedQuery = query.trim();
-  return trimmedQuery ? `${qualifiers.join(' ')} ${trimmedQuery}` : qualifiers.join(' ');
+  return trimmedQuery
+    ? `${qualifiers.join(' ')} ${trimmedQuery}`
+    : qualifiers.join(' ');
 }
 
-function dedupePullRequestSearchEntries(entries: ReadonlyArray<OverviewPullRequestSummary>) {
+function parseGitHubPullRequestUrl(input: string, expectedHost: string) {
+  try {
+    const url = new URL(input);
+    if (url.hostname.toLowerCase() !== hostNameFromHost(expectedHost)) {
+      return null;
+    }
+
+    const [owner, name, kind, numberValue] = url.pathname
+      .split('/')
+      .filter(Boolean);
+    if (!owner || !name || kind !== 'pull') {
+      return null;
+    }
+
+    const number = Number.parseInt(numberValue ?? '', 10);
+    if (!Number.isSafeInteger(number) || number < 0) {
+      return null;
+    }
+
+    return { owner, name, number };
+  } catch {
+    return null;
+  }
+}
+
+function dedupePullRequestSearchEntries(
+  entries: ReadonlyArray<OverviewPullRequestSummary>,
+) {
   const deduped = new Map<string, OverviewPullRequestSummary>();
   for (const entry of entries) {
-    deduped.set(`${entry.repo.nameWithOwner}#${entry.pullRequest.number}`, entry);
+    deduped.set(
+      `${entry.repo.nameWithOwner}#${entry.pullRequest.number}`,
+      entry,
+    );
   }
 
   return [...deduped.values()].sort(
     (left, right) =>
-      Date.parse(right.pullRequest.updatedAt) - Date.parse(left.pullRequest.updatedAt),
+      Date.parse(right.pullRequest.updatedAt) -
+      Date.parse(left.pullRequest.updatedAt),
   );
 }
 
@@ -369,7 +441,10 @@ function latestReviewsByLogin(reviews: GhPullRequestReview[]) {
     }
 
     const previousSubmittedAt = previous.submitted_at;
-    if (!previousSubmittedAt || Date.parse(submittedAt) >= Date.parse(previousSubmittedAt)) {
+    if (
+      !previousSubmittedAt ||
+      Date.parse(submittedAt) >= Date.parse(previousSubmittedAt)
+    ) {
       latestByLogin.set(login, review);
     }
   }
@@ -379,10 +454,14 @@ function latestReviewsByLogin(reviews: GhPullRequestReview[]) {
 
 function unixTimestampSeconds(value: string) {
   const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? Math.floor(Date.now() / 1000) : Math.floor(parsed / 1000);
+  return Number.isNaN(parsed)
+    ? Math.floor(Date.now() / 1000)
+    : Math.floor(parsed / 1000);
 }
 
-function githubQualitySeverity(level: string): PullRequestQualityFinding['severity'] {
+function githubQualitySeverity(
+  level: string,
+): PullRequestQualityFinding['severity'] {
   switch (level.toLowerCase()) {
     case 'failure':
       return 'major';
@@ -406,7 +485,9 @@ function githubQualityStatus(checkRuns: GhCheckRun[]) {
 
   if (
     conclusions.some((conclusion) =>
-      ['action_required', 'failure', 'startup_failure', 'timed_out'].includes(conclusion),
+      ['action_required', 'failure', 'startup_failure', 'timed_out'].includes(
+        conclusion,
+      ),
     )
   ) {
     return 'failed' as const;
@@ -436,7 +517,9 @@ function githubCheckRunStatusCounts(checkRuns: GhCheckRun[]) {
 
 function githubCheckRunSourceName(checkRun: GhCheckRun) {
   const appName = checkRun.app?.name?.trim();
-  return appName && appName !== checkRun.name ? `${appName} · ${checkRun.name}` : checkRun.name;
+  return appName && appName !== checkRun.name
+    ? `${appName} · ${checkRun.name}`
+    : checkRun.name;
 }
 
 function toGitHubQualityFinding(
@@ -466,7 +549,10 @@ function toGitHubQualityFinding(
   };
 }
 
-function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitHubProviderError> {
+function makeGitHubProvider(): ForgeProviderEffectContract<
+  GitHubApiClient,
+  GitHubProviderError
+> {
   const authorizeRequest: ForgeProviderEffectContract<
     GitHubApiClient,
     GitHubProviderError
@@ -481,6 +567,29 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
           HttpClientRequest.bearerToken(token),
           HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
         );
+    },
+  );
+
+  const validateImageUrl: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['validateImageUrl'] = providerEffect(
+    'GitHubProvider.validateImageUrl',
+    'validateImageUrl',
+    function* (url: string) {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return false;
+      }
+
+      try {
+        return (
+          new URL(url).hostname.toLowerCase() === hostNameFromHost(token.host)
+        );
+      } catch {
+        return false;
+      }
     },
   );
 
@@ -532,31 +641,35 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   const viewerLogin: ForgeProviderEffectContract<
     GitHubApiClient,
     GitHubProviderError
-  >['viewerLogin'] = providerEffect('GitHubProvider.viewerLogin', 'viewerLogin', function* () {
-    const api = yield* GitHubApiClient;
-    const token = yield* api.storedToken();
-    if (!token) {
-      return yield* Effect.fail(
-        new GitHubProviderNotAuthenticated({
-          message: 'GitHub is not signed in.',
-          cause: { provider: 'github', operation: 'viewerLogin' },
-        }),
-      );
-    }
+  >['viewerLogin'] = providerEffect(
+    'GitHubProvider.viewerLogin',
+    'viewerLogin',
+    function* () {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation: 'viewerLogin' },
+          }),
+        );
+      }
 
-    yield* ensureUserContext();
-    const login = userContext?.login;
-    if (!login) {
-      return yield* Effect.fail(
-        new GitHubProviderViewerLoginUnavailable({
-          message: 'Unable to determine GitHub viewer login',
-          cause: { provider: 'github', operation: 'viewerLogin' },
-        }),
-      );
-    }
+      yield* ensureUserContext();
+      const login = userContext?.login;
+      if (!login) {
+        return yield* Effect.fail(
+          new GitHubProviderViewerLoginUnavailable({
+            message: 'Unable to determine GitHub viewer login',
+            cause: { provider: 'github', operation: 'viewerLogin' },
+          }),
+        );
+      }
 
-    return login;
-  });
+      return login;
+    },
+  );
 
   const authStatus: ForgeProviderEffectContract<
     GitHubApiClient,
@@ -625,7 +738,9 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         affiliation: initialRepoAffiliations,
       });
 
-      return repos.map((repo) => repoSummaryFromRest(token.id, token.host, label, repo));
+      return repos.map((repo) =>
+        repoSummaryFromRest(token.id, token.host, label, repo),
+      );
     },
   );
 
@@ -682,6 +797,17 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     },
   );
 
+  const listNamespaceRepos: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['listNamespaceRepos'] = providerEffect(
+    'GitHubProvider.listNamespaceRepos',
+    'listNamespaceRepos',
+    function* (namespacePath: string, limit: number) {
+      return yield* searchRepos(namespacePath, limit);
+    },
+  );
+
   const searchNamespaces: ForgeProviderEffectContract<
     GitHubApiClient,
     GitHubProviderError
@@ -707,7 +833,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       const normalizedQuery = query.trim().toLowerCase();
 
       return owners
-        .filter((owner) => !normalizedQuery || owner.toLowerCase().includes(normalizedQuery))
+        .filter(
+          (owner) =>
+            !normalizedQuery || owner.toLowerCase().includes(normalizedQuery),
+        )
         .slice(0, limit)
         .map(
           (owner) =>
@@ -752,7 +881,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
             message: 'Repo URL host must match the selected GitHub account.',
             expectedHost: token.host,
             actualHost: validatedHost,
-            cause: { input, expectedHost: token.host, actualHost: validatedHost },
+            cause: {
+              input,
+              expectedHost: token.host,
+              actualHost: validatedHost,
+            },
           }),
         );
       }
@@ -776,7 +909,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return yield* Effect.fail(
           new GitHubProviderNotAuthenticated({
             message: 'GitHub is not signed in.',
-            cause: { provider: 'github', operation: 'listOverviewPullRequests' },
+            cause: {
+              provider: 'github',
+              operation: 'listOverviewPullRequests',
+            },
           }),
         );
       }
@@ -788,7 +924,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         return yield* Effect.fail(
           new GitHubProviderViewerLoginUnavailable({
             message: 'Unable to determine GitHub viewer login',
-            cause: { provider: 'github', operation: 'listOverviewPullRequests' },
+            cause: {
+              provider: 'github',
+              operation: 'listOverviewPullRequests',
+            },
           }),
         );
       }
@@ -847,6 +986,30 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       }
 
       const label = labelForToken(token);
+      const directPullRequest = parseGitHubPullRequestUrl(query, token.host);
+      if (directPullRequest) {
+        const repo = yield* api.repo(
+          directPullRequest.owner,
+          directPullRequest.name,
+        );
+        const response = yield* api.repositoryPullRequest(
+          directPullRequest.owner,
+          directPullRequest.name,
+          directPullRequest.number,
+        );
+        const pullRequest = response.data?.repository?.pullRequest;
+        if (!pullRequest) {
+          return [];
+        }
+
+        return [
+          {
+            repo: repoSummaryFromRest(token.id, token.host, label, repo),
+            pullRequest: toPullRequestSummary(pullRequest),
+          } satisfies OverviewPullRequestSummary,
+        ];
+      }
+
       yield* ensureUserContext();
       const login = userContext?.login;
       if (!login) {
@@ -863,7 +1026,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         (qualifier) =>
           api
             .searchPullRequests(
-              buildPullRequestSearchQuery(query, states, `${qualifier}:${login}`),
+              buildPullRequestSearchQuery(
+                query,
+                states,
+                `${qualifier}:${login}`,
+              ),
               limit,
             )
             .pipe(
@@ -876,7 +1043,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
 
                   return [
                     {
-                      repo: repoSummaryFromGraphql(token.id, token.host, label, repo),
+                      repo: repoSummaryFromGraphql(
+                        token.id,
+                        token.host,
+                        label,
+                        repo,
+                      ),
                       pullRequest: toPullRequestSummary(pullRequest),
                     } satisfies OverviewPullRequestSummary,
                   ];
@@ -956,14 +1128,17 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         .filter((review) => review.state.toUpperCase() === 'APPROVED')
         .sort(
           (left, right) =>
-            Date.parse(right.submitted_at ?? '') - Date.parse(left.submitted_at ?? ''),
+            Date.parse(right.submitted_at ?? '') -
+            Date.parse(left.submitted_at ?? ''),
         )
         .map(toApprovalActor);
 
       return {
         provider: 'github',
         approvedBy,
-        viewerApproved: approvedBy.some((approval) => approval.login === currentViewerLogin),
+        viewerApproved: approvedBy.some(
+          (approval) => approval.login === currentViewerLogin,
+        ),
         viewerRemoveStrategy: 'dismiss',
         approvalsRequired: null,
         approvalsLeft: null,
@@ -1023,8 +1198,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         page += 1;
       }
 
-      const latestViewerReview = latestReviewsByLogin(reviews).get(currentViewerLogin);
-      if (!latestViewerReview || latestViewerReview.state.toUpperCase() !== 'APPROVED') {
+      const latestViewerReview =
+        latestReviewsByLogin(reviews).get(currentViewerLogin);
+      if (
+        !latestViewerReview ||
+        latestViewerReview.state.toUpperCase() !== 'APPROVED'
+      ) {
         return yield* Effect.fail(
           new GitHubProviderNoApprovalToRemove({
             message: 'No viewer approval to remove.',
@@ -1073,7 +1252,13 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       let shouldContinue = true;
 
       while (shouldContinue) {
-        const items = yield* api.pullRequestFiles({ owner, name, number, perPage: 100, page });
+        const items = yield* api.pullRequestFiles({
+          owner,
+          name,
+          number,
+          perPage: 100,
+          page,
+        });
         if (items.length === 0) {
           shouldContinue = false;
         } else {
@@ -1200,7 +1385,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
             ...annotations
               .slice(0, remainingCapacity)
               .map((annotation, index) =>
-                toGitHubQualityFinding(checkRun, annotation, (annotationPage - 1) * 100 + index),
+                toGitHubQualityFinding(
+                  checkRun,
+                  annotation,
+                  (annotationPage - 1) * 100 + index,
+                ),
               ),
           );
 
@@ -1216,11 +1405,15 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       const statusCounts = githubCheckRunStatusCounts(checkRuns);
       const detailsUrl =
         checkRuns.find((checkRun) =>
-          ['action_required', 'failure', 'startup_failure', 'timed_out'].includes(
-            checkRun.conclusion?.toLowerCase() ?? '',
-          ),
+          [
+            'action_required',
+            'failure',
+            'startup_failure',
+            'timed_out',
+          ].includes(checkRun.conclusion?.toLowerCase() ?? ''),
         )?.details_url ??
-        checkRuns.find((checkRun) => checkRun.status !== 'completed')?.details_url ??
+        checkRuns.find((checkRun) => checkRun.status !== 'completed')
+          ?.details_url ??
         checkRuns[0]?.details_url ??
         undefined;
 
@@ -1233,9 +1426,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         summary: {
           totalFindings: findings.length,
           inlineFindings: findings.filter(
-            (finding) => finding.anchorState === 'inline' && finding.line !== null,
+            (finding) =>
+              finding.anchorState === 'inline' && finding.line !== null,
           ).length,
-          fileOnlyFindings: findings.filter((finding) => finding.anchorState === 'file').length,
+          fileOnlyFindings: findings.filter(
+            (finding) => finding.anchorState === 'file',
+          ).length,
           statusCounts,
           providerLabel: 'GitHub checks',
           detailsUrl,
@@ -1251,8 +1447,13 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     },
   );
 
-  const gitRemote: ForgeProviderEffectContract<GitHubApiClient, GitHubProviderError>['gitRemote'] =
-    providerEffect('GitHubProvider.gitRemote', 'gitRemote', function* (repo: ProviderRepoIdentity) {
+  const gitRemote: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['gitRemote'] = providerEffect(
+    'GitHubProvider.gitRemote',
+    'gitRemote',
+    function* (repo: ProviderRepoIdentity) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const token = yield* api.accessToken();
@@ -1267,7 +1468,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
           ],
         },
       };
-    });
+    },
+  );
 
   const listReviewThreads: ForgeProviderEffectContract<
     GitHubApiClient,
@@ -1300,10 +1502,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
               startLine: thread.startLine ?? thread.originalStartLine ?? null,
               side: thread.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT',
               startSide:
-                thread.startDiffSide === 'LEFT' || thread.startDiffSide === 'RIGHT'
+                thread.startDiffSide === 'LEFT' ||
+                thread.startDiffSide === 'RIGHT'
                   ? thread.startDiffSide
                   : null,
-              subjectType: thread.subjectType.toLowerCase() === 'file' ? 'file' : 'line',
+              subjectType:
+                thread.subjectType.toLowerCase() === 'file' ? 'file' : 'line',
               comments,
             },
           ];
@@ -1387,7 +1591,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
           oldPath: comment.path,
           newPath: comment.path,
           line: comment.line ?? null,
-          side: comment.side === 'LEFT' ? 'LEFT' : comment.side === 'RIGHT' ? 'RIGHT' : null,
+          side:
+            comment.side === 'LEFT'
+              ? 'LEFT'
+              : comment.side === 'RIGHT'
+                ? 'RIGHT'
+                : null,
           startLine: comment.start_line ?? null,
           startSide:
             comment.start_side === 'LEFT' || comment.start_side === 'RIGHT'
@@ -1420,7 +1629,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   >['createReviewThread'] = providerEffect(
     'GitHubProvider.createReviewThread',
     'createReviewThread',
-    function* (repo: ProviderRepoIdentity, number: number, input: ReviewThreadInput) {
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      input: ReviewThreadInput,
+    ) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const pullRequestId = yield* api.pullRequestNodeId(owner, name, number);
@@ -1457,7 +1670,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         pullRequestId,
         commitOID: headSha,
       });
-      const providerReviewId = response.data?.addPullRequestReview?.pullRequestReview?.id ?? null;
+      const providerReviewId =
+        response.data?.addPullRequestReview?.pullRequestReview?.id ?? null;
       if (!providerReviewId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
@@ -1542,7 +1756,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         pullRequestReviewThreadId: threadId,
         body,
       });
-      const providerCommentId = response.data?.addPullRequestReviewThreadReply?.comment?.id ?? null;
+      const providerCommentId =
+        response.data?.addPullRequestReviewThreadReply?.comment?.id ?? null;
       if (!providerCommentId) {
         const message = firstGraphQlErrorMessage(response);
         return yield* Effect.fail(
@@ -1595,8 +1810,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       });
       return {
         providerCommentId:
-          response.data?.updatePullRequestReviewComment?.pullRequestReviewComment?.id ??
-          providerCommentId,
+          response.data?.updatePullRequestReviewComment
+            ?.pullRequestReviewComment?.id ?? providerCommentId,
         providerThreadId: null,
       };
     },
@@ -1608,7 +1823,11 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   >['deletePendingReviewComment'] = providerEffect(
     'GitHubProvider.deletePendingReviewComment',
     'deletePendingReviewComment',
-    function* (_repo: ProviderRepoIdentity, _number: number, providerCommentId: string) {
+    function* (
+      _repo: ProviderRepoIdentity,
+      _number: number,
+      providerCommentId: string,
+    ) {
       const api = yield* GitHubApiClient;
       yield* api.deletePullRequestReviewComment(providerCommentId);
     },
@@ -1624,7 +1843,10 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       _repo: ProviderRepoIdentity,
       _number: number,
       session: { providerReviewId: string | null },
-      input: { action?: 'approve' | 'request_changes' | 'comment'; summary?: string | null },
+      input: {
+        action?: 'approve' | 'request_changes' | 'comment';
+        summary?: string | null;
+      },
     ) {
       const api = yield* GitHubApiClient;
       const event =
@@ -1670,7 +1892,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
   >['replyToReviewThread'] = providerEffect(
     'GitHubProvider.replyToReviewThread',
     'replyToReviewThread',
-    function* (repo: ProviderRepoIdentity, number: number, threadId: string, body: string) {
+    function* (
+      repo: ProviderRepoIdentity,
+      number: number,
+      threadId: string,
+      body: string,
+    ) {
       const api = yield* GitHubApiClient;
       const [owner, name] = yield* parseOwnerRepoEffect(repo.path);
       const pullRequestId = yield* api.pullRequestNodeId(owner, name, number);
@@ -1755,10 +1982,12 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
 
   return {
     authorizeRequest,
+    validateImageUrl,
     authStatus,
     viewerLogin,
     listInitialRepos,
     searchRepos,
+    listNamespaceRepos,
     searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
