@@ -62,5 +62,6 @@
     "@libsql/linux-x64-gnu": "catalog:",
     "@libsql/linux-x64-musl": "catalog:",
     "@libsql/win32-x64-msvc": "catalog:"
-  }
+  },
+  "productName": "code-review.app"
 }
