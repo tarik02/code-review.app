@@ -13,6 +13,7 @@ import {
   useSelectedPullRequestData,
   useTrackedPullRequests,
 } from '../hooks/use-forge-queries';
+import { useCodeAppearance } from '../hooks/use-code-appearance';
 import { useTheme } from '../hooks/use-theme';
 import { useAuthSession } from './auth-session';
 import { sortByFileTreePathOrder } from '../lib/file-tree-order';
@@ -65,6 +66,7 @@ function MainApp() {
   const navigate = useNavigate({ from: '/' });
   const queryClient = useQueryClient();
   const { isDark } = useTheme();
+  const { diffTheme } = useCodeAppearance();
   const workerPool = useWorkerPool();
   const activeRepoIdentity = useMemo<RepoIdentity | null>(
     () =>
@@ -428,9 +430,9 @@ function MainApp() {
     if (!workerPool) return;
 
     void workerPool.setRenderOptions({
-      theme: isDark ? 'pierre-dark' : 'pierre-light',
+      theme: isDark ? diffTheme.dark : diffTheme.light,
     });
-  }, [isDark, workerPool]);
+  }, [diffTheme.dark, diffTheme.light, isDark, workerPool]);
 
   useEffect(() => {
     for (const repo of refreshableTrackedRepos) {

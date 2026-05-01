@@ -10,6 +10,7 @@ import type {
   AccountVisibilitySettings,
   AppearanceBackgroundInput,
   AppearanceBackgroundSettings,
+  CodeAppearanceSettings,
   DiffDataSettings,
   ReviewEditorSettings,
   ThemePreference,
@@ -27,6 +28,10 @@ type SettingsServiceShape = {
   setThemePreference(
     settings: ThemePreferenceSettings,
   ): Effect.Effect<ThemePreferenceSettings, Error>;
+  getCodeAppearanceSettings(): Effect.Effect<CodeAppearanceSettings, Error>;
+  setCodeAppearanceSettings(
+    settings: CodeAppearanceSettings,
+  ): Effect.Effect<CodeAppearanceSettings, Error>;
   getReviewEditorSettings(): Effect.Effect<ReviewEditorSettings, Error>;
   setReviewEditorSettings(
     settings: ReviewEditorSettings,
@@ -65,8 +70,10 @@ function toVisibilitySettings(
 const APPEARANCE_BACKGROUND_KEY = 'appearance.background';
 const THEME_PREFERENCE_KEY = 'theme_preference';
 const DIFF_DATA_SETTINGS_KEY = 'diff_data_settings';
+const CODE_APPEARANCE_SETTINGS_KEY = 'code_appearance_settings';
 const REVIEW_EDITOR_SETTINGS_KEY = 'review_editor_settings';
 const MAX_BACKGROUND_FILE_SIZE = 15 * 1024 * 1024;
+const CUSTOM_FONT_FAMILY_PATTERN = /^[A-Za-z0-9,'" _-]+$/;
 
 type PersistedAppearanceBackgroundSettings =
   | { kind: 'default' }
@@ -187,6 +194,99 @@ function validateDiffDataSettings(settings: DiffDataSettings): DiffDataSettings 
   return { mode: settings.mode };
 }
 
+function parseCodeAppearanceSettings(value: unknown): CodeAppearanceSettings {
+  const parsed =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : ({} as const);
+  const fontFamily =
+    parsed.fontFamily === 'geist-mono' ||
+    parsed.fontFamily === 'system-mono' ||
+    parsed.fontFamily === 'custom'
+      ? parsed.fontFamily
+      : 'geist-mono';
+  const customFontFamily =
+    typeof parsed.customFontFamily === 'string' ? parsed.customFontFamily.trim() : null;
+  const fontSizePx =
+    typeof parsed.fontSizePx === 'number' &&
+    Number.isInteger(parsed.fontSizePx) &&
+    parsed.fontSizePx >= 11 &&
+    parsed.fontSizePx <= 18
+      ? parsed.fontSizePx
+      : 13;
+  const ligatures = typeof parsed.ligatures === 'boolean' ? parsed.ligatures : false;
+  const diffThemePreset =
+    parsed.diffThemePreset === 'pierre' ||
+    parsed.diffThemePreset === 'github' ||
+    parsed.diffThemePreset === 'catppuccin' ||
+    parsed.diffThemePreset === 'solarized'
+      ? parsed.diffThemePreset
+      : 'pierre';
+
+  if (
+    fontFamily === 'custom' &&
+    customFontFamily &&
+    CUSTOM_FONT_FAMILY_PATTERN.test(customFontFamily)
+  ) {
+    return {
+      fontFamily,
+      customFontFamily,
+      fontSizePx,
+      ligatures,
+      diffThemePreset,
+    };
+  }
+
+  return {
+    fontFamily: fontFamily === 'custom' ? 'geist-mono' : fontFamily,
+    customFontFamily: null,
+    fontSizePx,
+    ligatures,
+    diffThemePreset,
+  };
+}
+
+function validateCodeAppearanceSettings(settings: CodeAppearanceSettings): CodeAppearanceSettings {
+  if (
+    settings.fontFamily !== 'geist-mono' &&
+    settings.fontFamily !== 'system-mono' &&
+    settings.fontFamily !== 'custom'
+  ) {
+    throw new Error('Unsupported code font family.');
+  }
+
+  if (!Number.isInteger(settings.fontSizePx) || settings.fontSizePx < 11 || settings.fontSizePx > 18) {
+    throw new Error('Code font size must be an integer between 11 and 18.');
+  }
+
+  if (
+    settings.diffThemePreset !== 'pierre' &&
+    settings.diffThemePreset !== 'github' &&
+    settings.diffThemePreset !== 'catppuccin' &&
+    settings.diffThemePreset !== 'solarized'
+  ) {
+    throw new Error('Unsupported diff theme preset.');
+  }
+
+  if (settings.fontFamily !== 'custom') {
+    return {
+      ...settings,
+      customFontFamily: null,
+    };
+  }
+
+  const customFontFamily = settings.customFontFamily?.trim() ?? '';
+  if (customFontFamily.length === 0) {
+    throw new Error('Custom code font family is required.');
+  }
+  if (!CUSTOM_FONT_FAMILY_PATTERN.test(customFontFamily)) {
+    throw new Error('Custom code font family contains unsupported characters.');
+  }
+
+  return {
+    ...settings,
+    customFontFamily,
+  };
+}
+
 function parseReviewEditorSettings(value: unknown): ReviewEditorSettings {
   if (
     value &&
@@ -301,6 +401,23 @@ const makeSettingsService = Effect.gen(function* () {
     return validated;
   });
 
+  const getCodeAppearanceSettings: SettingsServiceShape['getCodeAppearanceSettings'] = Effect.fn(
+    'SettingsService.getCodeAppearanceSettings',
+  )(function* () {
+    const persisted = yield* appSettings
+      .read<CodeAppearanceSettings>(CODE_APPEARANCE_SETTINGS_KEY)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    return parseCodeAppearanceSettings(persisted);
+  });
+
+  const setCodeAppearanceSettings: SettingsServiceShape['setCodeAppearanceSettings'] = Effect.fn(
+    'SettingsService.setCodeAppearanceSettings',
+  )(function* (settings) {
+    const validated = validateCodeAppearanceSettings(settings);
+    yield* appSettings.write(CODE_APPEARANCE_SETTINGS_KEY, validated);
+    return validated;
+  });
+
   const getReviewEditorSettings: SettingsServiceShape['getReviewEditorSettings'] = Effect.fn(
     'SettingsService.getReviewEditorSettings',
   )(function* () {
@@ -377,6 +494,8 @@ const makeSettingsService = Effect.gen(function* () {
     setDiffDataSettings,
     getThemePreference,
     setThemePreference,
+    getCodeAppearanceSettings,
+    setCodeAppearanceSettings,
     getReviewEditorSettings,
     setReviewEditorSettings,
     getAppearanceBackground,
@@ -387,4 +506,9 @@ const makeSettingsService = Effect.gen(function* () {
 
 const SettingsServiceLive = Layer.effect(SettingsService, makeSettingsService);
 
-export { SettingsService, SettingsServiceLive };
+export {
+  parseCodeAppearanceSettings,
+  SettingsService,
+  SettingsServiceLive,
+  validateCodeAppearanceSettings,
+};

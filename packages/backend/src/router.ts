@@ -13,6 +13,7 @@ import {
   appearanceBackgroundInputSchema,
   browseSearchInputSchema,
   browseSearchSnapshotSchema,
+  codeAppearanceSettingsSchema,
   completeOAuthSchema,
   createPendingReviewGlobalInputSchema,
   createPendingReviewReplyInputSchema,
@@ -361,6 +362,14 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
+      getCodeAppearanceSettings: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.getCodeAppearanceSettings();
+          }),
+        ),
+      ),
       setThemePreference: t.procedure
         .input(themePreferenceSettingsSchema)
         .mutation(async ({ input }) => {
@@ -373,6 +382,16 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           platform.setNativeTheme(settings.preference);
           return settings;
         }),
+      setCodeAppearanceSettings: t.procedure
+        .input(codeAppearanceSettingsSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* SettingsService;
+              return yield* service.setCodeAppearanceSettings(input);
+            }),
+          ),
+        ),
       getReviewEditorSettings: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {

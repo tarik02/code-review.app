@@ -11,6 +11,10 @@ import '@fontsource/geist-mono/700.css';
 import App from './App';
 import './index.css';
 import PierreDiffsWorker from '@pierre/diffs/worker/worker-portable.js?worker';
+import {
+  DEFAULT_CODE_APPEARANCE_SETTINGS,
+  resolveDiffTheme,
+} from './hooks/use-code-appearance';
 import { isElectron, syncDocumentPlatformClass } from './lib/platform';
 import { syncDocumentWindowControlsOverlayClass } from './lib/wco';
 import { syncDocumentWindowFullscreenClass } from './lib/window-fullscreen';
@@ -38,9 +42,7 @@ const queryClient = new QueryClient({
 });
 
 const poolSize = Math.max(2, Math.min(4, Math.floor(navigator.hardwareConcurrency / 2) || 2));
-const initialDiffTheme = document.documentElement.classList.contains('dark')
-  ? 'pierre-dark'
-  : 'pierre-light';
+const initialDiffTheme = resolveDiffTheme(DEFAULT_CODE_APPEARANCE_SETTINGS.diffThemePreset);
 
 function createPierreDiffsWorker() {
   return new PierreDiffsWorker();
