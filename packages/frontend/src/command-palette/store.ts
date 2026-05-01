@@ -1,13 +1,7 @@
 import { create } from 'zustand';
 import { trpc } from '../lib/trpc';
-import {
-  initialMainAppViewState,
-  type MainAppViewState,
-} from '../stores/main-app-view-store';
-import type {
-  BrowseSearchSnapshot,
-  PullRequestSearchState,
-} from '../types/forge';
+import { initialMainAppViewState, type MainAppViewState } from '../stores/main-app-view-store';
+import type { BrowseSearchSnapshot, PullRequestSearchState } from '../types/forge';
 
 const BROWSE_QUERY_DEBOUNCE_MS = 250;
 
@@ -79,9 +73,7 @@ const resetBrowseSearchState = {
   browseQuery: '',
 };
 
-function createEmptyBrowseSearchSnapshot(
-  accountIds: string[] = [],
-): BrowseSearchSnapshot {
+function createEmptyBrowseSearchSnapshot(accountIds: string[] = []): BrowseSearchSnapshot {
   return {
     repos: [],
     namespaces: [],
@@ -95,9 +87,7 @@ function createEmptyBrowseSearchSnapshot(
 }
 
 function withExclusiveOpenState(
-  next: Partial<
-    Pick<CommandPaletteStore, 'browseOpen' | 'contentOpen' | 'workflowOpen'>
-  >,
+  next: Partial<Pick<CommandPaletteStore, 'browseOpen' | 'contentOpen' | 'workflowOpen'>>,
 ) {
   return {
     browseOpen: false,
@@ -336,9 +326,7 @@ const useCommandPaletteStore = create<CommandPaletteStore>()((set, get) => {
     setBrowseFilters(nextFilters) {
       set((state) => ({
         browseFilters:
-          typeof nextFilters === 'function'
-            ? nextFilters(state.browseFilters)
-            : nextFilters,
+          typeof nextFilters === 'function' ? nextFilters(state.browseFilters) : nextFilters,
       }));
       startBrowseSearch();
     },

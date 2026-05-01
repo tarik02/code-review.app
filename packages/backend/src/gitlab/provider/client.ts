@@ -30,10 +30,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
-import {
-  type GitLabClientError,
-  isGitLabClientError,
-} from '../client/errors.ts';
+import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
 import {
   GitLabProviderClientFailure,
   type GitLabProviderError,
@@ -53,11 +50,7 @@ import {
   type GitLabPosition,
   type GitLabProject,
 } from '../client/schemas.ts';
-import {
-  mergeRequestWebUrl,
-  OVERVIEW_MERGE_REQUEST_SCOPES,
-  toChangedFile,
-} from './schemas.ts';
+import { mergeRequestWebUrl, OVERVIEW_MERGE_REQUEST_SCOPES, toChangedFile } from './schemas.ts';
 import { prepareGitLabProviderImageUrl } from './images.ts';
 
 function isNotAuthenticatedMessage(message: string) {
@@ -123,12 +116,7 @@ function repoSummaryFromProject(
   project: GitLabProject,
 ): RepoSummary {
   return {
-    ...createRepoIdentity(
-      'gitlab',
-      host,
-      accountId,
-      project.path_with_namespace,
-    ),
+    ...createRepoIdentity('gitlab', host, accountId, project.path_with_namespace),
     provider: 'gitlab',
     host,
     providerAccountId: accountId,
@@ -136,10 +124,7 @@ function repoSummaryFromProject(
     name: project.name,
     nameWithOwner: project.path_with_namespace,
     description: project.description,
-    isPrivate:
-      project.visibility == null
-        ? null
-        : project.visibility.toLowerCase() !== 'public',
+    isPrivate: project.visibility == null ? null : project.visibility.toLowerCase() !== 'public',
     avatarUrl: prepareGitLabProviderImageUrl(accountId, project.avatar_url, {
       path: project.path_with_namespace,
       type: 'project',
@@ -170,9 +155,7 @@ function namespaceSummaryFromGroup(
 }
 
 function labelForToken(token: { viewerLogin: string | null; host: string }) {
-  return token.viewerLogin
-    ? `${token.viewerLogin} @ ${token.host}`
-    : token.host;
+  return token.viewerLogin ? `${token.viewerLogin} @ ${token.host}` : token.host;
 }
 
 function mapState(state: string) {
@@ -208,11 +191,7 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     title: mr.title,
     state: mapState(mr.state),
     isDraft: Boolean(mr.draft) || Boolean(mr.work_in_progress),
-    mergeStateStatus: (
-      mr.detailed_merge_status ??
-      mr.merge_status ??
-      'UNKNOWN'
-    ).toUpperCase(),
+    mergeStateStatus: (mr.detailed_merge_status ?? mr.merge_status ?? 'UNKNOWN').toUpperCase(),
     mergeable: 'UNKNOWN',
     additions: null,
     deletions: null,
@@ -225,17 +204,11 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
   };
 }
 
-function toApprovalActor(
-  accountId: string,
-  approval: typeof GitLabApprovedByEntrySchema.Type,
-) {
+function toApprovalActor(accountId: string, approval: typeof GitLabApprovedByEntrySchema.Type) {
   return {
     login: approval.user.username,
     name: approval.user.name,
-    avatarUrl: prepareGitLabProviderImageUrl(
-      accountId,
-      approval.user.avatar_url,
-    ),
+    avatarUrl: prepareGitLabProviderImageUrl(accountId, approval.user.avatar_url),
     url: approval.user.web_url ?? null,
     approvedAt: approval.approved_at ?? null,
   } satisfies PullRequestApprovalState['approvedBy'][number];
@@ -253,9 +226,7 @@ function parseGitLabMergeRequestUrl(input: string, expectedHost: string) {
     }
 
     const segments = url.pathname.split('/').filter(Boolean);
-    const markerIndex = segments.findIndex(
-      (segment) => segment === 'merge_requests',
-    );
+    const markerIndex = segments.findIndex((segment) => segment === 'merge_requests');
     if (markerIndex <= 0) {
       return null;
     }
@@ -285,9 +256,7 @@ function repoSummaryFromMergeRequestUrl(
   try {
     const url = new URL(mergeRequest.web_url);
     const path = normalizePath(
-      url.pathname
-        .replace(/\/-\/merge_requests\/\d+$/, '')
-        .replace(/\/merge_requests\/\d+$/, ''),
+      url.pathname.replace(/\/-\/merge_requests\/\d+$/, '').replace(/\/merge_requests\/\d+$/, ''),
     );
     if (!path) {
       return null;
@@ -332,8 +301,7 @@ function matchesSearchMergeRequestState(
 ) {
   return (
     states !== 'open' ||
-    (!(mergeRequest.draft ?? false) &&
-      !(mergeRequest.work_in_progress ?? false))
+    (!(mergeRequest.draft ?? false) && !(mergeRequest.work_in_progress ?? false))
   );
 }
 
@@ -348,9 +316,7 @@ function filterSearchMergeRequestsByTitle(
   }
 
   return mergeRequests
-    .filter((mergeRequest) =>
-      mergeRequest.title.toLowerCase().includes(normalizedQuery),
-    )
+    .filter((mergeRequest) => mergeRequest.title.toLowerCase().includes(normalizedQuery))
     .slice(0, limit);
 }
 
@@ -421,9 +387,7 @@ function gitlabQualityPending(status: string | null | undefined) {
 }
 
 function gitlabQualityUnavailable(status: string | null | undefined) {
-  return ['failed', 'error', 'not_found'].includes(
-    (status ?? '').toLowerCase(),
-  );
+  return ['failed', 'error', 'not_found'].includes((status ?? '').toLowerCase());
 }
 
 const EMPTY_STATUS_COUNTS: Record<string, number> = {};
@@ -458,16 +422,10 @@ function lineFromPosition(position: GitLabPosition) {
 }
 
 function startLineFromPosition(position: GitLabPosition) {
-  return (
-    position.line_range?.start?.new_line ??
-    position.line_range?.start?.old_line ??
-    null
-  );
+  return position.line_range?.start?.new_line ?? position.line_range?.start?.old_line ?? null;
 }
 
-function startSideFromPosition(
-  position: GitLabPosition,
-): 'LEFT' | 'RIGHT' | null {
+function startSideFromPosition(position: GitLabPosition): 'LEFT' | 'RIGHT' | null {
   const type = position.line_range?.start?.type;
   if (type === 'old') return 'LEFT';
   if (type === 'new') return 'RIGHT';
@@ -494,10 +452,7 @@ function discussionToReviewThread(
       id,
       databaseId: note.id,
       authorLogin: note.author?.username ?? 'unknown',
-      authorAvatarUrl: prepareGitLabProviderImageUrl(
-        accountId,
-        note.author?.avatar_url,
-      ),
+      authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
       authorAssociation: null,
       body: note.body,
       createdAt: note.created_at,
@@ -531,10 +486,7 @@ function discussionToReviewThread(
   };
 }
 
-function noteToGlobalReviewThread(
-  accountId: string,
-  note: GitLabNote,
-): ReviewThread {
+function noteToGlobalReviewThread(accountId: string, note: GitLabNote): ReviewThread {
   return {
     id: String(note.id),
     provider: 'gitlab',
@@ -552,10 +504,7 @@ function noteToGlobalReviewThread(
         id: String(note.id),
         databaseId: note.id,
         authorLogin: note.author?.username ?? 'unknown',
-        authorAvatarUrl: prepareGitLabProviderImageUrl(
-          accountId,
-          note.author?.avatar_url,
-        ),
+        authorAvatarUrl: prepareGitLabProviderImageUrl(accountId, note.author?.avatar_url),
         authorAssociation: null,
         body: note.body,
         createdAt: note.created_at,
@@ -586,18 +535,12 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   name: string,
   operation: string,
   effect: (...args: Args) => Generator<any, Success, any>,
-): ((
-  ...args: Args
-) => Effect.Effect<Success, GitLabProviderError, GitLabApiClient>) =>
+): ((...args: Args) => Effect.Effect<Success, GitLabProviderError, GitLabApiClient>) =>
   Effect.fn(name)((...args: Args) =>
     (
       Effect.gen(function* () {
         return yield* effect(...args);
-      }) as Effect.Effect<
-        Success,
-        GitLabClientError | GitLabProviderError,
-        GitLabApiClient
-      >
+      }) as Effect.Effect<Success, GitLabClientError | GitLabProviderError, GitLabApiClient>
     ).pipe(
       Effect.mapError((error: GitLabClientError | GitLabProviderError) =>
         mapProviderError(operation)(error),
@@ -605,10 +548,7 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
     ),
   );
 
-function makeGitLabProvider(): ForgeProviderEffectContract<
-  GitLabApiClient,
-  GitLabProviderError
-> {
+function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError> {
   const authorizeRequest: ForgeProviderEffectContract<
     GitLabApiClient,
     GitLabProviderError
@@ -640,9 +580,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
       }
 
       try {
-        return (
-          new URL(url).hostname.toLowerCase() === hostNameFromHost(token.host)
-        );
+        return new URL(url).hostname.toLowerCase() === hostNameFromHost(token.host);
       } catch {
         return false;
       }
@@ -652,15 +590,11 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   const viewerLogin: ForgeProviderEffectContract<
     GitLabApiClient,
     GitLabProviderError
-  >['viewerLogin'] = providerEffect(
-    'GitLabProvider.viewerLogin',
-    'viewerLogin',
-    function* () {
-      const api = yield* GitLabApiClient;
-      const user = yield* api.user();
-      return user.username;
-    },
-  );
+  >['viewerLogin'] = providerEffect('GitLabProvider.viewerLogin', 'viewerLogin', function* () {
+    const api = yield* GitLabApiClient;
+    const user = yield* api.user();
+    return user.username;
+  });
 
   const authStatus: ForgeProviderEffectContract<
     GitLabApiClient,
@@ -783,9 +717,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
                     query,
                     error: summarizeError(error),
                   }),
-                  Effect.zipRight(
-                    Effect.succeed([] as ReadonlyArray<GitLabProject>),
-                  ),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
                 ),
               ),
             ),
@@ -799,9 +731,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
 
       return [...projectsByPath.values()]
         .slice(0, limit)
-        .map((project) =>
-          repoSummaryFromProject(token.id, token.host, label, project),
-        );
+        .map((project) => repoSummaryFromProject(token.id, token.host, label, project));
     },
   );
 
@@ -845,9 +775,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
                   entries.filter(
                     (project) =>
                       project.path_with_namespace === namespacePath ||
-                      project.path_with_namespace.startsWith(
-                        `${namespacePath}/`,
-                      ),
+                      project.path_with_namespace.startsWith(`${namespacePath}/`),
                   ),
                 ),
               ),
@@ -883,9 +811,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         perPage: limit,
         search: query.trim() || undefined,
       });
-      return groups.map((group) =>
-        namespaceSummaryFromGroup(token.id, token.host, label, group),
-      );
+      return groups.map((group) => namespaceSummaryFromGroup(token.id, token.host, label, group));
     },
   );
 
@@ -907,10 +833,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         );
       }
       const label = labelForToken(token);
-      const [validatedHost, projectPath] = parseGitLabRepoInput(
-        token.host,
-        input,
-      );
+      const [validatedHost, projectPath] = parseGitLabRepoInput(token.host, input);
       if (validatedHost !== token.host) {
         return yield* Effect.fail(
           new GitLabProviderRepoHostMismatch({
@@ -962,9 +885,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
               mergeRequests,
               error: null,
             })),
-            Effect.catchAll((error) =>
-              Effect.succeed({ scope, mergeRequests: [], error }),
-            ),
+            Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
           ),
         { concurrency: 'unbounded' },
       );
@@ -981,15 +902,10 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         }
       }
 
-      if (
-        mergeRequestsByKey.size === 0 &&
-        errors.length === scopedResults.length
-      ) {
+      if (mergeRequestsByKey.size === 0 && errors.length === scopedResults.length) {
         return yield* Effect.fail(
           new GitLabProviderClientFailure({
-            message:
-              errors[0]?.message ??
-              'Failed to load GitLab overview merge requests.',
+            message: errors[0]?.message ?? 'Failed to load GitLab overview merge requests.',
             operation: 'overviewMergeRequests',
             cause: errors[0],
           }),
@@ -997,16 +913,13 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
       }
 
       const mergeRequests = [...mergeRequestsByKey.values()].sort(
-        (left, right) =>
-          Date.parse(right.updated_at) - Date.parse(left.updated_at),
+        (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
       );
       const projectIds = [
         ...new Set(
           mergeRequests
             .map((mergeRequest) => mergeRequest.project_id)
-            .filter(
-              (projectId): projectId is number => typeof projectId === 'number',
-            ),
+            .filter((projectId): projectId is number => typeof projectId === 'number'),
         ),
       ];
 
@@ -1080,10 +993,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
 
       const label = labelForToken(token);
       const trimmedQuery = query.trim();
-      const directMergeRequest = parseGitLabMergeRequestUrl(
-        trimmedQuery,
-        token.host,
-      );
+      const directMergeRequest = parseGitLabMergeRequestUrl(trimmedQuery, token.host);
       if (directMergeRequest) {
         const project = yield* api.project(directMergeRequest.projectPath);
         const mergeRequest = yield* api.mergeRequest(
@@ -1112,9 +1022,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
             })
             .pipe(
               Effect.catchAll((error) =>
-                Effect.logWarning(
-                  '[gitlab] scoped merge request search failed',
-                ).pipe(
+                Effect.logWarning('[gitlab] scoped merge request search failed').pipe(
                   Effect.annotateLogs({
                     accountId: token.id,
                     host: token.host,
@@ -1122,19 +1030,14 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
                     query: trimmedQuery,
                     error: summarizeError(error),
                   }),
-                  Effect.zipRight(
-                    Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>),
-                  ),
+                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
                 ),
               ),
             ),
         { concurrency: 'unbounded' },
       );
-      const mergeRequests = dedupeMergeRequests(
-        scopedMergeRequestGroups.flat(),
-      ).sort(
-        (left, right) =>
-          Date.parse(right.updated_at) - Date.parse(left.updated_at),
+      const mergeRequests = dedupeMergeRequests(scopedMergeRequestGroups.flat()).sort(
+        (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
       );
 
       return filterSearchMergeRequestsByTitle(
@@ -1142,12 +1045,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         trimmedQuery,
         limit,
       ).flatMap((mergeRequest) => {
-        const repo = repoSummaryFromMergeRequestUrl(
-          token.id,
-          token.host,
-          label,
-          mergeRequest,
-        );
+        const repo = repoSummaryFromMergeRequestUrl(token.id, token.host, label, mergeRequest);
         if (!repo) {
           return [];
         }
@@ -1195,17 +1093,13 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
       const approvedBy = (approvalState.approved_by ?? [])
         .map((approval) => toApprovalActor(token.id, approval))
         .sort(
-          (left, right) =>
-            Date.parse(right.approvedAt ?? '') -
-            Date.parse(left.approvedAt ?? ''),
+          (left, right) => Date.parse(right.approvedAt ?? '') - Date.parse(left.approvedAt ?? ''),
         );
 
       return {
         provider: 'gitlab',
         approvedBy,
-        viewerApproved: approvedBy.some(
-          (approval) => approval.login === currentViewerLogin,
-        ),
+        viewerApproved: approvedBy.some((approval) => approval.login === currentViewerLogin),
         viewerRemoveStrategy: 'unapprove',
         approvalsRequired: approvalState.approvals_required ?? null,
         approvalsLeft: approvalState.approvals_left ?? null,
@@ -1337,17 +1231,13 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         .codeQualityReportsComparer(repo.path, String(number))
         .pipe(Effect.catchAll(() => Effect.succeed(null)));
       const graphqlResult =
-        graphqlResponse?.data?.project?.mergeRequest
-          ?.codequalityReportsComparer ?? null;
+        graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ?? null;
 
       if (graphqlResult) {
         const comparerStatus = graphqlResult.status ?? null;
         const reportStatus = graphqlResult.report?.status ?? null;
 
-        if (
-          gitlabQualityPending(comparerStatus) ||
-          gitlabQualityPending(reportStatus)
-        ) {
+        if (gitlabQualityPending(comparerStatus) || gitlabQualityPending(reportStatus)) {
           return {
             provider: 'gitlab',
             repoKey: repo.repoKey,
@@ -1407,15 +1297,9 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
             summary: {
               totalFindings:
                 graphqlResult.report.summary?.total ??
-                newErrors.length +
-                  resolvedErrors.length +
-                  existingErrors.length,
-              inlineFindings: findings.filter(
-                (finding) => finding.anchorState === 'inline',
-              ).length,
-              fileOnlyFindings: findings.filter(
-                (finding) => finding.anchorState === 'file',
-              ).length,
+                newErrors.length + resolvedErrors.length + existingErrors.length,
+              inlineFindings: findings.filter((finding) => finding.anchorState === 'inline').length,
+              fileOnlyFindings: findings.filter((finding) => finding.anchorState === 'file').length,
               statusCounts: {
                 new: newErrors.length,
                 existing: existingErrors.length,
@@ -1424,9 +1308,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
               providerLabel: 'GitLab code quality',
               detailsUrl: mergeRequestWebUrl(repo, number),
               notes: gitlabQualityUnavailable(reportStatus)
-                ? [
-                    `GitLab reported code quality status ${reportStatus}, but returned findings.`,
-                  ]
+                ? [`GitLab reported code quality status ${reportStatus}, but returned findings.`]
                 : undefined,
             },
             findings,
@@ -1435,8 +1317,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
               source: 'graphql',
               comparerStatus,
               reportStatus,
-              resolvedCount:
-                graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
+              resolvedCount: graphqlResult.report.summary?.resolved ?? resolvedErrors.length,
               existingCount: existingErrors.length,
             },
           } satisfies PullRequestQualityReport;
@@ -1474,13 +1355,8 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
     },
   );
 
-  const gitRemote: ForgeProviderEffectContract<
-    GitLabApiClient,
-    GitLabProviderError
-  >['gitRemote'] = providerEffect(
-    'GitLabProvider.gitRemote',
-    'gitRemote',
-    function* (repo: ProviderRepoIdentity) {
+  const gitRemote: ForgeProviderEffectContract<GitLabApiClient, GitLabProviderError>['gitRemote'] =
+    providerEffect('GitLabProvider.gitRemote', 'gitRemote', function* (repo: ProviderRepoIdentity) {
       const api = yield* GitLabApiClient;
       const token = yield* api.accessToken();
       return {
@@ -1494,8 +1370,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
           ],
         },
       };
-    },
-  );
+    });
 
   const listReviewThreads: ForgeProviderEffectContract<
     GitLabApiClient,
@@ -1587,11 +1462,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
               ? 'RIGHT'
               : null;
         const subjectType =
-          position?.position_type === 'file'
-            ? 'file'
-            : position != null
-              ? 'line'
-              : 'global';
+          position?.position_type === 'file' ? 'file' : position != null ? 'line' : 'global';
         const kind =
           draftNote.discussion_id != null && position == null
             ? 'reply'
@@ -1684,11 +1555,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   >['createReviewThread'] = providerEffect(
     'GitLabProvider.createReviewThread',
     'createReviewThread',
-    function* (
-      repo: ProviderRepoIdentity,
-      number: number,
-      input: ReviewThreadInput,
-    ) {
+    function* (repo: ProviderRepoIdentity, number: number, input: ReviewThreadInput) {
       const api = yield* GitLabApiClient;
       if (input.subjectType === 'global') {
         yield* api.createMergeRequestNote(repo.path, number, input.body);
@@ -1820,16 +1687,9 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   >['createPendingGlobalComment'] = providerEffect(
     'GitLabProvider.createPendingGlobalComment',
     'createPendingGlobalComment',
-    function* (
-      repo: ProviderRepoIdentity,
-      number: number,
-      _session: unknown,
-      body: string,
-    ) {
+    function* (repo: ProviderRepoIdentity, number: number, _session: unknown, body: string) {
       const api = yield* GitLabApiClient;
-      const draftNote = yield* api.createDraftNote(repo.path, number, [
-        ['note', body],
-      ]);
+      const draftNote = yield* api.createDraftNote(repo.path, number, [['note', body]]);
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
@@ -1850,12 +1710,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
       body: string,
     ) {
       const api = yield* GitLabApiClient;
-      const draftNote = yield* api.updateDraftNote(
-        repo.path,
-        number,
-        providerCommentId,
-        body,
-      );
+      const draftNote = yield* api.updateDraftNote(repo.path, number, providerCommentId, body);
       return {
         providerCommentId: String(draftNote.id),
         providerThreadId: draftNote.discussion_id ?? null,
@@ -1869,11 +1724,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   >['deletePendingReviewComment'] = providerEffect(
     'GitLabProvider.deletePendingReviewComment',
     'deletePendingReviewComment',
-    function* (
-      repo: ProviderRepoIdentity,
-      number: number,
-      providerCommentId: string,
-    ) {
+    function* (repo: ProviderRepoIdentity, number: number, providerCommentId: string) {
       const api = yield* GitLabApiClient;
       yield* api.deleteDraftNote(repo.path, number, providerCommentId);
     },
@@ -1904,9 +1755,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
           : summary;
 
       if (reviewSummary) {
-        yield* api.createDraftNote(repo.path, number, [
-          ['note', reviewSummary],
-        ]);
+        yield* api.createDraftNote(repo.path, number, [['note', reviewSummary]]);
       }
 
       yield* api.bulkPublishDraftNotes(repo.path, number).pipe(
@@ -1942,12 +1791,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
     ) {
       yield* Effect.forEach(
         comments.filter((comment) => comment.providerCommentId != null),
-        (comment) =>
-          deletePendingReviewComment(
-            repo,
-            number,
-            comment.providerCommentId ?? '',
-          ),
+        (comment) => deletePendingReviewComment(repo, number, comment.providerCommentId ?? ''),
         { discard: true },
       );
     },
@@ -1959,12 +1803,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   >['replyToReviewThread'] = providerEffect(
     'GitLabProvider.replyToReviewThread',
     'replyToReviewThread',
-    function* (
-      repo: ProviderRepoIdentity,
-      number: number,
-      threadId: string,
-      body: string,
-    ) {
+    function* (repo: ProviderRepoIdentity, number: number, threadId: string, body: string) {
       const api = yield* GitLabApiClient;
       yield* api.createDiscussionNote(repo.path, number, threadId, body);
     },
@@ -1976,12 +1815,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
   >['setReviewThreadResolved'] = providerEffect(
     'GitLabProvider.setReviewThreadResolved',
     'setReviewThreadResolved',
-    function* (
-      repo: ProviderRepoIdentity,
-      number: number,
-      threadId: string,
-      isResolved: boolean,
-    ) {
+    function* (repo: ProviderRepoIdentity, number: number, threadId: string, isResolved: boolean) {
       const api = yield* GitLabApiClient;
       yield* api.updateDiscussion(repo.path, number, threadId, isResolved);
     },
@@ -2007,13 +1841,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<
         return;
       }
 
-      yield* api.updateDiscussionNote(
-        repo.path,
-        number,
-        threadId,
-        commentId,
-        body,
-      );
+      yield* api.updateDiscussionNote(repo.path, number, threadId, commentId, body);
     },
   );
 

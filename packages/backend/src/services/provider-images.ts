@@ -1,9 +1,5 @@
 import { createHash } from 'node:crypto';
-import {
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from '@effect/platform';
+import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
 import { Effect } from 'effect';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 
@@ -52,10 +48,7 @@ function signProviderImageUrlPayload(input: ProviderImageInput) {
 function parseProviderImageUrl(input: string): ProviderImageInput | null {
   try {
     const url = new URL(input);
-    if (
-      url.protocol !== `${PROVIDER_IMAGE_PROTOCOL}:` ||
-      url.hostname !== 'provider-image'
-    ) {
+    if (url.protocol !== `${PROVIDER_IMAGE_PROTOCOL}:` || url.hostname !== 'provider-image') {
       return null;
     }
 
@@ -80,9 +73,7 @@ function parseProviderImageUrl(input: string): ProviderImageInput | null {
   }
 }
 
-const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (
-  input: ProviderImageInput,
-) {
+const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (input: ProviderImageInput) {
   const client = yield* HttpClient.HttpClient;
   const providers = yield* ForgeProviderRegistry;
 
@@ -115,8 +106,7 @@ const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (
   const response = yield* client.execute(request).pipe(
     Effect.timeoutFail({
       duration: PROVIDER_IMAGE_TIMEOUT,
-      onTimeout: () =>
-        new Error(`Provider image request timed out: ${input.url}`),
+      onTimeout: () => new Error(`Provider image request timed out: ${input.url}`),
     }),
     Effect.flatMap((result) =>
       HttpClientResponse.filterStatusOk(result).pipe(

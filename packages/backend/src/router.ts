@@ -1,12 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import { Cause, Effect, Exit, Option } from 'effect';
-import {
-  BackendError,
-  formatLogDetails,
-  getErrorMessage,
-  summarizeError,
-} from './errors.ts';
+import { BackendError, formatLogDetails, getErrorMessage, summarizeError } from './errors.ts';
 import { PullRequestService } from './services/pull-requests.ts';
 import { PullRequestQualityService } from './services/pull-request-quality.ts';
 import { RepoService } from './services/repos.ts';
@@ -104,9 +99,7 @@ function dedupeNamespaces(namespaces: ReadonlyArray<NamespaceSummary>) {
   return [...entries.values()];
 }
 
-function dedupeOverviewPullRequests(
-  pullRequests: ReadonlyArray<OverviewPullRequestSummary>,
-) {
+function dedupeOverviewPullRequests(pullRequests: ReadonlyArray<OverviewPullRequestSummary>) {
   const entries = new Map<string, OverviewPullRequestSummary>();
   for (const entry of pullRequests) {
     const key = `${entry.repo.providerId}:${entry.repo.repoKey}#${entry.pullRequest.number}`;
@@ -121,17 +114,13 @@ function dedupeOverviewPullRequests(
   }
   return [...entries.values()].sort(
     (left, right) =>
-      Date.parse(right.pullRequest.updatedAt || '') -
-      Date.parse(left.pullRequest.updatedAt || ''),
+      Date.parse(right.pullRequest.updatedAt || '') - Date.parse(left.pullRequest.updatedAt || ''),
   );
 }
 
 function repoMatchesNamespace(repo: RepoSummary, namespacePath: string | null) {
   if (!namespacePath) return true;
-  return (
-    repo.nameWithOwner === namespacePath ||
-    repo.nameWithOwner.startsWith(`${namespacePath}/`)
-  );
+  return repo.nameWithOwner === namespacePath || repo.nameWithOwner.startsWith(`${namespacePath}/`);
 }
 
 function matchesPullRequestSearchState(
@@ -143,20 +132,14 @@ function matchesPullRequestSearchState(
   return state === 'draft_open' || !pullRequest.isDraft;
 }
 
-function parseRepoUrl(
-  input: string,
-  fallbackProvider: ProviderAccount['provider'],
-) {
+function parseRepoUrl(input: string, fallbackProvider: ProviderAccount['provider']) {
   try {
     const url = new URL(input);
     const host = url.origin.toLowerCase();
-    const provider =
-      url.hostname.toLowerCase() === 'github.com' ? 'github' : fallbackProvider;
+    const provider = url.hostname.toLowerCase() === 'github.com' ? 'github' : fallbackProvider;
     if (provider === 'github') {
       const [owner, name] = url.pathname.split('/').filter(Boolean);
-      return owner && name
-        ? { host, provider, path: `${owner}/${name}` }
-        : null;
+      return owner && name ? { host, provider, path: `${owner}/${name}` } : null;
     }
 
     const path = url.pathname
@@ -202,13 +185,8 @@ function summarizeEffectCause<E>(cause: Cause.Cause<E>) {
 }
 
 function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
-  async function runEffect<A, E, R>(
-    effect: Effect.Effect<A, E, R>,
-    label = 'effect',
-  ) {
-    const exit = await runtime.runPromiseExit(
-      effect as Effect.Effect<A, E, never>,
-    );
+  async function runEffect<A, E, R>(effect: Effect.Effect<A, E, R>, label = 'effect') {
+    const exit = await runtime.runPromiseExit(effect as Effect.Effect<A, E, never>);
     if (Exit.isSuccess(exit)) {
       return exit.value;
     }
@@ -221,11 +199,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     throw mapError(error);
   }
 
-  async function searchReposForAccount(
-    account: ProviderAccount,
-    query: string,
-    limit: number,
-  ) {
+  async function searchReposForAccount(account: ProviderAccount, query: string, limit: number) {
     const trimmedQuery = query.trim();
     const serviceEffect = Effect.gen(function* () {
       const service = yield* RepoService;
@@ -236,10 +210,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
 
       const parsedUrl = parseRepoUrl(trimmedQuery, account.provider);
       if (parsedUrl) {
-        if (
-          parsedUrl.provider !== account.provider ||
-          parsedUrl.host !== account.host
-        ) {
+        if (parsedUrl.provider !== account.provider || parsedUrl.host !== account.host) {
           return [];
         }
         return yield* service.validateRepo(account.id, parsedUrl.path).pipe(
@@ -256,12 +227,10 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         !pathQuery.startsWith('/') &&
         !pathQuery.endsWith('/')
       ) {
-        const validated = yield* service
-          .validateRepo(account.id, pathQuery)
-          .pipe(
-            Effect.map((repo) => [repo]),
-            Effect.catchAll(() => Effect.succeed(null)),
-          );
+        const validated = yield* service.validateRepo(account.id, pathQuery).pipe(
+          Effect.map((repo) => [repo]),
+          Effect.catchAll(() => Effect.succeed(null)),
+        );
         if (validated) {
           return validated;
         }
@@ -291,79 +260,57 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      getProviderProfile: t.procedure
-        .input(providerAccountSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* RepoService;
-              const profile = yield* service.getProviderProfile(
-                input.accountId,
-              );
-              const parsed: ProviderProfile =
-                providerProfileSchema.parse(profile);
-              return parsed;
-            }),
-          ),
+      getProviderProfile: t.procedure.input(providerAccountSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            const profile = yield* service.getProviderProfile(input.accountId);
+            const parsed: ProviderProfile = providerProfileSchema.parse(profile);
+            return parsed;
+          }),
         ),
+      ),
       startOAuth: t.procedure
         .input(providerHostSchema)
         .mutation(({ input }) =>
-          runEffect(
-            startOAuth(
-              input.provider,
-              input.host,
-              input.clientId,
-              input.clientSecret,
-            ),
-          ),
+          runEffect(startOAuth(input.provider, input.host, input.clientId, input.clientSecret)),
         ),
       pollDeviceOAuth: t.procedure
         .input(providerAccountSchema)
         .mutation(({ input }) => runEffect(pollDeviceOAuth(input.accountId))),
-      completeOAuth: t.procedure
-        .input(completeOAuthSchema)
-        .mutation(async ({ input }) => {
-          try {
-            const session = await runEffect(
-              completeOAuth(input.code, input.state),
-            );
-            const statuses = await runEffect(
-              Effect.gen(function* () {
-                const service = yield* RepoService;
-                return yield* service.getProviderStatuses();
-              }),
-            );
-            const status = statuses[session.accountId];
-            if (!status) {
-              throw new Error('Provider auth status was not returned.');
-            }
-            return status;
-          } catch (error) {
-            throw mapError(error);
-          }
-        }),
-      signOut: t.procedure
-        .input(providerAccountSchema)
-        .mutation(async ({ input }) => {
-          return runEffect(
+      completeOAuth: t.procedure.input(completeOAuthSchema).mutation(async ({ input }) => {
+        try {
+          const session = await runEffect(completeOAuth(input.code, input.state));
+          const statuses = await runEffect(
             Effect.gen(function* () {
-              const tokenStore = yield* AuthTokenStore;
-              yield* tokenStore.delete(input.accountId);
+              const service = yield* RepoService;
+              return yield* service.getProviderStatuses();
             }),
           );
-        }),
+          const status = statuses[session.accountId];
+          if (!status) {
+            throw new Error('Provider auth status was not returned.');
+          }
+          return status;
+        } catch (error) {
+          throw mapError(error);
+        }
+      }),
+      signOut: t.procedure.input(providerAccountSchema).mutation(async ({ input }) => {
+        return runEffect(
+          Effect.gen(function* () {
+            const tokenStore = yield* AuthTokenStore;
+            yield* tokenStore.delete(input.accountId);
+          }),
+        );
+      }),
       oauthCallbacks: t.procedure.subscription(() =>
         observable<string>((emit) => {
-          const unsubscribe = platform.subscribeToOAuthCallbacks((url) =>
-            emit.next(url),
-          );
+          const unsubscribe = platform.subscribeToOAuthCallbacks((url) => emit.next(url));
           return unsubscribe;
         }),
       ),
-      latestOAuthCallback: t.procedure.query(() =>
-        platform.getLatestOAuthCallback(),
-      ),
+      latestOAuthCallback: t.procedure.query(() => platform.getLatestOAuthCallback()),
     }),
 
     settings: t.router({
@@ -381,9 +328,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           runEffect(
             Effect.gen(function* () {
               const service = yield* SettingsService;
-              return yield* service.setAccountVisibility(
-                input.enabledAccountIds,
-              );
+              return yield* service.setAccountVisibility(input.enabledAccountIds);
             }),
           ),
         ),
@@ -395,16 +340,14 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      setDiffDataSettings: t.procedure
-        .input(diffDataSettingsSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* SettingsService;
-              return yield* service.setDiffDataSettings(input);
-            }),
-          ),
+      setDiffDataSettings: t.procedure.input(diffDataSettingsSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setDiffDataSettings(input);
+          }),
         ),
+      ),
       getThemePreference: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
@@ -433,16 +376,14 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      setReviewEditorSettings: t.procedure
-        .input(reviewEditorSettingsSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* SettingsService;
-              return yield* service.setReviewEditorSettings(input);
-            }),
-          ),
+      setReviewEditorSettings: t.procedure.input(reviewEditorSettingsSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* SettingsService;
+            return yield* service.setReviewEditorSettings(input);
+          }),
         ),
+      ),
       getAppearanceBackground: t.procedure.query(() =>
         runEffect(
           Effect.gen(function* () {
@@ -480,228 +421,209 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     deepLinks: t.router({
       urls: t.procedure.subscription(() =>
         observable<string>((emit) => {
-          const unsubscribe = platform.subscribeToDeepLinks((url) =>
-            emit.next(url),
-          );
+          const unsubscribe = platform.subscribeToDeepLinks((url) => emit.next(url));
           return unsubscribe;
         }),
       ),
     }),
 
     browse: t.router({
-      search: t.procedure
-        .input(browseSearchInputSchema)
-        .subscription(({ input }) =>
-          observable<BrowseSearchSnapshot>((emit) => {
-            let cancelled = false;
-            let pendingCount = 0;
-            let completedCount = 0;
-            let accountIds: string[] = [];
-            let repos: RepoSummary[] = [];
-            let namespaces: NamespaceSummary[] = [];
-            let pullRequests: OverviewPullRequestSummary[] = [];
-            const errors: string[] = [];
+      search: t.procedure.input(browseSearchInputSchema).subscription(({ input }) =>
+        observable<BrowseSearchSnapshot>((emit) => {
+          let cancelled = false;
+          let pendingCount = 0;
+          let completedCount = 0;
+          let accountIds: string[] = [];
+          let repos: RepoSummary[] = [];
+          let namespaces: NamespaceSummary[] = [];
+          let pullRequests: OverviewPullRequestSummary[] = [];
+          const errors: string[] = [];
 
-            const scopedSearch = Boolean(
-              input.repoFilterKey || input.namespaceFilterPath,
+          const scopedSearch = Boolean(input.repoFilterKey || input.namespaceFilterPath);
+
+          const emitSnapshot = () => {
+            if (cancelled) return;
+            emit.next(
+              browseSearchSnapshotSchema.parse({
+                repos: dedupeRepos(repos),
+                namespaces: dedupeNamespaces(namespaces),
+                pullRequests: dedupeOverviewPullRequests(pullRequests),
+                accountIds,
+                pendingCount,
+                completedCount,
+                errors,
+                loading: pendingCount > 0,
+              }),
             );
+          };
 
-            const emitSnapshot = () => {
-              if (cancelled) return;
-              emit.next(
-                browseSearchSnapshotSchema.parse({
-                  repos: dedupeRepos(repos),
-                  namespaces: dedupeNamespaces(namespaces),
-                  pullRequests: dedupeOverviewPullRequests(pullRequests),
-                  accountIds,
-                  pendingCount,
-                  completedCount,
-                  errors,
-                  loading: pendingCount > 0,
+          const applyAccountResults = (accountRepos: RepoSummary[]) => {
+            repos = dedupeRepos([...repos, ...accountRepos]);
+            emitSnapshot();
+          };
+
+          void (async () => {
+            try {
+              const accounts = await runEffect(
+                Effect.gen(function* () {
+                  const service = yield* RepoService;
+                  return yield* service.listProviderAccounts();
                 }),
+                'browse.listProviderAccounts',
               );
-            };
-
-            const applyAccountResults = (accountRepos: RepoSummary[]) => {
-              repos = dedupeRepos([...repos, ...accountRepos]);
+              const enabledAccountIds = new Set(input.accountIds);
+              const activeAccounts = accounts.filter((account) =>
+                enabledAccountIds.has(account.id),
+              );
+              accountIds = activeAccounts.map((account) => account.id);
+              pendingCount = activeAccounts.length;
               emitSnapshot();
-            };
 
-            void (async () => {
-              try {
-                const accounts = await runEffect(
-                  Effect.gen(function* () {
-                    const service = yield* RepoService;
-                    return yield* service.listProviderAccounts();
-                  }),
-                  'browse.listProviderAccounts',
-                );
-                const enabledAccountIds = new Set(input.accountIds);
-                const activeAccounts = accounts.filter((account) =>
-                  enabledAccountIds.has(account.id),
-                );
-                accountIds = activeAccounts.map((account) => account.id);
-                pendingCount = activeAccounts.length;
-                emitSnapshot();
+              await Promise.all(
+                activeAccounts.map(async (account) => {
+                  try {
+                    const accountRepos = await searchReposForAccount(
+                      account,
+                      input.query,
+                      input.repoLimit,
+                    );
+                    applyAccountResults(accountRepos);
 
-                await Promise.all(
-                  activeAccounts.map(async (account) => {
-                    try {
-                      const accountRepos = await searchReposForAccount(
-                        account,
-                        input.query,
-                        input.repoLimit,
-                      );
-                      applyAccountResults(accountRepos);
+                    if (input.query.trim()) {
+                      try {
+                        const accountNamespaces = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* RepoService;
+                            return yield* service.searchNamespaces(
+                              account.id,
+                              input.query,
+                              input.namespaceLimit,
+                            );
+                          }),
+                          'browse.searchNamespaces',
+                        );
+                        namespaces = dedupeNamespaces([...namespaces, ...accountNamespaces]);
+                        emitSnapshot();
+                      } catch (error) {
+                        errors.push(getErrorMessage(error));
+                        emitSnapshot();
+                      }
+                    }
 
-                      if (input.query.trim()) {
-                        try {
-                          const accountNamespaces = await runEffect(
-                            Effect.gen(function* () {
-                              const service = yield* RepoService;
-                              return yield* service.searchNamespaces(
-                                account.id,
-                                input.query,
-                                input.namespaceLimit,
+                    if (scopedSearch) {
+                      let scopedRepos = accountRepos;
+                      if (input.repoFilterKey) {
+                        scopedRepos = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* RepoService;
+                            return yield* service
+                              .validateRepo(account.id, input.repoFilterKey ?? '')
+                              .pipe(
+                                Effect.map((repo) => [repo]),
+                                Effect.catchAll(() => Effect.succeed([])),
                               );
-                            }),
-                            'browse.searchNamespaces',
-                          );
-                          namespaces = dedupeNamespaces([
-                            ...namespaces,
-                            ...accountNamespaces,
-                          ]);
-                          emitSnapshot();
-                        } catch (error) {
-                          errors.push(getErrorMessage(error));
-                          emitSnapshot();
-                        }
+                          }),
+                          'browse.validateScopedRepo',
+                        );
+                      } else if (input.namespaceFilterPath) {
+                        scopedRepos = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* RepoService;
+                            return yield* service.listNamespaceRepos(
+                              account.id,
+                              input.namespaceFilterPath ?? '',
+                              input.repoLimit,
+                            );
+                          }),
+                          'browse.listNamespaceRepos',
+                        );
+                        applyAccountResults(scopedRepos);
                       }
 
-                      if (scopedSearch) {
-                        let scopedRepos = accountRepos;
-                        if (input.repoFilterKey) {
-                          scopedRepos = await runEffect(
-                            Effect.gen(function* () {
-                              const service = yield* RepoService;
-                              return yield* service
-                                .validateRepo(
-                                  account.id,
-                                  input.repoFilterKey ?? '',
-                                )
-                                .pipe(
-                                  Effect.map((repo) => [repo]),
-                                  Effect.catchAll(() => Effect.succeed([])),
-                                );
-                            }),
-                            'browse.validateScopedRepo',
-                          );
-                        } else if (input.namespaceFilterPath) {
-                          scopedRepos = await runEffect(
-                            Effect.gen(function* () {
-                              const service = yield* RepoService;
-                              return yield* service.listNamespaceRepos(
-                                account.id,
-                                input.namespaceFilterPath ?? '',
-                                input.repoLimit,
-                              );
-                            }),
-                            'browse.listNamespaceRepos',
-                          );
-                          applyAccountResults(scopedRepos);
-                        }
-
-                        const visibleRepos = scopedRepos.filter(
-                          (repo) =>
-                            (!input.profileFilterAccountId ||
-                              repo.providerAccountId ===
-                                input.profileFilterAccountId) &&
-                            repoMatchesNamespace(
-                              repo,
-                              input.namespaceFilterPath,
-                            ),
-                        );
-                        const repoPullRequestGroups = await Promise.all(
-                          visibleRepos.map(async (repo) => {
-                            try {
-                              const repoPullRequests = await runEffect(
-                                Effect.gen(function* () {
-                                  const service = yield* PullRequestService;
-                                  return yield* service.list(repo);
-                                }),
-                                'browse.listPullRequests',
-                              );
-                              return repoPullRequests
-                                .filter((pullRequest) =>
-                                  matchesPullRequestSearchState(
+                      const visibleRepos = scopedRepos.filter(
+                        (repo) =>
+                          (!input.profileFilterAccountId ||
+                            repo.providerAccountId === input.profileFilterAccountId) &&
+                          repoMatchesNamespace(repo, input.namespaceFilterPath),
+                      );
+                      const repoPullRequestGroups = await Promise.all(
+                        visibleRepos.map(async (repo) => {
+                          try {
+                            const repoPullRequests = await runEffect(
+                              Effect.gen(function* () {
+                                const service = yield* PullRequestService;
+                                return yield* service.list(repo);
+                              }),
+                              'browse.listPullRequests',
+                            );
+                            return repoPullRequests
+                              .filter((pullRequest) =>
+                                matchesPullRequestSearchState(pullRequest, input.states),
+                              )
+                              .map(
+                                (pullRequest) =>
+                                  ({
+                                    repo,
                                     pullRequest,
-                                    input.states,
-                                  ),
-                                )
-                                .map(
-                                  (pullRequest) =>
-                                    ({
-                                      repo,
-                                      pullRequest,
-                                    }) satisfies OverviewPullRequestSummary,
-                                );
-                            } catch (error) {
-                              errors.push(getErrorMessage(error));
-                              return [];
-                            }
+                                  }) satisfies OverviewPullRequestSummary,
+                              );
+                          } catch (error) {
+                            errors.push(getErrorMessage(error));
+                            return [];
+                          }
+                        }),
+                      );
+                      pullRequests = dedupeOverviewPullRequests([
+                        ...pullRequests,
+                        ...repoPullRequestGroups.flat(),
+                      ]).slice(0, input.pullRequestLimit);
+                      emitSnapshot();
+                    } else if (input.query.trim()) {
+                      try {
+                        const accountPullRequests = await runEffect(
+                          Effect.gen(function* () {
+                            const service = yield* PullRequestService;
+                            return yield* service.search(
+                              account.id,
+                              input.query,
+                              input.pullRequestLimit,
+                              input.states,
+                            );
                           }),
+                          'browse.searchPullRequests',
                         );
                         pullRequests = dedupeOverviewPullRequests([
                           ...pullRequests,
-                          ...repoPullRequestGroups.flat(),
+                          ...accountPullRequests,
                         ]).slice(0, input.pullRequestLimit);
                         emitSnapshot();
-                      } else if (input.query.trim()) {
-                        try {
-                          const accountPullRequests = await runEffect(
-                            Effect.gen(function* () {
-                              const service = yield* PullRequestService;
-                              return yield* service.search(
-                                account.id,
-                                input.query,
-                                input.pullRequestLimit,
-                                input.states,
-                              );
-                            }),
-                            'browse.searchPullRequests',
-                          );
-                          pullRequests = dedupeOverviewPullRequests([
-                            ...pullRequests,
-                            ...accountPullRequests,
-                          ]).slice(0, input.pullRequestLimit);
-                          emitSnapshot();
-                        } catch (error) {
-                          errors.push(getErrorMessage(error));
-                          emitSnapshot();
-                        }
+                      } catch (error) {
+                        errors.push(getErrorMessage(error));
+                        emitSnapshot();
                       }
-                    } catch (error) {
-                      errors.push(getErrorMessage(error));
-                      emitSnapshot();
-                    } finally {
-                      completedCount += 1;
-                      pendingCount = Math.max(0, pendingCount - 1);
-                      emitSnapshot();
                     }
-                  }),
-                );
+                  } catch (error) {
+                    errors.push(getErrorMessage(error));
+                    emitSnapshot();
+                  } finally {
+                    completedCount += 1;
+                    pendingCount = Math.max(0, pendingCount - 1);
+                    emitSnapshot();
+                  }
+                }),
+              );
 
-                emit.complete();
-              } catch (error) {
-                emit.error(mapError(error));
-              }
-            })();
+              emit.complete();
+            } catch (error) {
+              emit.error(mapError(error));
+            }
+          })();
 
-            return () => {
-              cancelled = true;
-            };
-          }),
-        ),
+          return () => {
+            cancelled = true;
+          };
+        }),
+      ),
     }),
 
     repos: t.router({
@@ -715,10 +637,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           runEffect(
             Effect.gen(function* () {
               const service = yield* RepoService;
-              return yield* service.listInitialRepos(
-                input.accountId,
-                input.limit,
-              );
+              return yield* service.listInitialRepos(input.accountId, input.limit);
             }),
           ),
         ),
@@ -733,11 +652,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           runEffect(
             Effect.gen(function* () {
               const service = yield* RepoService;
-              return yield* service.searchRepos(
-                input.accountId,
-                input.query,
-                input.limit,
-              );
+              return yield* service.searchRepos(input.accountId, input.query, input.limit);
             }),
           ),
         ),
@@ -752,11 +667,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           runEffect(
             Effect.gen(function* () {
               const service = yield* RepoService;
-              return yield* service.searchNamespaces(
-                input.accountId,
-                input.query,
-                input.limit,
-              );
+              return yield* service.searchNamespaces(input.accountId, input.query, input.limit);
             }),
           ),
         ),
@@ -790,37 +701,31 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      save: t.procedure
-        .input(z.object({ repo: repoSummarySchema }))
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* RepoService;
-              return yield* service.saveRepo(input.repo);
-            }),
-          ),
+      save: t.procedure.input(z.object({ repo: repoSummarySchema })).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* RepoService;
+            return yield* service.saveRepo(input.repo);
+          }),
         ),
+      ),
     }),
 
     pullRequests: t.router({
-      listOverview: t.procedure
-        .input(providerAccountSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              yield* Effect.logInfo('tRPC pullRequests.listOverview').pipe(
-                Effect.annotateLogs({
-                  accountId: input.accountId,
-                }),
-              );
-              const service = yield* PullRequestService;
-              const pullRequests = yield* service.listOverview(input.accountId);
-              return pullRequests.map((entry) =>
-                overviewPullRequestSummarySchema.parse(entry),
-              );
-            }),
-          ),
+      listOverview: t.procedure.input(providerAccountSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            yield* Effect.logInfo('tRPC pullRequests.listOverview').pipe(
+              Effect.annotateLogs({
+                accountId: input.accountId,
+              }),
+            );
+            const service = yield* PullRequestService;
+            const pullRequests = yield* service.listOverview(input.accountId);
+            return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
+          }),
         ),
+      ),
       listCached: t.procedure.input(repoIdentitySchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -837,21 +742,14 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      search: t.procedure
-        .input(pullRequestSearchInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* PullRequestService;
-              return yield* service.search(
-                input.accountId,
-                input.query,
-                input.limit,
-                input.states,
-              );
-            }),
-          ),
+      search: t.procedure.input(pullRequestSearchInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.search(input.accountId, input.query, input.limit, input.states);
+          }),
         ),
+      ),
       get: t.procedure.input(pullRequestInputSchema).query(({ input }) =>
         runEffect(
           Effect.gen(function* () {
@@ -870,59 +768,39 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
           }),
         ),
       ),
-      getPatch: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* PullRequestService;
-              return yield* service.getPatch(
-                input,
-                input.number,
-                input.headSha,
-              );
-            }),
-          ),
+      getPatch: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.getPatch(input, input.number, input.headSha);
+          }),
         ),
-      listChangedFiles: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* PullRequestService;
-              return yield* service.listChangedFiles(
-                input,
-                input.number,
-                input.headSha,
-              );
-            }),
-          ),
+      ),
+      listChangedFiles: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.listChangedFiles(input, input.number, input.headSha);
+          }),
         ),
-      getQualityReport: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* PullRequestQualityService;
-              const report = yield* service.get(
-                input,
-                input.number,
-                input.headSha,
-              );
-              return pullRequestQualityReportSchema.parse(report);
-            }),
-          ),
+      ),
+      getQualityReport: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestQualityService;
+            const report = yield* service.get(input, input.number, input.headSha);
+            return pullRequestQualityReportSchema.parse(report);
+          }),
         ),
-      getFileContents: t.procedure
-        .input(pullRequestFileContentsInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* PullRequestService;
-              return yield* service.getFileContents(input);
-            }),
-          ),
+      ),
+      getFileContents: t.procedure.input(pullRequestFileContentsInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            return yield* service.getFileContents(input);
+          }),
         ),
+      ),
     }),
 
     tracked: t.router({
@@ -951,9 +829,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         ),
       ),
       track: t.procedure
-        .input(
-          repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }),
-        )
+        .input(repoIdentitySchema.extend({ pullRequest: pullRequestSummarySchema }))
         .mutation(({ input }) =>
           runEffect(
             Effect.gen(function* () {
@@ -991,84 +867,61 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     }),
 
     reviewComments: t.router({
-      getViewerLogin: t.procedure
-        .input(providerAccountSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.getViewerLogin(input.accountId);
-            }),
-          ),
+      getViewerLogin: t.procedure.input(providerAccountSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.getViewerLogin(input.accountId);
+          }),
         ),
-      getApprovalState: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              const approvalState = yield* service.getApprovalState(
-                input,
-                input.number,
-              );
-              return pullRequestApprovalStateSchema.parse(approvalState);
-            }),
-            'reviewComments.getApprovalState',
-          ),
+      ),
+      getApprovalState: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            const approvalState = yield* service.getApprovalState(input, input.number);
+            return pullRequestApprovalStateSchema.parse(approvalState);
+          }),
+          'reviewComments.getApprovalState',
         ),
-      approve: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.approve(input, input.number, input.headSha);
-            }),
-            'reviewComments.approve',
-          ),
+      ),
+      approve: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.approve(input, input.number, input.headSha);
+          }),
+          'reviewComments.approve',
         ),
-      removeApproval: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.removeApproval(input, input.number);
-            }),
-            'reviewComments.removeApproval',
-          ),
+      ),
+      removeApproval: t.procedure.input(pullRequestVersionedInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.removeApproval(input, input.number);
+          }),
+          'reviewComments.removeApproval',
         ),
-      listThreads: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.listThreads(
-                input,
-                input.number,
-                input.headSha,
-              );
-            }),
-            'reviewComments.listThreads',
-          ),
+      ),
+      listThreads: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.listThreads(input, input.number, input.headSha);
+          }),
+          'reviewComments.listThreads',
         ),
-      listPending: t.procedure
-        .input(pullRequestVersionedInputSchema)
-        .query(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              const pendingState = yield* service.listPending(
-                input,
-                input.number,
-                input.headSha,
-              );
-              return pendingReviewStateSchema.parse(pendingState);
-            }),
-            'reviewComments.listPending',
-          ),
+      ),
+      listPending: t.procedure.input(pullRequestVersionedInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            const pendingState = yield* service.listPending(input, input.number, input.headSha);
+            return pendingReviewStateSchema.parse(pendingState);
+          }),
+          'reviewComments.listPending',
         ),
+      ),
       createPendingThread: t.procedure
         .input(createPendingReviewThreadInputSchema)
         .mutation(({ input }) =>
@@ -1146,28 +999,24 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             'reviewComments.discardPendingReview',
           ),
         ),
-      create: t.procedure
-        .input(createPullRequestReviewCommentInputSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.create(input);
-            }),
-            'reviewComments.create',
-          ),
+      create: t.procedure.input(createPullRequestReviewCommentInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.create(input);
+          }),
+          'reviewComments.create',
         ),
-      reply: t.procedure
-        .input(replyToPullRequestReviewCommentInputSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.reply(input);
-            }),
-            'reviewComments.reply',
-          ),
+      ),
+      reply: t.procedure.input(replyToPullRequestReviewCommentInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.reply(input);
+          }),
+          'reviewComments.reply',
         ),
+      ),
       setResolved: t.procedure
         .input(setPullRequestReviewThreadResolvedInputSchema)
         .mutation(({ input }) =>
@@ -1179,17 +1028,15 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             'reviewComments.setResolved',
           ),
         ),
-      update: t.procedure
-        .input(updatePullRequestReviewCommentInputSchema)
-        .mutation(({ input }) =>
-          runEffect(
-            Effect.gen(function* () {
-              const service = yield* ReviewCommentService;
-              return yield* service.update(input);
-            }),
-            'reviewComments.update',
-          ),
+      update: t.procedure.input(updatePullRequestReviewCommentInputSchema).mutation(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* ReviewCommentService;
+            return yield* service.update(input);
+          }),
+          'reviewComments.update',
         ),
+      ),
       deleteComment: t.procedure
         .input(deletePullRequestReviewCommentInputSchema)
         .mutation(({ input }) =>
@@ -1206,9 +1053,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
     window: t.router({
       fullScreenStatus: t.procedure.subscription(() =>
         observable<boolean>((emit) => {
-          return platform.subscribeToFullScreenStatus((value) =>
-            emit.next(value),
-          );
+          return platform.subscribeToFullScreenStatus((value) => emit.next(value));
         }),
       ),
       toggleMaximize: t.procedure.mutation(() => platform.toggleMaximize()),
@@ -1242,9 +1087,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       }),
       events: t.procedure.subscription(() =>
         observable<UpdateEvent>((emit) => {
-          const unsubscribe = platform.subscribeToUpdateEvents((event) =>
-            emit.next(event),
-          );
+          const unsubscribe = platform.subscribeToUpdateEvents((event) => emit.next(event));
           return unsubscribe;
         }),
       ),

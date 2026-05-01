@@ -63,27 +63,17 @@ type GitRemoteSpec = {
   auth: GitRemoteAuth;
 };
 
-type ForgeProviderEffectContract<
-  Dependencies = never,
-  Error = ProviderError,
-> = {
+type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = {
   authorizeRequest(): Effect.Effect<
-    (
-      request: HttpClientRequest.HttpClientRequest,
-    ) => HttpClientRequest.HttpClientRequest,
+    (request: HttpClientRequest.HttpClientRequest) => HttpClientRequest.HttpClientRequest,
     Error,
     Dependencies
   >;
   validateImageUrl(url: string): Effect.Effect<boolean, Error, Dependencies>;
   authStatus(): Effect.Effect<ProviderAuthStatus, Error, Dependencies>;
   viewerLogin(): Effect.Effect<string, Error, Dependencies>;
-  listInitialRepos(
-    limit: number,
-  ): Effect.Effect<RepoSummary[], Error, Dependencies>;
-  searchRepos(
-    query: string,
-    limit: number,
-  ): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  listInitialRepos(limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
+  searchRepos(query: string, limit: number): Effect.Effect<RepoSummary[], Error, Dependencies>;
   listNamespaceRepos(
     namespacePath: string,
     limit: number,
@@ -93,11 +83,7 @@ type ForgeProviderEffectContract<
     limit: number,
   ): Effect.Effect<NamespaceSummary[], Error, Dependencies>;
   validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
-  listOverviewPullRequests(): Effect.Effect<
-    OverviewPullRequestSummary[],
-    Error,
-    Dependencies
-  >;
+  listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   searchPullRequests(
     query: string,
     limit: number,
@@ -143,9 +129,7 @@ type ForgeProviderEffectContract<
   getPullRequestQualityReport(
     input: PullRequestQualityReportInput,
   ): Effect.Effect<PullRequestQualityReport, Error, Dependencies>;
-  gitRemote(
-    repo: ProviderRepoIdentity,
-  ): Effect.Effect<GitRemoteSpec, Error, Dependencies>;
+  gitRemote(repo: ProviderRepoIdentity): Effect.Effect<GitRemoteSpec, Error, Dependencies>;
   listReviewThreads(
     repo: ProviderRepoIdentity,
     number: number,
@@ -248,8 +232,7 @@ type RemoveProviderDependencies<T> = {
     : T[K];
 };
 
-type ForgeProviderContract =
-  RemoveProviderDependencies<ForgeProviderEffectContract>;
+type ForgeProviderContract = RemoveProviderDependencies<ForgeProviderEffectContract>;
 
 export type {
   ForgeProviderContract,
