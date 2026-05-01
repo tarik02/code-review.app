@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppearanceBackground } from '../../components/ui/appearance-background';
 import { Button } from '../../components/ui/button';
@@ -80,17 +80,15 @@ function AppearanceRoute() {
   const codeAppearanceQuery = useQuery(codeAppearanceQueryOptionsValue);
   const codeAppearanceSettings = codeAppearanceQuery.data ?? DEFAULT_CODE_APPEARANCE_SETTINGS;
   const [draftSolidColor, setDraftSolidColor] = useState('#18181b');
-  const [draftCustomFontFamily, setDraftCustomFontFamily] = useState('');
+  const [draftCustomFontFamily, setDraftCustomFontFamily] = useState<string | null>(null);
   const [codeAppearanceValidationError, setCodeAppearanceValidationError] = useState<string | null>(
     null,
   );
   const backgroundQueryKey = appearanceBackgroundQueryOptions().queryKey;
   const codeAppearanceQueryKey = codeAppearanceQueryOptionsValue.queryKey;
   const solidColor = background?.kind === 'solid' ? background.color : draftSolidColor;
-
-  useEffect(() => {
-    setDraftCustomFontFamily(codeAppearanceSettings.customFontFamily ?? '');
-  }, [codeAppearanceSettings.customFontFamily]);
+  const customFontFamilyDraftValue =
+    draftCustomFontFamily ?? codeAppearanceSettings.customFontFamily ?? '';
 
   const backgroundMutation = useMutation({
     mutationFn: setAppearanceBackground,
@@ -111,7 +109,7 @@ function AppearanceRoute() {
     },
     onSuccess: (settings) => {
       queryClient.setQueryData(codeAppearanceQueryKey, settings);
-      setDraftCustomFontFamily(settings.customFontFamily ?? '');
+      setDraftCustomFontFamily(null);
     },
   });
 
@@ -131,7 +129,7 @@ function AppearanceRoute() {
       return;
     }
 
-    const trimmedFontFamily = draftCustomFontFamily.trim();
+    const trimmedFontFamily = customFontFamilyDraftValue.trim();
     if (trimmedFontFamily.length === 0) {
       setCodeAppearanceValidationError('Custom code font family is required.');
       return;
@@ -294,7 +292,7 @@ function AppearanceRoute() {
                 const nextFontFamily = value as CodeAppearanceFontFamily;
                 const nextCustomFontFamily =
                   codeAppearanceSettings.customFontFamily ||
-                  draftCustomFontFamily.trim() ||
+                  customFontFamilyDraftValue.trim() ||
                   resolveCodeFontFamily(codeAppearanceSettings.fontFamily, null);
 
                 if (nextFontFamily === 'custom') {
@@ -332,7 +330,7 @@ function AppearanceRoute() {
                 className="w-full md:justify-self-end"
                 disabled={codeAppearanceMutation.isPending}
                 placeholder={'"JetBrains Mono", "Fira Code", monospace'}
-                value={draftCustomFontFamily}
+                value={customFontFamilyDraftValue}
                 onBlur={commitCustomFontFamily}
                 onChange={(event) => setDraftCustomFontFamily(event.currentTarget.value)}
                 onKeyDown={(event) => {
