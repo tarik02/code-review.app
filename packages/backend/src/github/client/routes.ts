@@ -22,6 +22,12 @@ type GithubRoutes = {
       per_page?: number;
     };
   };
+  '/search/users': {
+    query: {
+      q: string;
+      per_page?: number;
+    };
+  };
   '/repos/:owner/:name': {};
   '/repos/:owner/:name/pulls': {
     query: {

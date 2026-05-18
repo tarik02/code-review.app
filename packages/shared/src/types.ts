@@ -91,6 +91,39 @@ type OverviewPullRequestSummary = {
 
 type PullRequestSearchState = 'open' | 'draft_open' | 'all';
 
+type PullRequestDataSourceStatus = 'open' | 'draft' | 'closed' | 'merged';
+
+type PullRequestDataSourceSort = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
+
+type PullRequestDataSourceResource =
+  | { kind: 'account' }
+  | {
+      kind: 'namespace';
+      path: string;
+      namespaceKind: NamespaceSummary['kind'] | 'namespace';
+    }
+  | { kind: 'repo'; repo: RepoSummary };
+
+type PullRequestDataSource = {
+  id: string;
+  name?: string;
+  accountId: string;
+  resource: PullRequestDataSourceResource;
+  statuses: PullRequestDataSourceStatus[];
+  sortBy: PullRequestDataSourceSort;
+  groupByProject: boolean;
+};
+
+type PullRequestDataSourcesSettings = {
+  activeDataSourceId: string | null;
+  sources: PullRequestDataSource[];
+};
+
+type PullRequestDataSourceListInput = {
+  dataSource: PullRequestDataSource;
+  limit: number;
+};
+
 type BrowseSearchInput = {
   accountIds: string[];
   query: string;
@@ -505,6 +538,12 @@ export type {
   ForgeProviderKind,
   NamespaceSummary,
   OverviewPullRequestSummary,
+  PullRequestDataSource,
+  PullRequestDataSourceListInput,
+  PullRequestDataSourceResource,
+  PullRequestDataSourcesSettings,
+  PullRequestDataSourceSort,
+  PullRequestDataSourceStatus,
   PendingReviewComment,
   PendingReviewCommentKind,
   PendingReviewCommentSubjectType,

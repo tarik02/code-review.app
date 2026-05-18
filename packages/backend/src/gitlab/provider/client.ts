@@ -27,6 +27,7 @@ import {
 } from '../../repo-id.ts';
 import type {
   ForgeProviderEffectContract,
+  PullRequestDiscoveryFilters,
   PullRequestQualityReportInput,
   PullRequestRefs,
   ReviewThreadInput,
@@ -236,6 +237,22 @@ function toApprovalActor(accountId: string, approval: typeof GitLabApprovedByEnt
 
 function toGitLabSearchState(states: PullRequestSearchState) {
   return states === 'all' ? 'all' : 'opened';
+}
+
+function toGitLabDiscoveryStates(statuses: ReadonlyArray<string>) {
+  const states: Array<'opened' | 'closed' | 'merged'> = [];
+  if (statuses.includes('open') || statuses.includes('draft')) states.push('opened');
+  if (statuses.includes('closed')) states.push('closed');
+  if (statuses.includes('merged')) states.push('merged');
+  return states.length > 0 ? states : ['opened' as const];
+}
+
+function toGitLabDiscoveryOrderBy(sortBy: PullRequestDiscoveryFilters['sortBy']) {
+  return sortBy === 'created_desc' || sortBy === 'created_asc' ? 'created_at' : 'updated_at';
+}
+
+function toGitLabDiscoverySortDirection(sortBy: PullRequestDiscoveryFilters['sortBy']) {
+  return sortBy === 'updated_asc' || sortBy === 'created_asc' ? 'asc' : 'desc';
 }
 
 function parseGitLabMergeRequestUrl(input: string, expectedHost: string) {
@@ -1055,6 +1072,190 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       }
 
       return entries;
+    },
+  );
+
+  const mergeRequestsToOverviewEntries = (
+    mergeRequests: ReadonlyArray<GitLabMergeRequest>,
+    filters: PullRequestDiscoveryFilters,
+  ) =>
+    Effect.gen(function* () {
+      const api = yield* GitLabApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitLabProviderNotAuthenticated({
+            message: 'GitLab is not signed in.',
+            cause: { provider: 'gitlab', operation: 'mergeRequestsToOverviewEntries' },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const sorted = dedupeMergeRequests(mergeRequests).sort((left, right) => {
+        const leftValue =
+          filters.sortBy === 'created_desc' || filters.sortBy === 'created_asc'
+            ? left.created_at
+            : left.updated_at;
+        const rightValue =
+          filters.sortBy === 'created_desc' || filters.sortBy === 'created_asc'
+            ? right.created_at
+            : right.updated_at;
+        return toGitLabDiscoverySortDirection(filters.sortBy) === 'asc'
+          ? Date.parse(leftValue) - Date.parse(rightValue)
+          : Date.parse(rightValue) - Date.parse(leftValue);
+      });
+
+      const projectIds = [
+        ...new Set(
+          sorted
+            .map((mergeRequest) => mergeRequest.project_id)
+            .filter((projectId): projectId is number => typeof projectId === 'number'),
+        ),
+      ];
+      const projectResults = yield* Effect.forEach(
+        projectIds,
+        (projectId) =>
+          api.project(projectId).pipe(
+            Effect.map((project) => ({ projectId, project })),
+            Effect.catchAll(() => Effect.succeed({ projectId, project: null })),
+          ),
+        { concurrency: 'unbounded' },
+      );
+
+      const projectsById = new Map<number, GitLabProject>();
+      for (const result of projectResults) {
+        if (result.project) projectsById.set(result.projectId, result.project);
+      }
+
+      const entries: OverviewPullRequestSummary[] = [];
+      for (const mergeRequest of sorted) {
+        const projectId = mergeRequest.project_id;
+        if (typeof projectId !== 'number') continue;
+        const project = projectsById.get(projectId);
+        if (!project) continue;
+        entries.push({
+          repo: repoSummaryFromProject(token.id, token.host, label, project),
+          pullRequest: toPullRequestSummary(mergeRequest),
+        });
+        if (entries.length >= filters.limit) break;
+      }
+      return entries;
+    });
+
+  const listViewerPullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listViewerPullRequests'] = providerEffect(
+    'GitLabProvider.listViewerPullRequests',
+    'listViewerPullRequests',
+    function* (filters) {
+      const api = yield* GitLabApiClient;
+      const states = toGitLabDiscoveryStates(filters.statuses);
+      const orderBy = toGitLabDiscoveryOrderBy(filters.sortBy);
+      const sort = toGitLabDiscoverySortDirection(filters.sortBy);
+      const mergeRequestGroups = yield* Effect.forEach(
+        states,
+        (state) =>
+          Effect.forEach(
+            OVERVIEW_MERGE_REQUEST_SCOPES,
+            (scope) =>
+              api
+                .overviewMergeRequests({
+                  scope,
+                  state,
+                  orderBy,
+                  sort,
+                  perPage: filters.limit,
+                })
+                .pipe(
+                  Effect.catchAll((error) =>
+                    Effect.logWarning('[gitlab] scoped pull request discovery failed').pipe(
+                      Effect.annotateLogs({
+                        scope,
+                        state,
+                        error: getErrorMessage(error),
+                      }),
+                      Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
+                    ),
+                  ),
+                ),
+            { concurrency: 'unbounded' },
+          ).pipe(Effect.map((groups) => groups.flat())),
+        { concurrency: 'unbounded' },
+      );
+      return yield* mergeRequestsToOverviewEntries(mergeRequestGroups.flat(), filters);
+    },
+  );
+
+  const listNamespacePullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listNamespacePullRequests'] = providerEffect(
+    'GitLabProvider.listNamespacePullRequests',
+    'listNamespacePullRequests',
+    function* (namespacePath, _namespaceKind, filters) {
+      const api = yield* GitLabApiClient;
+      const states = toGitLabDiscoveryStates(filters.statuses);
+      const orderBy = toGitLabDiscoveryOrderBy(filters.sortBy);
+      const sort = toGitLabDiscoverySortDirection(filters.sortBy);
+      const mergeRequestGroups = yield* Effect.forEach(
+        states,
+        (state) =>
+          api.groupMergeRequests({
+            group: namespacePath,
+            state,
+            orderBy,
+            sort,
+            perPage: filters.limit,
+          }),
+        { concurrency: 'unbounded' },
+      );
+      return yield* mergeRequestsToOverviewEntries(mergeRequestGroups.flat(), filters);
+    },
+  );
+
+  const listRepoPullRequests: ForgeProviderEffectContract<
+    GitLabApiClient,
+    GitLabProviderError
+  >['listRepoPullRequests'] = providerEffect(
+    'GitLabProvider.listRepoPullRequests',
+    'listRepoPullRequests',
+    function* (repo, filters) {
+      const api = yield* GitLabApiClient;
+      const states = toGitLabDiscoveryStates(filters.statuses);
+      const orderBy = toGitLabDiscoveryOrderBy(filters.sortBy);
+      const sort = toGitLabDiscoverySortDirection(filters.sortBy);
+      const mergeRequestGroups = yield* Effect.forEach(
+        states,
+        (state) =>
+          api.projectMergeRequests({
+            project: repo.repoKey,
+            state,
+            orderBy,
+            sort,
+            perPage: filters.limit,
+          }),
+        { concurrency: 'unbounded' },
+      );
+      return dedupeMergeRequests(mergeRequestGroups.flat())
+        .sort((left, right) => {
+          const leftValue =
+            filters.sortBy === 'created_desc' || filters.sortBy === 'created_asc'
+              ? left.created_at
+              : left.updated_at;
+          const rightValue =
+            filters.sortBy === 'created_desc' || filters.sortBy === 'created_asc'
+              ? right.created_at
+              : right.updated_at;
+          return sort === 'asc'
+            ? Date.parse(leftValue) - Date.parse(rightValue)
+            : Date.parse(rightValue) - Date.parse(leftValue);
+        })
+        .slice(0, filters.limit)
+        .map((mergeRequest) =>
+          toOverviewPullRequestSummary(repo, toPullRequestSummary(mergeRequest)),
+        );
     },
   );
 
@@ -2031,6 +2232,9 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
     searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
+    listViewerPullRequests,
+    listNamespacePullRequests,
+    listRepoPullRequests,
     searchPullRequests,
     listPullRequests,
     getPullRequest,

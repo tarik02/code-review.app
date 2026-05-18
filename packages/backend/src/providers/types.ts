@@ -46,6 +46,16 @@ type PullRequestQualityReportInput = {
   headSha: string;
 };
 
+type PullRequestDiscoveryStatus = 'open' | 'draft' | 'closed' | 'merged';
+
+type PullRequestDiscoverySort = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
+
+type PullRequestDiscoveryFilters = {
+  statuses: PullRequestDiscoveryStatus[];
+  sortBy: PullRequestDiscoverySort;
+  limit: number;
+};
+
 type PendingReviewSessionResult = {
   providerReviewId: string | null;
 };
@@ -89,6 +99,18 @@ type ForgeProviderEffectContract<Dependencies = never, Error = ProviderError> = 
   ): Effect.Effect<NamespaceSummary[], Error, Dependencies>;
   validateRepo(input: string): Effect.Effect<RepoSummary, Error, Dependencies>;
   listOverviewPullRequests(): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
+  listViewerPullRequests(
+    filters: PullRequestDiscoveryFilters,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
+  listNamespacePullRequests(
+    namespacePath: string,
+    namespaceKind: 'user' | 'organization' | 'group' | 'namespace',
+    filters: PullRequestDiscoveryFilters,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
+  listRepoPullRequests(
+    repo: RepoSummary,
+    filters: PullRequestDiscoveryFilters,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error, Dependencies>;
   searchPullRequests(
     query: string,
     limit: number,
@@ -244,6 +266,9 @@ export type {
   ForgeProviderEffectContract,
   GitRemoteAuth,
   GitRemoteSpec,
+  PullRequestDiscoveryFilters,
+  PullRequestDiscoverySort,
+  PullRequestDiscoveryStatus,
   RemoveProviderDependencies,
   PullRequestQualityReportInput,
   PendingReviewCommentResult,

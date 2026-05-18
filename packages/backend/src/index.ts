@@ -3,6 +3,7 @@ export { createAppRouter } from './router.ts';
 export { createBackendRuntime } from './runtime.ts';
 export { ensureError, formatLogDetails, getErrorMessage } from './errors.ts';
 export { SettingsService } from './services/settings.ts';
+export { PullRequestDataSourceService } from './services/pull-request-data-sources.ts';
 export {
   PROVIDER_IMAGE_PROTOCOL,
   createProviderImageUrl,

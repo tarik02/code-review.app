@@ -64,8 +64,19 @@ const GhRestUserSchema = Schema.Struct({
   login: Schema.String,
 });
 
+const GhSearchUserSchema = Schema.Struct({
+  login: Schema.String,
+  type: Schema.String,
+  avatar_url: OptionalNullableString,
+  html_url: OptionalNullableString,
+});
+
 const GhSearchResponseSchema = Schema.Struct({
   items: Schema.Array(GhSearchRepoSchema),
+});
+
+const GhSearchUsersResponseSchema = Schema.Struct({
+  items: Schema.Array(GhSearchUserSchema),
 });
 
 const GhChangedFileSchema = Schema.Struct({
@@ -354,6 +365,7 @@ const GitHubErrorBodySchema = Schema.Struct({
 });
 
 type GhSearchRepo = typeof GhSearchRepoSchema.Type;
+type GhSearchUser = typeof GhSearchUserSchema.Type;
 type GhRestPullRequest = typeof GhRestPullRequestSchema.Type;
 type GhRestRepo = typeof GhRestRepoSchema.Type;
 type GhGraphqlRepo = typeof GhGraphqlRepoSchema.Type;
@@ -385,6 +397,8 @@ export {
   GhRestUserSchema,
   GhSearchRepoSchema,
   GhSearchResponseSchema,
+  GhSearchUserSchema,
+  GhSearchUsersResponseSchema,
   GetPullRequestQueryDataSchema,
   GitHubErrorBodySchema,
   GitHubGraphQlErrorSchema,
@@ -409,5 +423,6 @@ export type {
   GhRestPullRequest,
   GhRestRepo,
   GhSearchRepo,
+  GhSearchUser,
   GraphQlResponse,
 };

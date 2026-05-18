@@ -45,6 +45,7 @@ const GitLabMergeRequestSchema = Schema.Struct({
   detailed_merge_status: OptionalNullableString,
   changes_count: OptionalNullableString,
   author: Schema.optional(Schema.NullOr(GitLabUserSchema)),
+  created_at: Schema.String,
   updated_at: Schema.String,
   web_url: Schema.String,
   sha: OptionalNullableString,

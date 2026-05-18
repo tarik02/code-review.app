@@ -117,6 +117,31 @@ export const providerProfiles = sqliteTable('provider_profiles', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const pullRequestDataSources = sqliteTable(
+  'pull_request_data_sources',
+  {
+    id: text('id').primaryKey(),
+    name: text('name'),
+    accountId: text('account_id').notNull(),
+    resourceKind: text('resource_kind').notNull(),
+    resourcePath: text('resource_path'),
+    resourceNamespaceKind: text('resource_namespace_kind'),
+    resourceRepoJson: text('resource_repo_json'),
+    statusesJson: text('statuses_json').notNull(),
+    sortBy: text('sort_by').notNull(),
+    groupByProject: integer('group_by_project', { mode: 'boolean' }).notNull(),
+    position: integer('position').notNull(),
+    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_pr_data_sources_account').on(table.accountId),
+    index('idx_pr_data_sources_position').on(table.position),
+    index('idx_pr_data_sources_active').on(table.isActive),
+  ],
+);
+
 export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
   valueJson: text('value_json').notNull(),

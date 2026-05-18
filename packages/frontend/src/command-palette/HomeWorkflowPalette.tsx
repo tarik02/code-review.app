@@ -131,13 +131,13 @@ function HomeWorkflowPalette({
 
     const nextItems: CommandPaletteItem[] = [
       {
-        id: 'section-overview',
+        id: 'section-data-source',
         group: 'Sections',
-        title: 'Overview',
+        title: 'Data source',
         icon: <PanelsTopLeftIcon className="size-4" />,
-        badge: sidebarView === 'overview' ? <ActiveBadge /> : undefined,
+        badge: sidebarView === 'data-source' ? <ActiveBadge /> : undefined,
         onSelect: () => {
-          setSidebarView('overview');
+          setSidebarView('data-source');
           setWorkflowOpen(false);
         },
       },

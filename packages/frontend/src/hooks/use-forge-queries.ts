@@ -42,6 +42,7 @@ import type {
   PrPatch,
   ProviderAccount,
   PullRequestQualityReport,
+  PullRequestDataSource,
   PullRequestSummary,
   ReplyToPullRequestReviewCommentInput,
   RepoIdentity,
@@ -147,6 +148,25 @@ function useAccountOverviewPullRequests(
     errors,
     isLoading: enabled && overviewQueries.some((query) => query.isPending),
     pullRequests,
+  };
+}
+
+function useDataSourcePullRequests(dataSource: PullRequestDataSource | null, enabled: boolean) {
+  const query = useQuery({
+    queryKey: dataSource
+      ? forgeKeys.pullRequestDataSourceList(dataSource)
+      : ([...forgeKeys.pullRequests(), 'data-source', 'idle'] as const),
+    queryFn: async (): Promise<OverviewPullRequestSummary[]> => {
+      if (!dataSource) return [];
+      return trpc.pullRequests.listDataSource.query({ dataSource, limit: 100 });
+    },
+    enabled: enabled && dataSource !== null,
+  });
+
+  return {
+    error: query.error ? getErrorMessage(query.error) : null,
+    isLoading: enabled && dataSource !== null && query.isPending,
+    pullRequests: query.data ?? [],
   };
 }
 
@@ -648,6 +668,7 @@ export {
   getErrorMessage,
   dedupeOverviewPullRequestEntries,
   useAccountOverviewPullRequests,
+  useDataSourcePullRequests,
   useInitialReposForAccounts,
   usePullRequestApprovalMutations,
   useOverviewPullRequests,

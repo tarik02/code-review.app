@@ -17,6 +17,8 @@ import type {
   PendingReviewState,
   PrFileChangeType,
   ProviderProfile,
+  PullRequestDataSource,
+  PullRequestDataSourcesSettings,
   PublishPendingReviewInput,
   PullRequestApprovalState,
   PullRequestQualityReport,
@@ -49,12 +51,15 @@ const forgeKeys = {
   themePreference: () => [...forgeKeys.settings(), 'theme-preference'] as const,
   codeAppearanceSettings: () => [...forgeKeys.settings(), 'code-appearance'] as const,
   reviewEditorSettings: () => [...forgeKeys.settings(), 'review-editor'] as const,
+  dataSources: () => [...forgeKeys.settings(), 'data-sources'] as const,
   savedRepos: () => [...forgeKeys.repos(), 'saved'] as const,
   initialRepos: (accountId: string) => [...forgeKeys.repos(), 'initial', accountId] as const,
   viewerLogin: (accountId: string) => [...forgeKeys.repos(), 'viewer-login', accountId] as const,
   pullRequests: () => [...forgeKeys.all, 'pull-requests'] as const,
   pullRequestOverview: (accountId: string) =>
     [...forgeKeys.pullRequests(), 'overview', accountId] as const,
+  pullRequestDataSourceList: (dataSource: PullRequestDataSource) =>
+    [...forgeKeys.pullRequests(), 'data-source', dataSource.id, dataSource] as const,
   pullRequestRecentList: () => [...forgeKeys.pullRequests(), 'recent'] as const,
   pullRequestList: (repo: RepoIdentity) =>
     [...forgeKeys.pullRequests(), 'list', repo.providerId, repo.repoKey] as const,
@@ -247,6 +252,16 @@ function reviewEditorSettingsQueryOptions() {
   });
 }
 
+function dataSourcesSettingsQueryOptions() {
+  return queryOptions({
+    queryKey: forgeKeys.dataSources(),
+    queryFn: async (): Promise<PullRequestDataSourcesSettings> => {
+      return trpc.settings.getDataSources.query();
+    },
+    staleTime: 0,
+  });
+}
+
 async function setAccountVisibility(enabledAccountIds: string[]) {
   return trpc.settings.setAccountVisibility.mutate({ enabledAccountIds });
 }
@@ -269,6 +284,10 @@ async function setCodeAppearanceSettings(settings: CodeAppearanceSettings) {
 
 async function setReviewEditorDefaultMode(mode: ReviewEditorMode) {
   return trpc.settings.setReviewEditorSettings.mutate({ defaultMode: mode });
+}
+
+async function setDataSourcesSettings(settings: PullRequestDataSourcesSettings) {
+  return trpc.settings.setDataSources.mutate(settings);
 }
 
 async function selectCustomBackgroundFile() {
@@ -309,6 +328,14 @@ function pullRequestOverviewQueryOptions(accountId: string) {
   return queryOptions({
     queryKey: forgeKeys.pullRequestOverview(accountId),
     queryFn: () => trpc.pullRequests.listOverview.query({ accountId }),
+    staleTime: 0,
+  });
+}
+
+function pullRequestDataSourceQueryOptions(dataSource: PullRequestDataSource) {
+  return queryOptions({
+    queryKey: forgeKeys.pullRequestDataSourceList(dataSource),
+    queryFn: () => trpc.pullRequests.listDataSource.query({ dataSource, limit: 100 }),
     staleTime: 0,
   });
 }
@@ -634,6 +661,7 @@ export {
   createPendingReviewReply,
   createPendingReviewThread,
   createPullRequestReviewComment,
+  dataSourcesSettingsQueryOptions,
   deletePullRequestReviewComment,
   deletePendingReviewComment,
   diffDataSettingsQueryOptions,
@@ -645,6 +673,7 @@ export {
   providerStatusesQueryOptions,
   pullRequestFileContentsQueryOptions,
   pullRequestCachedListQueryOptions,
+  pullRequestDataSourceQueryOptions,
   pullRequestFilesQueryOptions,
   pullRequestListQueryOptions,
   pullRequestOverviewQueryOptions,
@@ -671,6 +700,7 @@ export {
   setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
   setCodeAppearanceSettings,
+  setDataSourcesSettings,
   themePreferenceQueryOptions,
   trackedPullRequestOrderQueryOptions,
   updatePendingReviewComment,

@@ -210,7 +210,7 @@ function BrowsePalette({
       return (
         <p className="text-xs text-ink-500">
           {filteredPullRequests.length > 0
-            ? `Showing ${filteredPullRequests.length} locally available pull request${filteredPullRequests.length === 1 ? '' : 's'} from tracked, recent, and overview lists.`
+            ? `Showing ${filteredPullRequests.length} locally available pull request${filteredPullRequests.length === 1 ? '' : 's'} from tracked, recent, and data source lists.`
             : 'No local pull requests available. Type to search pull requests across enabled profiles.'}
         </p>
       );
@@ -276,7 +276,7 @@ function BrowsePalette({
         group: 'Pull requests',
         title: 'No local pull requests',
         subtitle:
-          'Tracked, recent, and overview pull requests appear here before global search starts.',
+        'Tracked, recent, and data source pull requests appear here before global search starts.',
         icon: <GitPullRequestIcon className="size-4" />,
         disabled: true,
         onSelect: () => {},
@@ -461,7 +461,7 @@ function BrowsePalette({
             ? 'Results will appear as repositories and pull requests come back.'
             : (browseSearch.errors[0] ??
               'Try a repository name, pull request title, author, or number.')
-          : 'Tracked, recent, and overview pull requests appear locally. Start typing to search globally.'
+          : 'Tracked, recent, and data source pull requests appear locally. Start typing to search globally.'
       }
       emptyTitle={
         isSearchPending ? 'Searching...' : 'No matching profiles, repositories, or pull requests'

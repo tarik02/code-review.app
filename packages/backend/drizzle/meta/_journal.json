@@ -8,6 +8,13 @@
       "when": 1777654435555,
       "tag": "0000_sparkling_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777991814373,
+      "tag": "0001_legal_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,7 @@ import {
 } from '../../repo-id.ts';
 import type {
   ForgeProviderEffectContract,
+  PullRequestDiscoveryFilters,
   PullRequestQualityReportInput,
   ReviewThreadInput,
 } from '../../providers/types.ts';
@@ -54,6 +55,7 @@ import {
   type GhRestPullRequest,
   type GhRestRepo,
   type GhSearchRepo,
+  type GhSearchUser,
   GraphQlConversationCommentSchema,
   GraphQlReviewCommentSchema,
 } from '../client/schemas.ts';
@@ -242,6 +244,29 @@ function repoSummaryFromRest(
   };
 }
 
+function namespaceSummaryFromSearchUser(
+  accountId: string,
+  host: string,
+  label: string,
+  user: GhSearchUser,
+): NamespaceSummary {
+  const kind = user.type.toLowerCase() === 'organization' ? 'organization' : 'user';
+  return {
+    provider: 'github',
+    host,
+    providerAccountId: accountId,
+    providerAccountLabel: label,
+    path: user.login,
+    name: user.login,
+    kind,
+    avatarUrl: prepareGitHubProviderImageUrl(user.avatar_url, {
+      host,
+      nameWithOwner: user.login,
+    }),
+    webUrl: user.html_url ?? `https://${hostNameFromHost(host)}/${user.login}`,
+  };
+}
+
 function repoSummaryFromGraphql(
   accountId: string,
   host: string,
@@ -279,6 +304,30 @@ function buildPullRequestSearchQuery(query: string, states: PullRequestSearchSta
 
   const trimmedQuery = query.trim();
   return trimmedQuery ? `${qualifiers.join(' ')} ${trimmedQuery}` : qualifiers.join(' ');
+}
+
+function githubDiscoveryStateQualifiers(statuses: ReadonlyArray<string>) {
+  const qualifiers: string[] = [];
+  if (statuses.includes('open') || statuses.includes('draft')) qualifiers.push('is:open');
+  if (statuses.includes('closed')) qualifiers.push('is:closed');
+  if (statuses.includes('merged')) qualifiers.push('is:merged');
+  return qualifiers.length > 0 ? qualifiers : ['is:open'];
+}
+
+function githubDiscoverySearchQuery(input: {
+  scope: string;
+  sortBy: PullRequestDiscoveryFilters['sortBy'];
+  state: string;
+}) {
+  const sort =
+    input.sortBy === 'created_desc'
+      ? 'sort:created-desc'
+      : input.sortBy === 'created_asc'
+        ? 'sort:created-asc'
+        : input.sortBy === 'updated_asc'
+          ? 'sort:updated-asc'
+          : 'sort:updated-desc';
+  return ['is:pr', 'archived:false', input.scope, input.state, sort].join(' ');
 }
 
 function parseGitHubPullRequestUrl(input: string, expectedHost: string) {
@@ -787,8 +836,14 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       const owners = userContext?.owners ?? [];
       const normalizedQuery = query.trim().toLowerCase();
 
+      if (normalizedQuery) {
+        const response = yield* api.searchUsers({ query: normalizedQuery, perPage: limit });
+        return response.items.map((user) =>
+          namespaceSummaryFromSearchUser(token.id, token.host, label, user),
+        );
+      }
+
       return owners
-        .filter((owner) => !normalizedQuery || owner.toLowerCase().includes(normalizedQuery))
         .slice(0, limit)
         .map(
           (owner) =>
@@ -902,6 +957,95 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
           ),
         ];
       });
+    },
+  );
+
+  const listPullRequestsForScope = (
+    operation: string,
+    scope: string,
+    filters: PullRequestDiscoveryFilters,
+  ) =>
+    Effect.gen(function* () {
+      const api = yield* GitHubApiClient;
+      const token = yield* api.storedToken();
+      if (!token) {
+        return yield* Effect.fail(
+          new GitHubProviderNotAuthenticated({
+            message: 'GitHub is not signed in.',
+            cause: { provider: 'github', operation },
+          }),
+        );
+      }
+
+      const label = labelForToken(token);
+      const resultGroups = yield* Effect.forEach(
+        githubDiscoveryStateQualifiers(filters.statuses),
+        (state) =>
+          api
+            .searchPullRequests(
+              githubDiscoverySearchQuery({ scope, sortBy: filters.sortBy, state }),
+              filters.limit,
+            )
+            .pipe(
+              Effect.map((response) =>
+                (response.data?.search?.nodes ?? []).flatMap((pullRequest) => {
+                  const repo = pullRequest?.repository;
+                  if (!pullRequest || !repo) return [];
+                  return [
+                    toOverviewPullRequestSummary(
+                      repoSummaryFromGraphql(token.id, token.host, label, repo),
+                      toPullRequestSummary(pullRequest),
+                    ),
+                  ];
+                }),
+              ),
+            ),
+        { concurrency: 'unbounded' },
+      );
+
+      return dedupePullRequestSearchEntries(resultGroups.flat()).slice(0, filters.limit);
+    });
+
+  const listViewerPullRequests: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['listViewerPullRequests'] = providerEffect(
+    'GitHubProvider.listViewerPullRequests',
+    'listViewerPullRequests',
+    function* (filters) {
+      const login = yield* viewerLogin();
+      return yield* listPullRequestsForScope(
+        'listViewerPullRequests',
+        `involves:${login}`,
+        filters,
+      );
+    },
+  );
+
+  const listNamespacePullRequests: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['listNamespacePullRequests'] = providerEffect(
+    'GitHubProvider.listNamespacePullRequests',
+    'listNamespacePullRequests',
+    function* (namespacePath, namespaceKind, filters) {
+      const scope = namespaceKind === 'user' ? `user:${namespacePath}` : `org:${namespacePath}`;
+      return yield* listPullRequestsForScope('listNamespacePullRequests', scope, filters);
+    },
+  );
+
+  const listRepoPullRequests: ForgeProviderEffectContract<
+    GitHubApiClient,
+    GitHubProviderError
+  >['listRepoPullRequests'] = providerEffect(
+    'GitHubProvider.listRepoPullRequests',
+    'listRepoPullRequests',
+    function* (repo, filters) {
+      return yield* listPullRequestsForScope(
+        'listRepoPullRequests',
+        `repo:${repo.nameWithOwner}`,
+        filters,
+      );
     },
   );
 
@@ -1887,6 +2031,9 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
     searchNamespaces,
     validateRepo,
     listOverviewPullRequests,
+    listViewerPullRequests,
+    listNamespacePullRequests,
+    listRepoPullRequests,
     searchPullRequests,
     listPullRequests,
     getPullRequest,
