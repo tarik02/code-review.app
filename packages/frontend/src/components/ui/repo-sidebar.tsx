@@ -250,7 +250,8 @@ function RepoSidebar({
                 />
               </div>
             ) : null}
-            {(isDataSource ? sortedDataSourcePullRequests : sortedRecentPullRequests).length === 0 &&
+            {(isDataSource ? sortedDataSourcePullRequests : sortedRecentPullRequests).length ===
+              0 &&
             (!isDataSource || dataSourceErrors.length === 0) &&
             repoErrorEntries.length === 0 &&
             (!isDataSource || !isDataSourceLoading) ? (

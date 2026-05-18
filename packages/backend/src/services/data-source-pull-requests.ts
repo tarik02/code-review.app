@@ -1,10 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
-import type {
-  OverviewPullRequestSummary,
-  PullRequestDataSource,
-} from '@code-review-app/shared';
+import type { OverviewPullRequestSummary, PullRequestDataSource } from '@code-review-app/shared';
 
 type DataSourcePullRequestServiceShape = {
   list(

@@ -16,13 +16,7 @@ import { Combobox } from './combobox';
 import { Dialog, DialogContent, DialogTitle } from './dialog';
 import { Input } from './input';
 import { ScrollArea } from './scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
 
 const STATUS_OPTIONS: Array<{
   value: PullRequestDataSourceStatus;
@@ -40,13 +34,12 @@ const RESOURCE_KIND_LABELS = {
   repo: 'Repository/project',
 } as const;
 
-const SORT_OPTIONS: Array<{ value: PullRequestDataSourceSort; label: string }> =
-  [
-    { value: 'updated_desc', label: 'Updated newest' },
-    { value: 'updated_asc', label: 'Updated oldest' },
-    { value: 'created_desc', label: 'Created newest' },
-    { value: 'created_asc', label: 'Created oldest' },
-  ];
+const SORT_OPTIONS: Array<{ value: PullRequestDataSourceSort; label: string }> = [
+  { value: 'updated_desc', label: 'Updated newest' },
+  { value: 'updated_asc', label: 'Updated oldest' },
+  { value: 'created_desc', label: 'Created newest' },
+  { value: 'created_asc', label: 'Created oldest' },
+];
 
 const RESOURCE_SEARCH_DEBOUNCE_MS = 200;
 
@@ -55,9 +48,7 @@ type DataSourceSelectorProps = {
   settings: PullRequestDataSourcesSettings;
   activeDataSource: PullRequestDataSource | null;
   disabled?: boolean;
-  onSettingsChange: (
-    settings: PullRequestDataSourcesSettings,
-  ) => void | Promise<void>;
+  onSettingsChange: (settings: PullRequestDataSourcesSettings) => void | Promise<void>;
 };
 
 type DataSourceSelectorStore = {
@@ -71,10 +62,7 @@ type DataSourceSelectorStore = {
   setDraft(draft: PullRequestDataSource | null): void;
   setEditorOpen(open: boolean): void;
   setResourceQuery(query: string): void;
-  setResourceRows(rows: {
-    namespaces?: NamespaceSummary[];
-    repos?: RepoSummary[];
-  }): void;
+  setResourceRows(rows: { namespaces?: NamespaceSummary[]; repos?: RepoSummary[] }): void;
 };
 
 function resourceSearchInputKey(state: DataSourceSelectorStore) {
@@ -88,10 +76,7 @@ function resourceSearchInputKey(state: DataSourceSelectorStore) {
   });
 }
 
-const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
-  set,
-  get,
-) => {
+const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((set, get) => {
   let resourceSearchKey = '';
   let resourceSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   let resourceSearchRun = 0;
@@ -103,10 +88,7 @@ const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
     }
   }
 
-  function setResourceRows(rows: {
-    namespaces?: NamespaceSummary[];
-    repos?: RepoSummary[];
-  }) {
+  function setResourceRows(rows: { namespaces?: NamespaceSummary[]; repos?: RepoSummary[] }) {
     set((state) => ({
       namespaceRows: rows.namespaces ?? state.namespaceRows,
       repoRows: rows.repos ?? state.repoRows,
@@ -136,8 +118,7 @@ const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
       const nextDraft = nextState.draft;
       const nextKind = nextDraft?.resource.kind ?? 'account';
       const nextKey = resourceSearchInputKey(nextState);
-      if (!nextState.isEditorOpen || !nextDraft || nextKind === 'account')
-        return;
+      if (!nextState.isEditorOpen || !nextDraft || nextKind === 'account') return;
 
       const query = nextState.resourceQuery;
       const search =
@@ -155,10 +136,7 @@ const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
 
       void search
         .then((rows) => {
-          if (
-            runId !== resourceSearchRun ||
-            resourceSearchInputKey(get()) !== nextKey
-          ) {
+          if (runId !== resourceSearchRun || resourceSearchInputKey(get()) !== nextKey) {
             return;
           }
           if (nextKind === 'namespace') {
@@ -174,10 +152,7 @@ const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
           });
         })
         .catch(() => {
-          if (
-            runId === resourceSearchRun &&
-            resourceSearchInputKey(get()) === nextKey
-          ) {
+          if (runId === resourceSearchRun && resourceSearchInputKey(get()) === nextKey) {
             setResourceRows({ namespaces: [], repos: [] });
           }
         });
@@ -234,29 +209,20 @@ const useDataSourceSelectorStore = create<DataSourceSelectorStore>()((
   };
 });
 
-function dataSourceLabel(
-  source: PullRequestDataSource,
-  accounts: ProviderAccount[],
-) {
+function dataSourceLabel(source: PullRequestDataSource, accounts: ProviderAccount[]) {
   const name = source.name?.trim();
   if (name) return name;
 
   const account = accounts.find((entry) => entry.id === source.accountId);
-  const accountLabel = account
-    ? providerAccountLabel(account)
-    : source.accountId;
-  if (source.resource.kind === 'account')
-    return `${accountLabel} / involving me`;
-  if (source.resource.kind === 'namespace')
-    return `${accountLabel} / ${source.resource.path}`;
+  const accountLabel = account ? providerAccountLabel(account) : source.accountId;
+  if (source.resource.kind === 'account') return `${accountLabel} / involving me`;
+  if (source.resource.kind === 'namespace') return `${accountLabel} / ${source.resource.path}`;
   return `${accountLabel} / ${source.resource.repo.nameWithOwner}`;
 }
 
 function providerAccountLabel(account: ProviderAccount) {
   if (account.viewerLogin) return `${account.viewerLogin} @ ${account.host}`;
-  return account.label === account.id
-    ? `${account.provider} @ ${account.host}`
-    : account.label;
+  return account.label === account.id ? `${account.provider} @ ${account.host}` : account.label;
 }
 
 function createDefaultSource(accountId: string): PullRequestDataSource {
@@ -312,10 +278,7 @@ function DataSourceSelector({
           value={settings.activeDataSourceId ?? ''}
           onValueChange={(value) => void selectActive(value || null)}
         >
-          <SelectTrigger
-            className="min-w-0 flex-1 bg-surface text-xs"
-            size="sm"
-          >
+          <SelectTrigger className="min-w-0 flex-1 bg-surface text-xs" size="sm">
             <SelectValue>{activeLabel}</SelectValue>
           </SelectTrigger>
           <SelectContent align="start">
@@ -361,31 +324,17 @@ function DataSourceEditorDialog({
   accounts,
   settings,
   onSettingsChange,
-}: Pick<
-  DataSourceSelectorProps,
-  'accounts' | 'settings' | 'onSettingsChange'
->) {
+}: Pick<DataSourceSelectorProps, 'accounts' | 'settings' | 'onSettingsChange'>) {
   const closeEditor = useDataSourceSelectorStore((state) => state.closeEditor);
   const draft = useDataSourceSelectorStore((state) => state.draft);
-  const isEditorOpen = useDataSourceSelectorStore(
-    (state) => state.isEditorOpen,
-  );
-  const namespaceRows = useDataSourceSelectorStore(
-    (state) => state.namespaceRows,
-  );
+  const isEditorOpen = useDataSourceSelectorStore((state) => state.isEditorOpen);
+  const namespaceRows = useDataSourceSelectorStore((state) => state.namespaceRows);
   const repoRows = useDataSourceSelectorStore((state) => state.repoRows);
-  const resourceQuery = useDataSourceSelectorStore(
-    (state) => state.resourceQuery,
-  );
+  const resourceQuery = useDataSourceSelectorStore((state) => state.resourceQuery);
   const setDraft = useDataSourceSelectorStore((state) => state.setDraft);
-  const setEditorOpen = useDataSourceSelectorStore(
-    (state) => state.setEditorOpen,
-  );
-  const setResourceQuery = useDataSourceSelectorStore(
-    (state) => state.setResourceQuery,
-  );
-  const selectedAccount =
-    accounts.find((account) => account.id === draft?.accountId) ?? null;
+  const setEditorOpen = useDataSourceSelectorStore((state) => state.setEditorOpen);
+  const setResourceQuery = useDataSourceSelectorStore((state) => state.setResourceQuery);
+  const selectedAccount = accounts.find((account) => account.id === draft?.accountId) ?? null;
   const resourceKind = draft?.resource.kind ?? 'account';
   const canDelete = settings.sources.length > 1 && draft !== null;
   const namespaceOptions = namespaceRows.map((namespace) => ({
@@ -401,9 +350,7 @@ function DataSourceEditorDialog({
     if (!draft || draft.statuses.length === 0) return;
     const exists = settings.sources.some((source) => source.id === draft.id);
     const sources = exists
-      ? settings.sources.map((source) =>
-          source.id === draft.id ? draft : source,
-        )
+      ? settings.sources.map((source) => (source.id === draft.id ? draft : source))
       : [...settings.sources, draft];
     await onSettingsChange({
       activeDataSourceId: draft.id,
@@ -465,9 +412,7 @@ function DataSourceEditorDialog({
               </label>
 
               <label className="grid gap-1.5 text-sm">
-                <span className="text-xs font-medium text-ink-500">
-                  Account
-                </span>
+                <span className="text-xs font-medium text-ink-500">Account</span>
                 <Select
                   value={draft.accountId}
                   onValueChange={(accountId) => {
@@ -481,9 +426,7 @@ function DataSourceEditorDialog({
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue>
-                      {selectedAccount
-                        ? providerAccountLabel(selectedAccount)
-                        : draft.accountId}
+                      {selectedAccount ? providerAccountLabel(selectedAccount) : draft.accountId}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
@@ -497,9 +440,7 @@ function DataSourceEditorDialog({
               </label>
 
               <label className="grid gap-1.5 text-sm">
-                <span className="text-xs font-medium text-ink-500">
-                  Resource
-                </span>
+                <span className="text-xs font-medium text-ink-500">Resource</span>
                 <Select
                   value={draft.resource.kind}
                   onValueChange={(kind) => {
@@ -520,9 +461,7 @@ function DataSourceEditorDialog({
                   }}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {RESOURCE_KIND_LABELS[draft.resource.kind]}
-                    </SelectValue>
+                    <SelectValue>{RESOURCE_KIND_LABELS[draft.resource.kind]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
                     <SelectItem value="account">Account</SelectItem>
@@ -535,22 +474,14 @@ function DataSourceEditorDialog({
               {resourceKind === 'namespace' || resourceKind === 'repo' ? (
                 <div className="grid gap-1.5 text-sm">
                   <span className="text-xs font-medium text-ink-500">
-                    {resourceKind === 'namespace'
-                      ? 'Group/org'
-                      : 'Repository/project'}
+                    {resourceKind === 'namespace' ? 'Group/org' : 'Repository/project'}
                   </span>
                   <Combobox
                     className="h-8 w-full"
                     inputValue={resourceQuery}
-                    options={
-                      resourceKind === 'namespace'
-                        ? namespaceOptions
-                        : repoOptions
-                    }
+                    options={resourceKind === 'namespace' ? namespaceOptions : repoOptions}
                     placeholder={
-                      resourceKind === 'namespace'
-                        ? 'Search groups or orgs'
-                        : 'Search repositories'
+                      resourceKind === 'namespace' ? 'Search groups or orgs' : 'Search repositories'
                     }
                     value={
                       draft.resource.kind === 'namespace'
@@ -580,9 +511,7 @@ function DataSourceEditorDialog({
                         setResourceQuery(pathParts.join(':'));
                         return;
                       }
-                      const repo = repoRows.find(
-                        (entry) => entry.repoKey === value,
-                      );
+                      const repo = repoRows.find((entry) => entry.repoKey === value);
                       if (repo) {
                         setDraft({
                           ...draft,
@@ -602,18 +531,14 @@ function DataSourceEditorDialog({
                   onValueChange={(sortBy) => {
                     setDraft({
                       ...draft,
-                      sortBy:
-                        sortBy && isDataSourceSort(sortBy)
-                          ? sortBy
-                          : 'updated_desc',
+                      sortBy: sortBy && isDataSourceSort(sortBy) ? sortBy : 'updated_desc',
                     });
                   }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue>
-                      {SORT_OPTIONS.find(
-                        (option) => option.value === draft.sortBy,
-                      )?.label ?? 'Updated newest'}
+                      {SORT_OPTIONS.find((option) => option.value === draft.sortBy)?.label ??
+                        'Updated newest'}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent align="start">
@@ -628,9 +553,7 @@ function DataSourceEditorDialog({
 
               <StatusMultiSelect
                 statuses={draft.statuses}
-                onStatusesChange={(statuses) =>
-                  setDraft({ ...draft, statuses })
-                }
+                onStatusesChange={(statuses) => setDraft({ ...draft, statuses })}
               />
 
               <label className="inline-flex items-center gap-2 text-sm">
@@ -661,10 +584,7 @@ function DataSourceEditorDialog({
                 <Button type="button" variant="outline" onClick={closeEditor}>
                   Cancel
                 </Button>
-                <Button
-                  disabled={!isDraftSavable(draft)}
-                  onClick={() => void saveDraft()}
-                >
+                <Button disabled={!isDraftSavable(draft)} onClick={() => void saveDraft()}>
                   Save
                 </Button>
               </div>
@@ -694,9 +614,7 @@ function StatusMultiSelect({
         options={STATUS_OPTIONS}
         value={statuses}
         onInputValueChange={() => undefined}
-        onValueChange={(values) =>
-          onStatusesChange(values.filter(isDataSourceStatus))
-        }
+        onValueChange={(values) => onStatusesChange(values.filter(isDataSourceStatus))}
       />
     </div>
   );
@@ -720,10 +638,8 @@ function emptyRepo(accountId: string): RepoSummary {
 
 function isDraftSavable(source: PullRequestDataSource) {
   if (source.statuses.length === 0) return false;
-  if (source.resource.kind === 'namespace')
-    return source.resource.path.trim().length > 0;
-  if (source.resource.kind === 'repo')
-    return source.resource.repo.repoKey.trim().length > 0;
+  if (source.resource.kind === 'namespace') return source.resource.path.trim().length > 0;
+  if (source.resource.kind === 'repo') return source.resource.repo.repoKey.trim().length > 0;
   return true;
 }
 
@@ -736,15 +652,8 @@ function isDataSourceSort(value: string): value is PullRequestDataSourceSort {
   );
 }
 
-function isDataSourceStatus(
-  value: string,
-): value is PullRequestDataSourceStatus {
-  return (
-    value === 'open' ||
-    value === 'draft' ||
-    value === 'closed' ||
-    value === 'merged'
-  );
+function isDataSourceStatus(value: string): value is PullRequestDataSourceStatus {
+  return value === 'open' || value === 'draft' || value === 'closed' || value === 'merged';
 }
 
 function statusSummary(statuses: PullRequestDataSourceStatus[]) {

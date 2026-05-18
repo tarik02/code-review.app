@@ -843,22 +843,20 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         );
       }
 
-      return owners
-        .slice(0, limit)
-        .map(
-          (owner) =>
-            ({
-              provider: 'github',
-              host: token.host,
-              providerAccountId: token.id,
-              providerAccountLabel: label,
-              path: owner,
-              name: owner,
-              kind: owner === login ? 'user' : 'organization',
-              avatarUrl: null,
-              webUrl: `https://${token.host}/${owner}`,
-            }) satisfies NamespaceSummary,
-        );
+      return owners.slice(0, limit).map(
+        (owner) =>
+          ({
+            provider: 'github',
+            host: token.host,
+            providerAccountId: token.id,
+            providerAccountLabel: label,
+            path: owner,
+            name: owner,
+            kind: owner === login ? 'user' : 'organization',
+            avatarUrl: null,
+            webUrl: `https://${token.host}/${owner}`,
+          }) satisfies NamespaceSummary,
+      );
     },
   );
 

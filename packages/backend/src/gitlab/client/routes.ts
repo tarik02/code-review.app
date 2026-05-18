@@ -1,10 +1,7 @@
 import type { ProviderRepoIdentity } from '../../repo-id.ts';
 import { createBuildRoute } from '../../providers/route.ts';
 
-type GitLabOverviewMergeRequestScope =
-  | 'reviews_for_me'
-  | 'assigned_to_me'
-  | 'created_by_me';
+type GitLabOverviewMergeRequestScope = 'reviews_for_me' | 'assigned_to_me' | 'created_by_me';
 type GitLabSearchMergeRequestState = 'opened' | 'closed' | 'merged' | 'all';
 type GitLabMergeRequestSortField = 'updated_at' | 'created_at';
 
@@ -42,12 +39,7 @@ type GitlabRoutes = {
     query: {
       include_subgroups?: boolean;
       simple?: boolean;
-      order_by?:
-        | 'last_activity_at'
-        | 'name'
-        | 'path'
-        | 'created_at'
-        | 'updated_at';
+      order_by?: 'last_activity_at' | 'name' | 'path' | 'created_at' | 'updated_at';
       sort?: 'asc' | 'desc';
       per_page?: number;
     };

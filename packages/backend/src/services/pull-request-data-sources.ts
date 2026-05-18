@@ -215,16 +215,18 @@ const makePullRequestDataSourceService = Effect.gen(function* () {
       yield* database.transaction(async (tx) => {
         await tx.delete(pullRequestDataSources);
         if (normalized.sources.length === 0) return;
-        await tx.insert(pullRequestDataSources).values(
-          normalized.sources.map((source, position) =>
-            sourceToRowValues(
-              source,
-              position,
-              source.id === normalized.activeDataSourceId,
-              timestamp,
+        await tx
+          .insert(pullRequestDataSources)
+          .values(
+            normalized.sources.map((source, position) =>
+              sourceToRowValues(
+                source,
+                position,
+                source.id === normalized.activeDataSourceId,
+                timestamp,
+              ),
             ),
-          ),
-        );
+          );
       });
 
       return normalized;

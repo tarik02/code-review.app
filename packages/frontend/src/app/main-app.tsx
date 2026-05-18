@@ -135,8 +135,7 @@ function MainApp() {
   const activeDataSource =
     dataSourcesSettings.sources.find(
       (source) => source.id === dataSourcesSettings.activeDataSourceId,
-    ) ??
-    null;
+    ) ?? null;
   const {
     error: dataSourceError,
     isLoading: isDataSourceLoading,
@@ -785,7 +784,8 @@ function MainApp() {
   ) {
     const repo =
       sidebarRepos.find((candidate) => sameRepoIdentity(candidate, repoIdentityInput)) ??
-      dataSourcePullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))?.repo ??
+      dataSourcePullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))
+        ?.repo ??
       recentPullRequestsQuery.data?.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))
         ?.repo;
     if (repo && !savedRepos.some((candidate) => sameRepoIdentity(candidate, repo))) {

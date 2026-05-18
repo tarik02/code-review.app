@@ -62,10 +62,7 @@ function requireRepo(repo: RepoIdentity) {
   return repo;
 }
 
-function matchesDataSourceStatus(
-  entry: OverviewPullRequestSummary,
-  statuses: ReadonlySet<string>,
-) {
+function matchesDataSourceStatus(entry: OverviewPullRequestSummary, statuses: ReadonlySet<string>) {
   const state = entry.pullRequest.state.toUpperCase();
   return (
     (statuses.has('open') && state === 'OPEN' && !entry.pullRequest.isDraft) ||

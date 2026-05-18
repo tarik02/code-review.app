@@ -276,7 +276,7 @@ function BrowsePalette({
         group: 'Pull requests',
         title: 'No local pull requests',
         subtitle:
-        'Tracked, recent, and data source pull requests appear here before global search starts.',
+          'Tracked, recent, and data source pull requests appear here before global search starts.',
         icon: <GitPullRequestIcon className="size-4" />,
         disabled: true,
         onSelect: () => {},
