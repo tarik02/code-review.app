@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
 import { Cause, Effect, Exit, Option } from 'effect';
 import { BackendError, formatLogDetails, getErrorMessage } from './errors.ts';
+import { PullRequestDataSourceService } from './services/pull-request-data-sources.ts';
 import { PullRequestService } from './services/pull-requests.ts';
 import { PullRequestQualityService } from './services/pull-request-quality.ts';
 import { RepoService } from './services/repos.ts';
@@ -29,6 +30,8 @@ import {
   providerHostSchema,
   providerProfileSchema,
   publishPendingReviewInputSchema,
+  pullRequestDataSourceListInputSchema,
+  pullRequestDataSourcesSettingsSchema,
   pullRequestApprovalStateSchema,
   pullRequestFileContentsInputSchema,
   pullRequestListItemSchema,
@@ -335,6 +338,24 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             Effect.gen(function* () {
               const service = yield* SettingsService;
               return yield* service.setAccountVisibility(input.enabledAccountIds);
+            }),
+          ),
+        ),
+      getDataSources: t.procedure.query(() =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestDataSourceService;
+            return pullRequestDataSourcesSettingsSchema.parse(yield* service.list());
+          }),
+        ),
+      ),
+      setDataSources: t.procedure
+        .input(pullRequestDataSourcesSettingsSchema)
+        .mutation(({ input }) =>
+          runEffect(
+            Effect.gen(function* () {
+              const service = yield* PullRequestDataSourceService;
+              return pullRequestDataSourcesSettingsSchema.parse(yield* service.replace(input));
             }),
           ),
         ),
@@ -755,6 +776,15 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             );
             const service = yield* PullRequestService;
             const pullRequests = yield* service.listOverview(input.accountId);
+            return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
+          }),
+        ),
+      ),
+      listDataSource: t.procedure.input(pullRequestDataSourceListInputSchema).query(({ input }) =>
+        runEffect(
+          Effect.gen(function* () {
+            const service = yield* PullRequestService;
+            const pullRequests = yield* service.listDataSource(input);
             return pullRequests.map((entry) => overviewPullRequestSummarySchema.parse(entry));
           }),
         ),

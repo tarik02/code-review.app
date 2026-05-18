@@ -2,7 +2,8 @@ import type { ProviderRepoIdentity } from '../../repo-id.ts';
 import { createBuildRoute } from '../../providers/route.ts';
 
 type GitLabOverviewMergeRequestScope = 'reviews_for_me' | 'assigned_to_me' | 'created_by_me';
-type GitLabSearchMergeRequestState = 'opened' | 'all';
+type GitLabSearchMergeRequestState = 'opened' | 'closed' | 'merged' | 'all';
+type GitLabMergeRequestSortField = 'updated_at' | 'created_at';
 
 type GitlabRoutes = {
   search: {
@@ -43,12 +44,21 @@ type GitlabRoutes = {
       per_page?: number;
     };
   };
+  'groups/:group/merge_requests': {
+    query: {
+      state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
+      order_by?: GitLabMergeRequestSortField;
+      sort?: 'desc' | 'asc';
+      non_archived?: 'true';
+      per_page?: number;
+    };
+  };
   merge_requests: {
     query: {
       scope: GitLabOverviewMergeRequestScope | 'all';
       state: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
-      order_by: 'updated_at';
-      sort: 'desc';
+      order_by: GitLabMergeRequestSortField;
+      sort: 'desc' | 'asc';
       non_archived: 'true';
       per_page: number;
       search?: string;
@@ -59,7 +69,7 @@ type GitlabRoutes = {
   'projects/:project/merge_requests': {
     query: {
       state?: 'opened' | 'closed' | 'locked' | 'merged' | 'all';
-      order_by?: 'updated_at' | 'created_at';
+      order_by?: GitLabMergeRequestSortField;
       sort?: 'desc' | 'asc';
       per_page?: number;
       search?: string;
@@ -114,4 +124,9 @@ function gitlabProjectPath(project: ProviderRepoIdentity | string) {
 }
 
 export { gitlabProjectPath, gitlabRoute };
-export type { GitLabOverviewMergeRequestScope, GitLabSearchMergeRequestState, GitlabRoutes };
+export type {
+  GitLabMergeRequestSortField,
+  GitLabOverviewMergeRequestScope,
+  GitLabSearchMergeRequestState,
+  GitlabRoutes,
+};

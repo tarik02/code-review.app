@@ -7,8 +7,10 @@ import { BackendConfig, type BackendRuntimeConfig } from './config.ts';
 import { DatabaseServiceLive } from './db/client.ts';
 import { ForgeProviderRegistryLive } from './providers/registry.ts';
 import { AppSettingsServiceLive } from './services/app-settings.ts';
+import { DataSourcePullRequestServiceLive } from './services/data-source-pull-requests.ts';
 import { DiffDataServiceLive } from './services/diff-data.ts';
 import { GitServiceLive } from './git/service.ts';
+import { PullRequestDataSourceServiceLive } from './services/pull-request-data-sources.ts';
 import { PullRequestServiceLive } from './services/pull-requests.ts';
 import { PullRequestQualityServiceLive } from './services/pull-request-quality.ts';
 import { RepoServiceLive } from './services/repos.ts';
@@ -43,6 +45,8 @@ function createAppLayer(options: BackendRuntimeOptions) {
   const IndependentServiceLayer = Layer.mergeAll(
     RepoServiceLive,
     TrackedPullRequestServiceLive,
+    PullRequestDataSourceServiceLive,
+    DataSourcePullRequestServiceLive,
     ReviewCommentServiceLive,
     SettingsServiceLive,
     GitServiceLive,

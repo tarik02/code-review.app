@@ -42,6 +42,7 @@ import {
   GhRestRepoSchema,
   GhRestUserSchema,
   GhSearchResponseSchema,
+  GhSearchUsersResponseSchema,
   GetPullRequestQueryDataSchema,
   GitHubErrorBodySchema,
   graphQlResponseSchema,
@@ -75,6 +76,10 @@ type GitHubApiClientShape = {
     query: string;
     perPage?: number;
   }): GitHubClientEffect<typeof GhSearchResponseSchema.Type>;
+  searchUsers(input: {
+    query: string;
+    perPage?: number;
+  }): GitHubClientEffect<typeof GhSearchUsersResponseSchema.Type>;
   repo(owner: string, name: string): GitHubClientEffect<GhRestRepo>;
   searchPullRequests(
     query: string,
@@ -507,6 +512,27 @@ const makeGitHubApiClient = (accountId: string) =>
         auth,
         send,
         decodeJsonBody(GhSearchResponseSchema),
+      );
+    });
+
+    const searchUsers: GitHubApiClientShape['searchUsers'] = Effect.fn(
+      'GitHubApiClient.searchUsers',
+    )(function* (input) {
+      const token = yield* requireStoredToken();
+      const auth = yield* authorize();
+      return yield* HttpClientRequest.get(
+        githubRoute('/search/users', {
+          query: {
+            q: input.query,
+            per_page: input.perPage,
+          },
+        }),
+      ).pipe(
+        setDefaultHeaders,
+        prefixApiHost(token.host),
+        auth,
+        send,
+        decodeJsonBody(GhSearchUsersResponseSchema),
       );
     });
 
@@ -1368,6 +1394,7 @@ mutation($id: ID!) {
       userOrgs,
       userRepos,
       searchRepositories,
+      searchUsers,
       repo,
       searchPullRequests,
       repositoryPullRequests,

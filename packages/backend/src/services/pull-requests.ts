@@ -2,9 +2,11 @@ import { Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
+import { DataSourcePullRequestService } from './data-source-pull-requests.ts';
 import { DiffDataService } from './diff-data.ts';
 import type {
   OverviewPullRequestSummary,
+  PullRequestDataSourceListInput,
   PrFileChangeType,
   PrFileContents,
   PrPatch,
@@ -19,6 +21,9 @@ type PullRequestServiceShape = {
   listRecent(): Effect.Effect<OverviewPullRequestSummary[], Error>;
   remember(repo: RepoIdentity, pullRequest: PullRequestListItem): Effect.Effect<void, Error>;
   listOverview(accountId: string): Effect.Effect<OverviewPullRequestSummary[], Error>;
+  listDataSource(
+    input: PullRequestDataSourceListInput,
+  ): Effect.Effect<OverviewPullRequestSummary[], Error>;
   search(
     accountId: string,
     query: string,
@@ -57,8 +62,41 @@ function requireRepo(repo: RepoIdentity) {
   return repo;
 }
 
+function matchesDataSourceStatus(entry: OverviewPullRequestSummary, statuses: ReadonlySet<string>) {
+  const state = entry.pullRequest.state.toUpperCase();
+  return (
+    (statuses.has('open') && state === 'OPEN' && !entry.pullRequest.isDraft) ||
+    (statuses.has('draft') && state === 'OPEN' && entry.pullRequest.isDraft) ||
+    (statuses.has('closed') && state === 'CLOSED') ||
+    (statuses.has('merged') && state === 'MERGED')
+  );
+}
+
+function sortDataSourceEntries(
+  entries: OverviewPullRequestSummary[],
+  sortBy: PullRequestDataSourceListInput['dataSource']['sortBy'],
+) {
+  if (sortBy === 'created_desc' || sortBy === 'created_asc') return entries;
+  return entries.sort((left, right) => {
+    const leftTime = Date.parse(left.pullRequest.updatedAt || '');
+    const rightTime = Date.parse(right.pullRequest.updatedAt || '');
+    const leftValue = Number.isNaN(leftTime) ? 0 : leftTime;
+    const rightValue = Number.isNaN(rightTime) ? 0 : rightTime;
+    return sortBy === 'updated_asc' ? leftValue - rightValue : rightValue - leftValue;
+  });
+}
+
+function dedupeOverviewEntries(entries: ReadonlyArray<OverviewPullRequestSummary>) {
+  const byKey = new Map<string, OverviewPullRequestSummary>();
+  for (const entry of entries) {
+    byKey.set(`${entry.repo.providerId}:${entry.repo.repoKey}#${entry.pullRequest.number}`, entry);
+  }
+  return [...byKey.values()];
+}
+
 const makePullRequestService = Effect.gen(function* () {
   const cache = yield* CacheService;
+  const dataSourcePullRequests = yield* DataSourcePullRequestService;
   const diffData = yield* DiffDataService;
   const providers = yield* ForgeProviderRegistry;
 
@@ -95,6 +133,23 @@ const makePullRequestService = Effect.gen(function* () {
       yield* cache.cachePullRequest(repoIdentity, pullRequest);
     },
   );
+
+  const listDataSource: PullRequestServiceShape['listDataSource'] = Effect.fn(
+    'PullRequestService.listDataSource',
+  )(function* (input) {
+    const accountId = input.dataSource.accountId.trim();
+    if (!accountId) throw new ValidationError('Account is required');
+    if (!Number.isInteger(input.limit) || input.limit <= 0) {
+      throw new ValidationError('Limit must be positive');
+    }
+
+    const entries = yield* dataSourcePullRequests.list(input.dataSource, input.limit);
+    const statuses = new Set(input.dataSource.statuses);
+    return sortDataSourceEntries(
+      dedupeOverviewEntries(entries).filter((entry) => matchesDataSourceStatus(entry, statuses)),
+      input.dataSource.sortBy,
+    ).slice(0, input.limit);
+  });
 
   const list: PullRequestServiceShape['list'] = Effect.fn('PullRequestService.list')(
     function* (repoInput) {
@@ -154,6 +209,7 @@ const makePullRequestService = Effect.gen(function* () {
     listRecent,
     remember,
     listOverview,
+    listDataSource,
     search,
     list,
     get,

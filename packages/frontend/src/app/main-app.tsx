@@ -8,7 +8,7 @@ import { HomeCommandPalettes } from '../command-palette/CommandPalette';
 import { PatchViewerMain } from '../components/ui/patch-viewer-main';
 import {
   getErrorMessage,
-  useAccountOverviewPullRequests,
+  useDataSourcePullRequests,
   useSavedRepos,
   useSelectedPullRequestData,
   useTrackedPullRequests,
@@ -32,10 +32,12 @@ import { trpc } from '../lib/trpc';
 import { useMainAppViewStore } from '../stores/main-app-view-store';
 import {
   accountVisibilityQueryOptions,
+  dataSourcesSettingsQueryOptions,
   diffDataSettingsQueryOptions,
   forgeKeys,
   pullRequestRecentListQueryOptions,
   savedReposQueryOptions,
+  setDataSourcesSettings,
   setTrackedPullRequestOrder,
   trackedReposQueryOptions,
   trackedPullRequestOrderQueryOptions,
@@ -44,6 +46,7 @@ import type {
   DiffDataMode,
   FileStatsEntry,
   OverviewPullRequestSummary,
+  PullRequestDataSourcesSettings,
   PullRequestSummary,
   RepoIdentity,
   RepoSummary,
@@ -86,7 +89,7 @@ function MainApp() {
   const clearRepoFilter = useMainAppViewStore((state) => state.clearRepoFilter);
 
   const [deepLinkMessage, setDeepLinkMessage] = useState<string | null>(null);
-  const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>('overview');
+  const [sidebarView, setSidebarView] = useState<SidebarPullRequestView>('data-source');
   const refreshedReposRef = useRef<Set<string>>(new Set());
   const lastRememberedPrKeyRef = useRef<string | null>(null);
 
@@ -124,45 +127,46 @@ function MainApp() {
     () => trackedRepos.filter((repo) => readyAccountIds.has(repo.providerAccountId)),
     [readyAccountIds, trackedRepos],
   );
+  const dataSourcesQuery = useQuery(dataSourcesSettingsQueryOptions());
+  const dataSourcesSettings: PullRequestDataSourcesSettings = dataSourcesQuery.data ?? {
+    activeDataSourceId: null,
+    sources: [],
+  };
+  const activeDataSource =
+    dataSourcesSettings.sources.find(
+      (source) => source.id === dataSourcesSettings.activeDataSourceId,
+    ) ?? null;
   const {
-    accountIds: overviewAccountIds,
-    errors: overviewErrors,
-    isLoading: isOverviewLoading,
-    pullRequests: overviewPullRequests,
-  } = useAccountOverviewPullRequests(
-    readyProviderAccounts,
-    enabledAccountIds,
-    sidebarView === 'overview',
-  );
+    error: dataSourceError,
+    isLoading: isDataSourceLoading,
+    pullRequests: dataSourcePullRequests,
+  } = useDataSourcePullRequests(activeDataSource, sidebarView === 'data-source');
   const recentPullRequestsQuery = useQuery(pullRequestRecentListQueryOptions());
-  const readyOverviewAccountCount = readyProviderAccounts.length;
-  const overviewStatusMessage = useMemo(() => {
-    if (sidebarView !== 'overview') return null;
-    if (readyOverviewAccountCount === 0) return 'No ready provider accounts.';
-    if (overviewAccountIds.length === 0) {
-      return 'Provider accounts are hidden in settings.';
-    }
+  const dataSourceStatusMessage = useMemo(() => {
+    if (sidebarView !== 'data-source') return null;
+    if (readyProviderAccounts.length === 0) return 'No ready provider accounts.';
+    if (!activeDataSource) return 'Create a data source to load PRs or MRs.';
     return null;
-  }, [overviewAccountIds.length, readyOverviewAccountCount, sidebarView]);
+  }, [activeDataSource, readyProviderAccounts.length, sidebarView]);
   const {
     prsByRepo: trackedPrsByRepo,
     repoErrors: trackedRepoErrors,
     refreshTrackedPullRequests,
   } = useTrackedPullRequests({ repos: refreshableTrackedRepos });
   const trackedPullRequestOrderQuery = useQuery(trackedPullRequestOrderQueryOptions());
-  const activeOverviewEntry = useMemo(() => {
+  const activeDataSourceEntry = useMemo(() => {
     if (!activeRepoIdentity || activePullRequestNumber === null) {
       return null;
     }
 
     return (
-      overviewPullRequests.find(
+      dataSourcePullRequests.find(
         (entry) =>
           sameRepoIdentity(entry.repo, activeRepoIdentity) &&
           entry.pullRequest.number === activePullRequestNumber,
       ) ?? null
     );
-  }, [activePullRequestNumber, activeRepoIdentity, overviewPullRequests]);
+  }, [activePullRequestNumber, activeRepoIdentity, dataSourcePullRequests]);
   const activeTrackedPullRequest = useMemo(() => {
     if (!activeRepoLookupKey || activePullRequestNumber === null) {
       return null;
@@ -211,7 +215,7 @@ function MainApp() {
     enabled:
       activeRepoIdentity !== null &&
       activePullRequestNumber !== null &&
-      activeOverviewEntry === null &&
+      activeDataSourceEntry === null &&
       activeTrackedPullRequest === null &&
       activeRecentEntry === null,
     staleTime: 0,
@@ -222,11 +226,11 @@ function MainApp() {
       return null;
     }
 
-    const overviewPullRequest = activeOverviewEntry?.pullRequest ?? null;
+    const dataSourcePullRequest = activeDataSourceEntry?.pullRequest ?? null;
     const recentPullRequest = activeRecentEntry?.pullRequest ?? null;
     const pullRequest =
       activeTrackedPullRequest ??
-      overviewPullRequest ??
+      dataSourcePullRequest ??
       recentPullRequest ??
       activeFallbackPullRequest;
     if (!pullRequest) {
@@ -237,11 +241,11 @@ function MainApp() {
       ...activeRepoIdentity,
       number: activePullRequestNumber,
       headSha: pullRequest.headSha,
-      baseSha: pullRequest.baseSha ?? overviewPullRequest?.baseSha ?? null,
+      baseSha: pullRequest.baseSha ?? dataSourcePullRequest?.baseSha ?? null,
     };
   }, [
     activeFallbackPullRequest,
-    activeOverviewEntry,
+    activeDataSourceEntry,
     activePullRequestNumber,
     activeRecentEntry,
     activeRepoIdentity,
@@ -251,7 +255,7 @@ function MainApp() {
     ? (savedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
       trackedRepos.find((repo) => sameRepoIdentity(repo, activeRepoIdentity)) ??
       activeRecentEntry?.repo ??
-      activeOverviewEntry?.repo ??
+      activeDataSourceEntry?.repo ??
       null)
     : null;
   const isSelectedRepoHidden =
@@ -316,9 +320,9 @@ function MainApp() {
       (!repoFilterKey || repo.repoKey === repoFilterKey),
     [profileFilterAccountId, repoFilterKey],
   );
-  const filteredOverviewPullRequests = useMemo(() => {
-    return overviewPullRequests.filter((entry) => matchesSidebarFilters(entry.repo));
-  }, [matchesSidebarFilters, overviewPullRequests]);
+  const filteredDataSourcePullRequests = useMemo(() => {
+    return dataSourcePullRequests;
+  }, [dataSourcePullRequests]);
   const filteredTrackedPullRequestEntries = useMemo(() => {
     return trackedPullRequestEntries.filter((entry) => matchesSidebarFilters(entry.repo));
   }, [matchesSidebarFilters, trackedPullRequestEntries]);
@@ -331,9 +335,9 @@ function MainApp() {
     () => [
       ...trackedPullRequestEntries,
       ...(recentPullRequestsQuery.data ?? []),
-      ...overviewPullRequests,
+      ...dataSourcePullRequests,
     ],
-    [overviewPullRequests, recentPullRequestsQuery.data, trackedPullRequestEntries],
+    [dataSourcePullRequests, recentPullRequestsQuery.data, trackedPullRequestEntries],
   );
   const selectedPullRequestSummary = useMemo(() => {
     if (!selectedPr) {
@@ -361,8 +365,8 @@ function MainApp() {
 
     const entry = { repo: selectedRepo, pullRequest: selectedPullRequestSummary };
     const currentEntries =
-      sidebarView === 'overview'
-        ? filteredOverviewPullRequests
+      sidebarView === 'data-source'
+        ? filteredDataSourcePullRequests
         : sidebarView === 'recent'
           ? filteredRecentPullRequests
           : filteredTrackedPullRequestEntries;
@@ -371,7 +375,7 @@ function MainApp() {
       ? null
       : entry;
   }, [
-    filteredOverviewPullRequests,
+    filteredDataSourcePullRequests,
     filteredRecentPullRequests,
     filteredTrackedPullRequestEntries,
     selectedPullRequestSummary,
@@ -591,7 +595,7 @@ function MainApp() {
       selectedRepo ??
       recentPullRequestsQuery.data?.find((entry) => sameRepoIdentity(entry.repo, selectedPr))
         ?.repo ??
-      overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, selectedPr))?.repo ??
+      dataSourcePullRequests.find((entry) => sameRepoIdentity(entry.repo, selectedPr))?.repo ??
       trackedRepos.find((entry) => sameRepoIdentity(entry, selectedPr)) ??
       null;
     if (!repo) {
@@ -606,7 +610,7 @@ function MainApp() {
     lastRememberedPrKeyRef.current = rememberKey;
     void rememberPullRequest(repo, selectedPullRequestSummary);
   }, [
-    overviewPullRequests,
+    dataSourcePullRequests,
     recentPullRequestsQuery.data,
     rememberPullRequest,
     selectedPr,
@@ -774,13 +778,14 @@ function MainApp() {
     }
   }
 
-  async function handleTrackFromOverview(
+  async function handleTrackFromDataSource(
     repoIdentityInput: RepoIdentity,
     pullRequest: PullRequestSummary,
   ) {
     const repo =
       sidebarRepos.find((candidate) => sameRepoIdentity(candidate, repoIdentityInput)) ??
-      overviewPullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))?.repo ??
+      dataSourcePullRequests.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))
+        ?.repo ??
       recentPullRequestsQuery.data?.find((entry) => sameRepoIdentity(entry.repo, repoIdentityInput))
         ?.repo;
     if (repo && !savedRepos.some((candidate) => sameRepoIdentity(candidate, repo))) {
@@ -809,7 +814,21 @@ function MainApp() {
       return;
     }
 
-    await handleTrackFromOverview(entry.repo, entry.pullRequest);
+    await handleTrackFromDataSource(entry.repo, entry.pullRequest);
+  }
+
+  async function handleDataSourcesChange(nextSettings: PullRequestDataSourcesSettings) {
+    const previousSettings = queryClient.getQueryData<PullRequestDataSourcesSettings>(
+      forgeKeys.dataSources(),
+    );
+    queryClient.setQueryData(forgeKeys.dataSources(), nextSettings);
+    try {
+      const persisted = await setDataSourcesSettings(nextSettings);
+      queryClient.setQueryData(forgeKeys.dataSources(), persisted);
+    } catch (error) {
+      queryClient.setQueryData(forgeKeys.dataSources(), previousSettings);
+      throw error;
+    }
   }
 
   const activeFilterChips = useMemo(() => {
@@ -856,12 +875,15 @@ function MainApp() {
             activeFilters={activeFilterChips}
             repos={sidebarRepos}
             repoErrors={sidebarView === 'tracked' ? trackedRepoErrors : {}}
-            overviewPullRequests={filteredOverviewPullRequests}
+            dataSourcePullRequests={filteredDataSourcePullRequests}
             recentPullRequests={filteredRecentPullRequests}
             trackedPullRequests={filteredTrackedPullRequestEntries}
-            overviewErrors={overviewErrors}
-            isOverviewLoading={isOverviewLoading}
-            overviewStatusMessage={overviewStatusMessage}
+            dataSourceErrors={dataSourceError ? [dataSourceError] : []}
+            isDataSourceLoading={isDataSourceLoading}
+            dataSourceStatusMessage={dataSourceStatusMessage}
+            dataSourcesSettings={dataSourcesSettings}
+            activeDataSource={activeDataSource}
+            providerAccounts={readyProviderAccounts}
             pinnedEntry={activePinnedSidebarEntry}
             view={sidebarView}
             selectedPrKey={selectedPrKey}
@@ -876,8 +898,9 @@ function MainApp() {
               </div>
             }
             onViewChange={setSidebarView}
+            onDataSourcesChange={(settings) => void handleDataSourcesChange(settings)}
             onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
-            onTrackPr={(repo, pullRequest) => void handleTrackFromOverview(repo, pullRequest)}
+            onTrackPr={(repo, pullRequest) => void handleTrackFromDataSource(repo, pullRequest)}
             onRemovePr={(repo, pullRequest) =>
               void handleRemoveTrackedPullRequest(repo, pullRequest)
             }

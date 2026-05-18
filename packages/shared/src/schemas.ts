@@ -11,6 +11,13 @@ const pendingReviewCommentKindSchema = z.enum(['thread', 'reply', 'global']);
 const pendingReviewCommentSubjectTypeSchema = z.enum(['file', 'line', 'global']);
 const pendingReviewSubmitActionSchema = z.enum(['comment', 'approve', 'request_changes']);
 const pullRequestSearchStateSchema = z.enum(['open', 'draft_open', 'all']);
+const pullRequestDataSourceStatusSchema = z.enum(['open', 'draft', 'closed', 'merged']);
+const pullRequestDataSourceSortSchema = z.enum([
+  'updated_desc',
+  'updated_asc',
+  'created_desc',
+  'created_asc',
+]);
 const pullRequestApprovalRemoveStrategySchema = z.enum(['dismiss', 'unapprove']);
 const pullRequestQualityReportStatusSchema = z.enum([
   'ok',
@@ -83,6 +90,39 @@ const pullRequestSummarySchema = pullRequestListItemSchema;
 const overviewPullRequestSummarySchema = z.object({
   repo: repoSummarySchema,
   pullRequest: pullRequestListItemSchema,
+});
+
+const pullRequestDataSourceResourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('account') }),
+  z.object({
+    kind: z.literal('namespace'),
+    path: z.string().min(1),
+    namespaceKind: z.enum(['user', 'organization', 'group', 'namespace']),
+  }),
+  z.object({
+    kind: z.literal('repo'),
+    repo: repoSummarySchema,
+  }),
+]);
+
+const pullRequestDataSourceSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().trim().min(1).optional(),
+  accountId: z.string().min(1),
+  resource: pullRequestDataSourceResourceSchema,
+  statuses: z.array(pullRequestDataSourceStatusSchema).min(1),
+  sortBy: pullRequestDataSourceSortSchema,
+  groupByProject: z.boolean(),
+});
+
+const pullRequestDataSourcesSettingsSchema = z.object({
+  activeDataSourceId: z.string().nullable(),
+  sources: z.array(pullRequestDataSourceSchema),
+});
+
+const pullRequestDataSourceListInputSchema = z.object({
+  dataSource: pullRequestDataSourceSchema,
+  limit: z.number().int().positive().max(200),
 });
 
 const browseSearchInputSchema = z.object({
@@ -397,6 +437,12 @@ export {
   forgeProviderKindSchema,
   namespaceSummarySchema,
   overviewPullRequestSummarySchema,
+  pullRequestDataSourceListInputSchema,
+  pullRequestDataSourceResourceSchema,
+  pullRequestDataSourcesSettingsSchema,
+  pullRequestDataSourceSchema,
+  pullRequestDataSourceSortSchema,
+  pullRequestDataSourceStatusSchema,
   pendingReviewCommentKindSchema,
   pendingReviewCommentSchema,
   pendingReviewCommentSubjectTypeSchema,
