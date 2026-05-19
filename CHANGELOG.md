@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- 57d64bc: optimize review comment rendering and GitLab merge request loading
+- b105d77: add pull request data source selection
+
 ## 0.2.0
 
 ### Minor Changes
