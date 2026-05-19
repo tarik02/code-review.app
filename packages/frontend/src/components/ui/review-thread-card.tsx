@@ -1,7 +1,7 @@
 import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating-ui/react';
-import { useQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   getReviewThreadRefKey,
   isGlobalReviewThread,
@@ -10,7 +10,6 @@ import {
   type ReviewThread,
 } from '../../lib/review-threads';
 import { getCommentPreviewText } from '../../lib/comment-preview';
-import { reviewEditorSettingsQueryOptions } from '../../queries/forge';
 import {
   getReviewCommentEditorSessionState,
   type ReviewCommentEditorState,
@@ -32,6 +31,7 @@ type ReviewThreadCardProps = {
   compact?: boolean;
   slim?: boolean;
   defaultCollapsed?: boolean;
+  defaultReviewEditorMode?: ReviewCommentEditorProps['defaultMode'];
   deletingCommentIds?: ReadonlySet<string>;
   patchViewerSessionKey?: string | null;
   resolvingThreadId?: string | null;
@@ -274,11 +274,78 @@ function FloatingReviewCommentEditor({
   );
 }
 
-function ReviewThreadCard({
+function SlimReviewThreadCard({ thread, onClick }: { thread: ReviewThread; onClick?: () => void }) {
+  const rootComment =
+    thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null;
+  const isReviewEvent = isReviewEventThread(thread);
+  const threadLine = thread.startLine ?? thread.line;
+  const locationLabel = isGlobalReviewThread(thread)
+    ? 'Global comment'
+    : threadLine === null
+      ? `${thread.path} - File comment`
+      : `${thread.path}:${threadLine}`;
+  const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
+  const eventLabel = getReviewEventLabel(thread);
+  const actorName = rootComment?.authorName ?? rootComment?.authorLogin ?? 'Someone';
+  const eventTime = rootComment ? formatRelativeTimestamp(rootComment.createdAt) : '';
+
+  const content = (
+    <>
+      {rootComment ? (
+        <CommentAvatar comment={rootComment} />
+      ) : (
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
+          ?
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        {isReviewEvent ? (
+          <>
+            <p className="min-w-0 truncate text-sm text-ink-700">
+              {actorName} {eventLabel}
+            </p>
+            <p className="mt-1 text-xs text-ink-500">{eventTime}</p>
+          </>
+        ) : (
+          <>
+            <p className="min-w-0 truncate text-sm text-ink-700">
+              {summaryBody || '(no comment body)'}
+            </p>
+            <p className="mt-1 text-xs text-ink-500">{locationLabel}</p>
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const baseClassName = 'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left';
+
+  return onClick ? (
+    <button
+      className={`${baseClassName} transition hover:bg-canvasDark focus-visible:bg-surface`}
+      onClick={onClick}
+      type="button"
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={baseClassName}>{content}</div>
+  );
+}
+
+function ReviewThreadCard(props: ReviewThreadCardProps) {
+  if (props.slim) {
+    return <SlimReviewThreadCard thread={props.thread} onClick={props.onClick} />;
+  }
+
+  return <ReviewThreadCardFull {...props} />;
+}
+
+function ReviewThreadCardFull({
   thread,
   compact = false,
-  slim = false,
   defaultCollapsed = false,
+  defaultReviewEditorMode = 'rich-text',
   deletingCommentIds = new Set<string>(),
   patchViewerSessionKey = null,
   resolvingThreadId = null,
@@ -291,7 +358,6 @@ function ReviewThreadCard({
   onEditComment,
   onDeleteComment,
   onDeletePendingComment,
-  onClick,
   containerRef,
 }: ReviewThreadCardProps) {
   const containerNodeRef = useRef<HTMLDivElement | null>(null);
@@ -303,18 +369,17 @@ function ReviewThreadCard({
     thread.comments.find((comment) => comment.replyToId === null) ?? thread.comments[0] ?? null;
   const isReviewEvent = isReviewEventThread(thread);
   const editorTarget = getThreadEditorTarget(thread);
-  const reviewEditorSession = useReviewCommentEditorStore((state) =>
-    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
-  );
-  const threadEditors = useMemo(
-    () =>
-      reviewEditorSession.editorOrder
+  const threadRefKey = getReviewThreadRefKey(thread);
+  const threadEditors = useReviewCommentEditorStore(
+    useShallow((state) => {
+      const reviewEditorSession = getReviewCommentEditorSessionState(state, reviewEditorSessionKey);
+      return reviewEditorSession.editorOrder
         .map((editorId) => reviewEditorSession.editorsById[editorId])
         .filter(
           (editor): editor is ReviewCommentEditorState =>
             editor != null && editor.threadId === thread.id,
-        ),
-    [reviewEditorSession, thread.id],
+        );
+    }),
   );
   const openReplyEditor = useReviewCommentEditorStore((state) => state.openReplyEditor);
   const openEditEditor = useReviewCommentEditorStore((state) => state.openEditEditor);
@@ -325,27 +390,22 @@ function ReviewThreadCard({
   );
   const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
-  const patchViewerSession = usePatchViewerStore((state) =>
-    getPatchViewerSessionState(state, patchViewerSessionKey),
+  const isExpandedOverride = usePatchViewerStore(
+    (state) =>
+      getPatchViewerSessionState(state, patchViewerSessionKey).threadExpansionByKey[threadRefKey],
   );
-  const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
-  const canCreateEditor =
-    reviewEditorSessionKey != null && (onReplyToThread != null || onEditComment != null);
-  const reviewEditorSettingsQuery = useQuery({
-    ...reviewEditorSettingsQueryOptions(),
-    enabled: canCreateEditor,
+  const highlightVersion = usePatchViewerStore((state) => {
+    const session = getPatchViewerSessionState(state, patchViewerSessionKey);
+    return session.highlightedThreadKey === threadRefKey ? session.highlightedThreadVersion : 0;
   });
-  const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
+  const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
   const replyEditor =
     thread.id.length > 0 ? threadEditors.find((editor) => editor.kind === 'reply') : undefined;
   const isResolvePending = resolvingThreadId === thread.id;
-  const threadRefKey = getReviewThreadRefKey(thread);
-  const isExpandedOverride = patchViewerSession.threadExpansionByKey[threadRefKey];
-  const highlightVersion = patchViewerSession.highlightedThreadVersion;
   const isCollapsed = defaultCollapsed ? isExpandedOverride !== true : isExpandedOverride === false;
   const hasActiveEditor =
     replyEditor !== undefined || threadEditors.some((editor) => editor.kind === 'edit');
-  const shouldObserveExpandedContent = !slim && !isCollapsed && !hasBeenNearViewport;
+  const shouldObserveExpandedContent = !isCollapsed && !hasBeenNearViewport;
   const { ref: inViewRef } = useInView({
     root: null,
     rootMargin: COMMENT_DEFER_ROOT_MARGIN,
@@ -377,19 +437,18 @@ function ReviewThreadCard({
   );
 
   useEffect(() => {
+    if (highlightVersion === 0) {
+      return;
+    }
+
     if (lastHandledHighlightVersionRef.current === null) {
       lastHandledHighlightVersionRef.current = highlightVersion;
-      return;
-    }
+    } else {
+      if (highlightVersion === lastHandledHighlightVersionRef.current) {
+        return;
+      }
 
-    if (highlightVersion === lastHandledHighlightVersionRef.current) {
-      return;
-    }
-
-    lastHandledHighlightVersionRef.current = highlightVersion;
-
-    if (patchViewerSession.highlightedThreadKey !== threadRefKey) {
-      return;
+      lastHandledHighlightVersionRef.current = highlightVersion;
     }
 
     const node = containerNodeRef.current;
@@ -423,69 +482,10 @@ function ReviewThreadCard({
       window.clearTimeout(timeoutId);
       cleanup();
     };
-  }, [patchViewerSession.highlightedThreadKey, highlightVersion, threadRefKey]);
+  }, [highlightVersion]);
 
   const shouldRenderExpandedContent =
-    hasBeenNearViewport ||
-    hasActiveEditor ||
-    isResolvePending ||
-    patchViewerSession.highlightedThreadKey === threadRefKey;
-
-  if (slim) {
-    const threadLine = thread.startLine ?? thread.line;
-    const locationLabel = isGlobalReviewThread(thread)
-      ? 'Global comment'
-      : threadLine === null
-        ? `${thread.path} - File comment`
-        : `${thread.path}:${threadLine}`;
-    const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
-    const eventLabel = getReviewEventLabel(thread);
-    const actorName = rootComment?.authorName ?? rootComment?.authorLogin ?? 'Someone';
-    const eventTime = rootComment ? formatRelativeTimestamp(rootComment.createdAt) : '';
-
-    const content = (
-      <>
-        {rootComment ? (
-          <CommentAvatar comment={rootComment} />
-        ) : (
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
-            ?
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          {isReviewEvent ? (
-            <>
-              <p className="min-w-0 truncate text-sm text-ink-700">
-                {actorName} {eventLabel}
-              </p>
-              <p className="mt-1 text-xs text-ink-500">{eventTime}</p>
-            </>
-          ) : (
-            <>
-              <p className="min-w-0 truncate text-sm text-ink-700">
-                {summaryBody || '(no comment body)'}
-              </p>
-              <p className="mt-1 text-xs text-ink-500">{locationLabel}</p>
-            </>
-          )}
-        </div>
-      </>
-    );
-
-    const baseClassName = 'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left';
-
-    return onClick ? (
-      <button
-        className={`${baseClassName} transition hover:bg-canvasDark focus-visible:bg-surface`}
-        onClick={onClick}
-        type="button"
-      >
-        {content}
-      </button>
-    ) : (
-      <div className={baseClassName}>{content}</div>
-    );
-  }
+    hasBeenNearViewport || hasActiveEditor || isResolvePending || highlightVersion > 0;
 
   if (isCollapsed) {
     const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
