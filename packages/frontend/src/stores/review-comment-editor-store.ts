@@ -308,14 +308,14 @@ const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => 
   setEditorBody(sessionKey, editorId, body) {
     set((state) =>
       updateSession(state, sessionKey, (session) =>
-        updateEditor(session, editorId, () => ({ body })),
+        updateEditor(session, editorId, (editor) => (editor.body === body ? {} : { body })),
       ),
     );
   },
   setEditorError(sessionKey, editorId, error) {
     set((state) =>
       updateSession(state, sessionKey, (session) =>
-        updateEditor(session, editorId, () => ({ error })),
+        updateEditor(session, editorId, (editor) => (editor.error === error ? {} : { error })),
       ),
     );
   },
@@ -331,7 +331,9 @@ const useReviewCommentEditorStore = create<ReviewCommentEditorStore>()((set) => 
   setEditorSubmitting(sessionKey, editorId, isSubmitting) {
     set((state) =>
       updateSession(state, sessionKey, (session) =>
-        updateEditor(session, editorId, () => ({ isSubmitting })),
+        updateEditor(session, editorId, (editor) =>
+          editor.isSubmitting === isSubmitting ? {} : { isSubmitting },
+        ),
       ),
     );
   },

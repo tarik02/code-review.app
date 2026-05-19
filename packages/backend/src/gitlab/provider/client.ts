@@ -1036,39 +1036,11 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const mergeRequests = [...mergeRequestsByKey.values()].sort(
         (left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at),
       );
-      const projectIds = [
-        ...new Set(
-          mergeRequests
-            .map((mergeRequest) => mergeRequest.project_id)
-            .filter((projectId): projectId is number => typeof projectId === 'number'),
-        ),
-      ];
-
-      const projectResults = yield* Effect.forEach(
-        projectIds,
-        (projectId) =>
-          api.project(projectId).pipe(
-            Effect.map((project) => ({ projectId, project })),
-            Effect.catchAll(() => Effect.succeed({ projectId, project: null })),
-          ),
-        { concurrency: 'unbounded' },
-      );
-
-      const projectsById = new Map<number, GitLabProject>();
-      for (const result of projectResults) {
-        if (result.project) projectsById.set(result.projectId, result.project);
-      }
-
       const entries: OverviewPullRequestSummary[] = [];
       for (const mergeRequest of mergeRequests) {
-        const projectId = mergeRequest.project_id;
-        if (typeof projectId !== 'number') continue;
-        const project = projectsById.get(projectId);
-        if (!project) continue;
-        entries.push({
-          repo: repoSummaryFromProject(token.id, token.host, label, project),
-          pullRequest: toPullRequestSummary(mergeRequest),
-        });
+        const repo = repoSummaryFromMergeRequestUrl(token.id, token.host, label, mergeRequest);
+        if (!repo) continue;
+        entries.push(toOverviewPullRequestSummary(repo, toPullRequestSummary(mergeRequest)));
       }
 
       return entries;
@@ -1106,38 +1078,11 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           : Date.parse(rightValue) - Date.parse(leftValue);
       });
 
-      const projectIds = [
-        ...new Set(
-          sorted
-            .map((mergeRequest) => mergeRequest.project_id)
-            .filter((projectId): projectId is number => typeof projectId === 'number'),
-        ),
-      ];
-      const projectResults = yield* Effect.forEach(
-        projectIds,
-        (projectId) =>
-          api.project(projectId).pipe(
-            Effect.map((project) => ({ projectId, project })),
-            Effect.catchAll(() => Effect.succeed({ projectId, project: null })),
-          ),
-        { concurrency: 'unbounded' },
-      );
-
-      const projectsById = new Map<number, GitLabProject>();
-      for (const result of projectResults) {
-        if (result.project) projectsById.set(result.projectId, result.project);
-      }
-
       const entries: OverviewPullRequestSummary[] = [];
       for (const mergeRequest of sorted) {
-        const projectId = mergeRequest.project_id;
-        if (typeof projectId !== 'number') continue;
-        const project = projectsById.get(projectId);
-        if (!project) continue;
-        entries.push({
-          repo: repoSummaryFromProject(token.id, token.host, label, project),
-          pullRequest: toPullRequestSummary(mergeRequest),
-        });
+        const repo = repoSummaryFromMergeRequestUrl(token.id, token.host, label, mergeRequest);
+        if (!repo) continue;
+        entries.push(toOverviewPullRequestSummary(repo, toPullRequestSummary(mergeRequest)));
         if (entries.length >= filters.limit) break;
       }
       return entries;

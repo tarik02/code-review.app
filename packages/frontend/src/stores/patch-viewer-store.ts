@@ -135,9 +135,17 @@ function updateSession(
   }
 
   const currentSession = state.sessionsByKey[sessionKey] ?? createPatchViewerSessionState();
+  const sessionUpdate = update(currentSession);
+  const updateEntries = Object.entries(sessionUpdate) as Array<
+    [keyof PatchViewerSessionState, PatchViewerSessionState[keyof PatchViewerSessionState]]
+  >;
+  if (updateEntries.every(([key, value]) => currentSession[key] === value)) {
+    return state;
+  }
+
   const nextSession = {
     ...currentSession,
-    ...update(currentSession),
+    ...sessionUpdate,
   };
   const nextSessionOrder = touchSessionKey(state.sessionOrder, sessionKey);
 

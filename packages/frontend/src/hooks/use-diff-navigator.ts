@@ -1,5 +1,3 @@
-'use no memo';
-
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { normalizePath } from '../lib/review-threads';
 import { getPatchViewerSessionState, usePatchViewerStore } from '../stores/patch-viewer-store';

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps } from 'react';
+import { memo, useEffect, useState, type ComponentProps } from 'react';
 import Markdown, { RuleType } from 'markdown-to-jsx';
 import { codeToHtml, type BundledLanguage } from 'shiki';
 import type { ThemeRegistrationResolved } from '@shikijs/types';
@@ -147,7 +147,13 @@ function MarkdownCodeBlock({
   );
 }
 
-function CommentMarkdown({ body, filePath }: { body: string; filePath?: string }) {
+const CommentMarkdown = memo(function CommentMarkdown({
+  body,
+  filePath,
+}: {
+  body: string;
+  filePath?: string;
+}) {
   return (
     <div className="comment-markdown font-sans whitespace-normal break-words">
       <Markdown
@@ -189,6 +195,6 @@ function CommentMarkdown({ body, filePath }: { body: string; filePath?: string }
       </Markdown>
     </div>
   );
-}
+});
 
 export { CommentMarkdown };

@@ -1,5 +1,3 @@
-'use no memo';
-
 import { autoUpdate, FloatingPortal, offset, size, useFloating } from '@floating-ui/react';
 import {
   createContext,
@@ -7,12 +5,14 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  memo,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import type { CSSProperties, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useShallow } from 'zustand/react/shallow';
 import type {
   DiffLineAnnotation,
   AnnotationSide,
@@ -25,7 +25,7 @@ import type {
 } from '@pierre/diffs';
 import { useQuery } from '@tanstack/react-query';
 import type { GitStatusEntry } from '@pierre/trees';
-import { FileDiff, VirtualizerContext } from '@pierre/diffs/react';
+import { FileDiff } from '@pierre/diffs/react';
 import { ChangedFilesTree } from './changed-files-tree';
 import { AppearanceBackground } from './appearance-background';
 import { PatchScrollVirtualizer } from './patch-scroll-virtualizer';
@@ -198,8 +198,6 @@ type PatchFileDiffItemContextValue = {
   registerFileCommentsSection: (filePath: string, node: HTMLDivElement | null) => void;
   registerThreadAnchor: (thread: ReviewThread, node: HTMLDivElement | null) => void;
   reviewEditorSessionKey: string | null;
-  qualityFindingsByFile: Map<string, FileQualityFindings>;
-  reviewThreadsByFile: Map<string, FileReviewThreads>;
   scrollToFileCommentsSection: (filePath: string) => void;
   selectedBaseSha: string | null;
   selectedPatch: SelectedPatch;
@@ -1019,17 +1017,15 @@ function GlobalCommentsSection({
   onSubmitDraftComment,
   onSubmitDraftCommentNow,
 }: GlobalCommentsSectionProps) {
-  const reviewEditorSession = useReviewCommentEditorStore((state) =>
-    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
-  );
   const setEditorBody = useReviewCommentEditorStore((state) => state.setEditorBody);
   const setEditorCursorPosition = useReviewCommentEditorStore(
     (state) => state.setEditorCursorPosition,
   );
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
-  const globalDraftEditors = useMemo(
-    () =>
-      reviewEditorSession.editorOrder
+  const globalDraftEditors = useReviewCommentEditorStore(
+    useShallow((state) => {
+      const reviewEditorSession = getReviewCommentEditorSessionState(state, reviewEditorSessionKey);
+      return reviewEditorSession.editorOrder
         .map((editorId) => reviewEditorSession.editorsById[editorId])
         .filter(
           (
@@ -1037,8 +1033,8 @@ function GlobalCommentsSection({
           ): editor is ReviewCommentEditorState & {
             target: Extract<DraftReviewCommentTarget, { type: 'global' }>;
           } => editor != null && editor.kind === 'new' && editor.target?.type === 'global',
-        ),
-    [reviewEditorSession],
+        );
+    }),
   );
   const hasComments = threads.length > 0;
   const hasOpenDraft = globalDraftEditors.length > 0;
@@ -1080,6 +1076,7 @@ function GlobalCommentsSection({
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
             defaultCollapsed={thread.isResolved || thread.isOutdated}
+            defaultReviewEditorMode={defaultReviewEditorMode}
             deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
@@ -1277,12 +1274,16 @@ function ReviewThreadsPanel({
   );
 }
 
-function PatchFileDiffItem({
+const PatchFileDiffItem = memo(function PatchFileDiffItem({
   fileDiff,
   fileIndex,
+  fileQualityFindings,
+  fileReviewThreads,
 }: {
   fileDiff: FileDiffMetadata;
   fileIndex: number;
+  fileQualityFindings: FileQualityFindings;
+  fileReviewThreads: FileReviewThreads;
 }) {
   const {
     defaultReviewEditorMode,
@@ -1292,11 +1293,9 @@ function PatchFileDiffItem({
     diffNavigator,
     isInactiveFileCommentsExpanded,
     parsedFileDiffs,
-    qualityFindingsByFile,
     registerFileCommentsSection,
     registerThreadAnchor,
     reviewEditorSessionKey,
-    reviewThreadsByFile,
     scrollToFileCommentsSection,
     selectedBaseSha,
     selectedPatch,
@@ -1313,27 +1312,28 @@ function PatchFileDiffItem({
     handleSubmitDraftComment,
     handleSubmitDraftCommentNow,
   } = usePatchFileDiffItemContext();
-  const reviewEditorSession = useReviewCommentEditorStore((state) =>
-    getReviewCommentEditorSessionState(state, reviewEditorSessionKey),
-  );
+  const normalizedFilePath = normalizePath(fileDiff.name);
   const openNewEditor = useReviewCommentEditorStore((state) => state.openNewEditor);
   const setEditorBody = useReviewCommentEditorStore((state) => state.setEditorBody);
   const setEditorCursorPosition = useReviewCommentEditorStore(
     (state) => state.setEditorCursorPosition,
   );
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
-  const newCommentEditors = useMemo(
-    () =>
-      reviewEditorSession.editorOrder
+  const newCommentEditors = useReviewCommentEditorStore(
+    useShallow((state) => {
+      const reviewEditorSession = getReviewCommentEditorSessionState(state, reviewEditorSessionKey);
+      return reviewEditorSession.editorOrder
         .map((editorId) => reviewEditorSession.editorsById[editorId])
         .filter(
           (editor): editor is ReviewCommentEditorState =>
-            editor != null && editor.kind === 'new' && editor.target != null,
-        ),
-    [reviewEditorSession],
+            editor != null &&
+            editor.kind === 'new' &&
+            editor.target != null &&
+            editor.target.type !== 'global' &&
+            normalizePath(editor.target.path) === normalizedFilePath,
+        );
+    }),
   );
-  const fileReviewThreads = getFileReviewThreadsForPath(reviewThreadsByFile, fileDiff.name);
-  const fileQualityFindings = getFileQualityFindings(qualityFindingsByFile, fileDiff.name);
   const {
     codeFontFamily,
     codeFontSizePx,
@@ -1342,7 +1342,6 @@ function PatchFileDiffItem({
     ligatureFontFeatures,
     virtualFileMetrics,
   } = useCodeAppearance();
-  const normalizedFilePath = normalizePath(fileDiff.name);
   const inactiveFileCommentsExpanded = isInactiveFileCommentsExpanded(normalizedFilePath);
   const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
   const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
@@ -1573,6 +1572,7 @@ function PatchFileDiffItem({
           <ReviewThreadCard
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
+            defaultReviewEditorMode={defaultReviewEditorMode}
             deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
@@ -1606,6 +1606,7 @@ function PatchFileDiffItem({
                   <ReviewThreadCard
                     key={getReviewThreadRefKey(thread)}
                     containerRef={(node) => registerThreadAnchor(thread, node)}
+                    defaultReviewEditorMode={defaultReviewEditorMode}
                     deletingCommentIds={deletingCommentIds}
                     patchViewerSessionKey={patchViewerSessionKey}
                     resolvingThreadId={resolvingThreadId}
@@ -1797,6 +1798,7 @@ function PatchFileDiffItem({
         compact
         containerRef={(node) => registerThreadAnchor(threadAnnotation.thread, node)}
         defaultCollapsed={threadAnnotation.defaultCollapsed}
+        defaultReviewEditorMode={defaultReviewEditorMode}
         deletingCommentIds={deletingCommentIds}
         patchViewerSessionKey={patchViewerSessionKey}
         resolvingThreadId={resolvingThreadId}
@@ -1924,13 +1926,7 @@ function PatchFileDiffItem({
       data-file-path={fileDiff.name}
       ref={(node) => diffNavigator.registerDiffNode(fileDiff.name, node)}
     >
-      {lineAnnotations.length > 0 ? (
-        <VirtualizerContext.Provider value={undefined}>
-          {fileDiffElement}
-        </VirtualizerContext.Provider>
-      ) : (
-        fileDiffElement
-      )}
+      {fileDiffElement}
       {fileCommentsPortalHost
         ? createPortal(
             <div className="bg-white px-4 pb-3 dark:bg-surface">{renderFileCommentsContent()}</div>,
@@ -1940,7 +1936,7 @@ function PatchFileDiffItem({
       <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-[4]" />
     </div>
   );
-}
+});
 
 function PatchViewerMain({
   selectedPrKey,
@@ -2023,6 +2019,7 @@ function PatchViewerMain({
     ? `global-comments-editor-root-${selectedPatch.number}`
     : 'global-comments-editor-root-idle';
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
+  const reviewThreadsRef = useRef(reviewThreads);
   const hasSelection = selectedPrKey !== null;
   const navigationIntent = usePatchViewerStore(
     (state) => getPatchViewerSessionState(state, patchViewerSessionKey).navigationIntent,
@@ -2500,57 +2497,129 @@ function PatchViewerMain({
     navigator.actions.notifyDiffContentChanged();
   }, [navigator.actions, parsedPatch.fileDiffs, qualityFindingsByFile, reviewThreadsByFile]);
 
-  async function handleSubmitDraftComment(editorId: string, body: string) {
-    const editor = getReviewCommentEditorSessionState(
-      useReviewCommentEditorStore.getState(),
+  useEffect(() => {
+    reviewThreadsRef.current = reviewThreads;
+  }, [reviewThreads]);
+
+  const handleSubmitDraftComment = useCallback(
+    async (editorId: string, body: string) => {
+      const editor = getReviewCommentEditorSessionState(
+        useReviewCommentEditorStore.getState(),
+        reviewEditorSessionKey,
+      ).editorsById[editorId];
+      const target = editor?.target;
+      if (!selectedPatch || !target) {
+        return;
+      }
+
+      setEditorSubmitting(reviewEditorSessionKey, editorId, true);
+      setEditorError(reviewEditorSessionKey, editorId, '');
+
+      try {
+        if (target.type === 'global' && selectedProvider === 'github') {
+          await createCommentMutation.mutateAsync({
+            providerId: selectedPatch.providerId,
+            repoKey: selectedPatch.repoKey,
+            number: selectedPatch.number,
+            body,
+            path: '',
+            oldPath: '',
+            newPath: '',
+            line: null,
+            side: null,
+            oldLine: null,
+            newLine: null,
+            startLine: null,
+            startSide: null,
+            startOldLine: null,
+            startNewLine: null,
+            subjectType: 'global',
+          });
+        } else if (target.type === 'global') {
+          await createPendingGlobalMutation.mutateAsync({
+            providerId: selectedPatch.providerId,
+            repoKey: selectedPatch.repoKey,
+            number: selectedPatch.number,
+            headSha: selectedPatch.headSha,
+            body,
+          });
+        } else {
+          await createPendingThreadMutation.mutateAsync({
+            providerId: selectedPatch.providerId,
+            repoKey: selectedPatch.repoKey,
+            number: selectedPatch.number,
+            headSha: selectedPatch.headSha,
+            body,
+            path: target.path,
+            oldPath: target.type === 'file' ? target.oldPath : target.path,
+            newPath: target.type === 'file' ? target.newPath : target.path,
+            line: target.type === 'line' ? target.line : null,
+            side: target.type === 'line' ? target.side : null,
+            oldLine: target.type === 'line' ? target.oldLine : null,
+            newLine: target.type === 'line' ? target.newLine : null,
+            startLine: target.type === 'line' ? target.startLine : null,
+            startSide: target.type === 'line' ? target.startSide : null,
+            startOldLine: target.type === 'line' ? target.startOldLine : null,
+            startNewLine: target.type === 'line' ? target.startNewLine : null,
+            subjectType: target.type,
+          });
+        }
+        closeEditor(reviewEditorSessionKey, editorId);
+      } catch (error) {
+        setEditorError(
+          reviewEditorSessionKey,
+          editorId,
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        if (
+          getReviewCommentEditorSessionState(
+            useReviewCommentEditorStore.getState(),
+            reviewEditorSessionKey,
+          ).editorsById[editorId]
+        ) {
+          setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+        }
+      }
+    },
+    [
+      closeEditor,
+      createCommentMutation,
+      createPendingGlobalMutation,
+      createPendingThreadMutation,
       reviewEditorSessionKey,
-    ).editorsById[editorId];
-    const target = editor?.target;
-    if (!selectedPatch || !target) {
-      return;
-    }
+      selectedPatch,
+      selectedProvider,
+      setEditorError,
+      setEditorSubmitting,
+    ],
+  );
 
-    setEditorSubmitting(reviewEditorSessionKey, editorId, true);
-    setEditorError(reviewEditorSessionKey, editorId, '');
+  const handleSubmitDraftCommentNow = useCallback(
+    async (editorId: string, body: string) => {
+      const editor = getReviewCommentEditorSessionState(
+        useReviewCommentEditorStore.getState(),
+        reviewEditorSessionKey,
+      ).editorsById[editorId];
+      const target = editor?.target;
+      if (!selectedPatch || !target) {
+        return;
+      }
 
-    try {
-      if (target.type === 'global' && selectedProvider === 'github') {
+      setEditorSubmitting(reviewEditorSessionKey, editorId, true);
+      setEditorError(reviewEditorSessionKey, editorId, '');
+
+      try {
         await createCommentMutation.mutateAsync({
           providerId: selectedPatch.providerId,
           repoKey: selectedPatch.repoKey,
           number: selectedPatch.number,
           body,
-          path: '',
-          oldPath: '',
-          newPath: '',
-          line: null,
-          side: null,
-          oldLine: null,
-          newLine: null,
-          startLine: null,
-          startSide: null,
-          startOldLine: null,
-          startNewLine: null,
-          subjectType: 'global',
-        });
-      } else if (target.type === 'global') {
-        await createPendingGlobalMutation.mutateAsync({
-          providerId: selectedPatch.providerId,
-          repoKey: selectedPatch.repoKey,
-          number: selectedPatch.number,
-          headSha: selectedPatch.headSha,
-          body,
-        });
-      } else {
-        await createPendingThreadMutation.mutateAsync({
-          providerId: selectedPatch.providerId,
-          repoKey: selectedPatch.repoKey,
-          number: selectedPatch.number,
-          headSha: selectedPatch.headSha,
-          body,
-          path: target.path,
-          oldPath: target.type === 'file' ? target.oldPath : target.path,
-          newPath: target.type === 'file' ? target.newPath : target.path,
+          path: target.type === 'global' ? '' : target.path,
+          oldPath:
+            target.type === 'file' ? target.oldPath : target.type === 'line' ? target.path : '',
+          newPath:
+            target.type === 'file' ? target.newPath : target.type === 'line' ? target.path : '',
           line: target.type === 'line' ? target.line : null,
           side: target.type === 'line' ? target.side : null,
           oldLine: target.type === 'line' ? target.oldLine : null,
@@ -2561,86 +2630,95 @@ function PatchViewerMain({
           startNewLine: target.type === 'line' ? target.startNewLine : null,
           subjectType: target.type,
         });
-      }
-      closeEditor(reviewEditorSessionKey, editorId);
-    } catch (error) {
-      setEditorError(
-        reviewEditorSessionKey,
-        editorId,
-        error instanceof Error ? error.message : String(error),
-      );
-    } finally {
-      if (
-        getReviewCommentEditorSessionState(
-          useReviewCommentEditorStore.getState(),
+        closeEditor(reviewEditorSessionKey, editorId);
+      } catch (error) {
+        setEditorError(
           reviewEditorSessionKey,
-        ).editorsById[editorId]
-      ) {
-        setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+          editorId,
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        if (
+          getReviewCommentEditorSessionState(
+            useReviewCommentEditorStore.getState(),
+            reviewEditorSessionKey,
+          ).editorsById[editorId]
+        ) {
+          setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+        }
       }
-    }
-  }
-
-  async function handleSubmitDraftCommentNow(editorId: string, body: string) {
-    const editor = getReviewCommentEditorSessionState(
-      useReviewCommentEditorStore.getState(),
+    },
+    [
+      closeEditor,
+      createCommentMutation,
       reviewEditorSessionKey,
-    ).editorsById[editorId];
-    const target = editor?.target;
-    if (!selectedPatch || !target) {
-      return;
-    }
+      selectedPatch,
+      setEditorError,
+      setEditorSubmitting,
+    ],
+  );
 
-    setEditorSubmitting(reviewEditorSessionKey, editorId, true);
-    setEditorError(reviewEditorSessionKey, editorId, '');
+  const handleReplyToThread = useCallback(
+    async (thread: ReviewThread, body: string) => {
+      if (!selectedPatch) {
+        return;
+      }
 
-    try {
-      await createCommentMutation.mutateAsync({
+      if (isGlobalReviewThread(thread)) {
+        if (selectedProvider !== 'gitlab') {
+          await createCommentMutation.mutateAsync({
+            providerId: selectedPatch.providerId,
+            repoKey: selectedPatch.repoKey,
+            number: selectedPatch.number,
+            body,
+            path: '',
+            oldPath: '',
+            newPath: '',
+            line: null,
+            side: null,
+            oldLine: null,
+            newLine: null,
+            startLine: null,
+            startSide: null,
+            startOldLine: null,
+            startNewLine: null,
+            subjectType: 'global',
+          });
+          return;
+        } else if (!thread.id || thread.isPending) {
+          throw new Error('This thread cannot be replied to from the app.');
+        }
+      }
+
+      if (!thread.id || thread.isPending) {
+        throw new Error('This thread cannot be replied to from the app.');
+      }
+
+      await createPendingReplyMutation.mutateAsync({
         providerId: selectedPatch.providerId,
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
+        headSha: selectedPatch.headSha,
+        threadId: thread.id,
         body,
-        path: target.type === 'global' ? '' : target.path,
-        oldPath:
-          target.type === 'file' ? target.oldPath : target.type === 'line' ? target.path : '',
-        newPath:
-          target.type === 'file' ? target.newPath : target.type === 'line' ? target.path : '',
-        line: target.type === 'line' ? target.line : null,
-        side: target.type === 'line' ? target.side : null,
-        oldLine: target.type === 'line' ? target.oldLine : null,
-        newLine: target.type === 'line' ? target.newLine : null,
-        startLine: target.type === 'line' ? target.startLine : null,
-        startSide: target.type === 'line' ? target.startSide : null,
-        startOldLine: target.type === 'line' ? target.startOldLine : null,
-        startNewLine: target.type === 'line' ? target.startNewLine : null,
-        subjectType: target.type,
+        path: thread.path,
+        line: thread.line,
+        side: thread.side,
+        startLine: thread.startLine,
+        startSide: thread.startSide,
+        subjectType: thread.subjectType ?? 'global',
       });
-      closeEditor(reviewEditorSessionKey, editorId);
-    } catch (error) {
-      setEditorError(
-        reviewEditorSessionKey,
-        editorId,
-        error instanceof Error ? error.message : String(error),
-      );
-    } finally {
-      if (
-        getReviewCommentEditorSessionState(
-          useReviewCommentEditorStore.getState(),
-          reviewEditorSessionKey,
-        ).editorsById[editorId]
-      ) {
-        setEditorSubmitting(reviewEditorSessionKey, editorId, false);
+    },
+    [createCommentMutation, createPendingReplyMutation, selectedPatch, selectedProvider],
+  );
+
+  const handleReplyToThreadNow = useCallback(
+    async (thread: ReviewThread, body: string) => {
+      if (!selectedPatch) {
+        return;
       }
-    }
-  }
 
-  async function handleReplyToThread(thread: ReviewThread, body: string) {
-    if (!selectedPatch) {
-      return;
-    }
-
-    if (isGlobalReviewThread(thread)) {
-      if (selectedProvider !== 'gitlab') {
+      if (isGlobalReviewThread(thread)) {
         await createCommentMutation.mutateAsync({
           providerId: selectedPatch.providerId,
           repoKey: selectedPatch.repoKey,
@@ -2660,208 +2738,172 @@ function PatchViewerMain({
           subjectType: 'global',
         });
         return;
-      } else if (!thread.id || thread.isPending) {
-        throw new Error('This thread cannot be replied to from the app.');
       }
-    }
 
-    if (!thread.id || thread.isPending) {
-      throw new Error('This thread cannot be replied to from the app.');
-    }
+      if (!thread.id || thread.isPending) {
+        return;
+      }
 
-    await createPendingReplyMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      headSha: selectedPatch.headSha,
-      threadId: thread.id,
-      body,
-      path: thread.path,
-      line: thread.line,
-      side: thread.side,
-      startLine: thread.startLine,
-      startSide: thread.startSide,
-      subjectType: thread.subjectType ?? 'global',
-    });
-  }
-
-  async function handleReplyToThreadNow(thread: ReviewThread, body: string) {
-    if (!selectedPatch) {
-      return;
-    }
-
-    if (isGlobalReviewThread(thread)) {
-      await createCommentMutation.mutateAsync({
-        providerId: selectedPatch.providerId,
-        repoKey: selectedPatch.repoKey,
-        number: selectedPatch.number,
-        body,
-        path: '',
-        oldPath: '',
-        newPath: '',
-        line: null,
-        side: null,
-        oldLine: null,
-        newLine: null,
-        startLine: null,
-        startSide: null,
-        startOldLine: null,
-        startNewLine: null,
-        subjectType: 'global',
-      });
-      return;
-    }
-
-    if (!thread.id || thread.isPending) {
-      return;
-    }
-
-    await replyCommentMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      threadId: thread.id,
-      body,
-    });
-  }
-
-  async function handleEditComment(comment: ReviewComment, body: string) {
-    if (!selectedPatch || !comment.id) {
-      throw new Error('This comment cannot be edited from the app.');
-    }
-
-    const pendingCommentId = getPendingCommentId(comment);
-    if (pendingCommentId !== null) {
-      await updatePendingCommentMutation.mutateAsync({
-        providerId: selectedPatch.providerId,
-        repoKey: selectedPatch.repoKey,
-        number: selectedPatch.number,
-        headSha: selectedPatch.headSha,
-        pendingCommentId,
-        body,
-      });
-      return;
-    }
-    const parentThread = reviewThreads.find((thread) =>
-      thread.comments.some((item) => item.id === comment.id),
-    );
-    if (!parentThread?.id) {
-      throw new Error('This comment cannot be edited from the app.');
-    }
-
-    await updateCommentMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      threadId: parentThread.id,
-      commentId: comment.id,
-      body,
-      subjectType: isGlobalReviewThread(parentThread)
-        ? 'global'
-        : isFileReviewThread(parentThread)
-          ? 'file'
-          : 'line',
-    });
-  }
-
-  async function handleDeletePendingComment(comment: ReviewComment) {
-    if (!selectedPatch) {
-      return;
-    }
-    const pendingCommentId = getPendingCommentId(comment);
-    if (pendingCommentId === null) {
-      throw new Error('This comment is not pending.');
-    }
-    const deletingCommentId = comment.id;
-    setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
-
-    try {
-      await deletePendingCommentMutation.mutateAsync({
-        providerId: selectedPatch.providerId,
-        repoKey: selectedPatch.repoKey,
-        number: selectedPatch.number,
-        headSha: selectedPatch.headSha,
-        pendingCommentId,
-      });
-    } finally {
-      setDeletingCommentIds((current) => {
-        const next = new Set(current);
-        next.delete(deletingCommentId);
-        return next;
-      });
-    }
-  }
-
-  async function handleSetThreadResolved(thread: ReviewThread, isResolved: boolean) {
-    if (!selectedPatch || !thread.id || thread.isPending || thread.canResolve === false) {
-      throw new Error('This thread cannot be updated from the app.');
-    }
-
-    await setResolvedMutation.mutateAsync({
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      threadId: thread.id,
-      isResolved,
-    });
-  }
-
-  async function handleDeleteComment(thread: ReviewThread, comment: ReviewComment) {
-    if (!selectedPatch || !comment.id) {
-      throw new Error('This comment cannot be deleted from the app.');
-    }
-
-    if (comment.isPending) {
-      await handleDeletePendingComment(comment);
-      return;
-    }
-
-    if (!thread.id && !isGlobalReviewThread(thread)) {
-      throw new Error('This comment cannot be deleted from the app.');
-    }
-
-    const deletingCommentId = comment.id;
-    setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
-
-    try {
-      await deleteCommentMutation.mutateAsync({
+      await replyCommentMutation.mutateAsync({
         providerId: selectedPatch.providerId,
         repoKey: selectedPatch.repoKey,
         number: selectedPatch.number,
         threadId: thread.id,
+        body,
+      });
+    },
+    [createCommentMutation, replyCommentMutation, selectedPatch],
+  );
+
+  const handleEditComment = useCallback(
+    async (comment: ReviewComment, body: string) => {
+      if (!selectedPatch || !comment.id) {
+        throw new Error('This comment cannot be edited from the app.');
+      }
+
+      const pendingCommentId = getPendingCommentId(comment);
+      if (pendingCommentId !== null) {
+        await updatePendingCommentMutation.mutateAsync({
+          providerId: selectedPatch.providerId,
+          repoKey: selectedPatch.repoKey,
+          number: selectedPatch.number,
+          headSha: selectedPatch.headSha,
+          pendingCommentId,
+          body,
+        });
+        return;
+      }
+      const parentThread = reviewThreadsRef.current.find((thread) =>
+        thread.comments.some((item) => item.id === comment.id),
+      );
+      if (!parentThread?.id) {
+        throw new Error('This comment cannot be edited from the app.');
+      }
+
+      await updateCommentMutation.mutateAsync({
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        threadId: parentThread.id,
         commentId: comment.id,
-        subjectType: isGlobalReviewThread(thread)
+        body,
+        subjectType: isGlobalReviewThread(parentThread)
           ? 'global'
-          : isFileReviewThread(thread)
+          : isFileReviewThread(parentThread)
             ? 'file'
             : 'line',
       });
-    } finally {
-      setDeletingCommentIds((current) => {
-        const next = new Set(current);
-        next.delete(deletingCommentId);
-        return next;
+    },
+    [selectedPatch, updateCommentMutation, updatePendingCommentMutation],
+  );
+
+  const handleDeletePendingComment = useCallback(
+    async (comment: ReviewComment) => {
+      if (!selectedPatch) {
+        return;
+      }
+      const pendingCommentId = getPendingCommentId(comment);
+      if (pendingCommentId === null) {
+        throw new Error('This comment is not pending.');
+      }
+      const deletingCommentId = comment.id;
+      setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
+
+      try {
+        await deletePendingCommentMutation.mutateAsync({
+          providerId: selectedPatch.providerId,
+          repoKey: selectedPatch.repoKey,
+          number: selectedPatch.number,
+          headSha: selectedPatch.headSha,
+          pendingCommentId,
+        });
+      } finally {
+        setDeletingCommentIds((current) => {
+          const next = new Set(current);
+          next.delete(deletingCommentId);
+          return next;
+        });
+      }
+    },
+    [deletePendingCommentMutation, selectedPatch],
+  );
+
+  const handleSetThreadResolved = useCallback(
+    async (thread: ReviewThread, isResolved: boolean) => {
+      if (!selectedPatch || !thread.id || thread.isPending || thread.canResolve === false) {
+        throw new Error('This thread cannot be updated from the app.');
+      }
+
+      await setResolvedMutation.mutateAsync({
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        threadId: thread.id,
+        isResolved,
       });
-    }
-  }
+    },
+    [selectedPatch, setResolvedMutation],
+  );
 
-  async function handlePublishPendingReview(
-    action: PendingReviewSubmitAction = 'comment',
-    summary = '',
-  ) {
-    if (!selectedPatch) return;
-    await publishPendingReviewMutation.mutateAsync({
-      action,
-      headSha: selectedPatch.headSha,
-      providerId: selectedPatch.providerId,
-      repoKey: selectedPatch.repoKey,
-      number: selectedPatch.number,
-      summary,
-    });
-    resetPendingReviewInput(patchViewerSessionKey);
-  }
+  const handleDeleteComment = useCallback(
+    async (thread: ReviewThread, comment: ReviewComment) => {
+      if (!selectedPatch || !comment.id) {
+        throw new Error('This comment cannot be deleted from the app.');
+      }
 
-  async function handleDiscardPendingReview() {
+      if (comment.isPending) {
+        await handleDeletePendingComment(comment);
+        return;
+      }
+
+      if (!thread.id && !isGlobalReviewThread(thread)) {
+        throw new Error('This comment cannot be deleted from the app.');
+      }
+
+      const deletingCommentId = comment.id;
+      setDeletingCommentIds((current) => new Set(current).add(deletingCommentId));
+
+      try {
+        await deleteCommentMutation.mutateAsync({
+          providerId: selectedPatch.providerId,
+          repoKey: selectedPatch.repoKey,
+          number: selectedPatch.number,
+          threadId: thread.id,
+          commentId: comment.id,
+          subjectType: isGlobalReviewThread(thread)
+            ? 'global'
+            : isFileReviewThread(thread)
+              ? 'file'
+              : 'line',
+        });
+      } finally {
+        setDeletingCommentIds((current) => {
+          const next = new Set(current);
+          next.delete(deletingCommentId);
+          return next;
+        });
+      }
+    },
+    [deleteCommentMutation, handleDeletePendingComment, selectedPatch],
+  );
+
+  const handlePublishPendingReview = useCallback(
+    async (action: PendingReviewSubmitAction = 'comment', summary = '') => {
+      if (!selectedPatch) return;
+      await publishPendingReviewMutation.mutateAsync({
+        action,
+        headSha: selectedPatch.headSha,
+        providerId: selectedPatch.providerId,
+        repoKey: selectedPatch.repoKey,
+        number: selectedPatch.number,
+        summary,
+      });
+      resetPendingReviewInput(patchViewerSessionKey);
+    },
+    [patchViewerSessionKey, publishPendingReviewMutation, resetPendingReviewInput, selectedPatch],
+  );
+
+  const handleDiscardPendingReview = useCallback(async () => {
     if (!selectedPatch) return;
     await discardPendingReviewMutation.mutateAsync({
       headSha: selectedPatch.headSha,
@@ -2869,10 +2911,66 @@ function PatchViewerMain({
       repoKey: selectedPatch.repoKey,
       number: selectedPatch.number,
     });
-  }
+  }, [discardPendingReviewMutation, selectedPatch]);
 
   const pendingReviewCount = pendingReview.comments.length;
   const { canApprove, canRequestChanges } = readReviewCapabilities(selectedPullRequestSummary);
+  const patchFileDiffItemContextValue = useMemo<PatchFileDiffItemContextValue>(
+    () => ({
+      defaultReviewEditorMode,
+      deletingCommentIds,
+      patchViewerSessionKey,
+      resolvingThreadId,
+      diffNavigator: navigator.diff,
+      isInactiveFileCommentsExpanded,
+      parsedFileDiffs: parsedPatch.fileDiffs,
+      registerFileCommentsSection,
+      registerThreadAnchor,
+      reviewEditorSessionKey,
+      scrollToFileCommentsSection,
+      selectedBaseSha,
+      selectedPatch: selectedPatch as SelectedPatch,
+      selectedProvider,
+      setInactiveFileCommentsExpanded,
+      viewerLogin,
+      handleDeletePendingComment,
+      handleDeleteComment,
+      handleEditComment,
+      handleFileDiffPostRender,
+      handleReplyToThread,
+      handleReplyToThreadNow,
+      handleSetThreadResolved,
+      handleSubmitDraftComment,
+      handleSubmitDraftCommentNow,
+    }),
+    [
+      defaultReviewEditorMode,
+      deletingCommentIds,
+      handleDeleteComment,
+      handleDeletePendingComment,
+      handleEditComment,
+      handleFileDiffPostRender,
+      handleReplyToThread,
+      handleReplyToThreadNow,
+      handleSetThreadResolved,
+      handleSubmitDraftComment,
+      handleSubmitDraftCommentNow,
+      isInactiveFileCommentsExpanded,
+      navigator.diff,
+      parsedPatch.fileDiffs,
+      patchViewerSessionKey,
+      registerFileCommentsSection,
+      registerThreadAnchor,
+      resolvingThreadId,
+      reviewEditorSessionKey,
+      scrollToFileCommentsSection,
+      selectedBaseSha,
+      selectedPatch,
+      selectedProvider,
+      setInactiveFileCommentsExpanded,
+      viewerLogin,
+    ],
+  );
 
   if (!hasSelection) {
     return (
@@ -2951,37 +3049,7 @@ function PatchViewerMain({
                 ) : null}
 
                 {!isPatchLoading && !patchError && selectedPatch ? (
-                  <PatchFileDiffItemContext.Provider
-                    value={{
-                      defaultReviewEditorMode,
-                      deletingCommentIds,
-                      patchViewerSessionKey,
-                      resolvingThreadId,
-                      diffNavigator: navigator.diff,
-                      isInactiveFileCommentsExpanded,
-                      parsedFileDiffs: parsedPatch.fileDiffs,
-                      qualityFindingsByFile,
-                      registerFileCommentsSection,
-                      registerThreadAnchor,
-                      reviewEditorSessionKey,
-                      reviewThreadsByFile,
-                      scrollToFileCommentsSection,
-                      selectedBaseSha,
-                      selectedPatch,
-                      selectedProvider,
-                      setInactiveFileCommentsExpanded,
-                      handleDeleteComment,
-                      viewerLogin,
-                      handleDeletePendingComment,
-                      handleEditComment,
-                      handleFileDiffPostRender,
-                      handleReplyToThread,
-                      handleReplyToThreadNow,
-                      handleSetThreadResolved,
-                      handleSubmitDraftComment,
-                      handleSubmitDraftCommentNow,
-                    }}
-                  >
+                  <PatchFileDiffItemContext.Provider value={patchFileDiffItemContextValue}>
                     <div className="grow flex flex-col bg-white dark:bg-surface">
                       <GlobalCommentsSection
                         defaultReviewEditorMode={defaultReviewEditorMode}
@@ -3027,13 +3095,26 @@ function PatchViewerMain({
                           No diff content.
                         </div>
                       ) : (
-                        parsedPatch.fileDiffs.map((fileDiff, fileIndex) => (
-                          <PatchFileDiffItem
-                            fileDiff={fileDiff}
-                            fileIndex={fileIndex}
-                            key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
-                          />
-                        ))
+                        parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
+                          const fileReviewThreads = getFileReviewThreadsForPath(
+                            reviewThreadsByFile,
+                            fileDiff.name,
+                          );
+                          const fileQualityFindings = getFileQualityFindings(
+                            qualityFindingsByFile,
+                            fileDiff.name,
+                          );
+
+                          return (
+                            <PatchFileDiffItem
+                              fileDiff={fileDiff}
+                              fileIndex={fileIndex}
+                              fileQualityFindings={fileQualityFindings}
+                              fileReviewThreads={fileReviewThreads}
+                              key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
+                            />
+                          );
+                        })
                       )}
 
                       <div className="grow" />
