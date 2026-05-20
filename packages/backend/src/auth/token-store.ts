@@ -1,8 +1,9 @@
-import { asc, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { Effect, Layer } from 'effect';
+import { randomUUID } from 'node:crypto';
 import { EncryptionService } from './encryption.ts';
 import { DatabaseService } from '../db/client.ts';
-import { authTokens } from '../db/schema.ts';
+import { authTokens, providerProfiles } from '../db/schema.ts';
 import { normalizeHost } from '../repo-id.ts';
 import type { ForgeProviderKind, ProviderAccount } from '@code-review-app/shared';
 
@@ -29,6 +30,7 @@ type AuthTokenStoreShape = {
 class AuthTokenStore extends Effect.Tag('AuthTokenStore')<AuthTokenStore, AuthTokenStoreShape>() {}
 
 type AuthTokenRow = typeof authTokens.$inferSelect;
+type ProviderProfileRow = typeof providerProfiles.$inferSelect;
 
 function parseScopes(value: string) {
   try {
@@ -41,15 +43,15 @@ function parseScopes(value: string) {
   }
 }
 
-function rowToProviderAccount(row: AuthTokenRow): ProviderAccount {
-  const host = normalizeHost(row.host);
+function rowToProviderAccount(row: AuthTokenRow, profile: ProviderProfileRow): ProviderAccount {
+  const host = normalizeHost(profile.host);
   return {
     id: row.accountId,
-    provider: row.provider as ForgeProviderKind,
+    provider: profile.provider as ForgeProviderKind,
     host,
     clientId: row.clientId,
-    viewerLogin: row.viewerLogin,
-    label: row.viewerLogin ? `${row.viewerLogin} @ ${host}` : host,
+    viewerLogin: profile.login,
+    label: profile.login ? `${profile.login} @ ${host}` : host,
     createdAt: row.createdAt,
   };
 }
@@ -61,30 +63,35 @@ const makeAuthTokenStore = Effect.gen(function* () {
   const get: AuthTokenStoreShape['get'] = Effect.fn('AuthTokenStore.get')(function* (accountId) {
     const row = yield* database.query(async (db) => {
       const [record] = await db
-        .select()
+        .select({
+          token: authTokens,
+          profile: providerProfiles,
+        })
         .from(authTokens)
+        .innerJoin(providerProfiles, eq(providerProfiles.accountId, authTokens.accountId))
         .where(eq(authTokens.accountId, accountId))
         .limit(1);
       return record ?? null;
     });
     if (!row) return null;
 
-    const accessToken = yield* encryption.decryptString(row.accessToken);
-    const refreshToken = row.refreshToken
-      ? yield* encryption.decryptString(row.refreshToken)
+    const accessToken = yield* encryption.decryptString(row.token.accessToken);
+    const refreshToken = row.token.refreshToken
+      ? yield* encryption.decryptString(row.token.refreshToken)
       : null;
+    const host = normalizeHost(row.profile.host);
 
     return {
-      id: row.accountId,
-      provider: row.provider as ForgeProviderKind,
-      host: normalizeHost(row.host),
-      clientId: row.clientId,
+      id: row.token.accountId,
+      provider: row.profile.provider as ForgeProviderKind,
+      host,
+      clientId: row.token.clientId,
       accessToken,
       refreshToken,
-      expiresAt: row.expiresAt,
-      scopes: parseScopes(row.scopesJson),
-      viewerLogin: row.viewerLogin,
-      createdAt: row.createdAt,
+      expiresAt: row.token.expiresAt,
+      scopes: parseScopes(row.token.scopesJson),
+      viewerLogin: row.profile.login,
+      createdAt: row.token.createdAt,
     };
   });
 
@@ -92,8 +99,15 @@ const makeAuthTokenStore = Effect.gen(function* () {
     'AuthTokenStore.listAccounts',
   )(() =>
     database.query(async (db) => {
-      const rows = await db.select().from(authTokens).orderBy(asc(authTokens.createdAt));
-      return rows.map(rowToProviderAccount);
+      const rows = await db
+        .select({
+          token: authTokens,
+          profile: providerProfiles,
+        })
+        .from(authTokens)
+        .innerJoin(providerProfiles, eq(providerProfiles.accountId, authTokens.accountId))
+        .orderBy(authTokens.createdAt);
+      return rows.map((row) => rowToProviderAccount(row.token, row.profile));
     }),
   );
 
@@ -107,31 +121,45 @@ const makeAuthTokenStore = Effect.gen(function* () {
     const timestamp = Math.floor(Date.now() / 1000);
     yield* database.transaction(async (tx) => {
       await tx
-        .insert(authTokens)
+        .insert(providerProfiles)
         .values({
           accountId: token.id,
           provider: token.provider,
           host: normalizedHost,
+          login: token.viewerLogin,
+          isEnabled: true,
+          updatedAt: timestamp,
+        })
+        .onConflictDoUpdate({
+          target: providerProfiles.accountId,
+          set: {
+            provider: token.provider,
+            host: normalizedHost,
+            login: token.viewerLogin,
+            updatedAt: timestamp,
+          },
+        });
+      await tx
+        .insert(authTokens)
+        .values({
+          id: randomUUID(),
+          accountId: token.id,
           clientId: token.clientId,
           accessToken,
           refreshToken,
           expiresAt: token.expiresAt,
           scopesJson,
-          viewerLogin: token.viewerLogin,
           createdAt: token.createdAt,
           updatedAt: timestamp,
         })
         .onConflictDoUpdate({
           target: authTokens.accountId,
           set: {
-            provider: token.provider,
-            host: normalizedHost,
             clientId: token.clientId,
             accessToken,
             refreshToken,
             expiresAt: token.expiresAt,
             scopesJson,
-            viewerLogin: token.viewerLogin,
             updatedAt: timestamp,
           },
         });

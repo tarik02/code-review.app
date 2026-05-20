@@ -32,6 +32,7 @@ describe('dedupeOverviewPullRequestEntries', () => {
           updatedAt: '2026-04-28T10:00:00.000Z',
           headSha: 'aaa',
           baseSha: null,
+          url: 'https://github.com/acme/app/pull/42',
         },
       },
       {
@@ -62,6 +63,7 @@ describe('dedupeOverviewPullRequestEntries', () => {
           updatedAt: '2026-04-29T10:00:00.000Z',
           headSha: 'bbb',
           baseSha: null,
+          url: 'https://github.com/acme/app/pull/42',
         },
       },
     ]);

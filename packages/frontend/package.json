@@ -49,6 +49,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-intersection-observer": "catalog:",
+    "react-resizable-panels": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:",

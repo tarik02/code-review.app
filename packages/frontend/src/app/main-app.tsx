@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useWorkerPool } from '@pierre/diffs/react';
 import type { GitStatusEntry } from '@pierre/trees';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { RepoSidebar, type SidebarPullRequestView } from '../components/ui/repo-sidebar';
 import { HomeCommandPalettes } from '../command-palette/CommandPalette';
 import { PatchViewerMain } from '../components/ui/patch-viewer-main';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable';
 import {
   getErrorMessage,
   useDataSourcePullRequests,
@@ -54,6 +56,10 @@ import type {
   TrackedPullRequestOrderEntry,
 } from '../types/forge';
 
+const REPO_SIDEBAR_DEFAULT_SIZE = '360px';
+const REPO_SIDEBAR_MIN_SIZE = '300px';
+const REPO_SIDEBAR_MAX_SIZE = '620px';
+
 function isSamePullRequestEntry(
   left: OverviewPullRequestSummary,
   right: OverviewPullRequestSummary,
@@ -71,6 +77,8 @@ function MainApp() {
   const { isDark } = useTheme();
   const { diffTheme } = useCodeAppearance();
   const workerPool = useWorkerPool();
+  const repoSidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [isRepoSidebarCollapsed, setIsRepoSidebarCollapsed] = useState(false);
   const activeRepoIdentity = useMemo<RepoIdentity | null>(
     () =>
       activeRouteSearch.providerId && activeRouteSearch.repoKey
@@ -212,12 +220,7 @@ function MainApp() {
         number: activePullRequestNumber,
       });
     },
-    enabled:
-      activeRepoIdentity !== null &&
-      activePullRequestNumber !== null &&
-      activeDataSourceEntry === null &&
-      activeTrackedPullRequest === null &&
-      activeRecentEntry === null,
+    enabled: activeRepoIdentity !== null && activePullRequestNumber !== null,
     staleTime: 0,
   });
   const activeFallbackPullRequest = activeFallbackPullRequestQuery.data ?? null;
@@ -344,15 +347,16 @@ function MainApp() {
       return null;
     }
 
-    return (
+    const localPullRequest =
       commandPaletteLocalPullRequests.find(
         (entry) =>
           sameRepoIdentity(entry.repo, selectedPr) &&
           entry.pullRequest.number === selectedPr.number,
-      )?.pullRequest ??
-      activeFallbackPullRequest ??
-      null
-    );
+      )?.pullRequest ?? null;
+
+    return localPullRequest && activeFallbackPullRequest
+      ? { ...localPullRequest, ...activeFallbackPullRequest }
+      : (localPullRequest ?? activeFallbackPullRequest ?? null);
   }, [activeFallbackPullRequest, commandPaletteLocalPullRequests, selectedPr]);
   const activePinnedSidebarEntry = useMemo(() => {
     if (
@@ -831,6 +835,18 @@ function MainApp() {
     }
   }
 
+  const toggleRepoSidebar = useCallback(() => {
+    const panel = repoSidebarPanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setIsRepoSidebarCollapsed(false);
+      return;
+    }
+    panel.collapse();
+    setIsRepoSidebarCollapsed(true);
+  }, []);
+
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ id: string; label: string; onClear: () => void }> = [];
 
@@ -869,50 +885,84 @@ function MainApp() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink-900">
-      <div className="flex min-h-0 flex-1">
-        <div className="min-h-0 w-1/4 min-w-[300px] shrink-0">
-          <RepoSidebar
-            activeFilters={activeFilterChips}
-            repos={sidebarRepos}
-            repoErrors={sidebarView === 'tracked' ? trackedRepoErrors : {}}
-            dataSourcePullRequests={filteredDataSourcePullRequests}
-            recentPullRequests={filteredRecentPullRequests}
-            trackedPullRequests={filteredTrackedPullRequestEntries}
-            dataSourceErrors={dataSourceError ? [dataSourceError] : []}
-            isDataSourceLoading={isDataSourceLoading}
-            dataSourceStatusMessage={dataSourceStatusMessage}
-            dataSourcesSettings={dataSourcesSettings}
-            activeDataSource={activeDataSource}
-            providerAccounts={readyProviderAccounts}
-            pinnedEntry={activePinnedSidebarEntry}
-            view={sidebarView}
-            selectedPrKey={selectedPrKey}
-            trackedRepoCount={
-              new Set(filteredTrackedPullRequestEntries.map((entry) => repoIdentityKey(entry.repo)))
-                .size
-            }
-            trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
-            emptyState={
-              <div className="px-3 py-8 text-center text-sm text-ink-500">
-                No repos visible for the selected accounts.
-              </div>
-            }
-            onViewChange={setSidebarView}
-            onDataSourcesChange={(settings) => void handleDataSourcesChange(settings)}
-            onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
-            onTrackPr={(repo, pullRequest) => void handleTrackFromDataSource(repo, pullRequest)}
-            onRemovePr={(repo, pullRequest) =>
-              void handleRemoveTrackedPullRequest(repo, pullRequest)
-            }
-            onReorderTrackedPullRequests={(entries) =>
-              void handleReorderTrackedPullRequests(entries)
-            }
-          />
-        </div>
-        <div className="min-h-0 min-w-[30%] flex-1">
+      <ResizablePanelGroup
+        className="min-h-0 flex-1"
+        disableCursor
+        id="main-app-panels"
+        orientation="horizontal"
+        resizeTargetMinimumSize={{ fine: 16, coarse: 32 }}
+      >
+        <ResizablePanel
+          className="h-full min-h-0 min-w-0 bg-canvas"
+          collapsedSize="0px"
+          collapsible
+          defaultSize={REPO_SIDEBAR_DEFAULT_SIZE}
+          groupResizeBehavior="preserve-pixel-size"
+          id="repo-sidebar"
+          maxSize={REPO_SIDEBAR_MAX_SIZE}
+          minSize={REPO_SIDEBAR_MIN_SIZE}
+          onResize={() => {
+            setIsRepoSidebarCollapsed(repoSidebarPanelRef.current?.isCollapsed() ?? false);
+          }}
+          panelRef={repoSidebarPanelRef}
+        >
+          {isRepoSidebarCollapsed ? null : (
+            <RepoSidebar
+              activeFilters={activeFilterChips}
+              repos={sidebarRepos}
+              repoErrors={sidebarView === 'tracked' ? trackedRepoErrors : {}}
+              dataSourcePullRequests={filteredDataSourcePullRequests}
+              recentPullRequests={filteredRecentPullRequests}
+              trackedPullRequests={filteredTrackedPullRequestEntries}
+              dataSourceErrors={dataSourceError ? [dataSourceError] : []}
+              isDataSourceLoading={isDataSourceLoading}
+              dataSourceStatusMessage={dataSourceStatusMessage}
+              dataSourcesSettings={dataSourcesSettings}
+              activeDataSource={activeDataSource}
+              providerAccounts={readyProviderAccounts}
+              pinnedEntry={activePinnedSidebarEntry}
+              view={sidebarView}
+              selectedPrKey={selectedPrKey}
+              trackedRepoCount={
+                new Set(
+                  filteredTrackedPullRequestEntries.map((entry) => repoIdentityKey(entry.repo)),
+                ).size
+              }
+              trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
+              emptyState={
+                <div className="px-3 py-8 text-center text-sm text-ink-500">
+                  No repos visible for the selected accounts.
+                </div>
+              }
+              onCollapse={toggleRepoSidebar}
+              onViewChange={setSidebarView}
+              onDataSourcesChange={(settings) => void handleDataSourcesChange(settings)}
+              onSelectPr={(name, pr) => void handleSelectPr(name, pr)}
+              onTrackPr={(repo, pullRequest) => void handleTrackFromDataSource(repo, pullRequest)}
+              onRemovePr={(repo, pullRequest) =>
+                void handleRemoveTrackedPullRequest(repo, pullRequest)
+              }
+              onReorderTrackedPullRequests={(entries) =>
+                void handleReorderTrackedPullRequests(entries)
+              }
+            />
+          )}
+        </ResizablePanel>
+        <ResizableHandle
+          className={isRepoSidebarCollapsed ? 'hidden' : ''}
+          disabled={isRepoSidebarCollapsed}
+          withHandle
+        />
+        <ResizablePanel
+          className="h-full min-h-0 min-w-0"
+          groupResizeBehavior="preserve-relative-size"
+          id="review-workspace"
+          minSize="420px"
+        >
           <PatchViewerMain
             selectedPrKey={selectedPrKey}
             selectedPr={selectedPr}
+            selectedRepo={selectedRepo}
             selectedPullRequestSummary={selectedPullRequestSummary}
             selectedPatch={selectedPatch}
             selectedBaseSha={selectedPr?.baseSha ?? null}
@@ -944,9 +994,11 @@ function MainApp() {
             parsedPatch={parsedPatch}
             fileStats={fileStats}
             gitStatus={gitStatus}
+            isRepoSidebarCollapsed={isRepoSidebarCollapsed}
+            onToggleRepoSidebar={toggleRepoSidebar}
           />
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
 
       {deepLinkMessage ? (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-md border border-neutral-200 bg-surface px-3 py-2 text-sm text-ink-700 shadow-lg dark:border-neutral-700">

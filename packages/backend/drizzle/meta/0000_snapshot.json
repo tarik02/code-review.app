@@ -38,22 +38,15 @@
     "auth_tokens": {
       "name": "auth_tokens",
       "columns": {
-        "account_id": {
-          "name": "account_id",
+        "id": {
+          "name": "id",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
         },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "host": {
-          "name": "host",
+        "account_id": {
+          "name": "account_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -94,13 +87,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "viewer_login": {
-          "name": "viewer_login",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -117,10 +103,10 @@
         }
       },
       "indexes": {
-        "idx_auth_tokens_provider_host": {
-          "name": "idx_auth_tokens_provider_host",
-          "columns": ["provider", "host"],
-          "isUnique": false
+        "idx_auth_tokens_account": {
+          "name": "idx_auth_tokens_account",
+          "columns": ["account_id"],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -259,6 +245,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "host": {
+          "name": "host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "login": {
           "name": "login",
           "type": "text",
@@ -286,6 +286,11 @@
         "provider_profiles_account_id_unique": {
           "name": "provider_profiles_account_id_unique",
           "columns": ["account_id"],
+          "isUnique": true
+        },
+        "idx_provider_profiles_provider_host_login": {
+          "name": "idx_provider_profiles_provider_host_login",
+          "columns": ["provider", "host", "login"],
           "isUnique": true
         }
       },
@@ -407,6 +412,13 @@
         },
         "base_sha": {
           "name": "base_sha",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "url": {
+          "name": "url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

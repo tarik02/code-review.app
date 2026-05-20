@@ -11,19 +11,17 @@ import { sql } from 'drizzle-orm';
 export const authTokens = sqliteTable(
   'auth_tokens',
   {
-    accountId: text('account_id').primaryKey(),
-    provider: text('provider').notNull(),
-    host: text('host').notNull(),
+    id: text('id').primaryKey(),
+    accountId: text('account_id').notNull(),
     clientId: text('client_id').notNull(),
     accessToken: text('access_token').notNull(),
     refreshToken: text('refresh_token'),
     expiresAt: integer('expires_at'),
     scopesJson: text('scopes_json').notNull(),
-    viewerLogin: text('viewer_login'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },
-  (table) => [index('idx_auth_tokens_provider_host').on(table.provider, table.host)],
+  (table) => [uniqueIndex('idx_auth_tokens_account').on(table.accountId)],
 );
 
 export const repos = sqliteTable(
@@ -73,6 +71,7 @@ export const pullRequests = sqliteTable(
     updatedAt: text('updated_at').notNull(),
     headSha: text('head_sha').notNull(),
     baseSha: text('base_sha'),
+    url: text('url'),
     lastSeenAt: integer('last_seen_at').notNull(),
   },
   (table) => [
@@ -109,13 +108,25 @@ export const prChangedFilesCache = sqliteTable(
   (table) => [primaryKey({ columns: [table.repoRowId, table.prNumber, table.headSha] })],
 );
 
-export const providerProfiles = sqliteTable('provider_profiles', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  accountId: text('account_id').notNull().unique(),
-  login: text('login'),
-  isEnabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(true),
-  updatedAt: integer('updated_at').notNull(),
-});
+export const providerProfiles = sqliteTable(
+  'provider_profiles',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    accountId: text('account_id').notNull().unique(),
+    provider: text('provider').notNull(),
+    host: text('host').notNull(),
+    login: text('login'),
+    isEnabled: integer('is_enabled', { mode: 'boolean' }).notNull().default(true),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_provider_profiles_provider_host_login').on(
+      table.provider,
+      table.host,
+      table.login,
+    ),
+  ],
+);
 
 export const pullRequestDataSources = sqliteTable(
   'pull_request_data_sources',

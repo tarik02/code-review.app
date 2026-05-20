@@ -5,20 +5,18 @@ CREATE TABLE `app_settings` (
 );
 --> statement-breakpoint
 CREATE TABLE `auth_tokens` (
-	`account_id` text PRIMARY KEY NOT NULL,
-	`provider` text NOT NULL,
-	`host` text NOT NULL,
+	`id` text PRIMARY KEY NOT NULL,
+	`account_id` text NOT NULL,
 	`client_id` text NOT NULL,
 	`access_token` text NOT NULL,
 	`refresh_token` text,
 	`expires_at` integer,
 	`scopes_json` text NOT NULL,
-	`viewer_login` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `idx_auth_tokens_provider_host` ON `auth_tokens` (`provider`,`host`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_auth_tokens_account` ON `auth_tokens` (`account_id`);--> statement-breakpoint
 CREATE TABLE `pr_changed_files_cache` (
 	`repo_row_id` integer NOT NULL,
 	`pr_number` integer NOT NULL,
@@ -42,12 +40,15 @@ CREATE TABLE `pr_patch_cache` (
 CREATE TABLE `provider_profiles` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`account_id` text NOT NULL,
+	`provider` text NOT NULL,
+	`host` text NOT NULL,
 	`login` text,
 	`is_enabled` integer DEFAULT true NOT NULL,
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `provider_profiles_account_id_unique` ON `provider_profiles` (`account_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_provider_profiles_provider_host_login` ON `provider_profiles` (`provider`,`host`,`login`);--> statement-breakpoint
 CREATE TABLE `pull_requests` (
 	`repo_row_id` integer NOT NULL,
 	`pr_number` integer NOT NULL,
@@ -65,6 +66,7 @@ CREATE TABLE `pull_requests` (
 	`updated_at` text NOT NULL,
 	`head_sha` text NOT NULL,
 	`base_sha` text,
+	`url` text,
 	`last_seen_at` integer NOT NULL
 );
 --> statement-breakpoint

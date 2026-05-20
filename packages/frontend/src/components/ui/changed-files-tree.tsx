@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import type { FileStatsEntry } from '../../types/forge';
 import { TopBar } from './top-bar';
+import './changed-files-tree.css';
 
 type ChangedFilesTreeProps = {
   files: string[];
@@ -15,6 +17,7 @@ type ChangedFilesTreeProps = {
   fileStats: Map<string, FileStatsEntry> | null;
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
+  headerAction?: ReactNode;
 };
 
 function formatCount(n: number): string {
@@ -33,6 +36,7 @@ function ChangedFilesTree({
   fileStats,
   gitStatus,
   isDark,
+  headerAction,
 }: ChangedFilesTreeProps) {
   const initialExpandedPaths = useMemo(() => {
     const expandedDirs = new Set<string>();
@@ -151,22 +155,23 @@ function ChangedFilesTree({
     >
       <TopBar
         position="right"
-        className="sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface text-xs text-ink-500 cursor-grab app-region-drag flex"
+        className="changed-files-tree-header sticky top-0 z-10 shrink-0 border-b border-ink-200 bg-surface text-xs text-ink-500 cursor-grab app-region-drag flex"
       >
-        <div className="grow flex items-center justify-between px-3 py-2">
-          <p className="text-sm text-ink-900">
-            Changed files <span className="ml-2 text-ink-500">{files.length}</span>
+        <div className="changed-files-tree-header-content grid grow grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2">
+          <div className="flex min-w-0 items-center">{headerAction}</div>
+          <p className="changed-files-tree-title min-w-0 truncate text-sm text-ink-900">
+            Changed files
           </p>
-          <div className="flex items-center gap-2 font-mono font-bold">
+          <div className="changed-files-tree-stats flex min-w-0 items-center justify-end gap-2 whitespace-nowrap font-mono font-bold">
             {totals ? (
-              <span className="inline-flex items-center gap-1.5">
+              <>
                 <span className="text-emerald-600 dark:text-emerald-300">
                   +{formatCount(totals.additions)}
                 </span>
                 <span className="text-red-500 dark:text-red-300">
                   −{formatCount(totals.deletions)}
                 </span>
-              </span>
+              </>
             ) : null}
           </div>
         </div>

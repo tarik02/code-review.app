@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { Cog6ToothIcon } from '@heroicons/react/20/solid';
+import { PanelLeftCloseIcon } from 'lucide-react';
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import { repoIdentityKey } from '../../lib/repo-identity';
 import type {
@@ -18,6 +19,8 @@ import { ScrollArea } from './scroll-area';
 import { TopBar } from './top-bar';
 import { TrackedPullRequestList } from './tracked-pull-request-list';
 import { DataSourceSelector } from './data-source-selector';
+import { Button } from './button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 
 type SidebarPullRequestView = 'data-source' | 'recent' | 'tracked';
 
@@ -44,6 +47,7 @@ type RepoSidebarProps = {
   trackedRepoCount: number;
   trackedPullRequestNumbersByRepo: Record<string, Set<number>>;
   emptyState?: ReactNode;
+  onCollapse?: () => void;
   onViewChange: (view: SidebarPullRequestView) => void;
   onDataSourcesChange: (settings: PullRequestDataSourcesSettings) => void | Promise<void>;
   onSelectPr: (repo: RepoSummary, pullRequest: PullRequestSummary) => void;
@@ -76,6 +80,7 @@ function RepoSidebar({
   trackedRepoCount,
   trackedPullRequestNumbersByRepo,
   emptyState,
+  onCollapse,
   onViewChange,
   onDataSourcesChange,
   onSelectPr,
@@ -148,6 +153,27 @@ function RepoSidebar({
               >
                 <Cog6ToothIcon className="size-5 shrink-0" />
               </Link>
+              {onCollapse ? (
+                <TooltipProvider closeDelay={0} delay={350}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          aria-label="Hide pull request sidebar"
+                          className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                          onClick={onCollapse}
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <PanelLeftCloseIcon className="size-4" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Hide pull requests</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
             </div>
           </div>
         </TopBar>

@@ -13,6 +13,15 @@ import {
 import type { CSSProperties, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
+import {
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  PanelLeftOpenIcon,
+  PanelRightCloseIcon,
+  PanelRightOpenIcon,
+  ShieldCheckIcon,
+} from 'lucide-react';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
 import type {
   DiffLineAnnotation,
   AnnotationSide,
@@ -28,12 +37,19 @@ import type { GitStatusEntry } from '@pierre/trees';
 import { FileDiff } from '@pierre/diffs/react';
 import { ChangedFilesTree } from './changed-files-tree';
 import { AppearanceBackground } from './appearance-background';
+import { Button, buttonVariants } from './button';
+import { CommentMarkdown } from './comment-markdown';
 import { PatchScrollVirtualizer } from './patch-scroll-virtualizer';
 import { PendingReviewBar } from './pending-review-bar';
-import { PullRequestQualitySummary } from './pull-request-quality-summary';
+import {
+  PullRequestQualitySummary,
+  type PullRequestQualitySummaryProps,
+} from './pull-request-quality-summary';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from './resizable';
 import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-editor';
 import { ReviewThreadCard } from './review-thread-card';
 import { ScrollArea } from './scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 import { TopBar, TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
   usePullRequestApprovalMutations,
@@ -42,6 +58,13 @@ import {
 import { useCodeAppearance } from '../../hooks/use-code-appearance';
 import { useDiffNavigator } from '../../hooks/use-diff-navigator';
 import { cx } from '../../lib/cx';
+import {
+  DraftIndicator,
+  PullRequestStatusIcon,
+  formatPullRequestChangeSummary,
+  formatPullRequestDisplayTitle,
+  getPullRequestStatus,
+} from './forge-search-result-parts';
 import {
   appearanceBackgroundQueryOptions,
   pullRequestFileContentsQueryOptions,
@@ -78,10 +101,14 @@ import type {
   PullRequestQualityFinding,
   PullRequestQualityReport,
   RepoIdentity,
+  RepoSummary,
   ReviewCommentSide,
   SelectedPullRequest,
 } from '../../types/forge';
-import { providerFromProviderId, repoIdentityKey } from '../../lib/repo-identity';
+import {
+  providerFromProviderId,
+  repoIdentityKey,
+} from '../../lib/repo-identity';
 import { getPatchViewerSessionState, usePatchViewerStore } from '../../stores/patch-viewer-store';
 import {
   getReviewCommentEditorSessionState,
@@ -99,6 +126,9 @@ const DIFF_EXPANSION_LINE_COUNT = 20;
 const DIFF_COLLAPSED_CONTEXT_THRESHOLD = 0;
 const SCROLL_RESTORE_MAX_ATTEMPTS = 60;
 const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
+const REVIEW_SIDEBAR_DEFAULT_SIZE = '360px';
+const REVIEW_SIDEBAR_MIN_SIZE = '260px';
+const REVIEW_SIDEBAR_MAX_SIZE = '560px';
 
 type HunkExpansionOwner = {
   expandHunk(
@@ -140,6 +170,7 @@ type PatchLineAnnotation =
 type PatchViewerMainProps = {
   selectedPrKey: string | null;
   selectedPr: SelectedPullRequest | null;
+  selectedRepo: RepoSummary | null;
   selectedPullRequestSummary: PullRequestSummary | null;
   selectedPatch: SelectedPatch | null;
   selectedBaseSha: string | null;
@@ -174,6 +205,8 @@ type PatchViewerMainProps = {
   fileStats: Map<string, FileStatsEntry> | null;
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
+  isRepoSidebarCollapsed: boolean;
+  onToggleRepoSidebar: () => void;
 };
 
 function readReviewCapabilities(pullRequest: PullRequestSummary | null) {
@@ -185,6 +218,236 @@ function readReviewCapabilities(pullRequest: PullRequestSummary | null) {
     canApprove: pullRequest.canApprove === true,
     canRequestChanges: pullRequest.canRequestChanges === true,
   };
+}
+
+function PullRequestToolbarMeta({
+  provider,
+  pullRequest,
+}: {
+  provider: ForgeProviderKind;
+  pullRequest: PullRequestSummary | null;
+}) {
+  if (!pullRequest) {
+    return <div className="truncate text-sm font-medium text-ink-500">No pull request selected</div>;
+  }
+
+  const status = getPullRequestStatus(pullRequest);
+  const title = formatPullRequestDisplayTitle(pullRequest.title);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span
+        className={cx(
+          'inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-medium',
+          status.className,
+        )}
+      >
+        <PullRequestStatusIcon status={status.status} />
+        {status.label}
+      </span>
+      {pullRequest.isDraft ? <DraftIndicator provider={provider} /> : null}
+      <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
+        #{pullRequest.number} {title}
+      </p>
+    </div>
+  );
+}
+
+function PullRequestOverviewSection({
+  pullRequest,
+  repoKey,
+}: {
+  pullRequest: PullRequestSummary | null;
+  repoKey: string | null;
+}) {
+  if (!pullRequest) {
+    return null;
+  }
+
+  const body = pullRequest.body?.trim() ?? '';
+
+  return (
+    <section className="border-b border-ink-200 bg-white px-4 py-4 dark:bg-surface">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500">
+        {repoKey ? <span className="font-medium text-ink-700">{repoKey}</span> : null}
+        <span>{pullRequest.authorLogin}</span>
+        <span>{formatPullRequestChangeSummary(pullRequest)}</span>
+      </div>
+
+      <div className="mt-3">
+        {body ? (
+          <CommentMarkdown body={body} />
+        ) : (
+          <div className="text-sm text-ink-500">No description.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function qualityButtonLabel({
+  error,
+  isLoading,
+  report,
+}: Pick<PullRequestQualitySummaryProps, 'error' | 'isLoading' | 'report'>) {
+  if (isLoading) {
+    return 'Quality';
+  }
+  if (error && !report) {
+    return 'Quality failed';
+  }
+  if (!report) {
+    return 'Quality';
+  }
+  if (report.summary.totalFindings > 0) {
+    return `${report.summary.totalFindings} issues`;
+  }
+  return 'Quality';
+}
+
+type QualityToolbarState = 'unknown' | 'good' | 'warn' | 'errors';
+
+function qualityToolbarState({
+  error,
+  isLoading,
+  report,
+}: Pick<PullRequestQualitySummaryProps, 'error' | 'isLoading' | 'report'>): QualityToolbarState {
+  if (error && !report) {
+    return 'errors';
+  }
+  if (isLoading || !report) {
+    return 'unknown';
+  }
+  if (
+    report.findings.some(
+      (finding) => finding.severity === 'critical' || finding.severity === 'major',
+    )
+  ) {
+    return 'errors';
+  }
+  switch (report.status) {
+    case 'ok':
+      return report.summary.totalFindings > 0 ? 'warn' : 'good';
+    case 'warning':
+      return 'warn';
+    case 'failed':
+      return 'errors';
+    case 'pending':
+    case 'unavailable':
+      return 'unknown';
+  }
+  return 'unknown';
+}
+
+function qualityToolbarTone(state: QualityToolbarState) {
+  switch (state) {
+    case 'good':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 aria-expanded:bg-emerald-100 aria-expanded:text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50 dark:aria-expanded:bg-emerald-950/50 dark:aria-expanded:text-emerald-300';
+    case 'warn':
+      return 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 aria-expanded:bg-amber-100 aria-expanded:text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50 dark:aria-expanded:bg-amber-950/50 dark:aria-expanded:text-amber-300';
+    case 'errors':
+      return 'border-red-200 bg-red-50 text-danger-600 hover:bg-red-100 hover:text-red-700 aria-expanded:bg-red-100 aria-expanded:text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50 dark:aria-expanded:bg-red-950/50 dark:aria-expanded:text-red-300';
+    case 'unknown':
+      return 'border-ink-200 bg-canvas text-ink-600 hover:bg-canvasDark hover:text-ink-900 aria-expanded:bg-canvasDark aria-expanded:text-ink-900 dark:border-neutral-700';
+  }
+}
+
+function CodeQualityDropdown({
+  style,
+  ...summaryProps
+}: PullRequestQualitySummaryProps & { style: CSSProperties }) {
+  const [open, setOpen] = useState(false);
+  const { floatingStyles, refs } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: 'bottom-end',
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(6),
+      size({
+        padding: 8,
+        apply({ availableWidth, elements }) {
+          Object.assign(elements.floating.style, {
+            maxWidth: `${Math.min(availableWidth, 520)}px`,
+          });
+        },
+      }),
+    ],
+  });
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const referenceNode = refs.reference.current;
+      const floatingNode = refs.floating.current;
+      if (
+        (referenceNode instanceof Node && referenceNode.contains(target)) ||
+        (floatingNode instanceof Node && floatingNode.contains(target))
+      ) {
+        return;
+      }
+      setOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, refs.floating, refs.reference]);
+
+  const hasSummary =
+    summaryProps.isLoading || Boolean(summaryProps.error) || Boolean(summaryProps.report);
+  const toolbarState = qualityToolbarState(summaryProps);
+
+  return (
+    <>
+      <span className="inline-flex h-7 items-center" ref={refs.setReference} style={style}>
+        <Button
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className={cx(
+            'h-7 border px-2.5',
+            qualityToolbarTone(toolbarState),
+          )}
+          onClick={() => setOpen((current) => !current)}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <ShieldCheckIcon className="size-4" />
+          {qualityButtonLabel(summaryProps)}
+          <ChevronDownIcon className="size-3.5 opacity-60" />
+        </Button>
+      </span>
+
+      {open ? (
+        <FloatingPortal>
+          <div
+            className="z-50 w-[min(520px,calc(100vw-16px))] rounded-md border border-ink-200 bg-surface p-3 shadow-lg"
+            ref={refs.setFloating}
+            style={floatingStyles}
+          >
+            {hasSummary ? (
+              <PullRequestQualitySummary {...summaryProps} />
+            ) : (
+              <div className="text-sm text-ink-500">No code quality data.</div>
+            )}
+          </div>
+        </FloatingPortal>
+      ) : null}
+    </>
+  );
 }
 
 type PatchFileDiffItemContextValue = {
@@ -1941,6 +2204,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
 function PatchViewerMain({
   selectedPrKey,
   selectedPr,
+  selectedRepo,
   selectedPullRequestSummary,
   selectedPatch,
   selectedBaseSha,
@@ -1972,6 +2236,8 @@ function PatchViewerMain({
   parsedPatch,
   fileStats,
   gitStatus,
+  isRepoSidebarCollapsed,
+  onToggleRepoSidebar,
 }: PatchViewerMainProps) {
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
@@ -2006,6 +2272,8 @@ function PatchViewerMain({
     byPath: {},
     scopeKey: inactiveFileCommentsScopeKey,
   });
+  const rightSidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
   const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
@@ -2031,6 +2299,143 @@ function PatchViewerMain({
   const shouldShowCommentsPanel =
     hasSelection &&
     (isReviewThreadsLoading || Boolean(reviewThreadsError) || reviewThreads.length > 0);
+  const noDragRegionStyle = {
+    WebkitAppRegion: 'no-drag',
+  } as CSSProperties & { WebkitAppRegion: string };
+  const selectedProviderId = selectedPatch?.providerId ?? selectedPr?.providerId ?? null;
+  const selectedRepoKey =
+    selectedPatch?.repoKey ?? selectedPr?.repoKey ?? selectedRepo?.nameWithOwner ?? null;
+  const selectedProvider =
+    selectedRepo?.provider ??
+    (selectedProviderId ? providerFromProviderId(selectedProviderId) : 'github');
+  const pullRequestUrl = selectedPullRequestSummary?.url ?? null;
+
+  useEffect(() => {
+    if (!hasSelection && isRightSidebarCollapsed) {
+      setIsRightSidebarCollapsed(false);
+    }
+  }, [hasSelection, isRightSidebarCollapsed]);
+
+  const toggleRightSidebar = useCallback(() => {
+    const panel = rightSidebarPanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setIsRightSidebarCollapsed(false);
+      return;
+    }
+    panel.collapse();
+    setIsRightSidebarCollapsed(true);
+  }, []);
+  const viewerToolbar = (
+    <TopBar
+      className={cx(
+        'shrink-0 cursor-grab border-b border-ink-200 bg-surface app-region-drag',
+        isRepoSidebarCollapsed &&
+          'macos:not-fullscreen:pl-[calc(72px+1em)] wco:pl-[env(titlebar-area-x)]',
+        isRightSidebarCollapsed &&
+          'wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x))]',
+      )}
+      position="middle"
+    >
+      <div className="flex h-full min-h-10 items-center gap-1.5 px-3">
+        {isRepoSidebarCollapsed ? (
+          <TooltipProvider closeDelay={0} delay={350}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label="Show pull request sidebar"
+                    className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                    onClick={onToggleRepoSidebar}
+                    size="icon-sm"
+                    style={noDragRegionStyle}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <PanelLeftOpenIcon className="size-4" />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">Show pull requests</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          {hasSelection ? (
+            <PullRequestToolbarMeta
+              provider={selectedProvider}
+              pullRequest={selectedPullRequestSummary}
+            />
+          ) : null}
+        </div>
+
+        {hasSelection ? (
+          <CodeQualityDropdown
+            displayedFileCount={displayedQualityFileCount}
+            displayedInlineCount={displayedQualityInlineCount}
+            error={qualityReportError}
+            isLoading={isQualityReportLoading}
+            report={qualityReport}
+            style={noDragRegionStyle}
+            unmappedFindings={unmappedQualityFindings}
+          />
+        ) : null}
+
+        {pullRequestUrl ? (
+          <TooltipProvider closeDelay={0} delay={350}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <a
+                    aria-label={`Open on ${selectedProvider === 'github' ? 'GitHub' : 'GitLab'}`}
+                    className={buttonVariants({
+                      variant: 'ghost',
+                      size: 'icon-sm',
+                      className: 'text-ink-500 hover:bg-canvasDark hover:text-ink-900',
+                    })}
+                    href={pullRequestUrl}
+                    rel="noreferrer"
+                    style={noDragRegionStyle}
+                    target="_blank"
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                  </a>
+                }
+              />
+              <TooltipContent side="bottom">
+                Open on {selectedProvider === 'github' ? 'GitHub' : 'GitLab'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+
+        {hasSelection && isRightSidebarCollapsed ? (
+          <TooltipProvider closeDelay={0} delay={350}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    aria-label="Show files and comments sidebar"
+                    className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                    onClick={toggleRightSidebar}
+                    size="icon-sm"
+                    style={noDragRegionStyle}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <PanelRightOpenIcon className="size-4" />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">Show files</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
+    </TopBar>
+  );
   const navigator = useDiffNavigator({
     sessionKey: patchViewerSessionKey,
     prKey: selectedPrKey,
@@ -2066,9 +2471,6 @@ function PatchViewerMain({
   const resolvingThreadId = setResolvedMutation.isPending
     ? (setResolvedMutation.variables?.threadId ?? null)
     : null;
-  const selectedProvider = selectedPatch
-    ? providerFromProviderId(selectedPatch.providerId)
-    : 'github';
   const handleVirtualizerRootChange = useCallback((node: HTMLDivElement | null) => {
     scrollRootRef.current = node;
   }, []);
@@ -2976,7 +3378,7 @@ function PatchViewerMain({
     return (
       <main className="h-full min-h-0 min-w-0 pl-0">
         <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <TopBar className="shrink-0 cursor-grab app-region-drag" position="middle" />
+          {viewerToolbar}
           <AppearanceBackground
             background={backgroundQuery.data}
             className="min-h-0 flex-1 w-full object-cover"
@@ -2989,16 +3391,29 @@ function PatchViewerMain({
   return (
     <main className="h-full min-h-0 min-w-0 pl-0">
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface">
-        <div className="flex min-h-0 min-w-0 flex-1">
-          <div className="min-h-0 min-w-[30%] flex-1">
-            <div className="relative h-full min-h-0 min-w-0">
-              <PatchScrollVirtualizer
-                className="relative h-full min-h-0 min-w-0"
-                config={VIRTUALIZER_CONFIG}
-                contentClassName="flex min-h-full flex-col bg-white dark:bg-surface"
-                onRootChange={handleVirtualizerRootChange}
-                onScroll={handlePatchScroll}
-              >
+        <ResizablePanelGroup
+          className="min-h-0 min-w-0 flex-1"
+          disableCursor
+          id="patch-viewer-panels"
+          orientation="horizontal"
+          resizeTargetMinimumSize={{ fine: 16, coarse: 32 }}
+        >
+          <ResizablePanel
+            className="h-full min-h-0 min-w-0"
+            groupResizeBehavior="preserve-relative-size"
+            id="diff-content"
+            minSize="360px"
+          >
+            <div className="flex h-full min-h-0 min-w-0 flex-col">
+              {viewerToolbar}
+              <div className="relative min-h-0 min-w-0 flex-1">
+                <PatchScrollVirtualizer
+                  className="relative h-full min-h-0 min-w-0"
+                  config={VIRTUALIZER_CONFIG}
+                  contentClassName="flex min-h-full flex-col bg-white dark:bg-surface"
+                  onRootChange={handleVirtualizerRootChange}
+                  onScroll={handlePatchScroll}
+                >
                 {!selectedPrKey && !isPatchLoading ? (
                   <div className="flex min-h-full flex-col">
                     <TopBar
@@ -3027,17 +3442,6 @@ function PatchViewerMain({
                   </div>
                 ) : null}
 
-                {hasSelection && !isPatchLoading ? (
-                  <PullRequestQualitySummary
-                    displayedFileCount={displayedQualityFileCount}
-                    displayedInlineCount={displayedQualityInlineCount}
-                    error={qualityReportError}
-                    isLoading={isQualityReportLoading}
-                    report={qualityReport}
-                    unmappedFindings={unmappedQualityFindings}
-                  />
-                ) : null}
-
                 {!isPatchLoading && !patchError && isReviewThreadsLoading ? (
                   <div className="px-4 pb-2 pt-1 text-sm text-ink-500">
                     Loading review threads...
@@ -3051,6 +3455,11 @@ function PatchViewerMain({
                 {!isPatchLoading && !patchError && selectedPatch ? (
                   <PatchFileDiffItemContext.Provider value={patchFileDiffItemContextValue}>
                     <div className="grow flex flex-col bg-white dark:bg-surface">
+                      <PullRequestOverviewSection
+                        pullRequest={selectedPullRequestSummary}
+                        repoKey={selectedRepoKey}
+                      />
+
                       <GlobalCommentsSection
                         defaultReviewEditorMode={defaultReviewEditorMode}
                         deletingCommentIds={deletingCommentIds}
@@ -3157,50 +3566,93 @@ function PatchViewerMain({
                     </div>
                   </PatchFileDiffItemContext.Provider>
                 ) : null}
-              </PatchScrollVirtualizer>
+                </PatchScrollVirtualizer>
+              </div>
             </div>
-          </div>
-          <div className="min-h-0 w-1/3 min-w-[15%] shrink-0">
-            <div
-              className={cx(
-                'flex h-full min-h-0 min-w-0 flex-col',
-                shouldShowCommentsPanel && 'divide-y divide-ink-200',
-              )}
-            >
+          </ResizablePanel>
+          <ResizableHandle
+            className={isRightSidebarCollapsed ? 'hidden' : ''}
+            disabled={isRightSidebarCollapsed}
+            withHandle
+          />
+          <ResizablePanel
+            className="h-full min-h-0 min-w-0 bg-surface"
+            collapsedSize="0px"
+            collapsible
+            defaultSize={REVIEW_SIDEBAR_DEFAULT_SIZE}
+            groupResizeBehavior="preserve-pixel-size"
+            id="review-sidebar"
+            maxSize={REVIEW_SIDEBAR_MAX_SIZE}
+            minSize={REVIEW_SIDEBAR_MIN_SIZE}
+            onResize={() => {
+              setIsRightSidebarCollapsed(rightSidebarPanelRef.current?.isCollapsed() ?? false);
+            }}
+            panelRef={rightSidebarPanelRef}
+          >
+            {isRightSidebarCollapsed ? null : (
               <div
                 className={cx(
-                  'min-h-0 overflow-hidden',
-                  shouldShowCommentsPanel ? 'flex-[3]' : 'flex-1',
+                  'flex h-full min-h-0 min-w-0 flex-col',
+                  shouldShowCommentsPanel && 'divide-y divide-ink-200',
                 )}
               >
-                <ChangedFilesTree
-                  error={changedFilesError}
-                  files={changedFiles}
-                  hasSelection={hasSelection}
-                  isDark={isDark}
-                  isLoading={isChangedFilesLoading}
-                  onSelectFile={navigator.tree.onSelectFile}
-                  selectedFilePath={navigator.tree.selectedFilePath}
-                  showContainer={false}
-                  fileStats={fileStats}
-                  gitStatus={gitStatus}
-                />
-              </div>
-
-              {shouldShowCommentsPanel ? (
-                <div className="min-h-0 flex-[2] overflow-y-auto scrollbar-hidden bg-surface">
-                  <ReviewThreadsPanel
-                    threads={reviewThreads}
-                    isLoading={isReviewThreadsLoading}
-                    error={reviewThreadsError}
+                <div
+                  className={cx(
+                    'min-h-0 overflow-hidden',
+                    shouldShowCommentsPanel ? 'flex-[3]' : 'flex-1',
+                  )}
+                >
+                  <ChangedFilesTree
+                    error={changedFilesError}
+                    files={changedFiles}
                     hasSelection={hasSelection}
-                    onSelectThread={handleSelectReviewThread}
+                    isDark={isDark}
+                    isLoading={isChangedFilesLoading}
+                    onSelectFile={navigator.tree.onSelectFile}
+                    selectedFilePath={navigator.tree.selectedFilePath}
+                    showContainer={false}
+                    fileStats={fileStats}
+                    gitStatus={gitStatus}
+                    headerAction={
+                      <TooltipProvider closeDelay={0} delay={350}>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                aria-label="Hide files and comments sidebar"
+                                className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                                onClick={toggleRightSidebar}
+                                size="icon-sm"
+                                style={noDragRegionStyle}
+                                type="button"
+                                variant="ghost"
+                              >
+                                <PanelRightCloseIcon className="size-4" />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent>Hide files</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    }
                   />
                 </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
+
+                {shouldShowCommentsPanel ? (
+                  <div className="min-h-0 flex-[2] overflow-y-auto scrollbar-hidden bg-surface">
+                    <ReviewThreadsPanel
+                      threads={reviewThreads}
+                      isLoading={isReviewThreadsLoading}
+                      error={reviewThreadsError}
+                      hasSelection={hasSelection}
+                      onSelectThread={handleSelectReviewThread}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </section>
     </main>
   );

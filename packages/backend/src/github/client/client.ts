@@ -687,6 +687,7 @@ query($owner: String!, $name: String!, $number: Int!) {
       mergeable
       additions
       deletions
+      body
       author { login }
       updatedAt
       url

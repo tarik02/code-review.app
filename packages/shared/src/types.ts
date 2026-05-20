@@ -75,9 +75,12 @@ type PullRequestListItem = {
   updatedAt: string;
   headSha: string;
   baseSha: string | null;
+  body?: string | null;
+  url: string | null;
 };
 
 type PullRequest = PullRequestListItem & {
+  body: string | null;
   canApprove: boolean;
   canRequestChanges: boolean;
 };
@@ -218,6 +221,8 @@ type AppearanceBackgroundInput = { kind: 'default' } | { kind: 'solid'; color: s
 
 type ProviderProfile = {
   accountId: string;
+  provider: ForgeProviderKind;
+  host: string;
   login: string;
 };
 

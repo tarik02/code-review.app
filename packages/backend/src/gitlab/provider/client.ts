@@ -204,6 +204,8 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
     updatedAt: mr.updated_at,
     headSha: mr.sha ?? diffRefs?.head_sha ?? '',
     baseSha: diffRefs?.base_sha ?? diffRefs?.start_sha ?? null,
+    body: mr.description ?? null,
+    url: mr.web_url,
   };
 }
 

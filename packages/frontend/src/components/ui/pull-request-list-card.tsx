@@ -183,10 +183,14 @@ function PullRequestListCard({
               trailingActionsAlwaysVisible
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
-              'shadow-[-24px_0_32px_-12px_rgba(15,23,42,0.5)]',
-              isSelected ? 'bg-canvasDark' : 'bg-canvas group-hover:bg-canvasDark',
+              'bg-canvasDark shadow-[-12px_0_20px_-10px_rgba(15,23,42,0.3)] dark:shadow-[-12px_0_20px_-10px_rgba(0,0,0,0.5)]',
+              isSelected && 'bg-ink-200 dark:bg-ink-200',
             )}
           >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-full w-4 bg-gradient-to-l from-[rgba(230,228,221,0.9)] to-transparent dark:from-[rgba(39,39,42,0.9)]"
+            />
             <div className="pointer-events-auto">{trailingActions}</div>
           </div>
         ) : null}
