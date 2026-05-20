@@ -1,6 +1,5 @@
 import type { PullRequestQualityFinding, PullRequestQualityReport } from '../../types/forge';
 import { cx } from '../../lib/cx';
-import { TopBar } from './top-bar';
 
 type PullRequestQualitySummaryProps = {
   report: PullRequestQualityReport | null;
@@ -55,16 +54,14 @@ function PullRequestQualitySummary({
 }: PullRequestQualitySummaryProps) {
   if (isLoading) {
     return (
-      <div className="border-b border-ink-200 px-4 pb-3 pt-3 text-sm text-ink-500">
+      <div className="text-sm text-ink-500">
         Loading checks and code quality...
       </div>
     );
   }
 
   if (error && !report) {
-    return (
-      <div className="border-b border-ink-200 px-4 pb-3 pt-3 text-sm text-danger-600">{error}</div>
-    );
+    return <div className="text-sm text-danger-600">{error}</div>;
   }
 
   if (!report) {
@@ -74,7 +71,7 @@ function PullRequestQualitySummary({
   const notes = report.summary.notes ?? [];
 
   return (
-    <TopBar position="middle" className="border-b border-ink-200 px-4 pb-3 pt-3 app-region-drag">
+    <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-medium text-ink-900">{report.summary.providerLabel}</span>
         <span
@@ -132,7 +129,7 @@ function PullRequestQualitySummary({
           </div>
         </div>
       ) : null}
-    </TopBar>
+    </div>
   );
 }
 

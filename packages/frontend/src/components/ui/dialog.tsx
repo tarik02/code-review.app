@@ -21,11 +21,11 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Popup>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-slate-950/50" />
+      <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-slate-950/50 opacity-100 transition-opacity duration-150 ease-out data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 motion-reduce:transition-none" />
       <DialogPrimitive.Viewport className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <DialogPrimitive.Popup
           className={cx(
-            'flex max-h-[80vh] w-full max-w-[520px] flex-col rounded-xl bg-surface shadow-dialog',
+            'flex max-h-[80vh] w-full max-w-[520px] origin-center flex-col rounded-xl bg-surface opacity-100 shadow-dialog transition-[opacity,transform] duration-150 ease-out data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 motion-reduce:transition-none',
             toClassName(className),
           )}
           {...props}

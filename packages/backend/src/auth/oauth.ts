@@ -9,6 +9,7 @@ import {
   oauthConfig,
   requestDeviceOAuthCode,
 } from './provider-auth.ts';
+import type { CacheService } from '../cache.ts';
 import type { AuthTokenStore } from './token-store.ts';
 import type { ForgeProviderKind } from '@code-review-app/shared';
 
@@ -155,7 +156,7 @@ function pollDeviceOAuth(
 ): Effect.Effect<
   { status: 'pending'; intervalMs: number } | { status: 'complete'; accountId: string },
   Error,
-  AuthTokenStore | HttpClient.HttpClient
+  AuthTokenStore | CacheService | HttpClient.HttpClient
 > {
   return Effect.gen(function* () {
     pruneExpiredSessions();
@@ -180,14 +181,14 @@ function pollDeviceOAuth(
     }
 
     deviceSessions.delete(accountId);
-    return { status: 'complete', accountId };
+    return { status: 'complete', accountId: result.token.id };
   });
 }
 
 function completeOAuth(
   code: string,
   state: string,
-): Effect.Effect<OAuthSession, Error, AuthTokenStore | HttpClient.HttpClient> {
+): Effect.Effect<OAuthSession, Error, AuthTokenStore | CacheService | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     pruneExpiredSessions();
     const session = sessions.get(state);
@@ -195,7 +196,7 @@ function completeOAuth(
     if (!session) {
       return yield* Effect.fail(new Error('OAuth sign in expired or has an invalid state.'));
     }
-    yield* exchangeOAuthCode(
+    const token = yield* exchangeOAuthCode(
       session.accountId,
       session.provider,
       session.host,
@@ -204,7 +205,7 @@ function completeOAuth(
       code,
       session.codeVerifier,
     );
-    return session;
+    return { ...session, accountId: token.id };
   });
 }
 

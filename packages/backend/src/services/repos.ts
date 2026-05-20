@@ -72,7 +72,12 @@ const makeRepoService = Effect.gen(function* () {
 
     const provider = yield* providers.forAccount(accountId);
     const login = yield* provider.viewerLogin();
-    const profile = { accountId, login };
+    const profile = {
+      accountId,
+      provider: account.provider,
+      host: account.host,
+      login,
+    };
     yield* cache.writeProviderProfile(profile);
     return profile;
   });
@@ -124,6 +129,8 @@ const makeRepoService = Effect.gen(function* () {
       if (account?.viewerLogin) {
         yield* cache.writeProviderProfile({
           accountId: repo.providerAccountId,
+          provider: account.provider,
+          host: account.host,
           login: account.viewerLogin,
         });
       }

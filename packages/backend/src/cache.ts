@@ -9,7 +9,7 @@ import {
   repos,
 } from './db/schema.ts';
 import { CacheError } from './errors.ts';
-import { createRepoIdentityFromParts } from './repo-id.ts';
+import { createRepoIdentityFromParts, normalizeHost } from './repo-id.ts';
 import type {
   ForgeProviderKind,
   ProviderProfile,
@@ -76,6 +76,11 @@ type CacheServiceShape = {
     enabledAccountIds: string[],
   ): Effect.Effect<void, CacheError>;
   readProviderProfile(accountId: string): Effect.Effect<ProviderProfile | null, CacheError>;
+  readProviderProfileByLogin(
+    provider: ForgeProviderKind,
+    host: string,
+    login: string,
+  ): Effect.Effect<ProviderProfile | null, CacheError>;
   writeProviderProfile(profile: ProviderProfile): Effect.Effect<void, CacheError>;
 };
 
@@ -126,25 +131,34 @@ function repoNameFromKey(repoKey: string) {
 
 async function getProviderProfileRowId(
   database: DatabaseTransaction,
-  accountId: string,
+  profile: { accountId: string; provider: ForgeProviderKind; host: string; login?: string | null },
   timestamp: number,
 ) {
+  const normalizedHost = normalizeHost(profile.host);
   await database
     .insert(providerProfiles)
     .values({
-      accountId,
+      accountId: profile.accountId,
+      provider: profile.provider,
+      host: normalizedHost,
+      login: profile.login ?? null,
       isEnabled: true,
       updatedAt: timestamp,
     })
     .onConflictDoUpdate({
       target: providerProfiles.accountId,
-      set: { updatedAt: timestamp },
+      set: {
+        provider: profile.provider,
+        host: normalizedHost,
+        ...(profile.login ? { login: profile.login } : {}),
+        updatedAt: timestamp,
+      },
     });
 
   const [row] = await database
     .select({ id: providerProfiles.id })
     .from(providerProfiles)
-    .where(eq(providerProfiles.accountId, accountId))
+    .where(eq(providerProfiles.accountId, profile.accountId))
     .limit(1);
 
   if (!row) {
@@ -179,6 +193,7 @@ function rowToPullRequestListItem(row: PullRequestCacheRow): PullRequestListItem
     updatedAt: row.updatedAt,
     headSha: row.headSha,
     baseSha: row.baseSha,
+    url: row.url,
   };
 }
 
@@ -210,6 +225,7 @@ function pullRequestValues(repoRowId: number, pullRequest: PullRequestListItem) 
     updatedAt: pullRequest.updatedAt,
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
+    url: pullRequest.url,
   };
 }
 
@@ -227,6 +243,7 @@ function pullRequestCacheUpdateValues(timestamp: number) {
     updatedAt: sqlExcluded(pullRequests.updatedAt),
     headSha: sqlExcluded(pullRequests.headSha),
     baseSha: sqlExcluded(pullRequests.baseSha),
+    url: sqlExcluded(pullRequests.url),
     lastSeenAt: timestamp,
   };
 }
@@ -313,7 +330,11 @@ const makeCacheService = Effect.gen(function* () {
       const identity = repoIdentityFromSummary(repo);
       const providerProfileId = await getProviderProfileRowId(
         tx,
-        repo.providerAccountId,
+        {
+          accountId: repo.providerAccountId,
+          provider: repo.provider,
+          host: repo.host,
+        },
         timestamp,
       );
 
@@ -355,7 +376,15 @@ const makeCacheService = Effect.gen(function* () {
     database.transaction(async (tx) => {
       const timestamp = nowUnixTimestamp();
       const identity = createRepoIdentityFromParts(repo.providerId, repo.repoKey);
-      const providerProfileId = await getProviderProfileRowId(tx, identity.accountId, timestamp);
+      const providerProfileId = await getProviderProfileRowId(
+        tx,
+        {
+          accountId: identity.accountId,
+          provider: identity.provider,
+          host: identity.host,
+        },
+        timestamp,
+      );
 
       await tx
         .insert(repos)
@@ -749,19 +778,12 @@ const makeCacheService = Effect.gen(function* () {
       for (const accountId of accountIds) {
         const isEnabled = enabled.has(accountId);
         await tx
-          .insert(providerProfiles)
-          .values({
-            accountId,
+          .update(providerProfiles)
+          .set({
             isEnabled,
             updatedAt: timestamp,
           })
-          .onConflictDoUpdate({
-            target: providerProfiles.accountId,
-            set: {
-              isEnabled,
-              updatedAt: timestamp,
-            },
-          });
+          .where(eq(providerProfiles.accountId, accountId));
       }
     }),
   );
@@ -773,13 +795,55 @@ const makeCacheService = Effect.gen(function* () {
       const [row] = await db
         .select({
           accountId: providerProfiles.accountId,
+          provider: providerProfiles.provider,
+          host: providerProfiles.host,
           login: providerProfiles.login,
         })
         .from(providerProfiles)
         .where(eq(providerProfiles.accountId, accountId))
         .limit(1);
 
-      return row?.login ? { accountId: row.accountId, login: row.login } : null;
+      return row?.login
+        ? {
+            accountId: row.accountId,
+            provider: row.provider as ForgeProviderKind,
+            host: normalizeHost(row.host),
+            login: row.login,
+          }
+        : null;
+    }),
+  );
+
+  const readProviderProfileByLogin: CacheServiceShape['readProviderProfileByLogin'] = Effect.fn(
+    'CacheService.readProviderProfileByLogin',
+  )((provider, host, login) =>
+    database.query(async (db) => {
+      const normalizedHost = normalizeHost(host);
+      const [row] = await db
+        .select({
+          accountId: providerProfiles.accountId,
+          provider: providerProfiles.provider,
+          host: providerProfiles.host,
+          login: providerProfiles.login,
+        })
+        .from(providerProfiles)
+        .where(
+          and(
+            eq(providerProfiles.provider, provider),
+            eq(providerProfiles.host, normalizedHost),
+            eq(providerProfiles.login, login),
+          ),
+        )
+        .limit(1);
+
+      return row?.login
+        ? {
+            accountId: row.accountId,
+            provider: row.provider as ForgeProviderKind,
+            host: normalizeHost(row.host),
+            login: row.login,
+          }
+        : null;
     }),
   );
 
@@ -793,6 +857,8 @@ const makeCacheService = Effect.gen(function* () {
         .insert(providerProfiles)
         .values({
           accountId: profile.accountId,
+          provider: profile.provider,
+          host: normalizeHost(profile.host),
           login: profile.login,
           isEnabled: true,
           updatedAt: timestamp,
@@ -800,6 +866,8 @@ const makeCacheService = Effect.gen(function* () {
         .onConflictDoUpdate({
           target: providerProfiles.accountId,
           set: {
+            provider: profile.provider,
+            host: normalizeHost(profile.host),
             login: profile.login,
             updatedAt: timestamp,
           },
@@ -829,6 +897,7 @@ const makeCacheService = Effect.gen(function* () {
     readProviderAccountVisibility,
     setProviderAccountVisibility,
     readProviderProfile,
+    readProviderProfileByLogin,
     writeProviderProfile,
   } satisfies CacheServiceShape;
 });

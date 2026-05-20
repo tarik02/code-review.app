@@ -168,6 +168,7 @@ const GhPullRequestFields = {
   mergeable: OptionalNullableString,
   additions: OptionalNullableNumber,
   deletions: OptionalNullableNumber,
+  body: OptionalNullableString,
   author: Schema.optional(Schema.NullOr(GhActorSchema)),
   updatedAt: Schema.String,
   url: Schema.String,

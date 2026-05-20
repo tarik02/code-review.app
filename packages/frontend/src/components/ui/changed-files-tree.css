@@ -1,0 +1,23 @@
+.changed-files-tree-header {
+  container-type: inline-size;
+}
+
+@container (max-width: 220px) {
+  .changed-files-tree-header-content {
+    gap: 0.25rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+@container (max-width: 240px) {
+  .changed-files-tree-title {
+    display: none;
+  }
+}
+
+@container (max-width: 130px) {
+  .changed-files-tree-stats {
+    display: none;
+  }
+}

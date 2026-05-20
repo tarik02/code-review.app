@@ -38,6 +38,7 @@ const GitLabMergeRequestSchema = Schema.Struct({
   project_id: OptionalNullableNumber,
   iid: Schema.Number,
   title: Schema.String,
+  description: OptionalNullableString,
   state: Schema.String,
   draft: OptionalNullableBoolean,
   work_in_progress: OptionalNullableBoolean,

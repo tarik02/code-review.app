@@ -1,7 +1,8 @@
-import { HttpClient, HttpClientRequest } from '@effect/platform';
+import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
 import { hostNameFromHost, normalizeHost } from '../repo-id.ts';
 import { Effect } from 'effect';
 import { ensureError } from '../errors.ts';
+import { CacheService } from '../cache.ts';
 import { AuthTokenStore } from './token-store.ts';
 import {
   DEFAULT_GITHUB_CLIENT_ID,
@@ -41,6 +42,11 @@ type OAuthDeviceCodeResponse = {
   interval?: number;
   error?: string;
   error_description?: string;
+};
+
+type OAuthViewerPayload = {
+  login?: unknown;
+  username?: unknown;
 };
 
 type DeviceOAuthPollResult =
@@ -156,6 +162,7 @@ function tokenFromPayload(
   clientId: string,
   scopes: string[],
   payload: OAuthTokenResponse,
+  viewerLogin: string | null = null,
 ): StoredAuthToken {
   return {
     id: accountId,
@@ -166,9 +173,76 @@ function tokenFromPayload(
     refreshToken: payload.refresh_token ?? null,
     expiresAt: expiresAt(payload.expires_in),
     scopes: parseScopes(payload.scope, scopes),
-    viewerLogin: null,
+    viewerLogin,
     createdAt: Date.now(),
   };
+}
+
+function oauthApiBase(provider: ForgeProviderKind, host: string) {
+  const normalizedHost = normalizeHost(host);
+  if (provider === 'github') {
+    return hostNameFromHost(normalizedHost) === 'github.com'
+      ? 'https://api.github.com'
+      : `${normalizedHost}/api/v3`;
+  }
+
+  return `${normalizedHost}/api/v4`;
+}
+
+function fetchOAuthViewerLogin(
+  provider: ForgeProviderKind,
+  host: string,
+  accessToken: string,
+): Effect.Effect<string, Error, HttpClient.HttpClient> {
+  return Effect.gen(function* () {
+    const request = HttpClientRequest.get(`${oauthApiBase(provider, host)}/user`).pipe(
+      HttpClientRequest.accept('application/json'),
+      HttpClientRequest.setHeader('User-Agent', 'code-review.app'),
+      HttpClientRequest.bearerToken(accessToken),
+    );
+    const client = yield* HttpClient.HttpClient;
+    const response = yield* client.execute(request).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.mapError(toError),
+    );
+    const payload = yield* response.json.pipe(
+      Effect.map((value) => value as OAuthViewerPayload),
+      Effect.mapError(toError),
+    );
+    const login = provider === 'github' ? payload.login : payload.username;
+    if (typeof login !== 'string' || login.trim().length === 0) {
+      return yield* Effect.fail(new Error('OAuth viewer login was not returned.'));
+    }
+    return login.trim();
+  });
+}
+
+function resolveOAuthAccountId(
+  requestedAccountId: string,
+  provider: ForgeProviderKind,
+  host: string,
+  viewerLogin: string,
+): Effect.Effect<string, Error, AuthTokenStore | CacheService> {
+  return Effect.gen(function* () {
+    const normalizedHost = normalizeHost(host);
+    const tokenStore = yield* AuthTokenStore;
+    const accounts = yield* tokenStore.listAccounts();
+    const existingAccount = accounts.find(
+      (account) =>
+        account.provider === provider &&
+        normalizeHost(account.host) === normalizedHost &&
+        account.viewerLogin === viewerLogin,
+    );
+    if (existingAccount) {
+      return existingAccount.id;
+    }
+
+    const cache = yield* CacheService;
+    const cachedProfile = yield* cache
+      .readProviderProfileByLogin(provider, normalizedHost, viewerLogin)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    return cachedProfile?.accountId ?? requestedAccountId;
+  });
 }
 
 function oauthFormJson<A>(
@@ -247,7 +321,7 @@ function exchangeOAuthCode(
   clientSecret: string,
   code: string,
   codeVerifier: string,
-): Effect.Effect<StoredAuthToken, Error, AuthTokenStore | HttpClient.HttpClient> {
+): Effect.Effect<StoredAuthToken, Error, AuthTokenStore | CacheService | HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
@@ -272,13 +346,21 @@ function exchangeOAuthCode(
       );
     }
 
-    const token = tokenFromPayload(
+    const viewerLogin = yield* fetchOAuthViewerLogin(provider, host, payload.access_token);
+    const resolvedAccountId = yield* resolveOAuthAccountId(
       accountId,
+      provider,
+      host,
+      viewerLogin,
+    );
+    const token = tokenFromPayload(
+      resolvedAccountId,
       provider,
       host,
       config.clientId,
       config.scopes,
       payload,
+      viewerLogin,
     );
     yield* tokenStore.save(token);
     return token;
@@ -291,7 +373,11 @@ function exchangeDeviceOAuthCode(
   host: string,
   clientId: string,
   deviceCode: string,
-): Effect.Effect<DeviceOAuthPollResult, Error, AuthTokenStore | HttpClient.HttpClient> {
+): Effect.Effect<
+  DeviceOAuthPollResult,
+  Error,
+  AuthTokenStore | CacheService | HttpClient.HttpClient
+> {
   return Effect.gen(function* () {
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
@@ -325,13 +411,21 @@ function exchangeDeviceOAuthCode(
       );
     }
 
-    const token = tokenFromPayload(
+    const viewerLogin = yield* fetchOAuthViewerLogin(provider, host, payload.access_token);
+    const resolvedAccountId = yield* resolveOAuthAccountId(
       accountId,
+      provider,
+      host,
+      viewerLogin,
+    );
+    const token = tokenFromPayload(
+      resolvedAccountId,
       provider,
       host,
       config.clientId,
       config.scopes,
       payload,
+      viewerLogin,
     );
     yield* tokenStore.save(token);
     return { status: 'complete', token } satisfies DeviceOAuthPollResult;
@@ -357,7 +451,6 @@ function refreshStoredAuthToken(
 
     const payload = yield* oauthFormJson<OAuthTokenResponse>(config.tokenUrl, body);
     if (payload.error || !payload.access_token) {
-      yield* tokenStore.delete(token.id);
       return yield* Effect.fail(
         new Error(payload.error_description ?? payload.error ?? 'OAuth token refresh failed.'),
       );

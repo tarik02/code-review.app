@@ -78,9 +78,12 @@ const pullRequestListItemSchema = z.object({
   updatedAt: z.string(),
   headSha: z.string(),
   baseSha: z.string().nullable(),
+  body: z.string().nullable().optional(),
+  url: z.string().nullable(),
 });
 
 const pullRequestSchema = pullRequestListItemSchema.extend({
+  body: z.string().nullable(),
   canApprove: z.boolean(),
   canRequestChanges: z.boolean(),
 });
@@ -198,6 +201,8 @@ const appearanceBackgroundInputSchema = z.discriminatedUnion('kind', [
 
 const providerProfileSchema = z.object({
   accountId: z.string(),
+  provider: forgeProviderKindSchema,
+  host: z.string(),
   login: z.string(),
 });
 

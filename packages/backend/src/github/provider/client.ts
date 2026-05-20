@@ -394,6 +394,8 @@ function toPullRequestSummary(pullRequest: GhPullRequest) {
     updatedAt: pullRequest.updatedAt,
     headSha: pullRequest.headRefOid,
     baseSha: pullRequest.baseRefOid ?? null,
+    body: pullRequest.body ?? null,
+    url: pullRequest.url,
   };
 }
 
@@ -427,6 +429,8 @@ function toPullRequestSummaryFromRest(pullRequest: GhRestPullRequest) {
     updatedAt: pullRequest.updated_at,
     headSha: pullRequest.head.sha,
     baseSha: pullRequest.base.sha,
+    body: null,
+    url: pullRequest.html_url,
   };
 }
 
