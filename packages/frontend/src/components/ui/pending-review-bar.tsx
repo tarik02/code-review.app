@@ -79,8 +79,7 @@ function PendingReviewBar({
       {count > 0 ? (
         <div
           className={cx(
-            'pointer-events-none absolute inset-x-0 bottom-full z-0 overflow-hidden group-focus-within:pointer-events-auto group-hover:pointer-events-auto',
-            shouldKeepReviewDetailsVisible && 'pointer-events-auto',
+            'pointer-events-none absolute inset-x-0 bottom-full z-0 overflow-hidden',
           )}
         >
           <div
@@ -89,7 +88,12 @@ function PendingReviewBar({
               shouldKeepReviewDetailsVisible && 'translate-y-0',
             )}
           >
-            <div className="-mb-px rounded-t-lg border border-ink-200 bg-canvas/95 px-3 pb-1 pt-3 shadow-lg backdrop-blur">
+            <div
+              className={cx(
+                'pointer-events-none -mb-px rounded-t-lg border border-ink-200 bg-canvas/95 px-3 pb-1 pt-3 shadow-lg backdrop-blur group-focus-within:pointer-events-auto group-hover:pointer-events-auto',
+                shouldKeepReviewDetailsVisible && 'pointer-events-auto',
+              )}
+            >
               <div className="grid grid-cols-[11rem_minmax(0,1fr)] gap-3">
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-ink-600">Review type</span>
