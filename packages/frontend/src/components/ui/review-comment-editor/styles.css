@@ -1,28 +1,7 @@
-.comment-editor-root {
-  position: relative;
-}
-
-.comment-editor-root--floating-controls:hover,
-.comment-editor-root--floating-controls:focus-within {
-  z-index: 1000;
-}
-
-.comment-editor-portal-root {
-  position: relative;
-  z-index: 1000;
-}
-
 .comment-editor-shell {
-  position: relative;
   border: 1px solid rgb(var(--rgb-ink-200));
   border-radius: 0.5rem;
   background: rgb(var(--rgb-surface));
-  overflow: visible;
-}
-
-.comment-editor-root--floating-controls:hover .comment-editor-shell,
-.comment-editor-root--floating-controls:focus-within .comment-editor-shell {
-  border-radius: 0;
 }
 
 .comment-editor {
@@ -59,15 +38,6 @@
   cursor: text;
 }
 
-.comment-editor-root--floating-controls .comment-editor {
-  border-radius: inherit;
-}
-
-.comment-editor-root--floating-controls:hover .comment-editor,
-.comment-editor-root--floating-controls:focus-within .comment-editor {
-  border-radius: 0;
-}
-
 .comment-editor [class*='_editorWrapper_'] {
   min-height: 0;
 }
@@ -88,32 +58,6 @@
   border-radius: 0.5rem 0.5rem 0 0;
   background: rgb(var(--rgb-canvas));
   padding: 0.25rem;
-}
-
-.comment-editor-root--floating-controls .comment-editor-toolbar {
-  position: absolute;
-  top: 0;
-  right: -1px;
-  left: -1px;
-  z-index: 1000;
-  border: 1px solid rgb(var(--rgb-ink-200));
-  background: rgb(var(--rgb-canvas) / 0.96);
-  box-shadow: 0 8px 24px rgb(var(--rgb-ink-900) / 0.1);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(calc(-100% + 1px));
-  visibility: hidden;
-  transition:
-    opacity 140ms ease,
-    visibility 0s linear 140ms;
-}
-
-.comment-editor-root--floating-controls:hover .comment-editor-toolbar,
-.comment-editor-root--floating-controls:focus-within .comment-editor-toolbar {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
-  transition-delay: 0s;
 }
 
 .comment-editor-toolbar-actions,
@@ -542,31 +486,4 @@
   border-radius: 0 0 0.5rem 0.5rem;
   background: rgb(var(--rgb-canvas));
   padding: 0.5rem;
-}
-
-.comment-editor-root--floating-controls .comment-editor-footer {
-  position: absolute;
-  right: -1px;
-  bottom: 0;
-  left: -1px;
-  z-index: 1000;
-  border: 1px solid rgb(var(--rgb-ink-200));
-  background: rgb(var(--rgb-canvas) / 0.96);
-  padding: 0.375rem;
-  box-shadow: 0 8px 24px rgb(var(--rgb-ink-900) / 0.1);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(calc(100% - 1px));
-  visibility: hidden;
-  transition:
-    opacity 140ms ease,
-    visibility 0s linear 140ms;
-}
-
-.comment-editor-root--floating-controls:hover .comment-editor-footer,
-.comment-editor-root--floating-controls:focus-within .comment-editor-footer {
-  opacity: 1;
-  pointer-events: auto;
-  visibility: visible;
-  transition-delay: 0s;
 }

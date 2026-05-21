@@ -1,6 +1,5 @@
 import { Combobox as ComboboxPrimitive } from '@base-ui/react/combobox';
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
-import type { ComponentProps } from 'react';
 
 import { cn } from '../../lib/utils';
 
@@ -18,7 +17,6 @@ type ComboboxBaseProps = {
   options: ComboboxOption[];
   placeholder?: string;
   inputValue?: string;
-  portalContainer?: ComponentProps<typeof ComboboxPrimitive.Portal>['container'];
   onOpenChange?: (open: boolean) => void;
   onInputValueChange?: (value: string) => void;
 };
@@ -46,7 +44,6 @@ function Combobox({
   options,
   placeholder,
   inputValue,
-  portalContainer,
   multiple,
   value,
   onOpenChange,
@@ -77,7 +74,6 @@ function Combobox({
           contentClassName={contentClassName}
           disabled={disabled}
           placeholder={placeholder}
-          portalContainer={portalContainer}
         />
       </ComboboxPrimitive.Root>
     );
@@ -105,7 +101,6 @@ function Combobox({
         contentClassName={contentClassName}
         disabled={disabled}
         placeholder={placeholder}
-        portalContainer={portalContainer}
       />
     </ComboboxPrimitive.Root>
   );
@@ -117,11 +112,7 @@ function ComboboxParts({
   contentClassName,
   disabled,
   placeholder,
-  portalContainer,
-}: Pick<
-  ComboboxBaseProps,
-  'className' | 'contentClassName' | 'disabled' | 'placeholder' | 'portalContainer'
-> & {
+}: Pick<ComboboxBaseProps, 'className' | 'contentClassName' | 'disabled' | 'placeholder'> & {
   ariaLabel?: string;
 }) {
   return (
@@ -148,7 +139,7 @@ function ComboboxParts({
           <ChevronsUpDownIcon className="size-3.5" />
         </ComboboxPrimitive.Trigger>
       </ComboboxPrimitive.InputGroup>
-      <ComboboxPrimitive.Portal container={portalContainer}>
+      <ComboboxPrimitive.Portal>
         <ComboboxPrimitive.Positioner align="start" className="isolate z-50" sideOffset={4}>
           <ComboboxPrimitive.Popup
             className={cn(

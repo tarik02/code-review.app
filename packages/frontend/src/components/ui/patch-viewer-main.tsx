@@ -509,7 +509,6 @@ function CodeQualityDropdown({
 
 type PatchFileDiffItemContextValue = {
   defaultReviewEditorMode: CommentEditorMode;
-  floatingReviewEditorControls: boolean;
   deletingCommentIds: ReadonlySet<string>;
   patchViewerSessionKey: string | null;
   resolvingThreadId: string | null;
@@ -967,7 +966,6 @@ function getFileContentsInputForFileDiff(
 type FloatingLineDraftEditorProps = {
   cursorPosition: ReviewCommentEditorState['cursorPosition'];
   defaultMode: CommentEditorMode;
-  floatingControls: boolean;
   error: string;
   isPending: boolean;
   provider: ForgeProviderKind;
@@ -986,7 +984,6 @@ type FloatingLineDraftEditorProps = {
 function FloatingLineDraftEditor({
   cursorPosition,
   defaultMode,
-  floatingControls,
   error,
   isPending,
   provider,
@@ -1075,7 +1072,6 @@ function FloatingLineDraftEditor({
             <ReviewCommentEditor
               cursorPosition={cursorPosition}
               defaultMode={defaultMode}
-              floatingControls={floatingControls}
               error={error}
               isPending={isPending}
               provider={provider}
@@ -1100,7 +1096,6 @@ function FloatingLineDraftEditor({
 
 type FloatingLineDraftEditorForTargetProps = {
   defaultMode: CommentEditorMode;
-  floatingControls: boolean;
   editor: ReviewCommentEditorState;
   fileDiffs: FileDiffMetadata[];
   portalRootId: string;
@@ -1116,7 +1111,6 @@ type FloatingLineDraftEditorForTargetProps = {
 
 function FloatingLineDraftEditorForTarget({
   defaultMode,
-  floatingControls,
   editor,
   fileDiffs,
   portalRootId,
@@ -1162,7 +1156,6 @@ function FloatingLineDraftEditorForTarget({
     <FloatingLineDraftEditor
       cursorPosition={editor.cursorPosition}
       defaultMode={defaultMode}
-      floatingControls={floatingControls}
       error={editor.error}
       isPending={editor.isSubmitting}
       portalRootId={portalRootId}
@@ -1361,7 +1354,6 @@ type GlobalCommentsSectionProps = {
   threads: ReviewThread[];
   isLoading: boolean;
   defaultReviewEditorMode: CommentEditorMode;
-  floatingReviewEditorControls: boolean;
   deletingCommentIds: ReadonlySet<string>;
   patchViewerSessionKey: string | null;
   resolvingThreadId: string | null;
@@ -1386,7 +1378,6 @@ function GlobalCommentsSection({
   threads,
   isLoading,
   defaultReviewEditorMode,
-  floatingReviewEditorControls,
   deletingCommentIds,
   patchViewerSessionKey,
   resolvingThreadId,
@@ -1466,7 +1457,6 @@ function GlobalCommentsSection({
             containerRef={(node) => registerThreadAnchor(thread, node)}
             defaultCollapsed={thread.isResolved || thread.isOutdated}
             defaultReviewEditorMode={defaultReviewEditorMode}
-            floatingReviewEditorControls={floatingReviewEditorControls}
             deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
@@ -1487,7 +1477,6 @@ function GlobalCommentsSection({
             key={editor.id}
             cursorPosition={editor.cursorPosition}
             defaultMode={defaultReviewEditorMode}
-            floatingControls={floatingReviewEditorControls}
             error={editor.error}
             isPending={editor.isSubmitting}
             portalRootId={portalRootId}
@@ -1506,7 +1495,7 @@ function GlobalCommentsSection({
           />
         ))}
       </div>
-      <div id={portalRootId} className="pointer-events-none absolute inset-0 z-20" />
+      <div id={portalRootId} className="pointer-events-none absolute inset-0 z-[4]" />
     </div>
   );
 }
@@ -1678,7 +1667,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
 }) {
   const {
     defaultReviewEditorMode,
-    floatingReviewEditorControls,
     deletingCommentIds,
     patchViewerSessionKey,
     resolvingThreadId,
@@ -1935,7 +1923,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             key={editor.id}
             cursorPosition={editor.cursorPosition}
             defaultMode={defaultReviewEditorMode}
-            floatingControls={floatingReviewEditorControls}
             error={editor.error}
             isPending={editor.isSubmitting}
             portalRootId={lineDraftPortalRootId}
@@ -1989,7 +1976,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
             defaultReviewEditorMode={defaultReviewEditorMode}
-            floatingReviewEditorControls={floatingReviewEditorControls}
             deletingCommentIds={deletingCommentIds}
             patchViewerSessionKey={patchViewerSessionKey}
             resolvingThreadId={resolvingThreadId}
@@ -2024,7 +2010,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
                     key={getReviewThreadRefKey(thread)}
                     containerRef={(node) => registerThreadAnchor(thread, node)}
                     defaultReviewEditorMode={defaultReviewEditorMode}
-                    floatingReviewEditorControls={floatingReviewEditorControls}
                     deletingCommentIds={deletingCommentIds}
                     patchViewerSessionKey={patchViewerSessionKey}
                     resolvingThreadId={resolvingThreadId}
@@ -2164,7 +2149,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
       return (
         <FloatingLineDraftEditorForTarget
           defaultMode={defaultReviewEditorMode}
-          floatingControls={floatingReviewEditorControls}
           editor={editor}
           fileDiffs={parsedFileDiffs}
           portalRootId={draftAnnotation.portalRootId}
@@ -2218,7 +2202,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
         containerRef={(node) => registerThreadAnchor(threadAnnotation.thread, node)}
         defaultCollapsed={threadAnnotation.defaultCollapsed}
         defaultReviewEditorMode={defaultReviewEditorMode}
-        floatingReviewEditorControls={floatingReviewEditorControls}
         deletingCommentIds={deletingCommentIds}
         patchViewerSessionKey={patchViewerSessionKey}
         resolvingThreadId={resolvingThreadId}
@@ -2391,7 +2374,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
           </Button>
         </div>
       ) : null}
-      <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-20" />
+      <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-[4]" />
     </div>
   );
 });
@@ -2441,7 +2424,6 @@ function PatchViewerMain({
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
   const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
-  const floatingReviewEditorControls = reviewEditorSettingsQuery.data?.floatingControls ?? false;
   const patchViewerSessionKey = selectedPrKey
     ? `${selectedPrKey}:${isGitDiffMode ? 'git' : 'provider'}`
     : null;
@@ -3820,7 +3802,6 @@ function PatchViewerMain({
   const patchFileDiffItemContextValue = useMemo<PatchFileDiffItemContextValue>(
     () => ({
       defaultReviewEditorMode,
-      floatingReviewEditorControls,
       deletingCommentIds,
       patchViewerSessionKey,
       resolvingThreadId,
@@ -3849,7 +3830,6 @@ function PatchViewerMain({
     }),
     [
       defaultReviewEditorMode,
-      floatingReviewEditorControls,
       deletingCommentIds,
       handleDeleteComment,
       handleDeletePendingComment,
@@ -3968,7 +3948,6 @@ function PatchViewerMain({
 
                         <GlobalCommentsSection
                           defaultReviewEditorMode={defaultReviewEditorMode}
-                          floatingReviewEditorControls={floatingReviewEditorControls}
                           deletingCommentIds={deletingCommentIds}
                           patchViewerSessionKey={patchViewerSessionKey}
                           resolvingThreadId={resolvingThreadId}

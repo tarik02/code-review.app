@@ -34,7 +34,6 @@ import {
 import { Button } from '../button';
 import { Input } from '../input';
 import { writeClipboardText } from '../../../lib/clipboard';
-import { useReviewCommentEditorPortalContainer } from './portal-context';
 
 type LinkLikeNode = LexicalNode & {
   setTitle: (title: string) => void;
@@ -61,7 +60,6 @@ function ReviewCommentLinkDialog() {
   const removeLink = usePublisher(removeLink$);
   const cancelLinkEdit = usePublisher(cancelLinkEdit$);
   const switchFromPreviewToLinkEdit = usePublisher(switchFromPreviewToLinkEdit$);
-  const portalContainer = useReviewCommentEditorPortalContainer();
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const inputId = useId();
@@ -276,7 +274,7 @@ function ReviewCommentLinkDialog() {
   }
 
   return (
-    <FloatingPortal root={portalContainer}>
+    <FloatingPortal>
       <form
         ref={(node) => {
           formRef.current = node;

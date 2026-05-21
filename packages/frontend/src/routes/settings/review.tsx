@@ -8,9 +8,8 @@ import {
   FieldTitle,
 } from '../../components/ui/field';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
-import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
-import { reviewEditorSettingsQueryOptions, setReviewEditorSettings } from '../../queries/forge';
-import type { ReviewEditorMode, ReviewEditorSettings } from '../../types/forge';
+import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from '../../queries/forge';
+import type { ReviewEditorMode } from '../../types/forge';
 
 const reviewEditorModeOptions: { value: ReviewEditorMode; label: string }[] = [
   { value: 'rich-text', label: 'Rich text' },
@@ -27,14 +26,8 @@ function ReviewRoute() {
   const reviewEditorSettingsOptions = reviewEditorSettingsQueryOptions();
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsOptions);
   const reviewEditorSettingsQueryKey = reviewEditorSettingsOptions.queryKey;
-  const fallbackReviewEditorSettings = {
-    defaultMode: 'rich-text',
-    floatingControls: false,
-  } satisfies ReviewEditorSettings;
-  const reviewEditorSettings =
-    reviewEditorSettingsQuery.data ?? fallbackReviewEditorSettings;
-  const reviewEditorSettingsMutation = useMutation({
-    mutationFn: setReviewEditorSettings,
+  const reviewEditorModeMutation = useMutation({
+    mutationFn: setReviewEditorDefaultMode,
     onMutate: async () => {
       await queryClient.cancelQueries({
         queryKey: reviewEditorSettingsQueryKey,
@@ -44,16 +37,9 @@ function ReviewRoute() {
       queryClient.setQueryData(reviewEditorSettingsQueryKey, settings);
     },
   });
-  const defaultMode = reviewEditorSettings.defaultMode;
-  const error = reviewEditorSettingsMutation.error ?? reviewEditorSettingsQuery.error;
-  const isSaving = reviewEditorSettingsMutation.isPending;
-
-  function updateReviewEditorSettings(settings: Partial<ReviewEditorSettings>) {
-    reviewEditorSettingsMutation.mutate({
-      ...reviewEditorSettings,
-      ...settings,
-    });
-  }
+  const defaultMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
+  const error = reviewEditorModeMutation.error ?? reviewEditorSettingsQuery.error;
+  const isSaving = reviewEditorModeMutation.isPending;
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-5 px-8 py-8">
@@ -76,7 +62,7 @@ function ReviewRoute() {
             value={defaultMode}
             onValueChange={(mode) => {
               if (mode !== defaultMode) {
-                updateReviewEditorSettings({ defaultMode: mode });
+                reviewEditorModeMutation.mutate(mode);
               }
             }}
           >
@@ -109,33 +95,6 @@ function ReviewRoute() {
               );
             })}
           </RadioGroup>
-        </div>
-
-        <div className="mt-4 grid gap-3 border-t border-ink-200 pt-4 md:grid-cols-[minmax(0,1fr)_240px] md:items-start">
-          <div>
-            <h4 className="text-sm font-semibold text-ink-900">Floating controls</h4>
-            <p className="mt-1 text-sm text-ink-500">
-              Show editor toolbar and submit actions as hover/focus overlays.
-            </p>
-          </div>
-          <ToggleGroup<'off' | 'on'>
-            className="grid w-full grid-cols-2 bg-canvasDark md:justify-self-end"
-            disabled={isSaving}
-            value={[reviewEditorSettings.floatingControls ? 'on' : 'off']}
-            onValueChange={(nextValue) => {
-              const floatingControlsValue = nextValue[0];
-              if (!floatingControlsValue) {
-                return;
-              }
-
-              updateReviewEditorSettings({
-                floatingControls: floatingControlsValue === 'on',
-              });
-            }}
-          >
-            <ToggleGroupItem value="off">Off</ToggleGroupItem>
-            <ToggleGroupItem value="on">On</ToggleGroupItem>
-          </ToggleGroup>
         </div>
 
         {error ? (

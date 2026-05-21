@@ -27,7 +27,6 @@ import {
 import { ReviewCommentEditorFooter } from './footer';
 import { getLanguageFromPath } from './language';
 import { ReviewCommentLinkDialog } from './link-dialog';
-import { ReviewCommentEditorPortalContext } from './portal-context';
 import { createSourceEditorViewBridge } from './source-editor-bridge';
 import { suggestionCodeBlockDescriptor } from './suggestion-code-block-editor';
 import { SuggestionEditorContext } from './suggestion-context';
@@ -128,7 +127,6 @@ function restoreCursorPosition(root: HTMLElement, cursorPosition: SerializedCurs
 
 function ReviewCommentEditorInner({
   defaultMode = 'rich-text',
-  floatingControls = false,
   initialValue = '',
   value,
   cursorPosition = null,
@@ -154,7 +152,6 @@ function ReviewCommentEditorInner({
   const [initialViewMode] = useState(defaultMode);
   const [sourceEditorView, setSourceEditorView] = useState<EditorView | null>(null);
   const [body, setBody] = useState(initialValue);
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
   const isControlled = value !== undefined;
   const currentBody = value ?? body;
   const lastMarkdownRef = useRef(value ?? initialValue);
@@ -389,51 +386,43 @@ function ReviewCommentEditorInner({
   }
 
   return (
-    <div
-      className={[
-        'comment-editor-root font-sans',
-        floatingControls ? 'comment-editor-root--floating-controls' : '',
-      ].join(' ')}
-    >
-      <ReviewCommentEditorPortalContext.Provider value={portalContainer}>
-        <div
-          ref={editorHostRef}
-          className="comment-editor-shell"
-          onBlurCapture={captureCursorPosition}
-          onKeyUpCapture={scheduleCursorPositionCapture}
-          onMouseUpCapture={scheduleCursorPositionCapture}
-          onPointerUpCapture={scheduleCursorPositionCapture}
-        >
-          <SuggestionEditorContext.Provider value={suggestionEditorContext}>
-            <MDXEditor
-              ref={editorRef}
-              autoFocus={autoFocus ? { defaultSelection: 'rootEnd', preventScroll: true } : false}
-              className="comment-editor"
-              contentEditableClassName="comment-editor-content comment-markdown"
-              markdown={value ?? initialValue}
-              onChange={handleChange}
-              placeholder={placeholder}
-              plugins={plugins}
-              readOnly={isPending}
-              suppressHtmlProcessing
-              trim={false}
-            />
-          </SuggestionEditorContext.Provider>
-          <ReviewCommentEditorFooter
-            canSubmit={!isPending && currentBody.trim().length > 0}
-            cancelLabel={cancelLabel}
-            isPending={isPending}
-            secondarySubmitLabel={secondarySubmitLabel}
-            submitLabel={submitLabel}
-            onCancel={onCancel}
-            onSecondarySubmit={
-              onSecondarySubmit ? () => void handleSubmit(onSecondarySubmit) : undefined
-            }
-            onSubmit={() => void handleSubmit(onSubmit)}
+    <div className="font-sans">
+      <div
+        ref={editorHostRef}
+        className="comment-editor-shell"
+        onBlurCapture={captureCursorPosition}
+        onKeyUpCapture={scheduleCursorPositionCapture}
+        onMouseUpCapture={scheduleCursorPositionCapture}
+        onPointerUpCapture={scheduleCursorPositionCapture}
+      >
+        <SuggestionEditorContext.Provider value={suggestionEditorContext}>
+          <MDXEditor
+            ref={editorRef}
+            autoFocus={autoFocus ? { defaultSelection: 'rootEnd', preventScroll: true } : false}
+            className="comment-editor"
+            contentEditableClassName="comment-editor-content comment-markdown"
+            markdown={value ?? initialValue}
+            onChange={handleChange}
+            placeholder={placeholder}
+            plugins={plugins}
+            readOnly={isPending}
+            suppressHtmlProcessing
+            trim={false}
           />
-        </div>
-        <div ref={setPortalContainer} className="comment-editor-portal-root" />
-      </ReviewCommentEditorPortalContext.Provider>
+        </SuggestionEditorContext.Provider>
+        <ReviewCommentEditorFooter
+          canSubmit={!isPending && currentBody.trim().length > 0}
+          cancelLabel={cancelLabel}
+          isPending={isPending}
+          secondarySubmitLabel={secondarySubmitLabel}
+          submitLabel={submitLabel}
+          onCancel={onCancel}
+          onSecondarySubmit={
+            onSecondarySubmit ? () => void handleSubmit(onSecondarySubmit) : undefined
+          }
+          onSubmit={() => void handleSubmit(onSubmit)}
+        />
+      </div>
       {error || suggestionError ? (
         <div className="mt-2 text-sm text-danger-600">{error || suggestionError}</div>
       ) : null}

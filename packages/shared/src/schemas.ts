@@ -189,7 +189,6 @@ const codeAppearanceSettingsSchema = z.object({
 
 const reviewEditorSettingsSchema = z.object({
   defaultMode: reviewEditorModeSchema,
-  floatingControls: z.boolean(),
 });
 
 const appearanceBackgroundInputSchema = z.discriminatedUnion('kind', [

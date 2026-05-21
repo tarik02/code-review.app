@@ -30,7 +30,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../../../lib/utils';
 import { Combobox } from '../combobox';
 import { toggleCodeFormatting } from '../review-comment-editor-actions';
-import { useReviewCommentEditorPortalContainer } from './portal-context';
 import { createSuggestionLineNumberGutter } from './suggestion-gutter';
 import type { SuggestionGutterColumns } from './types';
 
@@ -198,7 +197,6 @@ function CommentCodeMirrorEditor({
     getCodemirror: () => editorViewRef.current,
   });
   const { lexicalNode, parentEditor, setCode } = useCodeBlockEditorContext();
-  const portalContainer = useReviewCommentEditorPortalContainer();
   const lexicalNodeRef = useRef(lexicalNode);
   const setEditorInFocus = usePublisher(editorInFocus$);
   const [readOnly, codeMirrorExtensions, autoLoadLanguageSupport, codeBlockLanguages] =
@@ -455,7 +453,6 @@ function CommentCodeMirrorEditor({
             disabled={readOnly}
             options={languageOptions}
             placeholder={t('codeBlock.inlineLanguage', 'Language')}
-            portalContainer={portalContainer}
             value={selectedLanguage || null}
             onOpenChange={setIsLanguageComboboxOpen}
             onValueChange={handleLanguageChange}

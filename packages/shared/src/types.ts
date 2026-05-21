@@ -30,7 +30,6 @@ type ReviewEditorMode = 'rich-text' | 'source';
 
 type ReviewEditorSettings = {
   defaultMode: ReviewEditorMode;
-  floatingControls: boolean;
 };
 
 type RepoIdentity = {

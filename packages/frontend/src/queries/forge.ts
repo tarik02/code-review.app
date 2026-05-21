@@ -23,6 +23,7 @@ import type {
   PullRequestApprovalState,
   PullRequestQualityReport,
   ReplyToPullRequestReviewCommentInput,
+  ReviewEditorMode,
   ReviewEditorSettings,
   RepoIdentity,
   SelectedPullRequest,
@@ -281,8 +282,8 @@ async function setCodeAppearanceSettings(settings: CodeAppearanceSettings) {
   return trpc.settings.setCodeAppearanceSettings.mutate(settings);
 }
 
-async function setReviewEditorSettings(settings: ReviewEditorSettings) {
-  return trpc.settings.setReviewEditorSettings.mutate(settings);
+async function setReviewEditorDefaultMode(mode: ReviewEditorMode) {
+  return trpc.settings.setReviewEditorSettings.mutate({ defaultMode: mode });
 }
 
 async function setDataSourcesSettings(settings: PullRequestDataSourcesSettings) {
@@ -696,7 +697,7 @@ export {
   setDiffDataMode,
   setTrackedPullRequestOrder,
   setThemePreference,
-  setReviewEditorSettings,
+  setReviewEditorDefaultMode,
   selectCustomBackgroundFile,
   setCodeAppearanceSettings,
   setDataSourcesSettings,
