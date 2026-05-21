@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- 00d3659: improve pull request review layout and summary actions
+- 799f365: improve pull request refresh, link, copy, and stale approval actions
+- 00d3659: refactor provider auth around stable profile records
+- 799f365: use exhaustive tagged error matching for provider failures
+- 00d3659: add resizable pull request and review panels
+- 799f365: reset sqlite schema migrations to a single baseline
+- 799f365: retry transient GitLab read transport failures
+
 ## 0.2.1
 
 ### Patch Changes
