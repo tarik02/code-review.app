@@ -1,4 +1,4 @@
-import { Effect, Layer } from 'effect';
+import { Cause, Effect, Layer } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
 import { GitService } from '../git/service.ts';
@@ -69,8 +69,7 @@ const makeDiffDataService = Effect.gen(function* () {
   }) =>
     Effect.try({
       try: () => parsePullRequestPatch(input),
-      catch: (error) =>
-        error instanceof Error ? error : new Error('Failed to parse the PR patch.'),
+      catch: (cause) => new Cause.UnknownException(cause),
     });
 
   const getPatch: DiffDataServiceShape['getPatch'] = Effect.fn('DiffDataService.getPatch')(

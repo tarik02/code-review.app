@@ -1,0 +1,7 @@
+id: no-is-error
+language: tsx
+message: do not add is*Error guards; keep error channels typed and match tags exhaustively
+severity: error
+rule:
+  kind: identifier
+  regex: ^is[A-Z].*Error$

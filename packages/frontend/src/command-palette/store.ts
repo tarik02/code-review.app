@@ -97,12 +97,6 @@ function withExclusiveOpenState(
   };
 }
 
-function getErrorMessage(error: unknown): string {
-  if (!error) return '';
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 function browseSearchInputKey(state: CommandPaletteStore) {
   return JSON.stringify({
     accountIds: state.browseSearchAccountIds,
@@ -208,7 +202,7 @@ const useCommandPaletteStore = create<CommandPaletteStore>()((set, get) => {
       {
         onData: updateBrowseSearchSnapshot,
         onError: (error) => {
-          failBrowseSearch(accountIds, getErrorMessage(error));
+          failBrowseSearch(accountIds, error.message);
         },
       },
     );

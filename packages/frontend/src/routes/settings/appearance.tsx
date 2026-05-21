@@ -67,8 +67,13 @@ const DEFAULT_CODE_APPEARANCE_SETTINGS: CodeAppearanceSettings = {
   diffThemePreset: 'pierre',
 };
 
-function getErrorText(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+function getErrorText(cause: unknown, fallback: string) {
+  return typeof cause === 'object' &&
+    cause !== null &&
+    'message' in cause &&
+    typeof cause.message === 'string'
+    ? cause.message
+    : fallback;
 }
 
 function AppearanceRoute() {

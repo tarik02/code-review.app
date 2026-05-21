@@ -8,8 +8,8 @@ import { RepoSidebar, type SidebarPullRequestView } from '../components/ui/repo-
 import { HomeCommandPalettes } from '../command-palette/CommandPalette';
 import { PatchViewerMain } from '../components/ui/patch-viewer-main';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../components/ui/resizable';
+import { AppToaster, appToastManager } from '../components/ui/toast';
 import {
-  getErrorMessage,
   useDataSourcePullRequests,
   useSavedRepos,
   useSelectedPullRequestData,
@@ -59,6 +59,10 @@ import type {
 const REPO_SIDEBAR_DEFAULT_SIZE = '360px';
 const REPO_SIDEBAR_MIN_SIZE = '300px';
 const REPO_SIDEBAR_MAX_SIZE = '620px';
+
+function isStaleApprovalErrorMessage(message: string) {
+  return message.toLowerCase().includes('sha does not match head');
+}
 
 function isSamePullRequestEntry(
   left: OverviewPullRequestSummary,
@@ -199,8 +203,8 @@ function MainApp() {
       ) ?? null
     );
   }, [activePullRequestNumber, activeRepoIdentity, recentPullRequestsQuery.data]);
-  const activeFallbackPullRequestQuery = useQuery({
-    queryKey:
+  const activeFallbackPullRequestQueryKey = useMemo(
+    () =>
       activeRepoIdentity && activePullRequestNumber !== null
         ? [
             ...forgeKeys.pullRequests(),
@@ -210,6 +214,10 @@ function MainApp() {
             activePullRequestNumber,
           ]
         : [...forgeKeys.pullRequests(), 'selected-fallback', 'idle'],
+    [activePullRequestNumber, activeRepoIdentity],
+  );
+  const activeFallbackPullRequestQuery = useQuery({
+    queryKey: activeFallbackPullRequestQueryKey,
     queryFn: () => {
       if (!activeRepoIdentity || activePullRequestNumber === null) {
         throw new Error('No pull request selected');
@@ -424,6 +432,70 @@ function MainApp() {
     () => buildPullRequestQualityView(qualityReport, selectedPatch?.fileDiffs ?? []),
     [qualityReport, selectedPatch?.fileDiffs],
   );
+  const [isRefreshingPullRequest, setIsRefreshingPullRequest] = useState(false);
+  const handleRefreshSelectedPullRequest = useCallback(() => {
+    if (!selectedPr || isRefreshingPullRequest) {
+      return;
+    }
+
+    setIsRefreshingPullRequest(true);
+    void (async () => {
+      const invalidations = [
+        queryClient.invalidateQueries({ queryKey: activeFallbackPullRequestQueryKey }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestList(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestCachedList(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.trackedPullRequestList(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestRecentList() }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestPatch(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestFiles(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestReviewThreads(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestPendingReview(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestApprovalState(selectedPr) }),
+        queryClient.invalidateQueries({ queryKey: forgeKeys.pullRequestQualityReport(selectedPr) }),
+      ];
+
+      if (activeDataSource) {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: forgeKeys.pullRequestDataSourceList(activeDataSource),
+          }),
+        );
+      }
+
+      if (selectedRepo) {
+        invalidations.push(
+          queryClient.invalidateQueries({
+            queryKey: forgeKeys.pullRequestOverview(selectedRepo.providerAccountId),
+          }),
+        );
+      }
+
+      await Promise.all(invalidations);
+    })()
+      .catch(() => undefined)
+      .finally(() => setIsRefreshingPullRequest(false));
+  }, [
+    activeDataSource,
+    activeFallbackPullRequestQueryKey,
+    isRefreshingPullRequest,
+    queryClient,
+    selectedPr,
+    selectedRepo,
+  ]);
+  const handleApproveError = useCallback((error: Error) => {
+    const isStaleApproval = isStaleApprovalErrorMessage(error.message);
+    appToastManager.add({
+      id: 'approval-failed',
+      title: 'Approval failed',
+      description: isStaleApproval
+        ? 'Source branch changed. Refresh pull request details, comments, and diff, then try again.'
+        : error.message,
+      type: 'error',
+      priority: 'high',
+      timeout: 10_000,
+      data: isStaleApproval ? { action: 'refresh-pull-request' } : {},
+    });
+  }, []);
   const parsedPatch = useMemo(
     () => ({
       fileDiffs: selectedPatch
@@ -742,11 +814,11 @@ function MainApp() {
     const subscription = trpc.deepLinks.urls.subscribe(undefined, {
       onData(url) {
         void openForgePullRequestLink(url).catch((error) => {
-          setDeepLinkMessage(getErrorMessage(error));
+          setDeepLinkMessage(error.message);
         });
       },
       onError(error) {
-        setDeepLinkMessage(getErrorMessage(error));
+        setDeepLinkMessage(error.message);
       },
     });
 
@@ -995,6 +1067,9 @@ function MainApp() {
             fileStats={fileStats}
             gitStatus={gitStatus}
             isRepoSidebarCollapsed={isRepoSidebarCollapsed}
+            isRefreshingPullRequest={isRefreshingPullRequest}
+            onApproveError={handleApproveError}
+            onRefreshPullRequest={handleRefreshSelectedPullRequest}
             onToggleRepoSidebar={toggleRepoSidebar}
           />
         </ResizablePanel>
@@ -1005,16 +1080,20 @@ function MainApp() {
           {deepLinkMessage}
         </div>
       ) : null}
+      <AppToaster onRefreshPullRequest={handleRefreshSelectedPullRequest} />
       <HomeCommandPalettes
         approvalState={approvalState}
         changedFiles={changedFiles}
         diffSessionKey={patchViewerSessionKey}
         patchViewerSessionKey={patchViewerSessionKey}
+        isRefreshingPullRequest={isRefreshingPullRequest}
         localPullRequests={commandPaletteLocalPullRequests}
         trackedPullRequestNumbersByRepo={trackedPullRequestNumbersByRepo}
         onToggleTrackedPullRequest={(entry, tracked) =>
           void handleToggleTrackedPullRequest(entry, tracked)
         }
+        onApproveError={handleApproveError}
+        onRefreshPullRequest={handleRefreshSelectedPullRequest}
         pendingReview={pendingReview}
         reviewThreads={reviewThreads}
         selectedPr={selectedPr}

@@ -35,6 +35,8 @@ class CliExecutionError extends BackendError {
 }
 
 class ProviderError extends BackendError {
+  readonly _tag = 'ProviderError';
+
   constructor(message: string, options?: ErrorOptions) {
     super('ProviderError', message, options);
   }
@@ -50,16 +52,6 @@ class UpdateError extends BackendError {
   constructor(message: string, options?: ErrorOptions) {
     super('UpdateError', message, options);
   }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
-function ensureError(error: unknown): Error {
-  if (error instanceof Error) return error;
-  return new Error(String(error), { cause: error });
 }
 
 function formatLogDetails(details: unknown): string {
@@ -78,10 +70,8 @@ export {
   CliAuthError,
   CliExecutionError,
   CliMissingError,
-  ensureError,
   formatLogDetails,
   ProviderError,
   UpdateError,
   ValidationError,
-  getErrorMessage,
 };

@@ -26,14 +26,6 @@ type AppUpdaterProps = {
   containerClassName?: string;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return String(error);
-}
-
 function formatProgress(progress: DownloadProgress | null) {
   if (!progress) {
     return null;
@@ -97,7 +89,7 @@ function AppUpdater({
       },
       onError(error) {
         if (!isMounted) return;
-        setFeedback(`Update events failed: ${getErrorMessage(error)}`);
+        setFeedback(`Update events failed: ${error.message}`);
       },
     });
 
@@ -110,7 +102,7 @@ function AppUpdater({
       .catch((error) => {
         if (!isMounted) return;
         setAvailableUpdate(null);
-        setFeedback(`Update check failed: ${getErrorMessage(error)}`);
+        setFeedback(`Update check failed: ${error.message}`);
       });
 
     return () => {
@@ -134,7 +126,9 @@ function AppUpdater({
       await trpc.updates.install.mutate();
       setFeedback('Update installed. Relaunching code-review.app...');
     } catch (error) {
-      setFeedback(`Update install failed: ${getErrorMessage(error)}`);
+      setFeedback(
+        `Update install failed: ${new Error('Update install failed.', { cause: error }).message}`,
+      );
     } finally {
       setIsInstalling(false);
     }

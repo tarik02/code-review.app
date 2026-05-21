@@ -1,7 +1,6 @@
 import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
 import { hostNameFromHost, normalizeHost } from '../repo-id.ts';
-import { Effect } from 'effect';
-import { ensureError } from '../errors.ts';
+import { Cause, Effect } from 'effect';
 import { CacheService } from '../cache.ts';
 import { AuthTokenStore } from './token-store.ts';
 import {
@@ -54,10 +53,6 @@ type DeviceOAuthPollResult =
   | { status: 'complete'; token: StoredAuthToken };
 
 const REFRESH_SKEW_MS = 60_000;
-
-function toError(error: unknown) {
-  return ensureError(error);
-}
 
 function redirectUri() {
   return DEFAULT_OAUTH_REDIRECT_URI;
@@ -203,11 +198,11 @@ function fetchOAuthViewerLogin(
     const client = yield* HttpClient.HttpClient;
     const response = yield* client.execute(request).pipe(
       Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.mapError(toError),
+      Effect.mapError((cause) => new Cause.UnknownException(cause)),
     );
     const payload = yield* response.json.pipe(
       Effect.map((value) => value as OAuthViewerPayload),
-      Effect.mapError(toError),
+      Effect.mapError((cause) => new Cause.UnknownException(cause)),
     );
     const login = provider === 'github' ? payload.login : payload.username;
     if (typeof login !== 'string' || login.trim().length === 0) {
@@ -238,9 +233,11 @@ function resolveOAuthAccountId(
     }
 
     const cache = yield* CacheService;
-    const cachedProfile = yield* cache
-      .readProviderProfileByLogin(provider, normalizedHost, viewerLogin)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const cachedProfile = yield* cache.readProviderProfileByLogin(
+      provider,
+      normalizedHost,
+      viewerLogin,
+    );
     return cachedProfile?.accountId ?? requestedAccountId;
   });
 }
@@ -256,10 +253,12 @@ function oauthFormJson<A>(
       HttpClientRequest.bodyText(body.toString(), 'application/x-www-form-urlencoded'),
     );
     const client = yield* HttpClient.HttpClient;
-    const response = yield* client.execute(request).pipe(Effect.mapError(toError));
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError((cause) => new Cause.UnknownException(cause)));
     return yield* response.json.pipe(
       Effect.map((payload) => payload as A),
-      Effect.mapError(toError),
+      Effect.mapError((cause) => new Cause.UnknownException(cause)),
     );
   });
 }
@@ -283,7 +282,7 @@ function requestDeviceOAuthCode(
   return Effect.gen(function* () {
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, host, clientId),
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     });
     if (!config.deviceCodeUrl) {
       return yield* Effect.fail(new Error('Device authorization is only supported for GitHub.'));
@@ -326,7 +325,7 @@ function exchangeOAuthCode(
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, host, clientId, clientSecret),
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     });
     const body = new URLSearchParams({
       client_id: config.clientId,
@@ -382,7 +381,7 @@ function exchangeDeviceOAuthCode(
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
       try: () => oauthConfig(provider, host, clientId),
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     });
     const body = new URLSearchParams({
       client_id: config.clientId,
@@ -440,7 +439,7 @@ function refreshStoredAuthToken(
     const tokenStore = yield* AuthTokenStore;
     const config = yield* Effect.try({
       try: () => oauthConfig(token.provider, token.host, token.clientId),
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     });
     const body = new URLSearchParams({
       client_id: config.clientId,

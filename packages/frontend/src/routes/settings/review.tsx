@@ -8,7 +8,6 @@ import {
   FieldTitle,
 } from '../../components/ui/field';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
-import { getErrorMessage } from '../../hooks/use-forge-queries';
 import { reviewEditorSettingsQueryOptions, setReviewEditorDefaultMode } from '../../queries/forge';
 import type { ReviewEditorMode } from '../../types/forge';
 
@@ -100,7 +99,7 @@ function ReviewRoute() {
 
         {error ? (
           <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-danger-600 dark:border-red-900/40 dark:bg-red-950/30">
-            {getErrorMessage(error)}
+            {error.message}
           </p>
         ) : null}
       </section>

@@ -1,10 +1,10 @@
 import { createClient, type Client } from '@libsql/client/sqlite3';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
-import { Effect, Layer } from 'effect';
+import { Cause, Effect, Layer } from 'effect';
 import { pathToFileURL } from 'node:url';
 import { BackendConfig, type BackendRuntimeConfig } from '../config.ts';
-import { CacheError, ensureError } from '../errors.ts';
+import { CacheError } from '../errors.ts';
 import * as schema from './schema.ts';
 
 type Database = LibSQLDatabase<typeof schema>;
@@ -27,9 +27,9 @@ class DatabaseService extends Effect.Tag('DatabaseService')<
   DatabaseServiceShape
 >() {}
 
-function toCacheError(error: unknown) {
-  const cause = ensureError(error);
-  return new CacheError(cause.message, { cause });
+function toCacheError(cause: unknown) {
+  const error = new Cause.UnknownException(cause);
+  return new CacheError(error.message, { cause: error });
 }
 
 async function initializeDatabase(config: BackendRuntimeConfig): Promise<DatabaseHandle> {

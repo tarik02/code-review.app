@@ -1,20 +1,7 @@
-import { Effect } from 'effect';
+import { Effect, Match } from 'effect';
 import { ProviderError, ValidationError } from '../../errors.ts';
 import type { GitServiceShape } from '../../git/service.ts';
-import {
-  GitAuthenticationFailed,
-  GitAuthorizationFailed,
-  GitCommandFailed,
-  GitCommandTimedOut,
-  GitExecutableNotFound,
-  GitPartialCloneUnsupported,
-  GitPathNotFound,
-  GitRefNotFound,
-  GitRepositoryNotFound,
-  GitUnknownCommandError,
-  firstLine,
-  type GitError,
-} from '../../git/errors.ts';
+import { firstLine, type GitError } from '../../git/errors.ts';
 import type {
   AccountScopedForgeProvider,
   ForgeProviderRegistryShape,
@@ -77,53 +64,71 @@ function gitProviderError(message: string, error: GitError) {
 }
 
 function gitErrorToProviderError(error: GitError) {
-  if (error instanceof GitExecutableNotFound) {
-    return new ProviderError('Git mode requires git to be installed and available on PATH.', {
-      cause: error,
-    });
-  }
-  if (error instanceof GitAuthenticationFailed) {
-    return gitProviderError(
-      'Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.',
-      error,
-    );
-  }
-  if (error instanceof GitAuthorizationFailed) {
-    return gitProviderError('Your account cannot fetch this repository with git.', error);
-  }
-  if (error instanceof GitRepositoryNotFound) {
-    return gitProviderError('Git could not find this repository.', error);
-  }
-  if (error instanceof GitRefNotFound) {
-    return gitProviderError('Git could not fetch one of the PR refs.', error);
-  }
-  if (error instanceof GitPathNotFound) {
-    return gitProviderError('Git could not find this file at the requested ref.', error);
-  }
-  if (error instanceof GitPartialCloneUnsupported) {
-    return gitProviderError('This git server does not support blobless partial clone.', error);
-  }
-  if (error instanceof GitCommandTimedOut) {
-    return gitProviderError('Git command timed out.', error);
-  }
-  if (error instanceof GitCommandFailed) {
-    return gitProviderError(
-      `Git command failed: ${firstLine(error.stderr) || firstLine(error.stdout) || 'unknown git error'}`,
-      error,
-    );
-  }
-  if (error instanceof GitUnknownCommandError) {
-    return new ProviderError('Git command failed unexpectedly.', { cause: error });
-  }
-  return new ProviderError('Git command failed unexpectedly.', { cause: error });
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      GitAuthenticationFailed: (gitError) =>
+        gitProviderError(
+          'Git authentication failed for this repository. Sign in again or switch diff loading to Provider API.',
+          gitError,
+        ),
+      GitAuthorizationFailed: (gitError) =>
+        gitProviderError('Your account cannot fetch this repository with git.', gitError),
+      GitCommandFailed: (gitError) =>
+        gitProviderError(
+          `Git command failed: ${firstLine(gitError.stderr) || firstLine(gitError.stdout) || 'unknown git error'}`,
+          gitError,
+        ),
+      GitCommandTimedOut: (gitError) => gitProviderError('Git command timed out.', gitError),
+      GitExecutableNotFound: (gitError) =>
+        new ProviderError('Git mode requires git to be installed and available on PATH.', {
+          cause: gitError,
+        }),
+      GitPartialCloneUnsupported: (gitError) =>
+        gitProviderError('This git server does not support blobless partial clone.', gitError),
+      GitPathNotFound: (gitError) =>
+        gitProviderError('Git could not find this file at the requested ref.', gitError),
+      GitRefNotFound: (gitError) =>
+        gitProviderError('Git could not fetch one of the PR refs.', gitError),
+      GitRepositoryNotFound: (gitError) =>
+        gitProviderError('Git could not find this repository.', gitError),
+      GitUnknownCommandError: (gitError) =>
+        new ProviderError('Git command failed unexpectedly.', { cause: gitError }),
+    }),
+  );
 }
 
 function logGitError(context: string, error: GitError) {
+  const logDetails = Match.value(error).pipe(
+    Match.tagsExhaustive({
+      GitAuthenticationFailed: (gitError) => ({
+        tag: 'GitAuthenticationFailed',
+        error: gitError,
+      }),
+      GitAuthorizationFailed: (gitError) => ({
+        tag: 'GitAuthorizationFailed',
+        error: gitError,
+      }),
+      GitCommandFailed: (gitError) => ({ tag: 'GitCommandFailed', error: gitError }),
+      GitCommandTimedOut: (gitError) => ({ tag: 'GitCommandTimedOut', error: gitError }),
+      GitExecutableNotFound: (gitError) => ({ tag: 'GitExecutableNotFound', error: gitError }),
+      GitPartialCloneUnsupported: (gitError) => ({
+        tag: 'GitPartialCloneUnsupported',
+        error: gitError,
+      }),
+      GitPathNotFound: (gitError) => ({ tag: 'GitPathNotFound', error: gitError }),
+      GitRefNotFound: (gitError) => ({ tag: 'GitRefNotFound', error: gitError }),
+      GitRepositoryNotFound: (gitError) => ({ tag: 'GitRepositoryNotFound', error: gitError }),
+      GitUnknownCommandError: (gitError) => ({
+        tag: 'GitUnknownCommandError',
+        error: { args: gitError.args },
+      }),
+    }),
+  );
+
   return Effect.logDebug('[diff-data] git backend error').pipe(
     Effect.annotateLogs({
       context,
-      tag: error._tag,
-      error: error instanceof GitUnknownCommandError ? { args: error.args } : error,
+      ...logDetails,
     }),
   );
 }

@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getErrorMessage } from '../hooks/use-forge-queries';
 import { trpc } from '../lib/trpc';
 import {
   forgeKeys,
@@ -17,6 +16,7 @@ import {
   providerStatusesQueryOptions,
 } from '../queries/forge';
 import { normalizeHostInput } from '../lib/forge-links';
+import { getCaughtErrorMessage } from '../lib/caught-error';
 import type { ForgeProviderKind, ProviderAccount, ProviderAuthStatus } from '../types/forge';
 
 type AuthSessionValue = {
@@ -75,8 +75,8 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   const providerStatusMessage =
     authMessage ??
     gateStatus.message ??
-    (getErrorMessage(providerAccountsQuery.error) ||
-      getErrorMessage(providerStatusesQuery.error) ||
+    (providerAccountsQuery.error?.message ||
+      providerStatusesQuery.error?.message ||
       null);
 
   const checkAgain = useCallback(() => {
@@ -153,7 +153,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         pendingOAuthRef.current = null;
         setPendingOAuthStartedAt(null);
-        setAuthMessage(getErrorMessage(error));
+        setAuthMessage(getCaughtErrorMessage(error));
       } finally {
         setIsSigningIn(false);
       }
@@ -194,7 +194,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         pendingOAuthRef.current = null;
         setPendingOAuthStartedAt(null);
-        setAuthMessage(getErrorMessage(error));
+        setAuthMessage(getCaughtErrorMessage(error));
       }
     },
     [refreshAuthQueries],
@@ -206,7 +206,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
         void handleOAuthCallback(url);
       },
       onError(error) {
-        setAuthMessage(getErrorMessage(error));
+        setAuthMessage(error.message);
       },
     });
 
@@ -230,7 +230,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
         await handleOAuthCallback(callback.url);
       } catch (error) {
         if (!isDisposed) {
-          setAuthMessage(getErrorMessage(error));
+          setAuthMessage(getCaughtErrorMessage(error));
         }
       }
     }
@@ -285,7 +285,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (!isDisposed) {
           setPendingDeviceOAuth(null);
-          setAuthMessage(getErrorMessage(error));
+          setAuthMessage(getCaughtErrorMessage(error));
         }
       }
     }

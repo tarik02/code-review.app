@@ -29,7 +29,7 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
     openContent();
   });
 
-  useHotkey('Mod+Shift+P', (event) => {
+  useHotkey('/', (event) => {
     event.preventDefault();
     openWorkflow();
   });
@@ -45,11 +45,14 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
       <HomeWorkflowPalette
         approvalState={props.approvalState}
         diffSessionKey={props.diffSessionKey}
+        isRefreshingPullRequest={props.isRefreshingPullRequest}
         pendingReview={props.pendingReview}
         selectedPr={props.selectedPr}
         selectedPullRequestSummary={props.selectedPullRequestSummary}
         selectedPrKey={props.selectedPrKey}
         sidebarView={props.sidebarView}
+        onApproveError={props.onApproveError}
+        onRefreshPullRequest={props.onRefreshPullRequest}
         setSidebarView={props.setSidebarView}
       />
       <BrowsePalette
@@ -64,7 +67,7 @@ function HomeCommandPalettes(props: HomeCommandPalettesProps) {
 function SettingsCommandPalettes({ handleBackToPrs }: SettingsCommandPalettesProps) {
   const openWorkflow = useCommandPaletteStore((state) => state.openWorkflow);
 
-  useHotkey('Mod+Shift+P', (event) => {
+  useHotkey('/', (event) => {
     event.preventDefault();
     openWorkflow();
   });

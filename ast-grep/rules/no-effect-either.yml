@@ -1,0 +1,8 @@
+id: no-effect-either
+language: tsx
+message: use typed Effect matching instead of converting failures to Either
+severity: error
+rule:
+  any:
+    - pattern: Effect.either($$$ARGS)
+    - pattern: $EFFECT.pipe($$$BEFORE, Effect.either, $$$AFTER)

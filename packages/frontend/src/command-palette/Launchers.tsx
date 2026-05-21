@@ -35,7 +35,7 @@ function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope
             icon: PanelsTopLeftIcon,
             label: 'Sections and actions',
             onClick: openWorkflow,
-            shortcut: 'Mod+Shift+P',
+            shortcut: '/',
           },
           {
             id: 'browse',
@@ -51,7 +51,7 @@ function CommandPaletteLaunchers({ scope }: { scope: CommandPaletteLauncherScope
             icon: PanelsTopLeftIcon,
             label: 'Settings sections and actions',
             onClick: openWorkflow,
-            shortcut: 'Mod+Shift+P',
+            shortcut: '/',
           },
           {
             id: 'browse',

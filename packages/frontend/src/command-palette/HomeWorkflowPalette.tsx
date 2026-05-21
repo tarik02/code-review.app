@@ -1,11 +1,14 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
   CheckIcon,
+  CopyIcon,
+  ExternalLinkIcon,
   FilterXIcon,
   GitPullRequestIcon,
   MessageSquareMoreIcon,
   PanelsTopLeftIcon,
   PaintbrushIcon,
+  RefreshCwIcon,
   Settings2Icon,
   UserCircle2Icon,
 } from 'lucide-react';
@@ -26,6 +29,9 @@ import type {
 } from '../types/forge';
 import { Button } from '../components/ui/button';
 import { CommandPalette, type CommandPaletteItem } from '../components/ui/command-palette';
+import { appToastManager } from '../components/ui/toast';
+import { writeClipboardText } from '../lib/clipboard';
+import { providerFromProviderId } from '../lib/repo-identity';
 import { ActiveBadge } from './items';
 import { useCommandPaletteStore } from './store';
 import type { SidebarPullRequestView } from './types';
@@ -38,6 +44,9 @@ type HomeWorkflowPaletteProps = {
   selectedPullRequestSummary: PullRequestSummary | null;
   selectedPrKey: string | null;
   sidebarView: SidebarPullRequestView;
+  isRefreshingPullRequest: boolean;
+  onApproveError: (error: Error) => void;
+  onRefreshPullRequest: () => void;
   setSidebarView: (view: SidebarPullRequestView) => void;
 };
 
@@ -60,6 +69,9 @@ function HomeWorkflowPalette({
   selectedPullRequestSummary,
   selectedPrKey,
   sidebarView,
+  isRefreshingPullRequest,
+  onApproveError,
+  onRefreshPullRequest,
   setSidebarView,
 }: HomeWorkflowPaletteProps) {
   const navigate = useNavigate();
@@ -73,7 +85,9 @@ function HomeWorkflowPalette({
   const clearRepoFilter = useMainAppViewStore((state) => state.clearRepoFilter);
   const profileFilterAccountId = useMainAppViewStore((state) => state.profileFilterAccountId);
   const repoFilterKey = useMainAppViewStore((state) => state.repoFilterKey);
-  const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
+  const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr, {
+    onApproveError,
+  });
   const { discardPendingReviewMutation, publishPendingReviewMutation } =
     usePullRequestReviewCommentMutations(selectedPr);
   const submitReviewMode = useCommandPaletteStore((state) => state.workflowSubmitReviewMode);
@@ -85,6 +99,9 @@ function HomeWorkflowPalette({
   const workflowQuery = useCommandPaletteStore((state) => state.workflowQuery);
   const setWorkflowQuery = useCommandPaletteStore((state) => state.setWorkflowQuery);
   const { canApprove, canRequestChanges } = readReviewCapabilities(selectedPullRequestSummary);
+  const pullRequestUrl = selectedPullRequestSummary?.url ?? null;
+  const selectedProviderLabel =
+    selectedPr && providerFromProviderId(selectedPr.providerId) === 'github' ? 'GitHub' : 'GitLab';
   const effectiveSubmitAction =
     submitAction === 'approve' && !canApprove
       ? 'comment'
@@ -241,6 +258,63 @@ function HomeWorkflowPalette({
       });
     }
 
+    if (selectedPr) {
+      nextItems.push({
+        id: 'action-refresh-current-pr',
+        group: 'Actions',
+        title: 'Refresh',
+        disabled: isRefreshingPullRequest,
+        icon: <RefreshCwIcon className="size-4" />,
+        onSelect: () => {
+          onRefreshPullRequest();
+          setWorkflowOpen(false);
+        },
+      });
+    }
+
+    if (selectedPr && pullRequestUrl) {
+      nextItems.push(
+        {
+          id: 'action-open-current-pr',
+          group: 'Actions',
+          title: `Open on ${selectedProviderLabel}`,
+          icon: <ExternalLinkIcon className="size-4" />,
+          onSelect: () => {
+            window.open(pullRequestUrl, '_blank', 'noopener,noreferrer');
+            setWorkflowOpen(false);
+          },
+        },
+        {
+          id: 'action-copy-current-pr-link',
+          group: 'Actions',
+          title: 'Copy link',
+          icon: <CopyIcon className="size-4" />,
+          onSelect: () => {
+            void writeClipboardText(pullRequestUrl).then(
+              () => {
+                appToastManager.add({
+                  id: 'pull-request-link-copied',
+                  title: 'Link copied',
+                  timeout: 2500,
+                });
+              },
+              () => {
+                appToastManager.add({
+                  id: 'pull-request-link-copy-failed',
+                  title: 'Copy failed',
+                  description: 'Could not copy link.',
+                  type: 'error',
+                  priority: 'high',
+                  timeout: 5000,
+                });
+              },
+            );
+            setWorkflowOpen(false);
+          },
+        },
+      );
+    }
+
     if (selectedPr && canApprove && !approvalState?.viewerApproved) {
       nextItems.push({
         id: 'action-approve',
@@ -248,7 +322,9 @@ function HomeWorkflowPalette({
         title: 'Approve current PR/MR',
         icon: <CheckIcon className="size-4" />,
         onSelect: () => {
-          void approveMutation.mutateAsync(selectedPr).then(() => setWorkflowOpen(false));
+          approveMutation.mutate(selectedPr, {
+            onSuccess: () => setWorkflowOpen(false),
+          });
         },
       });
     }

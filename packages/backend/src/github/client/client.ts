@@ -5,7 +5,6 @@ import {
   HttpClientResponse,
 } from '@effect/platform';
 import { Effect, Layer, ParseResult, Schema } from 'effect';
-import { getErrorMessage } from '../../errors.ts';
 import { hostNameFromHost } from '../../repo-id.ts';
 import { getValidAccessToken, updateViewerLogin } from '../../auth/provider-auth.ts';
 import { AuthTokenStore, type StoredAuthToken } from '../../auth/token-store.ts';
@@ -21,7 +20,6 @@ import {
   GitHubClientTransportError,
   GitHubClientUnexpectedResponseError,
   GitHubClientViewerLoginPersistenceError,
-  isGitHubClientError,
 } from './errors.ts';
 import {
   AddPullRequestReviewDataSchema,
@@ -236,7 +234,7 @@ const makeGitHubApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitHubClientTokenStoreError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               cause,
             }),
@@ -268,7 +266,7 @@ const makeGitHubApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitHubClientAccessTokenError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               cause,
             }),
@@ -282,7 +280,7 @@ const makeGitHubApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitHubClientViewerLoginPersistenceError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               login,
               cause,
@@ -321,7 +319,9 @@ const makeGitHubApiClient = (accountId: string) =>
 
     const responseErrorMessage = (error: HttpClientError.ResponseError) =>
       Effect.gen(function* () {
-        const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed('')));
+        const body = yield* error.response.text.pipe(
+          Effect.catchTag('ResponseError', () => Effect.succeed('')),
+        );
         return parseGitHubErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
       });
 
@@ -336,45 +336,52 @@ const makeGitHubApiClient = (accountId: string) =>
         ),
       );
 
-    const mapHttpError = (error: unknown): Effect.Effect<GitHubClientError> => {
-      if (isGitHubClientError(error)) {
-        return Effect.succeed(error);
-      }
+    const failClientError = (clientError: GitHubClientError): GitHubClientEffect<never> =>
+      Effect.fail(clientError);
 
-      if (error instanceof ParseResult.ParseError) {
-        return parseSchemaError(error);
-      }
-
-      if (error instanceof HttpClientError.ResponseError) {
-        return responseErrorMessage(error).pipe(
-          Effect.map(
-            (message) =>
-              new GitHubClientResponseError({
-                message,
-                url: error.request.url,
-                status: error.response.status,
-                cause: error,
+    const catchKnownHttpErrors = <Success, Requirements>(
+      effect: Effect.Effect<
+        Success,
+        GitHubClientError | HttpClientError.HttpClientError | ParseResult.ParseError,
+        Requirements
+      >,
+    ): Effect.Effect<Success, GitHubClientError, Requirements> =>
+      effect.pipe(
+        Effect.catchTags({
+          GitHubClientAccessTokenError: failClientError,
+          GitHubClientGraphqlError: failClientError,
+          GitHubClientNotAuthenticated: failClientError,
+          GitHubClientRequestTimeoutError: failClientError,
+          GitHubClientResponseError: failClientError,
+          GitHubClientSchemaDecodeError: failClientError,
+          GitHubClientTokenStoreError: failClientError,
+          GitHubClientTransportError: failClientError,
+          GitHubClientUnexpectedResponseError: failClientError,
+          GitHubClientViewerLoginPersistenceError: failClientError,
+          ParseError: (parseError) => Effect.flatMap(parseSchemaError(parseError), Effect.fail),
+          RequestError: (requestError) =>
+            Effect.fail(
+              new GitHubClientTransportError({
+                message: requestError.message,
+                cause: requestError,
               }),
-          ),
-        );
-      }
-
-      if (HttpClientError.isHttpClientError(error)) {
-        return Effect.succeed(
-          new GitHubClientTransportError({
-            message: error.message,
-            cause: error,
-          }),
-        );
-      }
-
-      return Effect.succeed(
-        new GitHubClientTransportError({
-          message: getErrorMessage(error),
-          cause: error,
+            ),
+          ResponseError: (responseError) =>
+            responseErrorMessage(responseError).pipe(
+              Effect.flatMap(
+                (message) =>
+                  Effect.fail(
+                    new GitHubClientResponseError({
+                      message,
+                      url: responseError.request.url,
+                      status: responseError.response.status,
+                      cause: responseError,
+                    }),
+                  ),
+              ),
+            ),
         }),
       );
-    };
 
     const logApiResponse = (response: HttpClientResponse.HttpClientResponse) =>
       Effect.logInfo('[github api] request').pipe(
@@ -399,7 +406,7 @@ const makeGitHubApiClient = (accountId: string) =>
         }),
         Effect.tap(logApiResponse),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+        catchKnownHttpErrors,
       );
 
     const decodeJsonBody =
@@ -407,7 +414,7 @@ const makeGitHubApiClient = (accountId: string) =>
       (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubClientError>) =>
         response.pipe(
           Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-          Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+          catchKnownHttpErrors,
         );
 
     const decodeTextBody = (
@@ -415,7 +422,7 @@ const makeGitHubApiClient = (accountId: string) =>
     ) =>
       response.pipe(
         Effect.flatMap((httpResponse) => httpResponse.text),
-        Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+        catchKnownHttpErrors,
       );
 
     const graphqlErrors = <T>(response: GraphQlResponse<T>) => {

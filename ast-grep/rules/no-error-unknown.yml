@@ -1,0 +1,52 @@
+id: no-error-unknown
+language: tsx
+message: do not type error as unknown except in catch clauses
+severity: error
+rule:
+  all:
+    - any:
+        - all:
+            - any:
+                - kind: required_parameter
+                - kind: optional_parameter
+            - has:
+                field: pattern
+                kind: identifier
+                regex: ^error$
+            - has:
+                field: type
+                kind: type_annotation
+                has:
+                  kind: predefined_type
+                  regex: ^unknown$
+                  stopBy: end
+        - all:
+            - kind: variable_declarator
+            - has:
+                field: name
+                kind: identifier
+                regex: ^error$
+            - has:
+                field: type
+                kind: type_annotation
+                has:
+                  kind: predefined_type
+                  regex: ^unknown$
+                  stopBy: end
+        - all:
+            - kind: property_signature
+            - has:
+                field: name
+                kind: property_identifier
+                regex: ^error$
+            - has:
+                field: type
+                kind: type_annotation
+                has:
+                  kind: predefined_type
+                  regex: ^unknown$
+                  stopBy: end
+    - not:
+        inside:
+          kind: catch_clause
+          stopBy: end

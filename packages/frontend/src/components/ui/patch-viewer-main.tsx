@@ -1,4 +1,5 @@
 import { autoUpdate, FloatingPortal, offset, size, useFloating } from '@floating-ui/react';
+import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import {
   createContext,
   useCallback,
@@ -10,15 +11,19 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, UIEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import {
+  CheckIcon,
   ChevronDownIcon,
+  CopyIcon,
   ExternalLinkIcon,
+  MoreHorizontalIcon,
   PanelLeftOpenIcon,
   PanelRightCloseIcon,
   PanelRightOpenIcon,
+  RefreshCwIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
@@ -37,7 +42,7 @@ import type { GitStatusEntry } from '@pierre/trees';
 import { FileDiff } from '@pierre/diffs/react';
 import { ChangedFilesTree } from './changed-files-tree';
 import { AppearanceBackground } from './appearance-background';
-import { Button, buttonVariants } from './button';
+import { Button } from './button';
 import { CommentMarkdown } from './comment-markdown';
 import { PatchScrollVirtualizer } from './patch-scroll-virtualizer';
 import { PendingReviewBar } from './pending-review-bar';
@@ -50,6 +55,7 @@ import { ReviewCommentEditor, type CommentEditorMode } from './review-comment-ed
 import { ReviewThreadCard } from './review-thread-card';
 import { ScrollArea } from './scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+import { appToastManager } from './toast';
 import { TopBar, TOP_BAR_MACOS_HEIGHT, TOP_BAR_WCO_HEIGHT } from './top-bar';
 import {
   usePullRequestApprovalMutations,
@@ -57,7 +63,9 @@ import {
 } from '../../hooks/use-forge-queries';
 import { useCodeAppearance } from '../../hooks/use-code-appearance';
 import { useDiffNavigator } from '../../hooks/use-diff-navigator';
+import { getCaughtErrorMessage } from '../../lib/caught-error';
 import { cx } from '../../lib/cx';
+import { writeClipboardText } from '../../lib/clipboard';
 import {
   DraftIndicator,
   PullRequestStatusIcon,
@@ -129,6 +137,17 @@ const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
 const REVIEW_SIDEBAR_DEFAULT_SIZE = '360px';
 const REVIEW_SIDEBAR_MIN_SIZE = '260px';
 const REVIEW_SIDEBAR_MAX_SIZE = '560px';
+const PULL_REQUEST_ACTIONS_MENU_ITEM_CLASS =
+  'flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-ink-700 outline-hidden select-none transition-colors data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-canvasDark data-highlighted:text-ink-900';
+
+function stopToolbarDoubleClick(event: ReactMouseEvent<HTMLElement>) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function stopToolbarMouseDown(event: ReactMouseEvent<HTMLElement>) {
+  event.stopPropagation();
+}
 
 type HunkExpansionOwner = {
   expandHunk(
@@ -206,6 +225,9 @@ type PatchViewerMainProps = {
   gitStatus: GitStatusEntry[] | undefined;
   isDark: boolean;
   isRepoSidebarCollapsed: boolean;
+  isRefreshingPullRequest: boolean;
+  onApproveError: (error: Error) => void;
+  onRefreshPullRequest: () => void;
   onToggleRepoSidebar: () => void;
 };
 
@@ -374,6 +396,12 @@ function CodeQualityDropdown({
       }),
     ],
   });
+  const setReference = useCallback((node: HTMLSpanElement | null) => {
+    refs.setReference(node);
+  }, [refs]);
+  const setFloating = useCallback((node: HTMLDivElement | null) => {
+    refs.setFloating(node);
+  }, [refs]);
 
   useEffect(() => {
     if (!open) return;
@@ -412,7 +440,12 @@ function CodeQualityDropdown({
 
   return (
     <>
-      <span className="inline-flex h-7 items-center" ref={refs.setReference} style={style}>
+      <span
+        className="inline-flex h-7 items-center"
+        onMouseDown={stopToolbarMouseDown}
+        ref={setReference}
+        style={style}
+      >
         <Button
           aria-expanded={open}
           aria-haspopup="dialog"
@@ -420,6 +453,7 @@ function CodeQualityDropdown({
             'h-7 border px-2.5',
             qualityToolbarTone(toolbarState),
           )}
+          onDoubleClick={stopToolbarDoubleClick}
           onClick={() => setOpen((current) => !current)}
           size="sm"
           type="button"
@@ -435,7 +469,7 @@ function CodeQualityDropdown({
         <FloatingPortal>
           <div
             className="z-50 w-[min(520px,calc(100vw-16px))] rounded-md border border-ink-200 bg-surface p-3 shadow-lg"
-            ref={refs.setFloating}
+            ref={setFloating}
             style={floatingStyles}
           >
             {hasSummary ? (
@@ -1227,6 +1261,21 @@ function compareThreadLineAnnotations(
   );
 }
 
+function fileDiffContainsAnnotationLine(
+  fileDiff: FileDiffMetadata,
+  annotation: { side: AnnotationSide; lineNumber: number },
+) {
+  if (annotation.side === 'additions') {
+    return resolveDiffLinePosition(fileDiff, 'RIGHT', annotation.lineNumber) !== null;
+  }
+
+  if (annotation.side === 'deletions') {
+    return resolveDiffLinePosition(fileDiff, 'LEFT', annotation.lineNumber) !== null;
+  }
+
+  return false;
+}
+
 function getPendingCommentId(comment: ReviewComment) {
   const match = comment.id.match(/^pending-comment:(.+)$/);
   if (!match) return null;
@@ -1610,22 +1659,47 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
   const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
   const [fileCommentsPortalHost, setFileCommentsPortalHost] = useState<HTMLDivElement | null>(null);
   const fileCommentsPortalHostRef = useRef<HTMLDivElement | null>(null);
-  const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] = [
-    ...fileReviewThreads.activeLineAnnotations.map((annotation) => ({
-      ...annotation,
-      metadata: {
-        ...annotation.metadata,
-        portalRootId: lineDraftPortalRootId,
-      },
-    })),
-    ...fileReviewThreads.inactiveLineAnnotations.map((annotation) => ({
+  const activeLineThreadAnnotations = fileReviewThreads.activeLineAnnotations.map((annotation) => ({
+    ...annotation,
+    metadata: {
+      ...annotation.metadata,
+      portalRootId: lineDraftPortalRootId,
+    },
+  }));
+  const inactiveLineThreadAnnotations = fileReviewThreads.inactiveLineAnnotations.map(
+    (annotation) => ({
       ...annotation,
       metadata: {
         ...annotation.metadata,
         defaultCollapsed: true,
         portalRootId: lineDraftPortalRootId,
       },
-    })),
+    }),
+  );
+  const anchoredActiveLineThreadAnnotations = activeLineThreadAnnotations.filter((annotation) =>
+    fileDiffContainsAnnotationLine(fileDiff, annotation),
+  );
+  const anchoredInactiveLineThreadAnnotations = inactiveLineThreadAnnotations.filter((annotation) =>
+    fileDiffContainsAnnotationLine(fileDiff, annotation),
+  );
+  const detachedActiveLineThreads = activeLineThreadAnnotations
+    .filter((annotation) => !fileDiffContainsAnnotationLine(fileDiff, annotation))
+    .map((annotation) => annotation.metadata.thread);
+  const detachedInactiveLineThreads = inactiveLineThreadAnnotations
+    .filter((annotation) => !fileDiffContainsAnnotationLine(fileDiff, annotation))
+    .map((annotation) => annotation.metadata.thread);
+  const activeFileThreads = [
+    ...fileReviewThreads.activeFileThreads,
+    ...detachedActiveLineThreads,
+  ];
+  const inactiveFileThreads = [
+    ...fileReviewThreads.inactiveFileThreads,
+    ...detachedInactiveLineThreads,
+  ];
+  const fileThreadCount = activeFileThreads.length + inactiveFileThreads.length;
+  const lineThreadAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] = [
+    ...anchoredActiveLineThreadAnnotations,
+    ...anchoredInactiveLineThreadAnnotations,
   ].sort(compareThreadLineAnnotations);
   const lineQualityAnnotations: DiffLineAnnotation<PatchLineAnnotation>[] =
     fileQualityFindings.inlineAnnotations.map((annotation) => ({
@@ -1677,7 +1751,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
       }
     : null;
   const shouldRenderFileCommentsInHeader =
-    fileReviewThreads.fileThreadCount > 0 ||
+    fileThreadCount > 0 ||
     fileDraftEditors.length > 0 ||
     fileQualityFindings.fileFindings.length > 0;
   const { additions, deletions } = getFileDiffLineCounts(fileDiff);
@@ -1749,8 +1823,8 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
         {hasDraft ? (
           <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">Draft open</span>
         ) : null}
-        {fileReviewThreads.fileThreadCount > 0 ? (
-          <span className="text-ink-500">{fileReviewThreads.fileThreadCount} file comments</span>
+        {fileThreadCount > 0 ? (
+          <span className="text-ink-500">{fileThreadCount} file comments</span>
         ) : null}
         {fileQualityFindings.totalCount > 0 ? (
           <span className="rounded-full bg-canvas px-2 py-0.5 text-ink-700">
@@ -1831,7 +1905,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             ))}
           </div>
         ) : null}
-        {fileReviewThreads.activeFileThreads.map((thread) => (
+        {activeFileThreads.map((thread) => (
           <ReviewThreadCard
             key={getReviewThreadRefKey(thread)}
             containerRef={(node) => registerThreadAnchor(thread, node)}
@@ -1851,7 +1925,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             viewerLogin={viewerLogin}
           />
         ))}
-        {fileReviewThreads.inactiveFileThreads.length > 0 ? (
+        {inactiveFileThreads.length > 0 ? (
           <div className="flex flex-col gap-3 border-t border-ink-200 pt-3">
             <button
               className="self-start text-xs font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
@@ -1861,11 +1935,11 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
               type="button"
             >
               {inactiveFileCommentsExpanded ? 'Hide inactive comments' : 'Show inactive comments'} (
-              {fileReviewThreads.inactiveFileThreads.length})
+              {inactiveFileThreads.length})
             </button>
             {inactiveFileCommentsExpanded ? (
               <div className="flex flex-col gap-3">
-                {fileReviewThreads.inactiveFileThreads.map((thread) => (
+                {inactiveFileThreads.map((thread) => (
                   <ReviewThreadCard
                     key={getReviewThreadRefKey(thread)}
                     containerRef={(node) => registerThreadAnchor(thread, node)}
@@ -2237,6 +2311,9 @@ function PatchViewerMain({
   fileStats,
   gitStatus,
   isRepoSidebarCollapsed,
+  isRefreshingPullRequest,
+  onApproveError,
+  onRefreshPullRequest,
   onToggleRepoSidebar,
 }: PatchViewerMainProps) {
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
@@ -2274,7 +2351,9 @@ function PatchViewerMain({
   });
   const rightSidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  const [copiedPullRequestUrl, setCopiedPullRequestUrl] = useState<string | null>(null);
   const scrollRootRef = useRef<HTMLDivElement | null>(null);
+  const pullRequestUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restoringScrollSessionKeyRef = useRef<string | null>(null);
   const cancelScrollRestoreRef = useRef<(() => void) | null>(null);
   const cancelFileCommentsSectionScrollRef = useRef<(() => void) | null>(null);
@@ -2309,12 +2388,10 @@ function PatchViewerMain({
     selectedRepo?.provider ??
     (selectedProviderId ? providerFromProviderId(selectedProviderId) : 'github');
   const pullRequestUrl = selectedPullRequestSummary?.url ?? null;
+  const selectedProviderLabel = selectedProvider === 'github' ? 'GitHub' : 'GitLab';
 
-  useEffect(() => {
-    if (!hasSelection && isRightSidebarCollapsed) {
-      setIsRightSidebarCollapsed(false);
-    }
-  }, [hasSelection, isRightSidebarCollapsed]);
+  const isRightSidebarCollapsedVisible = hasSelection && isRightSidebarCollapsed;
+  const isPullRequestUrlCopied = copiedPullRequestUrl === pullRequestUrl;
 
   const toggleRightSidebar = useCallback(() => {
     const panel = rightSidebarPanelRef.current;
@@ -2327,13 +2404,48 @@ function PatchViewerMain({
     panel.collapse();
     setIsRightSidebarCollapsed(true);
   }, []);
+  const handleCopyPullRequestUrl = useCallback(() => {
+    if (!pullRequestUrl) return;
+
+    void writeClipboardText(pullRequestUrl).then(
+      () => {
+        setCopiedPullRequestUrl(pullRequestUrl);
+        if (pullRequestUrlCopiedTimerRef.current) {
+          clearTimeout(pullRequestUrlCopiedTimerRef.current);
+        }
+        pullRequestUrlCopiedTimerRef.current = setTimeout(() => {
+          setCopiedPullRequestUrl(null);
+          pullRequestUrlCopiedTimerRef.current = null;
+        }, 1500);
+      },
+      () => {
+        appToastManager.add({
+          id: 'pull-request-link-copy-failed',
+          title: 'Copy failed',
+          description: 'Could not copy link.',
+          type: 'error',
+          priority: 'high',
+          timeout: 5000,
+        });
+      },
+    );
+  }, [pullRequestUrl]);
+
+  useEffect(
+    () => () => {
+      if (pullRequestUrlCopiedTimerRef.current) {
+        clearTimeout(pullRequestUrlCopiedTimerRef.current);
+      }
+    },
+    [],
+  );
   const viewerToolbar = (
     <TopBar
       className={cx(
         'shrink-0 cursor-grab border-b border-ink-200 bg-surface app-region-drag',
         isRepoSidebarCollapsed &&
           'macos:not-fullscreen:pl-[calc(72px+1em)] wco:pl-[env(titlebar-area-x)]',
-        isRightSidebarCollapsed &&
+        isRightSidebarCollapsedVisible &&
           'wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x))]',
       )}
       position="middle"
@@ -2383,35 +2495,107 @@ function PatchViewerMain({
           />
         ) : null}
 
-        {pullRequestUrl ? (
+        {hasSelection && isRefreshingPullRequest ? (
           <TooltipProvider closeDelay={0} delay={350}>
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <a
-                    aria-label={`Open on ${selectedProvider === 'github' ? 'GitHub' : 'GitLab'}`}
-                    className={buttonVariants({
-                      variant: 'ghost',
-                      size: 'icon-sm',
-                      className: 'text-ink-500 hover:bg-canvasDark hover:text-ink-900',
-                    })}
-                    href={pullRequestUrl}
-                    rel="noreferrer"
+                  <Button
+                    aria-label="Refreshing pull request"
+                    className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                    disabled
+                    onDoubleClick={stopToolbarDoubleClick}
+                    onMouseDown={stopToolbarMouseDown}
+                    size="icon-sm"
                     style={noDragRegionStyle}
-                    target="_blank"
+                    type="button"
+                    variant="ghost"
                   >
-                    <ExternalLinkIcon className="size-4" />
-                  </a>
+                    <RefreshCwIcon className="size-4 animate-spin" />
+                  </Button>
                 }
               />
-              <TooltipContent side="bottom">
-                Open on {selectedProvider === 'github' ? 'GitHub' : 'GitLab'}
-              </TooltipContent>
+              <TooltipContent side="bottom">Refreshing</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ) : null}
 
-        {hasSelection && isRightSidebarCollapsed ? (
+        {hasSelection && !isRefreshingPullRequest ? (
+          <MenuPrimitive.Root modal={false}>
+            <TooltipProvider closeDelay={0} delay={350}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <MenuPrimitive.Trigger
+                      render={
+                        <Button
+                          aria-label="Pull request actions"
+                          className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+                          onDoubleClick={stopToolbarDoubleClick}
+                          onMouseDown={stopToolbarMouseDown}
+                          size="icon-sm"
+                          style={noDragRegionStyle}
+                          type="button"
+                          variant="ghost"
+                        >
+                          <MoreHorizontalIcon className="size-4" />
+                        </Button>
+                      }
+                    />
+                  }
+                />
+                <TooltipContent side="bottom">Pull request actions</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <MenuPrimitive.Portal>
+              <MenuPrimitive.Positioner
+                align="end"
+                className="isolate z-50"
+                side="bottom"
+                sideOffset={6}
+              >
+                <MenuPrimitive.Popup className="relative isolate z-50 min-w-56 origin-(--transform-origin) rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+                  <MenuPrimitive.Item
+                    className={PULL_REQUEST_ACTIONS_MENU_ITEM_CLASS}
+                    onClick={onRefreshPullRequest}
+                  >
+                    <RefreshCwIcon className="size-4 text-ink-500" />
+                    <span>Refresh</span>
+                  </MenuPrimitive.Item>
+
+                  {pullRequestUrl ? (
+                    <>
+                      <MenuPrimitive.LinkItem
+                        className={PULL_REQUEST_ACTIONS_MENU_ITEM_CLASS}
+                        closeOnClick
+                        href={pullRequestUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <ExternalLinkIcon className="size-4 text-ink-500" />
+                        <span>Open on {selectedProviderLabel}</span>
+                      </MenuPrimitive.LinkItem>
+                      <MenuPrimitive.Item
+                        className={PULL_REQUEST_ACTIONS_MENU_ITEM_CLASS}
+                        closeOnClick={false}
+                        onClick={handleCopyPullRequestUrl}
+                      >
+                        {isPullRequestUrlCopied ? (
+                          <CheckIcon className="size-4 text-green-600" />
+                        ) : (
+                          <CopyIcon className="size-4 text-ink-500" />
+                        )}
+                        <span>{isPullRequestUrlCopied ? 'Link copied' : 'Copy link'}</span>
+                      </MenuPrimitive.Item>
+                    </>
+                  ) : null}
+                </MenuPrimitive.Popup>
+              </MenuPrimitive.Positioner>
+            </MenuPrimitive.Portal>
+          </MenuPrimitive.Root>
+        ) : null}
+
+        {isRightSidebarCollapsedVisible ? (
           <TooltipProvider closeDelay={0} delay={350}>
             <Tooltip>
               <TooltipTrigger
@@ -2466,7 +2650,9 @@ function PatchViewerMain({
         }
       : null,
   );
-  const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr);
+  const { approveMutation, removeApprovalMutation } = usePullRequestApprovalMutations(selectedPr, {
+    onApproveError,
+  });
   const [deletingCommentIds, setDeletingCommentIds] = useState<Set<string>>(() => new Set());
   const resolvingThreadId = setResolvedMutation.isPending
     ? (setResolvedMutation.variables?.threadId ?? null)
@@ -2607,7 +2793,7 @@ function PatchViewerMain({
         threadKey: getReviewThreadRefKey(thread),
         filePath: isGlobalReviewThread(thread) ? null : normalizePath(thread.path),
         isGlobal: isGlobalReviewThread(thread),
-        expandInactiveComments: isFileReviewThread(thread) && !isActiveReviewThread(thread),
+        expandInactiveComments: !isGlobalReviewThread(thread) && !isActiveReviewThread(thread),
       });
     },
     [patchViewerSessionKey, requestNavigationIntent],
@@ -2971,7 +3157,7 @@ function PatchViewerMain({
         setEditorError(
           reviewEditorSessionKey,
           editorId,
-          error instanceof Error ? error.message : String(error),
+          getCaughtErrorMessage(error),
         );
       } finally {
         if (
@@ -3037,7 +3223,7 @@ function PatchViewerMain({
         setEditorError(
           reviewEditorSessionKey,
           editorId,
-          error instanceof Error ? error.message : String(error),
+          getCaughtErrorMessage(error),
         );
       } finally {
         if (
@@ -3548,7 +3734,7 @@ function PatchViewerMain({
                               return;
                             }
 
-                            void approveMutation.mutateAsync(selectedPr);
+                            approveMutation.mutate(selectedPr);
                           }}
                           onDiscard={() => void handleDiscardPendingReview()}
                           onRemoveApproval={() => {
@@ -3571,8 +3757,8 @@ function PatchViewerMain({
             </div>
           </ResizablePanel>
           <ResizableHandle
-            className={isRightSidebarCollapsed ? 'hidden' : ''}
-            disabled={isRightSidebarCollapsed}
+            className={isRightSidebarCollapsedVisible ? 'hidden' : ''}
+            disabled={isRightSidebarCollapsedVisible}
             withHandle
           />
           <ResizablePanel
@@ -3589,7 +3775,7 @@ function PatchViewerMain({
             }}
             panelRef={rightSidebarPanelRef}
           >
-            {isRightSidebarCollapsed ? null : (
+            {isRightSidebarCollapsedVisible ? null : (
               <div
                 className={cx(
                   'flex h-full min-h-0 min-w-0 flex-col',

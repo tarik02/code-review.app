@@ -1,5 +1,5 @@
 import { Effect, Layer } from 'effect';
-import { ValidationError, getErrorMessage } from '../errors.ts';
+import { ProviderError, ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 import type {
   ForgeProviderKind,
@@ -75,24 +75,29 @@ const makePullRequestQualityService = Effect.gen(function* () {
           headSha,
         })
         .pipe(
-          Effect.catchAll((error) => {
-            const message = error instanceof Error ? error.message : String(error);
-            return Effect.logWarning('[pull-request-quality] failed to load quality report').pipe(
+          Effect.catchTag('ProviderError', (error: ProviderError) =>
+            Effect.logWarning('[pull-request-quality] failed to load quality report').pipe(
               Effect.annotateLogs({
                 provider: repo.provider,
                 repo: repo.path,
                 number,
                 headSha,
-                message,
-                error: getErrorMessage(error),
+                message: error.message,
+                error,
               }),
               Effect.zipRight(
                 Effect.succeed(
-                  unavailableQualityReport(repo.provider, repoIdentity, number, headSha, message),
+                  unavailableQualityReport(
+                    repo.provider,
+                    repoIdentity,
+                    number,
+                    headSha,
+                    error.message,
+                  ),
                 ),
               ),
-            );
-          }),
+            ),
+          ),
         );
     },
   );
