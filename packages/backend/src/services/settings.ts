@@ -1,9 +1,8 @@
 import { FileSystem } from '@effect/platform';
 import path from 'node:path';
-import { Effect, Layer } from 'effect';
+import { Cause, Effect, Layer, Option } from 'effect';
 import { BackendConfig } from '../config.ts';
 import { CacheService } from '../cache.ts';
-import { ensureError } from '../errors.ts';
 import { AppSettingsService } from './app-settings.ts';
 import { AuthTokenStore } from '../auth/token-store.ts';
 import type {
@@ -325,7 +324,8 @@ function readBackgroundDataUrl(
       Effect.map(
         (data) => `data:${background.mimeType};base64,${Buffer.from(data).toString('base64')}`,
       ),
-      Effect.catchAll(() => Effect.succeed(null)),
+      Effect.option,
+      Effect.map(Option.getOrNull),
     );
 
     return {
@@ -391,9 +391,7 @@ const makeSettingsService = Effect.gen(function* () {
   const getThemePreference: SettingsServiceShape['getThemePreference'] = Effect.fn(
     'SettingsService.getThemePreference',
   )(function* () {
-    const persisted = yield* appSettings
-      .read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const persisted = yield* appSettings.read<ThemePreferenceSettings>(THEME_PREFERENCE_KEY);
     return parseThemePreferenceSettings(persisted);
   });
 
@@ -408,9 +406,7 @@ const makeSettingsService = Effect.gen(function* () {
   const getCodeAppearanceSettings: SettingsServiceShape['getCodeAppearanceSettings'] = Effect.fn(
     'SettingsService.getCodeAppearanceSettings',
   )(function* () {
-    const persisted = yield* appSettings
-      .read<CodeAppearanceSettings>(CODE_APPEARANCE_SETTINGS_KEY)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const persisted = yield* appSettings.read<CodeAppearanceSettings>(CODE_APPEARANCE_SETTINGS_KEY);
     return parseCodeAppearanceSettings(persisted);
   });
 
@@ -425,9 +421,7 @@ const makeSettingsService = Effect.gen(function* () {
   const getReviewEditorSettings: SettingsServiceShape['getReviewEditorSettings'] = Effect.fn(
     'SettingsService.getReviewEditorSettings',
   )(function* () {
-    const persisted = yield* appSettings
-      .read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const persisted = yield* appSettings.read<ReviewEditorSettings>(REVIEW_EDITOR_SETTINGS_KEY);
     return parseReviewEditorSettings(persisted);
   });
 
@@ -461,7 +455,9 @@ const makeSettingsService = Effect.gen(function* () {
         throw new Error('Background image must be a PNG, JPG, GIF, WebP, or AVIF file.');
       }
 
-      const sourceStats = yield* fileSystem.stat(filePath).pipe(Effect.mapError(ensureError));
+      const sourceStats = yield* fileSystem.stat(filePath).pipe(
+        Effect.mapError((cause) => new Cause.UnknownException(cause)),
+      );
       if (sourceStats.type !== 'File') {
         throw new Error('Background image must be a file.');
       }
@@ -477,7 +473,7 @@ const makeSettingsService = Effect.gen(function* () {
             ? Effect.void
             : fileSystem.copyFile(filePath, destinationPath),
         ),
-        Effect.mapError(ensureError),
+        Effect.mapError((cause) => new Cause.UnknownException(cause)),
       );
 
       const persisted: PersistedAppearanceBackgroundSettings = {

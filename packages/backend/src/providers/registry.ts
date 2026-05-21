@@ -63,7 +63,7 @@ const makeForgeProviderRegistry = Effect.gen(function* () {
     const account = yield* tokenStore.get(accountId).pipe(
       Effect.mapError(
         (error) =>
-          new ProviderError(error instanceof Error ? error.message : String(error), {
+          new ProviderError(error.message, {
             cause: error,
           }),
       ),

@@ -33,6 +33,7 @@ import {
 } from 'react';
 import { Button } from '../button';
 import { Input } from '../input';
+import { writeClipboardText } from '../../../lib/clipboard';
 
 type LinkLikeNode = LexicalNode & {
   setTitle: (title: string) => void;
@@ -239,7 +240,7 @@ function ReviewCommentLinkDialog() {
       return;
     }
 
-    void window.navigator.clipboard.writeText(trimmedUrl).then(() => {
+    void writeClipboardText(trimmedUrl).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1000);
     });

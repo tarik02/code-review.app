@@ -1,6 +1,6 @@
 import { Command, FileSystem } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
-import { Data, Effect, ParseResult, Schema } from 'effect';
+import { Data, Effect, Option, ParseResult, Schema } from 'effect';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -155,7 +155,7 @@ function resolveSystemElectronPath() {
 
       const resolved = yield* fileSystem
         .realPath(candidate)
-        .pipe(Effect.catchAll(() => Effect.succeed(candidate)));
+        .pipe(Effect.option, Effect.map(Option.getOrElse(() => candidate)));
 
       return resolved;
     }
@@ -178,7 +178,7 @@ function resolveMisePath() {
       if (yield* fileSystem.exists(candidate)) {
         return yield* fileSystem
           .realPath(candidate)
-          .pipe(Effect.catchAll(() => Effect.succeed(candidate)));
+          .pipe(Effect.option, Effect.map(Option.getOrElse(() => candidate)));
       }
     }
 
@@ -186,7 +186,8 @@ function resolveMisePath() {
       Command.string,
       Effect.map((value) => value.trim()),
       Effect.flatMap((value) => (value.length > 0 ? Effect.succeed(value) : Effect.fail(null))),
-      Effect.catchAll(() => Effect.succeed(null)),
+      Effect.option,
+      Effect.map(Option.getOrNull),
     );
   });
 }
@@ -254,13 +255,12 @@ function renderDesktopEntry(entry: DesktopEntry) {
 function updateDesktopDatabase() {
   return Command.make('update-desktop-database', desktopDir).pipe(
     Command.exitCode,
-    Effect.catchAll((cause) =>
-      Effect.fail(
+    Effect.mapError(
+      (cause) =>
         new InstallLinuxDevDesktopUpdateDesktopDatabaseError({
           command: `update-desktop-database ${desktopDir}`,
           cause,
         }),
-      ),
     ),
     Effect.flatMap((exitCode) =>
       exitCode === 0

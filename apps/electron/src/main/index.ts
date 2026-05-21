@@ -1,7 +1,7 @@
 import 'source-map-support/register';
 import { app, BrowserWindow } from 'electron';
-import { Effect } from 'effect';
-import { SettingsService, getErrorMessage } from '@code-review-app/backend';
+import { Cause, Effect } from 'effect';
+import { SettingsService } from '@code-review-app/backend';
 import { applyNativeThemePreference, createMainWindow } from './window';
 import { configureUpdater } from './updater';
 import { backendRuntime } from './backend-runtime';
@@ -81,7 +81,7 @@ async function syncNativeThemeFromSettings() {
     void backendRuntime.runFork(
       Effect.logError('Failed to sync native theme from settings.').pipe(
         Effect.annotateLogs({
-          error: getErrorMessage(error),
+          error: new Cause.UnknownException(error).message,
         }),
       ),
     );

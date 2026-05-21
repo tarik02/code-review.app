@@ -4,8 +4,7 @@ import {
   HttpClientRequest,
   HttpClientResponse,
 } from '@effect/platform';
-import { Effect, Layer, ParseResult, Schema } from 'effect';
-import { getErrorMessage } from '../../errors.ts';
+import { Effect, Layer, Match, ParseResult, Schema } from 'effect';
 import { getValidAccessToken, updateViewerLogin } from '../../auth/provider-auth.ts';
 import { AuthTokenStore, type StoredAuthToken } from '../../auth/token-store.ts';
 import { rawPathParam } from '../../providers/route.ts';
@@ -20,7 +19,6 @@ import {
   GitLabClientTokenStoreError,
   GitLabClientTransportError,
   GitLabClientViewerLoginPersistenceError,
-  isGitLabClientError,
 } from './errors.ts';
 import {
   GitLabCodeQualityGraphqlQueryDataSchema,
@@ -258,6 +256,8 @@ class GitLabApiClient extends Effect.Tag('GitLabApiClient')<
 >() {}
 
 const API_REQUEST_TIMEOUT = '30 seconds';
+const API_TRANSPORT_RETRY_COUNT = 2;
+const RETRYABLE_RESPONSE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 
 function parseGitLabErrorBody(text: string) {
   if (!text) {
@@ -284,7 +284,7 @@ const makeGitLabApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitLabClientTokenStoreError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               cause,
             }),
@@ -316,7 +316,7 @@ const makeGitLabApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitLabClientAccessTokenError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               cause,
             }),
@@ -330,7 +330,7 @@ const makeGitLabApiClient = (accountId: string) =>
         Effect.mapError(
           (cause) =>
             new GitLabClientViewerLoginPersistenceError({
-              message: getErrorMessage(cause),
+              message: cause.message,
               accountId,
               login,
               cause,
@@ -365,7 +365,9 @@ const makeGitLabApiClient = (accountId: string) =>
 
     const responseErrorMessage = (error: HttpClientError.ResponseError) =>
       Effect.gen(function* () {
-        const body = yield* error.response.text.pipe(Effect.catchAll(() => Effect.succeed('')));
+        const body = yield* error.response.text.pipe(
+          Effect.catchTag('ResponseError', () => Effect.succeed('')),
+        );
         return parseGitLabErrorBody(body) || `Provider API returned HTTP ${error.response.status}`;
       });
 
@@ -380,41 +382,51 @@ const makeGitLabApiClient = (accountId: string) =>
         ),
       );
 
-    const mapHttpError = (error: unknown): Effect.Effect<GitLabClientError> => {
-      if (isGitLabClientError(error)) {
-        return Effect.succeed(error);
-      }
-      if (error instanceof ParseResult.ParseError) {
-        return parseSchemaError(error);
-      }
-      if (error instanceof HttpClientError.ResponseError) {
-        return responseErrorMessage(error).pipe(
-          Effect.map(
-            (message) =>
-              new GitLabClientResponseError({
-                message,
-                url: error.request.url,
-                status: error.response.status,
-                cause: error,
+    const failClientError = (clientError: GitLabClientError): GitLabClientEffect<never> =>
+      Effect.fail(clientError);
+
+    const catchKnownHttpErrors = <Success, Requirements>(
+      effect: Effect.Effect<
+        Success,
+        GitLabClientError | HttpClientError.HttpClientError | ParseResult.ParseError,
+        Requirements
+      >,
+    ): Effect.Effect<Success, GitLabClientError, Requirements> =>
+      effect.pipe(
+        Effect.catchTags({
+          GitLabClientAccessTokenError: failClientError,
+          GitLabClientGraphqlError: failClientError,
+          GitLabClientNotAuthenticated: failClientError,
+          GitLabClientRequestTimeoutError: failClientError,
+          GitLabClientResponseError: failClientError,
+          GitLabClientSchemaDecodeError: failClientError,
+          GitLabClientTokenStoreError: failClientError,
+          GitLabClientTransportError: failClientError,
+          GitLabClientViewerLoginPersistenceError: failClientError,
+          ParseError: (parseError) => Effect.flatMap(parseSchemaError(parseError), Effect.fail),
+          RequestError: (requestError) =>
+            Effect.fail(
+              new GitLabClientTransportError({
+                message: requestError.message,
+                cause: requestError,
               }),
-          ),
-        );
-      }
-      if (HttpClientError.isHttpClientError(error)) {
-        return Effect.succeed(
-          new GitLabClientTransportError({
-            message: error.message,
-            cause: error,
-          }),
-        );
-      }
-      return Effect.succeed(
-        new GitLabClientTransportError({
-          message: getErrorMessage(error),
-          cause: error,
+            ),
+          ResponseError: (responseError) =>
+            responseErrorMessage(responseError).pipe(
+              Effect.flatMap(
+                (message) =>
+                  Effect.fail(
+                    new GitLabClientResponseError({
+                      message,
+                      url: responseError.request.url,
+                      status: responseError.response.status,
+                      cause: responseError,
+                    }),
+                  ),
+              ),
+            ),
         }),
       );
-    };
 
     const logApiResponse = (response: HttpClientResponse.HttpClientResponse) =>
       Effect.logInfo('[gitlab api] request').pipe(
@@ -424,6 +436,30 @@ const makeGitLabApiClient = (accountId: string) =>
           statusCode: response.status,
         }),
       );
+
+    const isRetryableReadFailure = (
+      request: HttpClientRequest.HttpClientRequest,
+      error: GitLabClientError,
+    ) => {
+      if (request.method !== 'GET') {
+        return false;
+      }
+
+      return Match.value(error).pipe(
+        Match.tagsExhaustive({
+          GitLabClientAccessTokenError: () => false,
+          GitLabClientGraphqlError: () => false,
+          GitLabClientNotAuthenticated: () => false,
+          GitLabClientRequestTimeoutError: () => true,
+          GitLabClientResponseError: (responseError) =>
+            RETRYABLE_RESPONSE_STATUS_CODES.has(responseError.status),
+          GitLabClientSchemaDecodeError: () => false,
+          GitLabClientTokenStoreError: () => false,
+          GitLabClientTransportError: () => true,
+          GitLabClientViewerLoginPersistenceError: () => false,
+        }),
+      );
+    };
 
     const send = (request: HttpClientRequest.HttpClientRequest) =>
       httpClient.execute(request).pipe(
@@ -439,7 +475,11 @@ const makeGitLabApiClient = (accountId: string) =>
         }),
         Effect.tap(logApiResponse),
         Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+        catchKnownHttpErrors,
+        Effect.retry({
+          times: API_TRANSPORT_RETRY_COUNT,
+          while: (error) => isRetryableReadFailure(request, error),
+        }),
       );
 
     const decodeJsonBody =
@@ -447,7 +487,7 @@ const makeGitLabApiClient = (accountId: string) =>
       (response: Effect.Effect<HttpClientResponse.HttpClientResponse, GitLabClientError>) =>
         response.pipe(
           Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-          Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+          catchKnownHttpErrors,
         );
 
     const decodeTextBody = (
@@ -455,7 +495,7 @@ const makeGitLabApiClient = (accountId: string) =>
     ) =>
       response.pipe(
         Effect.flatMap((httpResponse) => httpResponse.text),
-        Effect.catchAll((error) => Effect.flatMap(mapHttpError(error), Effect.fail)),
+        catchKnownHttpErrors,
       );
 
     const graphqlErrors = (response: { errors?: ReadonlyArray<{ message: string }> | null }) => {
@@ -983,7 +1023,7 @@ query($fullPath: ID!, $iid: String!) {
               number,
               contentType: 'application/json',
               requestBody: JSON.stringify(requestBody),
-              error: getErrorMessage(error),
+              error: error.message,
             }),
           ),
         ),
@@ -1111,10 +1151,8 @@ query($fullPath: ID!, $iid: String!) {
         auth,
         send,
         Effect.asVoid,
-        Effect.catchAll((error) =>
-          error instanceof GitLabClientResponseError && error.status === 404
-            ? Effect.void
-            : Effect.fail(error),
+        Effect.catchTag('GitLabClientResponseError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
         ),
       );
     });
@@ -1146,10 +1184,8 @@ query($fullPath: ID!, $iid: String!) {
         auth,
         send,
         Effect.asVoid,
-        Effect.catchAll((error) =>
-          error instanceof GitLabClientResponseError && error.status === 404
-            ? Effect.void
-            : Effect.fail(error),
+        Effect.catchTag('GitLabClientResponseError', (error) =>
+          error.status === 404 ? Effect.void : Effect.fail(error),
         ),
       );
     });

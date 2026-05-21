@@ -568,7 +568,7 @@ function ReviewThreadCardFull({
       setEditorError(
         reviewEditorSessionKey,
         editorId,
-        error instanceof Error ? error.message : String(error),
+        new Error('Reply failed.', { cause: error }).message,
       );
     } finally {
       if (
@@ -597,7 +597,7 @@ function ReviewThreadCardFull({
       setEditorError(
         reviewEditorSessionKey,
         editorId,
-        error instanceof Error ? error.message : String(error),
+        new Error('Comment update failed.', { cause: error }).message,
       );
     } finally {
       if (

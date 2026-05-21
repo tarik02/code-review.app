@@ -1,4 +1,4 @@
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Option } from 'effect';
 import { CacheService } from '../cache.ts';
 import { ValidationError } from '../errors.ts';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
@@ -62,10 +62,9 @@ const makeTrackedPullRequestService = Effect.gen(function* () {
           return Effect.succeed(openPullRequest);
         }
 
-        return provider.getPullRequest(repo, trackedPullRequest.number).pipe(
-          Effect.catchAll(() => Effect.succeed(null)),
-          Effect.map((pullRequest) => pullRequest),
-        );
+        return provider
+          .getPullRequest(repo, trackedPullRequest.number)
+          .pipe(Effect.option, Effect.map(Option.getOrNull));
       },
       { concurrency: 'unbounded' },
     );

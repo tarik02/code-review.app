@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import { ForgeProviderRegistry } from '../providers/registry.ts';
 
 type ProviderImageInput = {
@@ -79,21 +79,21 @@ const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (input: Pro
 
   const provider = yield* providers
     .forAccount(input.accountId)
-    .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    .pipe(Effect.option, Effect.map(Option.getOrNull));
   if (!provider) {
     return missingProviderImage();
   }
 
   const isAllowedImageUrl = yield* provider
     .validateImageUrl(input.url)
-    .pipe(Effect.catchAll(() => Effect.succeed(false)));
+    .pipe(Effect.option, Effect.map(Option.getOrElse(() => false)));
   if (!isAllowedImageUrl) {
     return missingProviderImage();
   }
 
   const authorizeRequest = yield* provider
     .authorizeRequest()
-    .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    .pipe(Effect.option, Effect.map(Option.getOrNull));
   if (!authorizeRequest) {
     return missingProviderImage();
   }
@@ -108,14 +108,9 @@ const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (input: Pro
       duration: PROVIDER_IMAGE_TIMEOUT,
       onTimeout: () => new Error(`Provider image request timed out: ${input.url}`),
     }),
-    Effect.flatMap((result) =>
-      HttpClientResponse.filterStatusOk(result).pipe(
-        Effect.catchAll(() =>
-          Effect.fail(new Error(`Provider image request failed: ${input.url}`)),
-        ),
-      ),
-    ),
-    Effect.catchAll(() => Effect.succeed(null)),
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
+    Effect.option,
+    Effect.map(Option.getOrNull),
   );
   if (!response) {
     return missingProviderImage();
@@ -123,8 +118,8 @@ const fetchProviderImage = Effect.fn('fetchProviderImage')(function* (input: Pro
 
   const data = yield* response.arrayBuffer.pipe(
     Effect.map((buffer) => new Uint8Array(buffer)),
-    Effect.mapError(() => null),
-    Effect.catchAll(() => Effect.succeed(null)),
+    Effect.option,
+    Effect.map(Option.getOrNull),
   );
   if (!data || data.byteLength > MAX_PROVIDER_IMAGE_BYTES) {
     return missingProviderImage();

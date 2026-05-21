@@ -1,6 +1,6 @@
 import { Command, FileSystem } from '@effect/platform';
 import { CommandExecutor } from '@effect/platform/CommandExecutor';
-import { Chunk, Duration, Effect, Fiber, Layer, Stream } from 'effect';
+import { Chunk, Duration, Effect, Fiber, Layer, Option, Stream } from 'effect';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { DurationInput } from 'effect/Duration';
@@ -220,11 +220,14 @@ function decodeChunks(chunks: Chunk.Chunk<Uint8Array>) {
   return decoder.decode(bytes);
 }
 
-function isExecutableMissing(error: unknown) {
+function isExecutableMissing(cause: unknown) {
   const message =
-    error instanceof Error
-      ? error.message
-      : String((error as { message?: unknown })?.message ?? error);
+    typeof cause === 'object' &&
+    cause !== null &&
+    'message' in cause &&
+    typeof cause.message === 'string'
+      ? cause.message
+      : String(cause);
   const normalized = message.toLowerCase();
   return (
     normalized.includes('enoent') ||
@@ -290,8 +293,8 @@ function parseGitNameStatus(stdout: string): PrChangedFile[] {
 function classifyGitResult(
   input: GitCommandInput,
   output: GitCommandOutput,
-): GitCommandOutput | GitError {
-  if (output.exitCode === 0) return output;
+): Effect.Effect<GitCommandOutput, GitError> {
+  if (output.exitCode === 0) return Effect.succeed(output);
 
   const stderr = sanitize(output.stderr, input.redactValues);
   const stdout = sanitize(output.stdout, input.redactValues);
@@ -306,7 +309,7 @@ function classifyGitResult(
     combined.includes('http basic: access denied') ||
     /\b401\b/.test(combined)
   ) {
-    return new GitAuthenticationFailed({ args: input.args, stdout, stderr, remoteUrl });
+    return Effect.fail(new GitAuthenticationFailed({ args: input.args, stdout, stderr, remoteUrl }));
   }
 
   if (
@@ -315,7 +318,7 @@ function classifyGitResult(
     combined.includes('not permitted') ||
     (combined.includes('permission denied') && combined.includes('http'))
   ) {
-    return new GitAuthorizationFailed({ args: input.args, stdout, stderr, remoteUrl });
+    return Effect.fail(new GitAuthorizationFailed({ args: input.args, stdout, stderr, remoteUrl }));
   }
 
   if (
@@ -324,7 +327,7 @@ function classifyGitResult(
     combined.includes('the requested url returned error: 404') ||
     /repository .* not found/.test(combined)
   ) {
-    return new GitRepositoryNotFound({ args: input.args, stdout, stderr, remoteUrl });
+    return Effect.fail(new GitRepositoryNotFound({ args: input.args, stdout, stderr, remoteUrl }));
   }
 
   if (
@@ -332,7 +335,9 @@ function classifyGitResult(
     combined.includes('filter capability not advertised') ||
     combined.includes('filter-spec')
   ) {
-    return new GitPartialCloneUnsupported({ args: input.args, stdout, stderr, remoteUrl });
+    return Effect.fail(
+      new GitPartialCloneUnsupported({ args: input.args, stdout, stderr, remoteUrl }),
+    );
   }
 
   if (
@@ -342,13 +347,15 @@ function classifyGitResult(
       combined.includes('fatal: path') ||
       combined.includes('invalid object name'))
   ) {
-    return new GitPathNotFound({
-      args: input.args,
-      ref: refFromArgs(input.args, input.ref),
-      path: pathFromShowArgs(input.args, input.filePath),
-      stdout,
-      stderr,
-    });
+    return Effect.fail(
+      new GitPathNotFound({
+        args: input.args,
+        ref: refFromArgs(input.args, input.ref),
+        path: pathFromShowArgs(input.args, input.filePath),
+        stdout,
+        stderr,
+      }),
+    );
   }
 
   if (
@@ -357,43 +364,32 @@ function classifyGitResult(
     combined.includes('fatal: not a valid object name') ||
     combined.includes('unknown revision or path not in the working tree')
   ) {
-    return new GitRefNotFound({
+    return Effect.fail(
+      new GitRefNotFound({
+        args: input.args,
+        ref: refFromArgs(input.args, input.ref),
+        stdout,
+        stderr,
+      }),
+    );
+  }
+
+  return Effect.fail(
+    new GitCommandFailed({
       args: input.args,
-      ref: refFromArgs(input.args, input.ref),
+      exitCode: output.exitCode,
       stdout,
       stderr,
-    });
-  }
-
-  return new GitCommandFailed({
-    args: input.args,
-    exitCode: output.exitCode,
-    stdout,
-    stderr,
-  });
+    }),
+  );
 }
 
-function normalizeCommandError(input: GitCommandInput, error: unknown): GitError {
-  if (
-    error instanceof GitAuthenticationFailed ||
-    error instanceof GitAuthorizationFailed ||
-    error instanceof GitCommandFailed ||
-    error instanceof GitCommandTimedOut ||
-    error instanceof GitExecutableNotFound ||
-    error instanceof GitPartialCloneUnsupported ||
-    error instanceof GitPathNotFound ||
-    error instanceof GitRefNotFound ||
-    error instanceof GitRepositoryNotFound ||
-    error instanceof GitUnknownCommandError
-  ) {
-    return error;
+function normalizeCommandError(input: GitCommandInput, cause: unknown): GitError {
+  if (isExecutableMissing(cause)) {
+    return new GitExecutableNotFound({ command: 'git', cause });
   }
 
-  if (isExecutableMissing(error)) {
-    return new GitExecutableNotFound({ command: 'git', cause: error });
-  }
-
-  return new GitUnknownCommandError({ args: input.args, originalError: error });
+  return new GitUnknownCommandError({ args: input.args, originalError: cause });
 }
 
 function ensureDirectory(fileSystem: FileSystem.FileSystem, directory: string) {
@@ -405,7 +401,7 @@ function ensureDirectory(fileSystem: FileSystem.FileSystem, directory: string) {
 }
 
 function pathExists(fileSystem: FileSystem.FileSystem, filePath: string) {
-  return fileSystem.exists(filePath).pipe(Effect.catchAll(() => Effect.succeed(false)));
+  return fileSystem.exists(filePath).pipe(Effect.option, Effect.map(Option.getOrElse(() => false)));
 }
 
 const makeGitService = Effect.gen(function* () {
@@ -441,13 +437,11 @@ const makeGitService = Effect.gen(function* () {
         const exitCode = yield* process.exitCode;
         const stdout = decodeChunks(yield* Fiber.join(stdoutFiber));
         const stderr = decodeChunks(yield* Fiber.join(stderrFiber));
-        const result = classifyGitResult(input, {
+        return yield* classifyGitResult(input, {
           stdout,
           stderr,
           exitCode: Number(exitCode),
         });
-        if (result instanceof Error) return yield* Effect.fail(result);
-        return result;
       }),
     ).pipe(
       Effect.provideService(CommandExecutor, commandExecutor),
@@ -460,6 +454,18 @@ const makeGitService = Effect.gen(function* () {
             stdout: '',
             stderr: '',
           }),
+      }),
+      Effect.catchTags({
+        GitAuthenticationFailed: (error) => Effect.fail(error),
+        GitAuthorizationFailed: (error) => Effect.fail(error),
+        GitCommandFailed: (error) => Effect.fail(error),
+        GitCommandTimedOut: (error) => Effect.fail(error),
+        GitExecutableNotFound: (error) => Effect.fail(error),
+        GitPartialCloneUnsupported: (error) => Effect.fail(error),
+        GitPathNotFound: (error) => Effect.fail(error),
+        GitRefNotFound: (error) => Effect.fail(error),
+        GitRepositoryNotFound: (error) => Effect.fail(error),
+        GitUnknownCommandError: (error) => Effect.fail(error),
       }),
       Effect.mapError((error) => normalizeCommandError(input, error)),
     );

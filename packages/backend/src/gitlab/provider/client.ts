@@ -1,5 +1,5 @@
 import { HttpClientRequest } from '@effect/platform';
-import { Effect } from 'effect';
+import { Effect, Match, Option, Predicate } from 'effect';
 import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
@@ -17,7 +17,6 @@ import type {
   ReviewComment,
   ReviewThread,
 } from '@code-review-app/shared';
-import { getErrorMessage } from '../../errors.ts';
 import {
   createRepoIdentity,
   hostNameFromHost,
@@ -33,7 +32,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitLabApiClient } from '../client/client.ts';
-import { type GitLabClientError, isGitLabClientError } from '../client/errors.ts';
+import type { GitLabClientError } from '../client/errors.ts';
 import type { CreateGitLabDraftNoteInput } from '../client/client.ts';
 import {
   GitLabProviderClientFailure,
@@ -56,17 +55,6 @@ import {
 } from '../client/schemas.ts';
 import { mergeRequestWebUrl, OVERVIEW_MERGE_REQUEST_SCOPES, toChangedFile } from './schemas.ts';
 import { prepareGitLabProviderImageUrl } from './images.ts';
-
-function isNotAuthenticatedMessage(message: string) {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('not logged') ||
-    normalized.includes('not authenticated') ||
-    normalized.includes('authenticate') ||
-    normalized.includes('401') ||
-    normalized.includes('unauthorized')
-  );
-}
 
 function basicAuthHeader(username: string, password: string) {
   return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
@@ -96,7 +84,7 @@ function parseGitLabRepoInput(host: string, input: string): [string, string] {
       return [inputHost, path];
     }
   } catch (error) {
-    if (error instanceof GitLabProviderInvalidRepoInput) {
+    if (Predicate.isTagged('GitLabProviderInvalidRepoInput')(error)) {
       throw error;
     }
   }
@@ -212,6 +200,7 @@ function toPullRequestSummary(mr: GitLabMergeRequest): PullRequestSummary {
 function withGitLabReviewCapabilities(pullRequest: PullRequestSummary): PullRequest {
   return {
     ...pullRequest,
+    body: pullRequest.body ?? null,
     canApprove: true,
     canRequestChanges: true,
   };
@@ -643,16 +632,111 @@ function toDiscussionFormData(input: CreateGitLabDraftNoteInput): Array<[string,
   return formData;
 }
 
-const mapProviderError =
+const wrapClientError =
   (operation: string) =>
-  (error: GitLabProviderError | GitLabClientError): GitLabProviderError =>
-    isGitLabClientError(error)
-      ? new GitLabProviderClientFailure({
-          message: error.message,
-          operation,
-          cause: error,
-        })
-      : error;
+  (clientError: GitLabClientError): Effect.Effect<never, GitLabProviderClientFailure> =>
+    Effect.fail(
+      new GitLabProviderClientFailure({
+        message: clientError.message,
+        operation,
+        cause: clientError,
+      }),
+    );
+
+function gitlabAuthStatusFromError(error: GitLabClientError | GitLabProviderError): ProviderAuthStatus {
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      GitLabClientAccessTokenError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientGraphqlError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientNotAuthenticated: () =>
+        ({
+          status: 'not_authenticated',
+          message: 'Sign in with GitLab again.',
+        }) satisfies ProviderAuthStatus,
+      GitLabClientRequestTimeoutError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientResponseError: (clientError) =>
+        clientError.status === 401
+          ? ({
+              status: 'not_authenticated',
+              message: 'Sign in with GitLab again.',
+            } satisfies ProviderAuthStatus)
+          : ({
+              status: 'unknown_error',
+              message: clientError.message,
+            } satisfies ProviderAuthStatus),
+      GitLabClientSchemaDecodeError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientTokenStoreError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientTransportError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabClientViewerLoginPersistenceError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabProviderClientFailure: (providerError) =>
+        gitlabAuthStatusFromError(providerError.cause),
+      GitLabProviderInvalidRepoInput: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabProviderMissingDiffVersion: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabProviderNotAuthenticated: () =>
+        ({
+          status: 'not_authenticated',
+          message: 'Sign in with GitLab again.',
+        }) satisfies ProviderAuthStatus,
+      GitLabProviderRepoHostMismatch: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitLabProviderUnsupportedOperation: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+    }),
+  );
+}
+
+function recoverGitLabAuthStatus(error: GitLabClientError | GitLabProviderError) {
+  const status = gitlabAuthStatusFromError(error);
+  return Effect.logWarning('[gitlab] auth status check failed').pipe(
+    Effect.annotateLogs({
+      message: status.message,
+      error,
+    }),
+    Effect.zipRight(Effect.succeed(status)),
+  );
+}
 
 const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   name: string,
@@ -665,9 +749,17 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
         return yield* effect(...args);
       }) as Effect.Effect<Success, GitLabClientError | GitLabProviderError, GitLabApiClient>
     ).pipe(
-      Effect.mapError((error: GitLabClientError | GitLabProviderError) =>
-        mapProviderError(operation)(error),
-      ),
+      Effect.catchTags({
+        GitLabClientAccessTokenError: wrapClientError(operation),
+        GitLabClientGraphqlError: wrapClientError(operation),
+        GitLabClientNotAuthenticated: wrapClientError(operation),
+        GitLabClientRequestTimeoutError: wrapClientError(operation),
+        GitLabClientResponseError: wrapClientError(operation),
+        GitLabClientSchemaDecodeError: wrapClientError(operation),
+        GitLabClientTokenStoreError: wrapClientError(operation),
+        GitLabClientTransportError: wrapClientError(operation),
+        GitLabClientViewerLoginPersistenceError: wrapClientError(operation),
+      }),
     ),
   );
 
@@ -736,27 +828,22 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       yield* viewerLogin();
       return { status: 'ready', message: null } satisfies ProviderAuthStatus;
     }).pipe(
-      Effect.catchAll((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        return Effect.logWarning('[gitlab] auth status check failed').pipe(
-          Effect.annotateLogs({
-            message,
-            error: getErrorMessage(error),
-          }),
-          Effect.zipRight(
-            Effect.succeed(
-              isNotAuthenticatedMessage(message)
-                ? ({
-                    status: 'not_authenticated',
-                    message: 'Sign in with GitLab again.',
-                  } satisfies ProviderAuthStatus)
-                : ({
-                    status: 'unknown_error',
-                    message,
-                  } satisfies ProviderAuthStatus),
-            ),
-          ),
-        );
+      Effect.catchTags({
+        GitLabClientAccessTokenError: recoverGitLabAuthStatus,
+        GitLabClientGraphqlError: recoverGitLabAuthStatus,
+        GitLabClientNotAuthenticated: recoverGitLabAuthStatus,
+        GitLabClientRequestTimeoutError: recoverGitLabAuthStatus,
+        GitLabClientResponseError: recoverGitLabAuthStatus,
+        GitLabClientSchemaDecodeError: recoverGitLabAuthStatus,
+        GitLabClientTokenStoreError: recoverGitLabAuthStatus,
+        GitLabClientTransportError: recoverGitLabAuthStatus,
+        GitLabClientViewerLoginPersistenceError: recoverGitLabAuthStatus,
+        GitLabProviderClientFailure: recoverGitLabAuthStatus,
+        GitLabProviderInvalidRepoInput: recoverGitLabAuthStatus,
+        GitLabProviderMissingDiffVersion: recoverGitLabAuthStatus,
+        GitLabProviderNotAuthenticated: recoverGitLabAuthStatus,
+        GitLabProviderRepoHostMismatch: recoverGitLabAuthStatus,
+        GitLabProviderUnsupportedOperation: recoverGitLabAuthStatus,
       }),
     );
   });
@@ -831,17 +918,19 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
               perPage: limit,
             })
             .pipe(
-              Effect.catchAll((error) =>
-                Effect.logWarning('[gitlab] group project search failed').pipe(
-                  Effect.annotateLogs({
-                    accountId: token.id,
-                    host: token.host,
-                    group: group.full_path,
-                    query,
-                    error: getErrorMessage(error),
-                  }),
-                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
-                ),
+              Effect.catchTag('GitLabClientResponseError', (error) =>
+                error.status === 403 || error.status === 404
+                  ? Effect.logWarning('[gitlab] group project search failed').pipe(
+                      Effect.annotateLogs({
+                        accountId: token.id,
+                        host: token.host,
+                        group: group.full_path,
+                        query,
+                        error,
+                      }),
+                      Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabProject>)),
+                    )
+                  : Effect.fail(error),
               ),
             ),
         { concurrency: 4 },
@@ -885,24 +974,24 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           perPage: limit,
         })
         .pipe(
-          Effect.catchAll(() =>
-            api
-              .projects({
-                membership: true,
-                search: namespacePath,
-                simple: true,
-                perPage: limit,
-              })
-              .pipe(
-                Effect.map((entries) =>
-                  entries.filter(
-                    (project) =>
-                      project.path_with_namespace === namespacePath ||
-                      project.path_with_namespace.startsWith(`${namespacePath}/`),
+          Effect.catchTag('GitLabClientResponseError', (error) =>
+            error.status === 403 || error.status === 404
+              ? api.projects({
+                  membership: true,
+                  search: namespacePath,
+                  simple: true,
+                  perPage: limit,
+                }).pipe(
+                  Effect.map((entries) =>
+                    entries.filter(
+                      (project) =>
+                        project.path_with_namespace === namespacePath ||
+                        project.path_with_namespace.startsWith(`${namespacePath}/`),
+                    ),
                   ),
-                ),
-              ),
-          ),
+                )
+              : Effect.fail(error),
+            ),
         );
       return projects.map((project) =>
         repoSummaryFromProject(token.id, token.host, label, project),
@@ -1001,38 +1090,15 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
 
       const scopedResults = yield* Effect.forEach(
         OVERVIEW_MERGE_REQUEST_SCOPES,
-        (scope) =>
-          api.overviewMergeRequests({ scope }).pipe(
-            Effect.map((mergeRequests) => ({
-              scope,
-              mergeRequests,
-              error: null,
-            })),
-            Effect.catchAll((error) => Effect.succeed({ scope, mergeRequests: [], error })),
-          ),
+        (scope) => api.overviewMergeRequests({ scope }),
         { concurrency: 'unbounded' },
       );
 
       const mergeRequestsByKey = new Map<string, GitLabMergeRequest>();
-      const errors: GitLabClientError[] = [];
-      for (const result of scopedResults) {
-        if (result.error) {
-          errors.push(result.error);
-          continue;
-        }
-        for (const mergeRequest of result.mergeRequests) {
+      for (const mergeRequests of scopedResults) {
+        for (const mergeRequest of mergeRequests) {
           mergeRequestsByKey.set(mergeRequestKey(mergeRequest), mergeRequest);
         }
-      }
-
-      if (mergeRequestsByKey.size === 0 && errors.length === scopedResults.length) {
-        return yield* Effect.fail(
-          new GitLabProviderClientFailure({
-            message: errors[0]?.message ?? 'Failed to load GitLab overview merge requests.',
-            operation: 'overviewMergeRequests',
-            cause: errors[0],
-          }),
-        );
       }
 
       const mergeRequests = [...mergeRequestsByKey.values()].sort(
@@ -1107,26 +1173,13 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
           Effect.forEach(
             OVERVIEW_MERGE_REQUEST_SCOPES,
             (scope) =>
-              api
-                .overviewMergeRequests({
-                  scope,
-                  state,
-                  orderBy,
-                  sort,
-                  perPage: filters.limit,
-                })
-                .pipe(
-                  Effect.catchAll((error) =>
-                    Effect.logWarning('[gitlab] scoped pull request discovery failed').pipe(
-                      Effect.annotateLogs({
-                        scope,
-                        state,
-                        error: getErrorMessage(error),
-                      }),
-                      Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
-                    ),
-                  ),
-                ),
+              api.overviewMergeRequests({
+                scope,
+                state,
+                orderBy,
+                sort,
+                perPage: filters.limit,
+              }),
             { concurrency: 'unbounded' },
           ).pipe(Effect.map((groups) => groups.flat())),
         { concurrency: 'unbounded' },
@@ -1264,28 +1317,13 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const scopedMergeRequestGroups = yield* Effect.forEach(
         OVERVIEW_MERGE_REQUEST_SCOPES,
         (scope) =>
-          api
-            .overviewMergeRequests({
-              scope,
-              state: searchState,
-              perPage: limit,
-              search: trimmedQuery || undefined,
-              in: trimmedQuery ? 'title' : undefined,
-            })
-            .pipe(
-              Effect.catchAll((error) =>
-                Effect.logWarning('[gitlab] scoped merge request search failed').pipe(
-                  Effect.annotateLogs({
-                    accountId: token.id,
-                    host: token.host,
-                    scope,
-                    query: trimmedQuery,
-                    error: getErrorMessage(error),
-                  }),
-                  Effect.zipRight(Effect.succeed([] as ReadonlyArray<GitLabMergeRequest>)),
-                ),
-              ),
-            ),
+          api.overviewMergeRequests({
+            scope,
+            state: searchState,
+            perPage: limit,
+            search: trimmedQuery || undefined,
+            in: trimmedQuery ? 'title' : undefined,
+          }),
         { concurrency: 'unbounded' },
       );
       const mergeRequests = dedupeMergeRequests(scopedMergeRequestGroups.flat()).sort(
@@ -1481,7 +1519,7 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
       const { repo, number, headSha } = input;
       const graphqlResponse = yield* api
         .codeQualityReportsComparer(repo.path, String(number))
-        .pipe(Effect.catchAll(() => Effect.succeed(null)));
+        .pipe(Effect.option, Effect.map(Option.getOrNull));
       const graphqlResult =
         graphqlResponse?.data?.project?.mergeRequest?.codequalityReportsComparer ?? null;
 

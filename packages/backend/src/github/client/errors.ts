@@ -76,18 +76,6 @@ type GitHubClientError =
   | GitHubClientUnexpectedResponseError
   | GitHubClientViewerLoginPersistenceError;
 
-const isGitHubClientError = (error: unknown): error is GitHubClientError =>
-  error instanceof GitHubClientTokenStoreError ||
-  error instanceof GitHubClientNotAuthenticated ||
-  error instanceof GitHubClientAccessTokenError ||
-  error instanceof GitHubClientViewerLoginPersistenceError ||
-  error instanceof GitHubClientSchemaDecodeError ||
-  error instanceof GitHubClientResponseError ||
-  error instanceof GitHubClientTransportError ||
-  error instanceof GitHubClientRequestTimeoutError ||
-  error instanceof GitHubClientGraphqlError ||
-  error instanceof GitHubClientUnexpectedResponseError;
-
 export {
   GitHubClientAccessTokenError,
   GitHubClientGraphqlError,
@@ -99,6 +87,5 @@ export {
   GitHubClientTransportError,
   GitHubClientUnexpectedResponseError,
   GitHubClientViewerLoginPersistenceError,
-  isGitHubClientError,
 };
 export type { GitHubClientError };

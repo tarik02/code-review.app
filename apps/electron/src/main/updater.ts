@@ -1,9 +1,8 @@
 import electronUpdater from 'electron-updater';
 import { EventEmitter } from 'node:events';
 import { app } from 'electron';
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import type { AvailableUpdate, UpdateEvent } from '@code-review-app/shared';
-import { getErrorMessage } from '@code-review-app/backend';
 import { backendRuntime } from './backend-runtime';
 
 const updateEvents = new EventEmitter();
@@ -35,11 +34,12 @@ function isUpdaterEnabled() {
   return app.isPackaged && process.env.CODE_REVIEW_APP_DISABLE_UPDATER !== '1';
 }
 
-function logUpdaterError(context: string, error: unknown) {
+function logUpdaterError(context: string, cause: unknown) {
+  const error = new Cause.UnknownException(cause);
   void backendRuntime.runFork(
     Effect.logError(`[updater] ${context} failed`).pipe(
       Effect.annotateLogs({
-        error: getErrorMessage(error),
+        error: error.message,
       }),
     ),
   );
@@ -78,7 +78,7 @@ function configureUpdater() {
     logUpdaterError('event', error);
     emitUpdateEvent({
       type: 'error',
-      message: error instanceof Error ? error.message : String(error),
+      message: new Cause.UnknownException(error).message,
     });
   });
 }

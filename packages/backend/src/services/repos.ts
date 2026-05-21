@@ -65,9 +65,7 @@ const makeRepoService = Effect.gen(function* () {
   )(function* (accountId) {
     const account = yield* tokenStore.get(accountId);
     if (!account) throw new Error('Provider account is not signed in.');
-    const cached = yield* cache
-      .readProviderProfile(accountId)
-      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    const cached = yield* cache.readProviderProfile(accountId);
     if (cached) return cached;
 
     const provider = yield* providers.forAccount(accountId);

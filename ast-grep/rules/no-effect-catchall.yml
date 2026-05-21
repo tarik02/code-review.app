@@ -1,0 +1,6 @@
+id: no-effect-catchall
+language: tsx
+message: use catchTag, catchTags, or typed Match instead of Effect.catchAll
+severity: error
+rule:
+  pattern: Effect.catchAll($$$ARGS)

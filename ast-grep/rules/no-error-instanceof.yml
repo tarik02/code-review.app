@@ -1,0 +1,9 @@
+id: no-error-instanceof
+language: tsx
+message: use tagged Effect matching instead of instanceof for errors
+severity: error
+rule:
+  pattern: $VALUE instanceof $ERROR
+constraints:
+  ERROR:
+    regex: Error$

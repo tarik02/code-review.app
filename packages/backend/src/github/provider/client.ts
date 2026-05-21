@@ -1,5 +1,5 @@
 import { HttpClientRequest } from '@effect/platform';
-import { Effect } from 'effect';
+import { Effect, Match, Option, Predicate } from 'effect';
 import { Buffer } from 'node:buffer';
 import type {
   OverviewPullRequestSummary,
@@ -17,7 +17,6 @@ import type {
   ReviewComment,
   ReviewThread,
 } from '@code-review-app/shared';
-import { getErrorMessage } from '../../errors.ts';
 import {
   createRepoIdentity,
   hostNameFromHost,
@@ -33,7 +32,7 @@ import type {
   ReviewThreadInput,
 } from '../../providers/types.ts';
 import { GitHubApiClient } from '../client/client.ts';
-import { type GitHubClientError, isGitHubClientError } from '../client/errors.ts';
+import type { GitHubClientError } from '../client/errors.ts';
 import {
   GitHubProviderClientFailure,
   type GitHubProviderError,
@@ -113,7 +112,7 @@ function parseGitHubRepoInput(host: string, input: string): [string, string] {
       return [inputHost, `${owner}/${name}`];
     }
   } catch (error) {
-    if (error instanceof GitHubProviderInvalidRepoInput) {
+    if (Predicate.isTagged('GitHubProviderInvalidRepoInput')(error)) {
       throw error;
     }
   }
@@ -141,28 +140,131 @@ function basicAuthHeader(username: string, password: string) {
   return `AUTHORIZATION: basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
 }
 
-function isNotAuthenticatedMessage(message: string) {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('not logged') ||
-    normalized.includes('bad credentials') ||
-    normalized.includes('401') ||
-    normalized.includes('unauthorized') ||
-    normalized.includes('authenticate') ||
-    (normalized.includes('github.com') && normalized.includes('login'))
+const wrapClientError =
+  (operation: string) =>
+  (clientError: GitHubClientError): Effect.Effect<never, GitHubProviderClientFailure> =>
+    Effect.fail(
+      new GitHubProviderClientFailure({
+        message: clientError.message,
+        operation,
+        cause: clientError,
+      }),
+    );
+
+function githubAuthStatusFromError(error: GitHubClientError | GitHubProviderError): ProviderAuthStatus {
+  return Match.value(error).pipe(
+    Match.tagsExhaustive({
+      GitHubClientAccessTokenError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientGraphqlError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientNotAuthenticated: () =>
+        ({
+          status: 'not_authenticated',
+          message: 'Sign in with GitHub again.',
+        }) satisfies ProviderAuthStatus,
+      GitHubClientRequestTimeoutError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientResponseError: (clientError) =>
+        clientError.status === 401
+          ? ({
+              status: 'not_authenticated',
+              message: 'Sign in with GitHub again.',
+            } satisfies ProviderAuthStatus)
+          : ({
+              status: 'unknown_error',
+              message: clientError.message,
+            } satisfies ProviderAuthStatus),
+      GitHubClientSchemaDecodeError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientTokenStoreError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientTransportError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientUnexpectedResponseError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubClientViewerLoginPersistenceError: (clientError) =>
+        ({
+          status: 'unknown_error',
+          message: clientError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderClientFailure: (providerError) =>
+        githubAuthStatusFromError(providerError.cause),
+      GitHubProviderInvalidRepoInput: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderMutationFailed: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderNoApprovalToRemove: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderNotAuthenticated: () =>
+        ({
+          status: 'not_authenticated',
+          message: 'Sign in with GitHub again.',
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderPullRequestNotFound: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderRepoHostMismatch: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderUnsupportedOperation: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+      GitHubProviderViewerLoginUnavailable: (providerError) =>
+        ({
+          status: 'unknown_error',
+          message: providerError.message,
+        }) satisfies ProviderAuthStatus,
+    }),
   );
 }
 
-const mapProviderError =
-  (operation: string) =>
-  (error: GitHubProviderError | GitHubClientError): GitHubProviderError =>
-    isGitHubClientError(error)
-      ? new GitHubProviderClientFailure({
-          message: error.message,
-          operation,
-          cause: error,
-        })
-      : error;
+function recoverGitHubAuthStatus(error: GitHubClientError | GitHubProviderError) {
+  const status = githubAuthStatusFromError(error);
+  return Effect.logWarning('[github] auth status check failed').pipe(
+    Effect.annotateLogs({
+      message: status.message,
+      error,
+    }),
+    Effect.zipRight(Effect.succeed(status)),
+  );
+}
 
 const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
   name: string,
@@ -175,9 +277,18 @@ const providerEffect = <Args extends ReadonlyArray<unknown>, Success>(
         return yield* effect(...args);
       }) as Effect.Effect<Success, GitHubClientError | GitHubProviderError, GitHubApiClient>
     ).pipe(
-      Effect.mapError((error: GitHubClientError | GitHubProviderError) =>
-        mapProviderError(operation)(error),
-      ),
+      Effect.catchTags({
+        GitHubClientAccessTokenError: wrapClientError(operation),
+        GitHubClientGraphqlError: wrapClientError(operation),
+        GitHubClientNotAuthenticated: wrapClientError(operation),
+        GitHubClientRequestTimeoutError: wrapClientError(operation),
+        GitHubClientResponseError: wrapClientError(operation),
+        GitHubClientSchemaDecodeError: wrapClientError(operation),
+        GitHubClientTokenStoreError: wrapClientError(operation),
+        GitHubClientTransportError: wrapClientError(operation),
+        GitHubClientUnexpectedResponseError: wrapClientError(operation),
+        GitHubClientViewerLoginPersistenceError: wrapClientError(operation),
+      }),
     ),
   );
 
@@ -408,6 +519,7 @@ function withGitHubReviewCapabilities(
 
   return {
     ...pullRequest,
+    body: pullRequest.body ?? null,
     canApprove: !isOwnPullRequest,
     canRequestChanges: !isOwnPullRequest,
   };
@@ -634,7 +746,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       const owners = [user.login];
       const orgs = yield* api
         .userOrgs({ perPage: 100 })
-        .pipe(Effect.catchAll(() => Effect.succeed([])));
+        .pipe(Effect.option, Effect.map(Option.getOrElse(() => [])));
       for (const org of orgs) {
         if (org.login.trim().length > 0) {
           owners.push(org.login);
@@ -698,27 +810,26 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
       yield* viewerLogin();
       return { status: 'ready', message: null } satisfies ProviderAuthStatus;
     }).pipe(
-      Effect.catchAll((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        return Effect.logWarning('[github] auth status check failed').pipe(
-          Effect.annotateLogs({
-            message,
-            error: getErrorMessage(error),
-          }),
-          Effect.zipRight(
-            Effect.succeed(
-              isNotAuthenticatedMessage(message)
-                ? ({
-                    status: 'not_authenticated',
-                    message: 'Sign in with GitHub again.',
-                  } satisfies ProviderAuthStatus)
-                : ({
-                    status: 'unknown_error',
-                    message,
-                  } satisfies ProviderAuthStatus),
-            ),
-          ),
-        );
+      Effect.catchTags({
+        GitHubClientAccessTokenError: recoverGitHubAuthStatus,
+        GitHubClientGraphqlError: recoverGitHubAuthStatus,
+        GitHubClientNotAuthenticated: recoverGitHubAuthStatus,
+        GitHubClientRequestTimeoutError: recoverGitHubAuthStatus,
+        GitHubClientResponseError: recoverGitHubAuthStatus,
+        GitHubClientSchemaDecodeError: recoverGitHubAuthStatus,
+        GitHubClientTokenStoreError: recoverGitHubAuthStatus,
+        GitHubClientTransportError: recoverGitHubAuthStatus,
+        GitHubClientUnexpectedResponseError: recoverGitHubAuthStatus,
+        GitHubClientViewerLoginPersistenceError: recoverGitHubAuthStatus,
+        GitHubProviderClientFailure: recoverGitHubAuthStatus,
+        GitHubProviderInvalidRepoInput: recoverGitHubAuthStatus,
+        GitHubProviderMutationFailed: recoverGitHubAuthStatus,
+        GitHubProviderNoApprovalToRemove: recoverGitHubAuthStatus,
+        GitHubProviderNotAuthenticated: recoverGitHubAuthStatus,
+        GitHubProviderPullRequestNotFound: recoverGitHubAuthStatus,
+        GitHubProviderRepoHostMismatch: recoverGitHubAuthStatus,
+        GitHubProviderUnsupportedOperation: recoverGitHubAuthStatus,
+        GitHubProviderViewerLoginUnavailable: recoverGitHubAuthStatus,
       }),
     );
   });
@@ -1439,7 +1550,7 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
         let shouldContinue = true;
 
         while (shouldContinue && findings.length < maxFindings) {
-          const annotations = yield* api
+          const annotationsResult = yield* api
             .checkRunAnnotations({
               owner,
               name,
@@ -1448,13 +1559,14 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
               page: annotationPage,
             })
             .pipe(
-              Effect.catchAll((error) => {
+              Effect.catchTag('GitHubClientResponseError', (error) => {
                 notes.push(
                   `Could not load annotations for ${githubCheckRunSourceName(checkRun)}: ${error.message}`,
                 );
-                return Effect.succeed([]);
+                return Effect.succeed([] as ReadonlyArray<GhCheckRunAnnotation>);
               }),
             );
+          const annotations = annotationsResult;
 
           if (annotations.length === 0) {
             shouldContinue = false;
@@ -1562,8 +1674,8 @@ function makeGitHubProvider(): ForgeProviderEffectContract<GitHubApiClient, GitH
               canResolve: true,
               isResolved: thread.isResolved,
               isOutdated: thread.isOutdated,
-              line: thread.line ?? thread.originalLine ?? null,
-              startLine: thread.startLine ?? thread.originalStartLine ?? null,
+              line: thread.line ?? null,
+              startLine: thread.startLine ?? null,
               side: thread.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT',
               startSide:
                 thread.startDiffSide === 'LEFT' || thread.startDiffSide === 'RIGHT'

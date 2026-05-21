@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain } from 'electron';
+import { app, clipboard, dialog, ipcMain } from 'electron';
 import type { BrowserWindow, OpenDialogOptions } from 'electron';
 import { applyWSSHandler } from '@trpc/server/adapters/ws';
 import { createElectronServer } from '@hadeeb/trpc-worker/adapter';
@@ -103,6 +103,7 @@ function createElectronRouterPlatform(window: BrowserWindow): BackendRouterPlatf
       if (window.isMaximized()) window.unmaximize();
       else window.maximize();
     },
+    writeClipboardText: (value) => clipboard.writeText(value),
     checkForUpdate,
     installUpdate,
     subscribeToUpdateEvents,

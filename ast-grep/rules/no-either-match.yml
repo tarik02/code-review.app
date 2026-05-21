@@ -1,0 +1,6 @@
+id: no-either-match
+language: tsx
+message: use typed Effect or Match handling instead of Either.match on errors
+severity: error
+rule:
+  pattern: Either.match($$$ARGS)

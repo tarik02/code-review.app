@@ -68,17 +68,6 @@ type GitLabClientError =
   | GitLabClientTransportError
   | GitLabClientViewerLoginPersistenceError;
 
-const isGitLabClientError = (error: unknown): error is GitLabClientError =>
-  error instanceof GitLabClientTokenStoreError ||
-  error instanceof GitLabClientNotAuthenticated ||
-  error instanceof GitLabClientAccessTokenError ||
-  error instanceof GitLabClientViewerLoginPersistenceError ||
-  error instanceof GitLabClientSchemaDecodeError ||
-  error instanceof GitLabClientResponseError ||
-  error instanceof GitLabClientTransportError ||
-  error instanceof GitLabClientRequestTimeoutError ||
-  error instanceof GitLabClientGraphqlError;
-
 export {
   GitLabClientAccessTokenError,
   GitLabClientGraphqlError,
@@ -89,6 +78,5 @@ export {
   GitLabClientTokenStoreError,
   GitLabClientTransportError,
   GitLabClientViewerLoginPersistenceError,
-  isGitLabClientError,
 };
 export type { GitLabClientError };

@@ -1,0 +1,16 @@
+id: no-effect-match-effect-recovery
+language: tsx
+message: use typed catchTag/catchTags or typed Match instead of matchEffect success passthrough recovery
+severity: error
+rule:
+  any:
+    - pattern: |
+        Effect.matchEffect({
+          onSuccess: Effect.succeed,
+          onFailure: $$$HANDLER
+        })
+    - pattern: |
+        Effect.matchEffect({
+          onFailure: $$$HANDLER,
+          onSuccess: Effect.succeed
+        })

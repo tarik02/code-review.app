@@ -1,4 +1,4 @@
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Option } from 'effect';
 import { createProviderRepoIdentityFromParts } from '../repo-id.ts';
 import { ForgeProviderRegistry, type AccountScopedForgeProvider } from '../providers/registry.ts';
 import type {
@@ -75,7 +75,8 @@ const makeReviewCommentService = Effect.gen(function* () {
   const getProviderViewerLogin = (repoInput: RepoIdentity) =>
     providers.forRepo(repoInput).pipe(
       Effect.flatMap(({ provider }) => provider.viewerLogin()),
-      Effect.catchAll(() => Effect.succeed('You')),
+      Effect.option,
+      Effect.map(Option.getOrElse(() => 'You')),
     );
 
   function pendingCommentId(id: string) {

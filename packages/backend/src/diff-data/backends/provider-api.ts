@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { ProviderError, ValidationError, ensureError } from '../../errors.ts';
+import { ValidationError } from '../../errors.ts';
 import type { ForgeProviderRegistryShape } from '../../providers/registry.ts';
 import { repoIdentityCacheKey } from '../../repo-id.ts';
 import type { PrChangedFile, PrFileContents } from '@code-review-app/shared';
@@ -31,11 +31,6 @@ function makeProviderApiDiffBackend(providers: ForgeProviderRegistryShape): Diff
       }
       return unique;
     },
-    Effect.mapError((error) => {
-      if (error instanceof Error) return error;
-      const cause = ensureError(error);
-      return new ProviderError(cause.message, { cause });
-    }),
   );
 
   const getFileContents: DiffDataBackend['getFileContents'] = Effect.fn(
@@ -99,11 +94,6 @@ function makeProviderApiDiffBackend(providers: ForgeProviderRegistryShape): Diff
         newContent,
       } satisfies PrFileContents;
     },
-    Effect.mapError((error) => {
-      if (error instanceof Error) return error;
-      const cause = ensureError(error);
-      return new ProviderError(cause.message, { cause });
-    }),
   );
 
   return {

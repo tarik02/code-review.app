@@ -1,0 +1,12 @@
+id: no-manual-tag-reads
+language: tsx
+message: use Match.tagsExhaustive or Effect.catchTag/catchTags instead of reading _tag
+severity: error
+rule:
+  any:
+    - pattern: $VALUE._tag
+    - pattern: $VALUE?._tag
+    - pattern: $VALUE["_tag"]
+    - pattern: $VALUE['_tag']
+    - kind: shorthand_property_identifier_pattern
+      regex: ^_tag$

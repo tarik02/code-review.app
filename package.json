@@ -16,7 +16,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "typecheck:all": "pnpm run typecheck && pnpm -r exec tsc -p tsconfig.json",
     "typecheck:ci": "pnpm exec tsc -p tsconfig.json --pretty false && pnpm -r exec tsc -p tsconfig.json --pretty false",
+    "lint:ast-grep": "ast-grep scan",
     "lint": "vp lint",
+    "check": "pnpm run lint && pnpm run lint:ast-grep",
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
     "version:release": "changeset version"

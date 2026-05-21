@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
-import { Cause, Effect, Exit, Option } from 'effect';
-import { BackendError, formatLogDetails, getErrorMessage } from './errors.ts';
+import { Cause, Effect, Exit, Option, Predicate } from 'effect';
+import { formatLogDetails } from './errors.ts';
 import { PullRequestDataSourceService } from './services/pull-request-data-sources.ts';
 import { PullRequestService } from './services/pull-requests.ts';
 import { PullRequestQualityService } from './services/pull-request-quality.ts';
@@ -76,6 +76,7 @@ type BackendRouterPlatform = {
   subscribeToFullScreenStatus(listener: (value: boolean) => void): () => void;
   setNativeTheme(preference: ThemePreference): void;
   toggleMaximize(): void;
+  writeClipboardText(value: string): void;
   checkForUpdate(): Promise<AvailableUpdate | null>;
   installUpdate(): Promise<void>;
   subscribeToUpdateEvents(listener: (event: UpdateEvent) => void): () => void;
@@ -159,14 +160,31 @@ function parseRepoUrl(input: string, fallbackProvider: ProviderAccount['provider
   }
 }
 
-function mapError(error: unknown): TRPCError {
-  if (error instanceof TRPCError) return error;
-  if (error instanceof BackendError) {
-    return new TRPCError({ code: 'BAD_REQUEST', message: error.message });
-  }
+function describeUnknownCause(cause: unknown) {
+  const squashed = Cause.squash(Cause.fail(cause));
+  const unknown = new Cause.UnknownException(cause);
+  const message =
+    Predicate.hasProperty(squashed, 'message') &&
+    typeof squashed.message === 'string' &&
+    squashed.message.length > 0
+      ? squashed.message
+      : unknown.message;
+  const name =
+    Predicate.hasProperty(squashed, 'name') &&
+    typeof squashed.name === 'string' &&
+    squashed.name.length > 0
+      ? squashed.name
+      : unknown.name;
+  return {
+    message,
+    name,
+  };
+}
+
+function mapError(cause: unknown): TRPCError {
   return new TRPCError({
     code: 'INTERNAL_SERVER_ERROR',
-    message: getErrorMessage(error),
+    message: describeUnknownCause(cause).message,
   });
 }
 
@@ -180,16 +198,18 @@ function causeFailureOrSquash<E>(cause: Cause.Cause<E>): unknown {
 
 function summarizeEffectCause<E>(cause: Cause.Cause<E>) {
   const errors = Cause.prettyErrors(cause).map((error) => {
-    const originalError = Cause.originalError(error);
+    const originalError = describeUnknownCause(Cause.originalError(error));
     return {
-      message: getErrorMessage(originalError),
-      name: originalError instanceof Error ? originalError.name : typeof originalError,
+      message: originalError.message,
+      name: originalError.name,
     };
   });
   return {
     pretty: Cause.pretty(cause, { renderErrorCause: true }),
     errors,
-    primaryError: errors[0] ?? { message: getErrorMessage(causeFailureOrSquash(cause)) },
+    primaryError: errors[0] ?? {
+      message: describeUnknownCause(causeFailureOrSquash(cause)).message,
+    },
   };
 }
 
@@ -224,7 +244,8 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         }
         return yield* service.validateRepo(account.id, parsedUrl.path).pipe(
           Effect.map((repo) => [repo]),
-          Effect.catchAll(() => Effect.succeed([])),
+          Effect.option,
+          Effect.map(Option.getOrElse(() => [])),
         );
       }
 
@@ -238,7 +259,8 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
       ) {
         const validated = yield* service.validateRepo(account.id, pathQuery).pipe(
           Effect.map((repo) => [repo]),
-          Effect.catchAll(() => Effect.succeed(null)),
+          Effect.option,
+          Effect.map(Option.getOrNull),
         );
         if (validated) {
           return validated;
@@ -550,7 +572,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
                         namespaces = dedupeNamespaces([...namespaces, ...accountNamespaces]);
                         emitSnapshot();
                       } catch (error) {
-                        errors.push(getErrorMessage(error));
+                        errors.push(describeUnknownCause(error).message);
                         emitSnapshot();
                       }
                     }
@@ -565,7 +587,8 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
                               .validateRepo(account.id, input.repoFilterKey ?? '')
                               .pipe(
                                 Effect.map((repo) => [repo]),
-                                Effect.catchAll(() => Effect.succeed([])),
+                                Effect.option,
+                                Effect.map(Option.getOrElse(() => [])),
                               );
                           }),
                           'browse.validateScopedRepo',
@@ -613,7 +636,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
                                   }) satisfies OverviewPullRequestSummary,
                               );
                           } catch (error) {
-                            errors.push(getErrorMessage(error));
+                            errors.push(describeUnknownCause(error).message);
                             return [];
                           }
                         }),
@@ -643,12 +666,12 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
                         ]).slice(0, input.pullRequestLimit);
                         emitSnapshot();
                       } catch (error) {
-                        errors.push(getErrorMessage(error));
+                        errors.push(describeUnknownCause(error).message);
                         emitSnapshot();
                       }
                     }
                   } catch (error) {
-                    errors.push(getErrorMessage(error));
+                    errors.push(describeUnknownCause(error).message);
                     emitSnapshot();
                   } finally {
                     completedCount += 1;
@@ -734,7 +757,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
               const service = yield* RepoService;
               return yield* service
                 .validateRepo(input.accountId, input.repo)
-                .pipe(Effect.catchAll(() => Effect.succeed(null)));
+                .pipe(Effect.option, Effect.map(Option.getOrNull));
             }),
           ),
         ),
@@ -837,7 +860,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
             const service = yield* PullRequestService;
             const pullRequest = yield* service
               .get(input, input.number)
-              .pipe(Effect.catchAll(() => Effect.succeed(null)));
+              .pipe(Effect.option, Effect.map(Option.getOrNull));
             return pullRequest ? pullRequestSchema.parse(pullRequest) : null;
           }),
         ),
@@ -1131,6 +1154,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         }),
       ),
       toggleMaximize: t.procedure.mutation(() => platform.toggleMaximize()),
+      writeClipboardText: t.procedure.input(z.string()).mutation(({ input }) => {
+        platform.writeClipboardText(input);
+      }),
     }),
 
     updates: t.router({
@@ -1141,7 +1167,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         } catch (error) {
           await runtime.runPromise(
             Effect.logError(
-              `[trpc] updates.check failed\n${formatLogDetails({ message: getErrorMessage(error) })}`,
+              `[trpc] updates.check failed\n${formatLogDetails({ message: describeUnknownCause(error).message })}`,
             ),
           );
           throw mapError(error);
@@ -1153,7 +1179,7 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         } catch (error) {
           await runtime.runPromise(
             Effect.logError(
-              `[trpc] updates.install failed\n${formatLogDetails({ message: getErrorMessage(error) })}`,
+              `[trpc] updates.install failed\n${formatLogDetails({ message: describeUnknownCause(error).message })}`,
             ),
           );
           throw mapError(error);

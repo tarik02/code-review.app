@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select';
-import { getErrorMessage } from '../../hooks/use-forge-queries';
 import { hasDefaultClientId, normalizeHostInput } from '../../lib/forge-links';
 import { trpc } from '../../lib/trpc';
 import {
@@ -147,7 +146,7 @@ function ProfilesRoute() {
             </p>
             {diffDataModeMutation.error ? (
               <p className="mt-2 text-sm text-danger-600">
-                {getErrorMessage(diffDataModeMutation.error)}
+                {diffDataModeMutation.error.message}
               </p>
             ) : null}
           </div>
@@ -242,7 +241,7 @@ function ProfilesRoute() {
             const status = providerStatuses[account.id];
             const profileQuery = profileQueries[index];
             const profileLogin = profileQuery?.data?.login ?? account.viewerLogin;
-            const profileError = getErrorMessage(profileQuery?.error);
+            const profileError = profileQuery?.error?.message ?? '';
             const isSigningOut =
               signOutMutation.isPending && signOutMutation.variables === account.id;
             const isReady = status?.status === 'ready';
@@ -305,11 +304,11 @@ function ProfilesRoute() {
       )}
 
       {visibilityMutation.error ? (
-        <p className="text-sm text-danger-600">{getErrorMessage(visibilityMutation.error)}</p>
+        <p className="text-sm text-danger-600">{visibilityMutation.error.message}</p>
       ) : null}
 
       {signOutMutation.error ? (
-        <p className="text-sm text-danger-600">{getErrorMessage(signOutMutation.error)}</p>
+        <p className="text-sm text-danger-600">{signOutMutation.error.message}</p>
       ) : null}
     </div>
   );

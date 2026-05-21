@@ -1,14 +1,9 @@
 import { safeStorage } from 'electron';
-import { Effect, Layer } from 'effect';
+import { Cause, Effect, Layer } from 'effect';
 import {
   EncryptionService,
-  ensureError,
   type EncryptionServiceShape,
 } from '@code-review-app/backend';
-
-function toError(error: unknown) {
-  return ensureError(error);
-}
 
 function assertEncryptionAvailable() {
   if (!safeStorage.isEncryptionAvailable()) {
@@ -29,7 +24,7 @@ const makeElectronSafeStorageEncryption = Effect.sync(() => {
         assertEncryptionAvailable();
         return safeStorage.encryptString(value).toString('base64');
       },
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     }),
   );
 
@@ -41,7 +36,7 @@ const makeElectronSafeStorageEncryption = Effect.sync(() => {
         assertEncryptionAvailable();
         return safeStorage.decryptString(Buffer.from(value, 'base64'));
       },
-      catch: toError,
+      catch: (cause) => new Cause.UnknownException(cause),
     }),
   );
 

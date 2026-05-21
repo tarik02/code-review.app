@@ -58,12 +58,6 @@ import {
   repoIdentityKey,
 } from '../lib/repo-identity';
 
-function getErrorMessage(error: unknown): string {
-  if (!error) return '';
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 function useSavedRepos() {
   const query = useQuery(savedReposQueryOptions());
   return {
@@ -138,7 +132,7 @@ function useAccountOverviewPullRequests(
     for (let i = 0; i < accountIds.length; i += 1) {
       const error = overviewQueries[i]?.error;
       if (!error) continue;
-      entries.push(getErrorMessage(error));
+      entries.push(error.message);
     }
     return entries;
   }, [accountIds, overviewQueries]);
@@ -164,7 +158,7 @@ function useDataSourcePullRequests(dataSource: PullRequestDataSource | null, ena
   });
 
   return {
-    error: query.error ? getErrorMessage(query.error) : null,
+    error: query.error ? query.error.message : null,
     isLoading: enabled && dataSource !== null && query.isPending,
     pullRequests: query.data ?? [],
   };
@@ -243,7 +237,7 @@ function useOverviewPullRequests({ repos, enabled }: UseOverviewPullRequestsArgs
       );
       const error = livePullRequestQueries[i]?.error;
       if (!error || hasDisplayData) continue;
-      entries.push([repo, getErrorMessage(error)]);
+      entries.push([repo, error.message]);
     }
     return Object.fromEntries(entries);
   }, [cachedPullRequestQueries, livePullRequestQueries, repoNames]);
@@ -283,7 +277,7 @@ function useTrackedPullRequests({ repos }: UseRepoPullRequestsArgs) {
       const repo = repoNames[i];
       const error = trackedPullRequestQueries[i]?.error;
       if (!error) continue;
-      entries.push([repo, getErrorMessage(error)]);
+      entries.push([repo, error.message]);
     }
     return Object.fromEntries(entries);
   }, [repoNames, trackedPullRequestQueries]);
@@ -474,30 +468,33 @@ function useSelectedPullRequestData(
 
   return {
     approvalState,
-    approvalStateError: getErrorMessage(approvalStateQuery.error),
+    approvalStateError: approvalStateQuery.error?.message ?? '',
     changedFiles,
     changedFilesError:
       diffDataMode === 'git'
-        ? getErrorMessage(selectedPatchQuery.error)
-        : getErrorMessage(changedFilesQuery.error),
+        ? (selectedPatchQuery.error?.message ?? '')
+        : (changedFilesQuery.error?.message ?? ''),
     isApprovalStateLoading,
     isChangedFilesLoading,
     isPatchLoading,
     isPendingReviewLoading,
     isQualityReportLoading,
     isReviewThreadsLoading,
-    patchError: getErrorMessage(selectedPatchQuery.error),
+    patchError: selectedPatchQuery.error?.message ?? '',
     pendingReview,
-    pendingReviewError: getErrorMessage(pendingReviewQuery.error),
+    pendingReviewError: pendingReviewQuery.error?.message ?? '',
     qualityReport,
-    qualityReportError: getErrorMessage(qualityReportQuery.error),
+    qualityReportError: qualityReportQuery.error?.message ?? '',
     reviewThreads,
-    reviewThreadsError: getErrorMessage(reviewThreadsQuery.error),
+    reviewThreadsError: reviewThreadsQuery.error?.message ?? '',
     selectedPatch,
   };
 }
 
-function usePullRequestApprovalMutations(selectedPr: SelectedPullRequest | null) {
+function usePullRequestApprovalMutations(
+  selectedPr: SelectedPullRequest | null,
+  options?: { onApproveError?: (error: Error) => void },
+) {
   const queryClient = useQueryClient();
   const approvalStateQueryKey = selectedPr ? forgeKeys.pullRequestApprovalState(selectedPr) : null;
   const reviewThreadsQueryKey = selectedPr ? forgeKeys.pullRequestReviewThreads(selectedPr) : null;
@@ -524,6 +521,7 @@ function usePullRequestApprovalMutations(selectedPr: SelectedPullRequest | null)
 
   const approveMutation = useMutation({
     mutationFn: (input: SelectedPullRequest) => approvePullRequest(input),
+    onError: options?.onApproveError,
     onSuccess: invalidateApprovalState,
   });
 
@@ -665,7 +663,6 @@ function usePullRequestReviewCommentMutations(selectedPr: SelectedPullRequest | 
 }
 
 export {
-  getErrorMessage,
   dedupeOverviewPullRequestEntries,
   useAccountOverviewPullRequests,
   useDataSourcePullRequests,
