@@ -145,9 +145,7 @@ function ProfilesRoute() {
                 : 'Use GitHub/GitLab APIs.'}
             </p>
             {diffDataModeMutation.error ? (
-              <p className="mt-2 text-sm text-danger-600">
-                {diffDataModeMutation.error.message}
-              </p>
+              <p className="mt-2 text-sm text-danger-600">{diffDataModeMutation.error.message}</p>
             ) : null}
           </div>
           <Select

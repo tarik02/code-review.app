@@ -368,16 +368,15 @@ const makeGitHubApiClient = (accountId: string) =>
             ),
           ResponseError: (responseError) =>
             responseErrorMessage(responseError).pipe(
-              Effect.flatMap(
-                (message) =>
-                  Effect.fail(
-                    new GitHubClientResponseError({
-                      message,
-                      url: responseError.request.url,
-                      status: responseError.response.status,
-                      cause: responseError,
-                    }),
-                  ),
+              Effect.flatMap((message) =>
+                Effect.fail(
+                  new GitHubClientResponseError({
+                    message,
+                    url: responseError.request.url,
+                    status: responseError.response.status,
+                    cause: responseError,
+                  }),
+                ),
               ),
             ),
         }),

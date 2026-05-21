@@ -346,12 +346,7 @@ function exchangeOAuthCode(
     }
 
     const viewerLogin = yield* fetchOAuthViewerLogin(provider, host, payload.access_token);
-    const resolvedAccountId = yield* resolveOAuthAccountId(
-      accountId,
-      provider,
-      host,
-      viewerLogin,
-    );
+    const resolvedAccountId = yield* resolveOAuthAccountId(accountId, provider, host, viewerLogin);
     const token = tokenFromPayload(
       resolvedAccountId,
       provider,
@@ -411,12 +406,7 @@ function exchangeDeviceOAuthCode(
     }
 
     const viewerLogin = yield* fetchOAuthViewerLogin(provider, host, payload.access_token);
-    const resolvedAccountId = yield* resolveOAuthAccountId(
-      accountId,
-      provider,
-      host,
-      viewerLogin,
-    );
+    const resolvedAccountId = yield* resolveOAuthAccountId(accountId, provider, host, viewerLogin);
     const token = tokenFromPayload(
       resolvedAccountId,
       provider,

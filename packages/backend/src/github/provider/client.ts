@@ -151,7 +151,9 @@ const wrapClientError =
       }),
     );
 
-function githubAuthStatusFromError(error: GitHubClientError | GitHubProviderError): ProviderAuthStatus {
+function githubAuthStatusFromError(
+  error: GitHubClientError | GitHubProviderError,
+): ProviderAuthStatus {
   return Match.value(error).pipe(
     Match.tagsExhaustive({
       GitHubClientAccessTokenError: (clientError) =>

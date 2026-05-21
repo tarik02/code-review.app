@@ -309,7 +309,9 @@ function classifyGitResult(
     combined.includes('http basic: access denied') ||
     /\b401\b/.test(combined)
   ) {
-    return Effect.fail(new GitAuthenticationFailed({ args: input.args, stdout, stderr, remoteUrl }));
+    return Effect.fail(
+      new GitAuthenticationFailed({ args: input.args, stdout, stderr, remoteUrl }),
+    );
   }
 
   if (

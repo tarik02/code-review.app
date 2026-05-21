@@ -1,9 +1,6 @@
 import { safeStorage } from 'electron';
 import { Cause, Effect, Layer } from 'effect';
-import {
-  EncryptionService,
-  type EncryptionServiceShape,
-} from '@code-review-app/backend';
+import { EncryptionService, type EncryptionServiceShape } from '@code-review-app/backend';
 
 function assertEncryptionAvailable() {
   if (!safeStorage.isEncryptionAvailable()) {

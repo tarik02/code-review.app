@@ -53,11 +53,7 @@ function PullRequestQualitySummary({
   unmappedFindings,
 }: PullRequestQualitySummaryProps) {
   if (isLoading) {
-    return (
-      <div className="text-sm text-ink-500">
-        Loading checks and code quality...
-      </div>
-    );
+    return <div className="text-sm text-ink-500">Loading checks and code quality...</div>;
   }
 
   if (error && !report) {

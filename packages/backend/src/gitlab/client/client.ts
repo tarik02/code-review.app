@@ -413,16 +413,15 @@ const makeGitLabApiClient = (accountId: string) =>
             ),
           ResponseError: (responseError) =>
             responseErrorMessage(responseError).pipe(
-              Effect.flatMap(
-                (message) =>
-                  Effect.fail(
-                    new GitLabClientResponseError({
-                      message,
-                      url: responseError.request.url,
-                      status: responseError.response.status,
-                      cause: responseError,
-                    }),
-                  ),
+              Effect.flatMap((message) =>
+                Effect.fail(
+                  new GitLabClientResponseError({
+                    message,
+                    url: responseError.request.url,
+                    status: responseError.response.status,
+                    cause: responseError,
+                  }),
+                ),
               ),
             ),
         }),
