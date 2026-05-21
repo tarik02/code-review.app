@@ -75,9 +75,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   const providerStatusMessage =
     authMessage ??
     gateStatus.message ??
-    (providerAccountsQuery.error?.message ||
-      providerStatusesQuery.error?.message ||
-      null);
+    (providerAccountsQuery.error?.message || providerStatusesQuery.error?.message || null);
 
   const checkAgain = useCallback(() => {
     void queryClient.invalidateQueries({

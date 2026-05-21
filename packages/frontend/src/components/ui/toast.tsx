@@ -45,9 +45,7 @@ function AppToaster({ onRefreshPullRequest }: { onRefreshPullRequest: () => void
                   </ToastPrimitive.Title>
                 ) : null}
                 {toast.description ? (
-                  <ToastPrimitive.Description
-                    className={cx('text-ink-600', toast.title && 'mt-1')}
-                  >
+                  <ToastPrimitive.Description className={cx('text-ink-600', toast.title && 'mt-1')}>
                     {toast.description}
                   </ToastPrimitive.Description>
                 ) : null}

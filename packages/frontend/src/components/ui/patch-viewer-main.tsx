@@ -113,10 +113,7 @@ import type {
   ReviewCommentSide,
   SelectedPullRequest,
 } from '../../types/forge';
-import {
-  providerFromProviderId,
-  repoIdentityKey,
-} from '../../lib/repo-identity';
+import { providerFromProviderId, repoIdentityKey } from '../../lib/repo-identity';
 import { getPatchViewerSessionState, usePatchViewerStore } from '../../stores/patch-viewer-store';
 import {
   getReviewCommentEditorSessionState,
@@ -250,7 +247,9 @@ function PullRequestToolbarMeta({
   pullRequest: PullRequestSummary | null;
 }) {
   if (!pullRequest) {
-    return <div className="truncate text-sm font-medium text-ink-500">No pull request selected</div>;
+    return (
+      <div className="truncate text-sm font-medium text-ink-500">No pull request selected</div>
+    );
   }
 
   const status = getPullRequestStatus(pullRequest);
@@ -396,12 +395,18 @@ function CodeQualityDropdown({
       }),
     ],
   });
-  const setReference = useCallback((node: HTMLSpanElement | null) => {
-    refs.setReference(node);
-  }, [refs]);
-  const setFloating = useCallback((node: HTMLDivElement | null) => {
-    refs.setFloating(node);
-  }, [refs]);
+  const setReference = useCallback(
+    (node: HTMLSpanElement | null) => {
+      refs.setReference(node);
+    },
+    [refs],
+  );
+  const setFloating = useCallback(
+    (node: HTMLDivElement | null) => {
+      refs.setFloating(node);
+    },
+    [refs],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -449,10 +454,7 @@ function CodeQualityDropdown({
         <Button
           aria-expanded={open}
           aria-haspopup="dialog"
-          className={cx(
-            'h-7 border px-2.5',
-            qualityToolbarTone(toolbarState),
-          )}
+          className={cx('h-7 border px-2.5', qualityToolbarTone(toolbarState))}
           onDoubleClick={stopToolbarDoubleClick}
           onClick={() => setOpen((current) => !current)}
           size="sm"
@@ -1688,10 +1690,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
   const detachedInactiveLineThreads = inactiveLineThreadAnnotations
     .filter((annotation) => !fileDiffContainsAnnotationLine(fileDiff, annotation))
     .map((annotation) => annotation.metadata.thread);
-  const activeFileThreads = [
-    ...fileReviewThreads.activeFileThreads,
-    ...detachedActiveLineThreads,
-  ];
+  const activeFileThreads = [...fileReviewThreads.activeFileThreads, ...detachedActiveLineThreads];
   const inactiveFileThreads = [
     ...fileReviewThreads.inactiveFileThreads,
     ...detachedInactiveLineThreads,
@@ -3154,11 +3153,7 @@ function PatchViewerMain({
         }
         closeEditor(reviewEditorSessionKey, editorId);
       } catch (error) {
-        setEditorError(
-          reviewEditorSessionKey,
-          editorId,
-          getCaughtErrorMessage(error),
-        );
+        setEditorError(reviewEditorSessionKey, editorId, getCaughtErrorMessage(error));
       } finally {
         if (
           getReviewCommentEditorSessionState(
@@ -3220,11 +3215,7 @@ function PatchViewerMain({
         });
         closeEditor(reviewEditorSessionKey, editorId);
       } catch (error) {
-        setEditorError(
-          reviewEditorSessionKey,
-          editorId,
-          getCaughtErrorMessage(error),
-        );
+        setEditorError(reviewEditorSessionKey, editorId, getCaughtErrorMessage(error));
       } finally {
         if (
           getReviewCommentEditorSessionState(
@@ -3600,158 +3591,160 @@ function PatchViewerMain({
                   onRootChange={handleVirtualizerRootChange}
                   onScroll={handlePatchScroll}
                 >
-                {!selectedPrKey && !isPatchLoading ? (
-                  <div className="flex min-h-full flex-col">
-                    <TopBar
-                      aria-hidden="true"
-                      position="middle"
-                      className="shrink-0 cursor-grab app-region-drag border-b border-ink-200 bg-transparent dark:border-neutral-700"
-                    />
-                    <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center md:min-h-full">
-                      <strong>Select a pull request.</strong>
-                      <span className="text-sm text-ink-600">
-                        The PR patch will render here with Pierre Diffs.
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-
-                {isPatchLoading ? (
-                  <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center md:min-h-full">
-                    Loading patch...
-                  </div>
-                ) : null}
-
-                {!isPatchLoading && patchError ? (
-                  <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
-                    {patchError}
-                  </div>
-                ) : null}
-
-                {!isPatchLoading && !patchError && isReviewThreadsLoading ? (
-                  <div className="px-4 pb-2 pt-1 text-sm text-ink-500">
-                    Loading review threads...
-                  </div>
-                ) : null}
-
-                {!isPatchLoading && !patchError && reviewThreadsError ? (
-                  <div className="px-4 pb-2 pt-1 text-sm text-danger-600">{reviewThreadsError}</div>
-                ) : null}
-
-                {!isPatchLoading && !patchError && selectedPatch ? (
-                  <PatchFileDiffItemContext.Provider value={patchFileDiffItemContextValue}>
-                    <div className="grow flex flex-col bg-white dark:bg-surface">
-                      <PullRequestOverviewSection
-                        pullRequest={selectedPullRequestSummary}
-                        repoKey={selectedRepoKey}
+                  {!selectedPrKey && !isPatchLoading ? (
+                    <div className="flex min-h-full flex-col">
+                      <TopBar
+                        aria-hidden="true"
+                        position="middle"
+                        className="shrink-0 cursor-grab app-region-drag border-b border-ink-200 bg-transparent dark:border-neutral-700"
                       />
-
-                      <GlobalCommentsSection
-                        defaultReviewEditorMode={defaultReviewEditorMode}
-                        deletingCommentIds={deletingCommentIds}
-                        patchViewerSessionKey={patchViewerSessionKey}
-                        resolvingThreadId={resolvingThreadId}
-                        onDeleteComment={handleDeleteComment}
-                        isLoading={isReviewThreadsLoading}
-                        onDeletePendingComment={handleDeletePendingComment}
-                        onEditComment={handleEditComment}
-                        onOpenNewComment={() => {
-                          useReviewCommentEditorStore
-                            .getState()
-                            .openNewEditor(reviewEditorSessionKey, {
-                              type: 'global',
-                            });
-                          globalCommentsSectionNodeRef.current?.scrollIntoView({
-                            behavior: 'auto',
-                            block: 'start',
-                            inline: 'nearest',
-                          });
-                        }}
-                        onReplyToThread={handleReplyToThread}
-                        onReplyToThreadNow={handleReplyToThreadNow}
-                        onSetThreadResolved={handleSetThreadResolved}
-                        onSubmitDraftComment={handleSubmitDraftComment}
-                        onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
-                        portalRootId={globalCommentsPortalRootId}
-                        provider={selectedProvider}
-                        registerSection={registerGlobalCommentsSection}
-                        registerThreadAnchor={registerThreadAnchor}
-                        reviewEditorSessionKey={reviewEditorSessionKey}
-                        threads={globalReviewThreads}
-                        viewerLogin={viewerLogin}
-                      />
-
-                      {parsedPatch.parseError ? (
-                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
-                          {parsedPatch.parseError}
-                        </div>
-                      ) : parsedPatch.fileDiffs.length === 0 ? (
-                        <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
-                          No diff content.
-                        </div>
-                      ) : (
-                        parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
-                          const fileReviewThreads = getFileReviewThreadsForPath(
-                            reviewThreadsByFile,
-                            fileDiff.name,
-                          );
-                          const fileQualityFindings = getFileQualityFindings(
-                            qualityFindingsByFile,
-                            fileDiff.name,
-                          );
-
-                          return (
-                            <PatchFileDiffItem
-                              fileDiff={fileDiff}
-                              fileIndex={fileIndex}
-                              fileQualityFindings={fileQualityFindings}
-                              fileReviewThreads={fileReviewThreads}
-                              key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
-                            />
-                          );
-                        })
-                      )}
-
-                      <div className="grow" />
-
-                      <div className="sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
-                        <PendingReviewBar
-                          approvalState={approvalState}
-                          approvalStateError={approvalStateError}
-                          canApprove={canApprove}
-                          canRequestChanges={canRequestChanges}
-                          count={pendingReviewCount}
-                          error={pendingReviewError}
-                          isApprovalStateLoading={isApprovalStateLoading}
-                          isApprovePending={approveMutation.isPending}
-                          isRemovePending={removeApprovalMutation.isPending}
-                          isDiscarding={discardPendingReviewMutation.isPending}
-                          isLoading={isPendingReviewLoading}
-                          isPublishing={publishPendingReviewMutation.isPending}
-                          sessionKey={patchViewerSessionKey}
-                          onApprove={() => {
-                            if (!selectedPr) {
-                              return;
-                            }
-
-                            approveMutation.mutate(selectedPr);
-                          }}
-                          onDiscard={() => void handleDiscardPendingReview()}
-                          onRemoveApproval={() => {
-                            if (!selectedPr) {
-                              return;
-                            }
-
-                            void removeApprovalMutation.mutateAsync(selectedPr);
-                          }}
-                          onPublish={(action, summary) =>
-                            void handlePublishPendingReview(action, summary)
-                          }
-                        />
+                      <div className="flex min-h-[50vh] flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center md:min-h-full">
+                        <strong>Select a pull request.</strong>
+                        <span className="text-sm text-ink-600">
+                          The PR patch will render here with Pierre Diffs.
+                        </span>
                       </div>
                     </div>
-                  </PatchFileDiffItemContext.Provider>
-                ) : null}
+                  ) : null}
+
+                  {isPatchLoading ? (
+                    <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center md:min-h-full">
+                      Loading patch...
+                    </div>
+                  ) : null}
+
+                  {!isPatchLoading && patchError ? (
+                    <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
+                      {patchError}
+                    </div>
+                  ) : null}
+
+                  {!isPatchLoading && !patchError && isReviewThreadsLoading ? (
+                    <div className="px-4 pb-2 pt-1 text-sm text-ink-500">
+                      Loading review threads...
+                    </div>
+                  ) : null}
+
+                  {!isPatchLoading && !patchError && reviewThreadsError ? (
+                    <div className="px-4 pb-2 pt-1 text-sm text-danger-600">
+                      {reviewThreadsError}
+                    </div>
+                  ) : null}
+
+                  {!isPatchLoading && !patchError && selectedPatch ? (
+                    <PatchFileDiffItemContext.Provider value={patchFileDiffItemContextValue}>
+                      <div className="grow flex flex-col bg-white dark:bg-surface">
+                        <PullRequestOverviewSection
+                          pullRequest={selectedPullRequestSummary}
+                          repoKey={selectedRepoKey}
+                        />
+
+                        <GlobalCommentsSection
+                          defaultReviewEditorMode={defaultReviewEditorMode}
+                          deletingCommentIds={deletingCommentIds}
+                          patchViewerSessionKey={patchViewerSessionKey}
+                          resolvingThreadId={resolvingThreadId}
+                          onDeleteComment={handleDeleteComment}
+                          isLoading={isReviewThreadsLoading}
+                          onDeletePendingComment={handleDeletePendingComment}
+                          onEditComment={handleEditComment}
+                          onOpenNewComment={() => {
+                            useReviewCommentEditorStore
+                              .getState()
+                              .openNewEditor(reviewEditorSessionKey, {
+                                type: 'global',
+                              });
+                            globalCommentsSectionNodeRef.current?.scrollIntoView({
+                              behavior: 'auto',
+                              block: 'start',
+                              inline: 'nearest',
+                            });
+                          }}
+                          onReplyToThread={handleReplyToThread}
+                          onReplyToThreadNow={handleReplyToThreadNow}
+                          onSetThreadResolved={handleSetThreadResolved}
+                          onSubmitDraftComment={handleSubmitDraftComment}
+                          onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
+                          portalRootId={globalCommentsPortalRootId}
+                          provider={selectedProvider}
+                          registerSection={registerGlobalCommentsSection}
+                          registerThreadAnchor={registerThreadAnchor}
+                          reviewEditorSessionKey={reviewEditorSessionKey}
+                          threads={globalReviewThreads}
+                          viewerLogin={viewerLogin}
+                        />
+
+                        {parsedPatch.parseError ? (
+                          <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
+                            {parsedPatch.parseError}
+                          </div>
+                        ) : parsedPatch.fileDiffs.length === 0 ? (
+                          <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
+                            No diff content.
+                          </div>
+                        ) : (
+                          parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
+                            const fileReviewThreads = getFileReviewThreadsForPath(
+                              reviewThreadsByFile,
+                              fileDiff.name,
+                            );
+                            const fileQualityFindings = getFileQualityFindings(
+                              qualityFindingsByFile,
+                              fileDiff.name,
+                            );
+
+                            return (
+                              <PatchFileDiffItem
+                                fileDiff={fileDiff}
+                                fileIndex={fileIndex}
+                                fileQualityFindings={fileQualityFindings}
+                                fileReviewThreads={fileReviewThreads}
+                                key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
+                              />
+                            );
+                          })
+                        )}
+
+                        <div className="grow" />
+
+                        <div className="sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
+                          <PendingReviewBar
+                            approvalState={approvalState}
+                            approvalStateError={approvalStateError}
+                            canApprove={canApprove}
+                            canRequestChanges={canRequestChanges}
+                            count={pendingReviewCount}
+                            error={pendingReviewError}
+                            isApprovalStateLoading={isApprovalStateLoading}
+                            isApprovePending={approveMutation.isPending}
+                            isRemovePending={removeApprovalMutation.isPending}
+                            isDiscarding={discardPendingReviewMutation.isPending}
+                            isLoading={isPendingReviewLoading}
+                            isPublishing={publishPendingReviewMutation.isPending}
+                            sessionKey={patchViewerSessionKey}
+                            onApprove={() => {
+                              if (!selectedPr) {
+                                return;
+                              }
+
+                              approveMutation.mutate(selectedPr);
+                            }}
+                            onDiscard={() => void handleDiscardPendingReview()}
+                            onRemoveApproval={() => {
+                              if (!selectedPr) {
+                                return;
+                              }
+
+                              void removeApprovalMutation.mutateAsync(selectedPr);
+                            }}
+                            onPublish={(action, summary) =>
+                              void handlePublishPendingReview(action, summary)
+                            }
+                          />
+                        </div>
+                      </div>
+                    </PatchFileDiffItemContext.Provider>
+                  ) : null}
                 </PatchScrollVirtualizer>
               </div>
             </div>

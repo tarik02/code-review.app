@@ -643,7 +643,9 @@ const wrapClientError =
       }),
     );
 
-function gitlabAuthStatusFromError(error: GitLabClientError | GitLabProviderError): ProviderAuthStatus {
+function gitlabAuthStatusFromError(
+  error: GitLabClientError | GitLabProviderError,
+): ProviderAuthStatus {
   return Match.value(error).pipe(
     Match.tagsExhaustive({
       GitLabClientAccessTokenError: (clientError) =>
@@ -976,22 +978,24 @@ function makeGitLabProvider(): ForgeProviderEffectContract<GitLabApiClient, GitL
         .pipe(
           Effect.catchTag('GitLabClientResponseError', (error) =>
             error.status === 403 || error.status === 404
-              ? api.projects({
-                  membership: true,
-                  search: namespacePath,
-                  simple: true,
-                  perPage: limit,
-                }).pipe(
-                  Effect.map((entries) =>
-                    entries.filter(
-                      (project) =>
-                        project.path_with_namespace === namespacePath ||
-                        project.path_with_namespace.startsWith(`${namespacePath}/`),
+              ? api
+                  .projects({
+                    membership: true,
+                    search: namespacePath,
+                    simple: true,
+                    perPage: limit,
+                  })
+                  .pipe(
+                    Effect.map((entries) =>
+                      entries.filter(
+                        (project) =>
+                          project.path_with_namespace === namespacePath ||
+                          project.path_with_namespace.startsWith(`${namespacePath}/`),
+                      ),
                     ),
-                  ),
-                )
+                  )
               : Effect.fail(error),
-            ),
+          ),
         );
       return projects.map((project) =>
         repoSummaryFromProject(token.id, token.host, label, project),
