@@ -297,10 +297,16 @@ function parseReviewEditorSettings(value: unknown): ReviewEditorSettings {
     'defaultMode' in value &&
     (value.defaultMode === 'rich-text' || value.defaultMode === 'source')
   ) {
-    return { defaultMode: value.defaultMode };
+    return {
+      defaultMode: value.defaultMode,
+      floatingControls:
+        'floatingControls' in value && typeof value.floatingControls === 'boolean'
+          ? value.floatingControls
+          : false,
+    };
   }
 
-  return { defaultMode: 'rich-text' };
+  return { defaultMode: 'rich-text', floatingControls: false };
 }
 
 function validateReviewEditorSettings(settings: ReviewEditorSettings): ReviewEditorSettings {
@@ -308,7 +314,10 @@ function validateReviewEditorSettings(settings: ReviewEditorSettings): ReviewEdi
     throw new Error('Unsupported review editor mode.');
   }
 
-  return { defaultMode: settings.defaultMode };
+  return {
+    defaultMode: settings.defaultMode,
+    floatingControls: settings.floatingControls,
+  };
 }
 
 function readBackgroundDataUrl(
