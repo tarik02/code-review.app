@@ -175,12 +175,10 @@ type SelectedPatch = RepoIdentity & {
 type DraftReviewCommentAnnotation = {
   kind: 'draft';
   editorId: string;
-  portalRootId: string;
 };
 
 type ReviewThreadLineAnnotation = ReviewThreadAnnotation & {
   defaultCollapsed?: boolean;
-  portalRootId?: string;
 };
 
 type QualityFindingLineAnnotation = QualityFindingAnnotation & {
@@ -971,7 +969,7 @@ type FloatingLineDraftEditorProps = {
   error: string;
   isPending: boolean;
   provider: ForgeProviderKind;
-  portalRootId: string;
+  portalRoot: HTMLElement | null;
   selectedText: string;
   suggestionContext: ReturnType<typeof getDraftSuggestionContext>;
   target: DraftReviewCommentTarget | null;
@@ -990,7 +988,7 @@ function FloatingLineDraftEditor({
   error,
   isPending,
   provider,
-  portalRootId,
+  portalRoot,
   selectedText,
   suggestionContext,
   target,
@@ -1004,7 +1002,6 @@ function FloatingLineDraftEditor({
   const spacerRef = useRef<HTMLDivElement | null>(null);
   const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
-  const portalRoot = typeof document !== 'undefined' ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
     placement: 'bottom-start',
     strategy: 'absolute',
@@ -1103,7 +1100,7 @@ type FloatingLineDraftEditorForTargetProps = {
   floatingControls: boolean;
   editor: ReviewCommentEditorState;
   fileDiffs: FileDiffMetadata[];
-  portalRootId: string;
+  portalRoot: HTMLElement | null;
   provider: ForgeProviderKind;
   selectedBaseSha: string | null;
   selectedPatch: SelectedPatch | null;
@@ -1119,7 +1116,7 @@ function FloatingLineDraftEditorForTarget({
   floatingControls,
   editor,
   fileDiffs,
-  portalRootId,
+  portalRoot,
   provider,
   selectedBaseSha,
   selectedPatch,
@@ -1165,7 +1162,7 @@ function FloatingLineDraftEditorForTarget({
       floatingControls={floatingControls}
       error={editor.error}
       isPending={editor.isSubmitting}
-      portalRootId={portalRootId}
+      portalRoot={portalRoot}
       provider={provider}
       selectedText={selectedText}
       suggestionContext={suggestionContext}
@@ -1366,7 +1363,6 @@ type GlobalCommentsSectionProps = {
   patchViewerSessionKey: string | null;
   resolvingThreadId: string | null;
   provider: ForgeProviderKind;
-  portalRootId: string;
   reviewEditorSessionKey: string | null;
   viewerLogin: string | null;
   registerSection: (node: HTMLDivElement | null) => void;
@@ -1391,7 +1387,6 @@ function GlobalCommentsSection({
   patchViewerSessionKey,
   resolvingThreadId,
   provider,
-  portalRootId,
   reviewEditorSessionKey,
   viewerLogin,
   registerSection,
@@ -1411,6 +1406,7 @@ function GlobalCommentsSection({
     (state) => state.setEditorCursorPosition,
   );
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
+  const [portalRoot, setPortalRoot] = useState<HTMLDivElement | null>(null);
   const globalDraftEditors = useReviewCommentEditorStore(
     useShallow((state) => {
       const reviewEditorSession = getReviewCommentEditorSessionState(state, reviewEditorSessionKey);
@@ -1476,7 +1472,7 @@ function GlobalCommentsSection({
             onReplyToThread={onReplyToThread}
             onReplyToThreadNow={onReplyToThreadNow}
             onSetThreadResolved={onSetThreadResolved}
-            editorPortalRootId={portalRootId}
+            editorPortalRoot={portalRoot}
             reviewEditorSessionKey={reviewEditorSessionKey}
             thread={thread}
             viewerLogin={viewerLogin}
@@ -1490,7 +1486,7 @@ function GlobalCommentsSection({
             floatingControls={floatingReviewEditorControls}
             error={editor.error}
             isPending={editor.isSubmitting}
-            portalRootId={portalRootId}
+            portalRoot={portalRoot}
             provider={provider}
             selectedText=""
             suggestionContext={null}
@@ -1506,7 +1502,7 @@ function GlobalCommentsSection({
           />
         ))}
       </div>
-      <div id={portalRootId} className="pointer-events-none absolute inset-0 z-20" />
+      <div ref={setPortalRoot} className="pointer-events-none absolute inset-0 z-20" />
     </div>
   );
 }
@@ -1736,24 +1732,17 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
     virtualFileMetrics,
   } = useCodeAppearance();
   const inactiveFileCommentsExpanded = isInactiveFileCommentsExpanded(normalizedFilePath);
-  const lineDraftPortalRootId = `line-draft-editor-root-${selectedPatch.number}-${fileIndex}`;
   const fileCommentsSlotName = `file-comments-${selectedPatch.number}-${fileIndex}`;
+  const [lineDraftPortalRoot, setLineDraftPortalRoot] = useState<HTMLDivElement | null>(null);
   const [fileCommentsPortalHost, setFileCommentsPortalHost] = useState<HTMLDivElement | null>(null);
   const fileCommentsPortalHostRef = useRef<HTMLDivElement | null>(null);
-  const activeLineThreadAnnotations = fileReviewThreads.activeLineAnnotations.map((annotation) => ({
-    ...annotation,
-    metadata: {
-      ...annotation.metadata,
-      portalRootId: lineDraftPortalRootId,
-    },
-  }));
+  const activeLineThreadAnnotations = fileReviewThreads.activeLineAnnotations;
   const inactiveLineThreadAnnotations = fileReviewThreads.inactiveLineAnnotations.map(
     (annotation) => ({
       ...annotation,
       metadata: {
         ...annotation.metadata,
         defaultCollapsed: true,
-        portalRootId: lineDraftPortalRootId,
       },
     }),
   );
@@ -1815,7 +1804,6 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             metadata: {
               kind: 'draft' as const,
               editorId: editor.id,
-              portalRootId: lineDraftPortalRootId,
             },
           })),
         ]
@@ -1938,7 +1926,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             floatingControls={floatingReviewEditorControls}
             error={editor.error}
             isPending={editor.isSubmitting}
-            portalRootId={lineDraftPortalRootId}
+            portalRoot={lineDraftPortalRoot}
             provider={selectedProvider}
             selectedText=""
             suggestionContext={null}
@@ -1999,7 +1987,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             onReplyToThread={handleReplyToThread}
             onReplyToThreadNow={handleReplyToThreadNow}
             onSetThreadResolved={handleSetThreadResolved}
-            editorPortalRootId={lineDraftPortalRootId}
+            editorPortalRoot={lineDraftPortalRoot}
             reviewEditorSessionKey={reviewEditorSessionKey}
             thread={thread}
             viewerLogin={viewerLogin}
@@ -2034,7 +2022,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
                     onReplyToThread={handleReplyToThread}
                     onReplyToThreadNow={handleReplyToThreadNow}
                     onSetThreadResolved={handleSetThreadResolved}
-                    editorPortalRootId={lineDraftPortalRootId}
+                    editorPortalRoot={lineDraftPortalRoot}
                     reviewEditorSessionKey={reviewEditorSessionKey}
                     thread={thread}
                     viewerLogin={viewerLogin}
@@ -2167,7 +2155,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
           floatingControls={floatingReviewEditorControls}
           editor={editor}
           fileDiffs={parsedFileDiffs}
-          portalRootId={draftAnnotation.portalRootId}
+          portalRoot={lineDraftPortalRoot}
           provider={selectedProvider}
           selectedBaseSha={selectedBaseSha}
           selectedPatch={selectedPatch}
@@ -2222,7 +2210,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
         deletingCommentIds={deletingCommentIds}
         patchViewerSessionKey={patchViewerSessionKey}
         resolvingThreadId={resolvingThreadId}
-        editorPortalRootId={threadAnnotation.portalRootId}
+        editorPortalRoot={lineDraftPortalRoot}
         onDeleteComment={handleDeleteComment}
         onEditComment={handleEditComment}
         onDeletePendingComment={handleDeletePendingComment}
@@ -2391,7 +2379,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
           </Button>
         </div>
       ) : null}
-      <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-20" />
+      <div ref={setLineDraftPortalRoot} className="pointer-events-none absolute inset-0 z-20" />
     </div>
   );
 });
@@ -2492,9 +2480,6 @@ function PatchViewerMain({
   const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
   const fileCommentsSectionNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const globalCommentsSectionNodeRef = useRef<HTMLDivElement | null>(null);
-  const globalCommentsPortalRootId = selectedPatch
-    ? `global-comments-editor-root-${selectedPatch.number}`
-    : 'global-comments-editor-root-idle';
   const threadAnchorNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const reviewThreadsRef = useRef(reviewThreads);
   const hasSelection = selectedPrKey !== null;
@@ -3990,7 +3975,6 @@ function PatchViewerMain({
                           onSetThreadResolved={handleSetThreadResolved}
                           onSubmitDraftComment={handleSubmitDraftComment}
                           onSubmitDraftCommentNow={handleSubmitDraftCommentNow}
-                          portalRootId={globalCommentsPortalRootId}
                           provider={selectedProvider}
                           registerSection={registerGlobalCommentsSection}
                           registerThreadAnchor={registerThreadAnchor}

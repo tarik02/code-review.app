@@ -37,7 +37,7 @@ type ReviewThreadCardProps = {
   patchViewerSessionKey?: string | null;
   resolvingThreadId?: string | null;
   viewerLogin?: string | null;
-  editorPortalRootId?: string;
+  editorPortalRoot?: HTMLElement | null;
   reviewEditorSessionKey?: string | null;
   onReplyToThread?: (thread: ReviewThread, body: string) => Promise<void>;
   onReplyToThreadNow?: (thread: ReviewThread, body: string) => Promise<void>;
@@ -191,14 +191,12 @@ function CommentAvatar({ comment, size = 'md' }: { comment: ReviewComment; size?
 }
 
 function FloatingReviewCommentEditor({
-  portalRootId,
+  portalRoot,
   ...editorProps
-}: ReviewCommentEditorProps & { portalRootId?: string }) {
+}: ReviewCommentEditorProps & { portalRoot?: HTMLElement | null }) {
   const spacerRef = useRef<HTMLDivElement | null>(null);
   const floatingNodeRef = useRef<HTMLDivElement | null>(null);
   const [hasReference, setHasReference] = useState(false);
-  const portalRoot =
-    portalRootId && typeof document !== 'undefined' ? document.getElementById(portalRootId) : null;
   const { floatingStyles, refs } = useFloating({
     placement: 'bottom-start',
     strategy: 'absolute',
@@ -256,7 +254,7 @@ function FloatingReviewCommentEditor({
     [refs],
   );
 
-  const shouldRenderFloating = hasReference && (!portalRootId || portalRoot !== null);
+  const shouldRenderFloating = hasReference && portalRoot !== null;
   const floatingEditor = shouldRenderFloating ? (
     <div ref={setFloating} className="pointer-events-auto z-50 font-sans" style={floatingStyles}>
       <ReviewCommentEditor {...editorProps} />
@@ -266,10 +264,10 @@ function FloatingReviewCommentEditor({
   return (
     <>
       <div ref={setReference} style={{ height: INITIAL_FLOATING_EDITOR_HEIGHT }} />
-      {portalRootId ? (
-        <FloatingPortal root={portalRoot}>{floatingEditor}</FloatingPortal>
-      ) : (
+      {portalRoot === undefined ? (
         <FloatingPortal>{floatingEditor}</FloatingPortal>
+      ) : (
+        <FloatingPortal root={portalRoot}>{floatingEditor}</FloatingPortal>
       )}
     </>
   );
@@ -352,7 +350,7 @@ function ReviewThreadCardFull({
   patchViewerSessionKey = null,
   resolvingThreadId = null,
   viewerLogin = null,
-  editorPortalRootId,
+  editorPortalRoot,
   reviewEditorSessionKey = null,
   onReplyToThread,
   onReplyToThreadNow,
@@ -834,7 +832,7 @@ function ReviewThreadCardFull({
                   <div className="mt-1 min-w-0">
                     {editEditor ? (
                       <FloatingReviewCommentEditor
-                        portalRootId={editorPortalRootId}
+                        portalRoot={editorPortalRoot}
                         cursorPosition={editEditor.cursorPosition}
                         defaultMode={defaultReviewEditorMode}
                         floatingControls={floatingReviewEditorControls}
@@ -883,7 +881,7 @@ function ReviewThreadCardFull({
         <div className="mt-3 border-t border-ink-200 pt-3">
           {replyEditor ? (
             <FloatingReviewCommentEditor
-              portalRootId={editorPortalRootId}
+              portalRoot={editorPortalRoot}
               cursorPosition={replyEditor.cursorPosition}
               defaultMode={defaultReviewEditorMode}
               floatingControls={floatingReviewEditorControls}
