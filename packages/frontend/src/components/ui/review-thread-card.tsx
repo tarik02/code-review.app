@@ -32,6 +32,7 @@ type ReviewThreadCardProps = {
   slim?: boolean;
   defaultCollapsed?: boolean;
   defaultReviewEditorMode?: ReviewCommentEditorProps['defaultMode'];
+  floatingReviewEditorControls?: boolean;
   deletingCommentIds?: ReadonlySet<string>;
   patchViewerSessionKey?: string | null;
   resolvingThreadId?: string | null;
@@ -346,6 +347,7 @@ function ReviewThreadCardFull({
   compact = false,
   defaultCollapsed = false,
   defaultReviewEditorMode = 'rich-text',
+  floatingReviewEditorControls = false,
   deletingCommentIds = new Set<string>(),
   patchViewerSessionKey = null,
   resolvingThreadId = null,
@@ -835,6 +837,7 @@ function ReviewThreadCardFull({
                         portalRootId={editorPortalRootId}
                         cursorPosition={editEditor.cursorPosition}
                         defaultMode={defaultReviewEditorMode}
+                        floatingControls={floatingReviewEditorControls}
                         error={editEditor.error}
                         initialValue={comment.body}
                         isPending={editEditor.isSubmitting}
@@ -883,6 +886,7 @@ function ReviewThreadCardFull({
               portalRootId={editorPortalRootId}
               cursorPosition={replyEditor.cursorPosition}
               defaultMode={defaultReviewEditorMode}
+              floatingControls={floatingReviewEditorControls}
               error={replyEditor.error}
               isPending={replyEditor.isSubmitting}
               provider={thread.provider}

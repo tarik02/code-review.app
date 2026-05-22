@@ -10,6 +10,7 @@ import {
 } from '@mdxeditor/editor';
 import { $createParagraphNode } from 'lexical';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../select';
+import { useReviewCommentEditorPortalContainer } from './portal-context';
 
 type CommentBlockType = Exclude<BlockType, ''>;
 
@@ -32,6 +33,7 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
   const activePlugins = useCellValue(activePlugins$);
   const allowedHeadingLevels = useCellValue(allowedHeadingLevels$);
   const t = useTranslation();
+  const portalContainer = useReviewCommentEditorPortalContainer();
   const hasQuote = activePlugins.includes('quote');
   const hasHeadings = activePlugins.includes('headings');
 
@@ -105,7 +107,11 @@ function CommentBlockTypeSelect({ disabled = false }: CommentBlockTypeSelectProp
       >
         <SelectValue placeholder={t('toolbar.blockTypeSelect.placeholder', 'Block type')} />
       </SelectTrigger>
-      <SelectContent align="start" className="comment-editor-block-select-content">
+      <SelectContent
+        align="start"
+        className="comment-editor-block-select-content"
+        portalContainer={portalContainer}
+      >
         {blockTypeOptions.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}
