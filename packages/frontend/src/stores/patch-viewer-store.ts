@@ -100,16 +100,8 @@ type PatchViewerStore = {
   selectFile: (sessionKey: string | null, path: string) => void;
   resetNavigation: (sessionKey: string | null) => void;
   resetProviderExpansion: (scopeKey: string) => void;
-  setHydratedProviderDiff: (
-    scopeKey: string,
-    filePath: string,
-    fileDiff: FileDiffMetadata,
-  ) => void;
-  setProviderExpansionInFlight: (
-    scopeKey: string,
-    filePath: string,
-    isInFlight: boolean,
-  ) => void;
+  setHydratedProviderDiff: (scopeKey: string, filePath: string, fileDiff: FileDiffMetadata) => void;
+  setProviderExpansionInFlight: (scopeKey: string, filePath: string, isInFlight: boolean) => void;
   setProviderExpansionScrollAnchor: (anchor: ProviderExpansionScrollAnchor | null) => void;
   clearProviderExpansionScrollAnchor: (filePath: string) => void;
   loadProviderDiffForExpansion: (request: ProviderExpansionLoadRequest) => Promise<void>;

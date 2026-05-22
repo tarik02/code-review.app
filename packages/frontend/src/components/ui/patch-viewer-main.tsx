@@ -2829,9 +2829,7 @@ function PatchViewerMain({
         return;
       }
 
-      const target = node.shadowRoot?.querySelector(
-        `[data-expand-index="${anchor.hunkIndex}"]`,
-      );
+      const target = node.shadowRoot?.querySelector(`[data-expand-index="${anchor.hunkIndex}"]`);
       if (target instanceof HTMLElement && anchor.top !== null) {
         const delta = target.getBoundingClientRect().top - anchor.top;
         if (Math.abs(delta) > 1) {
@@ -2860,8 +2858,7 @@ function PatchViewerMain({
 
       void loadProviderDiffForExpansion({
         ...request,
-        loadFileContents: () =>
-          queryClient.fetchQuery(pullRequestFileContentsQueryOptions(input)),
+        loadFileContents: () => queryClient.fetchQuery(pullRequestFileContentsQueryOptions(input)),
         onError: (error) => {
           appToastManager.add({
             id: `provider-full-diff-context-failed:${providerExpansionScopeKey}:${request.filePath}`,
@@ -3203,7 +3200,7 @@ function PatchViewerMain({
           const providerExpansionState = usePatchViewerStore.getState();
           const hasHydratedProviderDiff = Boolean(
             providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
-              providerExpansionState.hydratedProviderDiffsByPath[filePath],
+            providerExpansionState.hydratedProviderDiffsByPath[filePath],
           );
 
           if (

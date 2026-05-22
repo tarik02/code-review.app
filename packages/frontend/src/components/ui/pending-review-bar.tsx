@@ -78,9 +78,7 @@ function PendingReviewBar({
     <div className="group pointer-events-auto relative flex w-[min(44rem,calc(100vw-3rem))] flex-col text-sm">
       {count > 0 ? (
         <div
-          className={cx(
-            'pointer-events-none absolute inset-x-0 bottom-full z-0 overflow-hidden',
-          )}
+          className={cx('pointer-events-none absolute inset-x-0 bottom-full z-0 overflow-hidden')}
         >
           <div
             className={cx(
