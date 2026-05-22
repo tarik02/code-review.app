@@ -193,6 +193,7 @@ function createProviderShellExpandButton(direction: ExpansionDirections) {
   const button = document.createElement('div');
   button.setAttribute('role', 'button');
   button.setAttribute('data-expand-button', '');
+  button.setAttribute('data-provider-shell-expand-button', '');
   button.setAttribute(`data-expand-${direction}`, '');
   const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   icon.setAttribute('data-icon', '');
@@ -242,9 +243,6 @@ function installProviderShellExpandControls(node: HTMLElement, fileDiff: FileDif
 
     wrapper.setAttribute('data-provider-shell-separator-wrapper', '');
     wrapper.prepend(createProviderShellExpandButton(direction));
-    wrapper
-      .querySelector('[data-expand-button]')
-      ?.setAttribute('data-provider-shell-expand-button', '');
   }
 }
 
