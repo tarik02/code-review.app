@@ -3203,7 +3203,7 @@ function PatchViewerMain({
           const providerExpansionState = usePatchViewerStore.getState();
           const hasHydratedProviderDiff = Boolean(
             providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
-              providerExpansionState.hydratedProviderDiffsByPath[filePath],
+            providerExpansionState.hydratedProviderDiffsByPath[filePath],
           );
 
           if (
