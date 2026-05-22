@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { PendingReviewSubmitAction } from '../types/forge';
+import type { FileDiffMetadata } from '@pierre/diffs';
+import type { PendingReviewSubmitAction, PrFileContents } from '../types/forge';
+import { hydrateProviderFileDiff } from '../lib/provider-diff-expansion';
 
 const MAX_PATCH_VIEWER_SESSIONS = 20;
 
@@ -41,9 +43,39 @@ type PatchViewerSessionState = {
   hunkExpansionsByFile: Record<string, Record<string, HunkExpansionRegion | undefined> | undefined>;
 };
 
+type ProviderExpansionScrollAnchor = {
+  filePath: string;
+  hunkIndex: number;
+  top: number | null;
+};
+
+type ProviderExpansionLoadRequest = {
+  anchorTop: number | null;
+  expansion: {
+    hunkIndex: number;
+    direction: HunkExpansionDirection;
+    lineCount: number;
+  };
+  filePath: string;
+  loadFileContents: () => Promise<PrFileContents>;
+  onError: (error: unknown) => void;
+  onSuccess: (result: {
+    direction: HunkExpansionDirection;
+    filePath: string;
+    hunkIndex: number;
+    lineCount: number;
+  }) => void;
+  scopeKey: string;
+  sourceFileDiff: FileDiffMetadata;
+};
+
 type PatchViewerStore = {
   sessionsByKey: Record<string, PatchViewerSessionState | undefined>;
   sessionOrder: string[];
+  providerExpansionScopeKey: string;
+  hydratedProviderDiffsByPath: Record<string, FileDiffMetadata | undefined>;
+  providerExpansionInFlightByPath: Record<string, boolean | undefined>;
+  providerExpansionScrollAnchor: ProviderExpansionScrollAnchor | null;
   ensureSession: (sessionKey: string | null) => void;
   resetSession: (sessionKey: string | null) => void;
   removeSession: (sessionKey: string | null) => void;
@@ -67,6 +99,12 @@ type PatchViewerStore = {
   requestNavigationIntent: (sessionKey: string | null, intent: PatchViewerNavigationIntent) => void;
   selectFile: (sessionKey: string | null, path: string) => void;
   resetNavigation: (sessionKey: string | null) => void;
+  resetProviderExpansion: (scopeKey: string) => void;
+  setHydratedProviderDiff: (scopeKey: string, filePath: string, fileDiff: FileDiffMetadata) => void;
+  setProviderExpansionInFlight: (scopeKey: string, filePath: string, isInFlight: boolean) => void;
+  setProviderExpansionScrollAnchor: (anchor: ProviderExpansionScrollAnchor | null) => void;
+  clearProviderExpansionScrollAnchor: (filePath: string) => void;
+  loadProviderDiffForExpansion: (request: ProviderExpansionLoadRequest) => Promise<void>;
 };
 
 function createPatchViewerSessionState(): PatchViewerSessionState {
@@ -161,6 +199,10 @@ function updateSession(
 const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
   sessionsByKey: {},
   sessionOrder: [],
+  providerExpansionScopeKey: '',
+  hydratedProviderDiffsByPath: {},
+  providerExpansionInFlightByPath: {},
+  providerExpansionScrollAnchor: null,
   ensureSession(sessionKey) {
     if (!sessionKey || get().sessionsByKey[sessionKey]) {
       return;
@@ -303,6 +345,128 @@ const usePatchViewerStore = create<PatchViewerStore>()((set, get) => ({
       })),
     );
   },
+  resetProviderExpansion(scopeKey) {
+    set((state) =>
+      state.providerExpansionScopeKey === scopeKey
+        ? state
+        : {
+            providerExpansionScopeKey: scopeKey,
+            hydratedProviderDiffsByPath: {},
+            providerExpansionInFlightByPath: {},
+            providerExpansionScrollAnchor: null,
+          },
+    );
+  },
+  setHydratedProviderDiff(scopeKey, filePath, fileDiff) {
+    set((state) => {
+      const isCurrentScope = state.providerExpansionScopeKey === scopeKey;
+      const currentDiffs = isCurrentScope ? state.hydratedProviderDiffsByPath : {};
+
+      return {
+        providerExpansionScopeKey: scopeKey,
+        hydratedProviderDiffsByPath: {
+          ...currentDiffs,
+          [filePath]: fileDiff,
+        },
+        providerExpansionInFlightByPath: isCurrentScope
+          ? state.providerExpansionInFlightByPath
+          : {},
+        providerExpansionScrollAnchor: isCurrentScope ? state.providerExpansionScrollAnchor : null,
+      };
+    });
+  },
+  setProviderExpansionInFlight(scopeKey, filePath, isInFlight) {
+    set((state) => {
+      const isCurrentScope = state.providerExpansionScopeKey === scopeKey;
+      const currentInFlight = isCurrentScope ? state.providerExpansionInFlightByPath : {};
+
+      if (Boolean(currentInFlight[filePath]) === isInFlight) {
+        return isCurrentScope
+          ? state
+          : {
+              providerExpansionScopeKey: scopeKey,
+              hydratedProviderDiffsByPath: {},
+              providerExpansionInFlightByPath: {},
+              providerExpansionScrollAnchor: null,
+            };
+      }
+
+      if (isInFlight) {
+        return {
+          providerExpansionScopeKey: scopeKey,
+          hydratedProviderDiffsByPath: isCurrentScope ? state.hydratedProviderDiffsByPath : {},
+          providerExpansionInFlightByPath: {
+            ...currentInFlight,
+            [filePath]: true,
+          },
+          providerExpansionScrollAnchor: isCurrentScope
+            ? state.providerExpansionScrollAnchor
+            : null,
+        };
+      }
+
+      const nextInFlight = { ...currentInFlight };
+      delete nextInFlight[filePath];
+      return {
+        providerExpansionScopeKey: scopeKey,
+        hydratedProviderDiffsByPath: isCurrentScope ? state.hydratedProviderDiffsByPath : {},
+        providerExpansionInFlightByPath: nextInFlight,
+        providerExpansionScrollAnchor: isCurrentScope ? state.providerExpansionScrollAnchor : null,
+      };
+    });
+  },
+  setProviderExpansionScrollAnchor(anchor) {
+    set({ providerExpansionScrollAnchor: anchor });
+  },
+  clearProviderExpansionScrollAnchor(filePath) {
+    set((state) =>
+      state.providerExpansionScrollAnchor?.filePath === filePath
+        ? { providerExpansionScrollAnchor: null }
+        : state,
+    );
+  },
+  async loadProviderDiffForExpansion(request) {
+    const state = get();
+    if (
+      state.providerExpansionScopeKey === request.scopeKey &&
+      state.providerExpansionInFlightByPath[request.filePath]
+    ) {
+      return;
+    }
+
+    get().setProviderExpansionInFlight(request.scopeKey, request.filePath, true);
+    get().setProviderExpansionScrollAnchor({
+      filePath: request.filePath,
+      hunkIndex: Math.min(request.expansion.hunkIndex, request.sourceFileDiff.hunks.length),
+      top: request.anchorTop,
+    });
+
+    try {
+      const fileContents = await request.loadFileContents();
+      if (get().providerExpansionScopeKey !== request.scopeKey) {
+        return;
+      }
+
+      const hydratedFileDiff = hydrateProviderFileDiff(request.sourceFileDiff, fileContents);
+      const hunkIndex = Math.min(request.expansion.hunkIndex, hydratedFileDiff.hunks.length);
+      get().setHydratedProviderDiff(request.scopeKey, request.filePath, hydratedFileDiff);
+      request.onSuccess({
+        direction: request.expansion.direction,
+        filePath: request.filePath,
+        hunkIndex,
+        lineCount: request.expansion.lineCount,
+      });
+    } catch (error) {
+      if (get().providerExpansionScopeKey === request.scopeKey) {
+        get().clearProviderExpansionScrollAnchor(request.filePath);
+        request.onError(error);
+      }
+    } finally {
+      if (get().providerExpansionScopeKey === request.scopeKey) {
+        get().setProviderExpansionInFlight(request.scopeKey, request.filePath, false);
+      }
+    }
+  },
 }));
 
 export { getPatchViewerSessionState, usePatchViewerStore };
@@ -311,4 +475,6 @@ export type {
   HunkExpansionRegion,
   PatchViewerNavigationIntent,
   PatchViewerSessionState,
+  ProviderExpansionLoadRequest,
+  ProviderExpansionScrollAnchor,
 };
