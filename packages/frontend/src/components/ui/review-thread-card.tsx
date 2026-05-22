@@ -1,3 +1,4 @@
+import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { FloatingPortal, autoUpdate, offset, size, useFloating } from '@floating-ui/react';
 import {
   CheckIcon,
@@ -5,6 +6,7 @@ import {
   ChevronUpIcon,
   ExternalLinkIcon,
   type LucideIcon,
+  MoreHorizontalIcon,
   PencilIcon,
   ReplyIcon,
   Trash2Icon,
@@ -37,6 +39,24 @@ import { Button, buttonVariants } from './button';
 const INITIAL_FLOATING_EDITOR_HEIGHT = 180;
 const COMMENT_DEFER_ROOT_MARGIN = '600px 0px';
 const COMMENT_ACTION_CLASS_NAME = 'font-sans text-ink-600 hover:bg-transparent hover:text-ink-900';
+const COMMENT_ACTION_MENU_ITEM_CLASS =
+  'flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-ink-700 outline-hidden select-none transition-colors data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-canvasDark data-highlighted:text-ink-900';
+
+type CommentAction = {
+  disabled?: boolean;
+  icon: LucideIcon;
+  key: string;
+  label: string;
+} & (
+  | {
+      kind: 'button';
+      onSelect: () => void;
+    }
+  | {
+      href: string;
+      kind: 'link';
+    }
+);
 
 type ReviewThreadCardProps = {
   thread: ReviewThread;
@@ -215,28 +235,112 @@ function CommentRowShell({
   isReply = false,
   metadata,
 }: {
-  actions?: ReactNode;
+  actions?: readonly CommentAction[];
   avatar: ReactNode;
   children: ReactNode;
   isDimmed?: boolean;
   isReply?: boolean;
   metadata: ReactNode;
 }) {
+  const hasActions = actions != null && actions.length > 0;
+
   return (
     <div
-      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 transition-opacity ${
+      className={`grid grid-cols-[auto_minmax(0,1fr)] gap-3 [container-type:inline-size] transition-opacity ${
         isDimmed ? 'opacity-50' : 'opacity-100'
       } ${isReply ? 'ml-5' : ''}`}
     >
       {avatar}
-      <div className="min-w-0">
-        <div className="flex items-start justify-between gap-3 text-xs text-ink-500">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">{metadata}</div>
-          {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
+      <div className="min-w-0 overflow-hidden">
+        <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden text-xs text-ink-500">
+          <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden whitespace-nowrap">
+            {metadata}
+          </div>
+          {hasActions ? (
+            <>
+              <div className="hidden shrink-0 items-center gap-1.5 [@container(min-width:560px)]:flex">
+                {actions.map((action) => (
+                  <CommentInlineAction action={action} key={action.key} />
+                ))}
+              </div>
+              <div className="flex shrink-0 [@container(min-width:560px)]:hidden">
+                <CommentActionsMenu actions={actions} />
+              </div>
+            </>
+          ) : null}
         </div>
         <div className="mt-1 min-w-0">{children}</div>
       </div>
     </div>
+  );
+}
+
+function CommentInlineAction({ action }: { action: CommentAction }) {
+  if (action.kind === 'link') {
+    return <CommentActionLink href={action.href} icon={action.icon} label={action.label} />;
+  }
+
+  return (
+    <CommentActionButton disabled={action.disabled} icon={action.icon} onClick={action.onSelect}>
+      {action.label}
+    </CommentActionButton>
+  );
+}
+
+function CommentActionsMenu({ actions }: { actions: readonly CommentAction[] }) {
+  return (
+    <MenuPrimitive.Root modal={false}>
+      <MenuPrimitive.Trigger
+        render={
+          <Button
+            aria-label="Comment actions"
+            className="text-ink-500 hover:bg-canvasDark hover:text-ink-900"
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <MoreHorizontalIcon className="size-3.5" />
+          </Button>
+        }
+      />
+      <MenuPrimitive.Portal>
+        <MenuPrimitive.Positioner align="end" className="isolate z-50" side="bottom" sideOffset={6}>
+          <MenuPrimitive.Popup className="relative isolate z-50 min-w-44 origin-(--transform-origin) rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95">
+            {actions.map((action) => {
+              const Icon = action.icon;
+
+              if (action.kind === 'link') {
+                return (
+                  <MenuPrimitive.LinkItem
+                    className={COMMENT_ACTION_MENU_ITEM_CLASS}
+                    closeOnClick
+                    href={action.href}
+                    key={action.key}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <Icon className="size-4 text-ink-500" />
+                    <span>{action.label}</span>
+                  </MenuPrimitive.LinkItem>
+                );
+              }
+
+              return (
+                <MenuPrimitive.Item
+                  className={COMMENT_ACTION_MENU_ITEM_CLASS}
+                  disabled={action.disabled}
+                  key={action.key}
+                  onClick={action.onSelect}
+                >
+                  <Icon className="size-4 text-ink-500" />
+                  <span>{action.label}</span>
+                </MenuPrimitive.Item>
+              );
+            })}
+          </MenuPrimitive.Popup>
+        </MenuPrimitive.Positioner>
+      </MenuPrimitive.Portal>
+    </MenuPrimitive.Root>
   );
 }
 
@@ -267,13 +371,13 @@ function CommentActionButton({
 }
 
 function CommentActionLink({
-  children,
   href,
   icon: Icon,
+  label,
 }: {
-  children: ReactNode;
   href: string;
   icon: LucideIcon;
+  label: string;
 }) {
   return (
     <a
@@ -287,7 +391,7 @@ function CommentActionLink({
       target="_blank"
     >
       <Icon data-icon="inline-start" />
-      {children}
+      {label}
     </a>
   );
 }
@@ -371,11 +475,17 @@ function FloatingReviewCommentEditor({
       {draftMetadata ? (
         <CommentRowShell
           actions={
-            draftMetadata.onDiscard ? (
-              <CommentActionButton icon={Trash2Icon} onClick={draftMetadata.onDiscard}>
-                Delete
-              </CommentActionButton>
-            ) : null
+            draftMetadata.onDiscard
+              ? [
+                  {
+                    icon: Trash2Icon,
+                    key: 'delete-draft',
+                    kind: 'button',
+                    label: 'Delete',
+                    onSelect: draftMetadata.onDiscard,
+                  },
+                ]
+              : undefined
           }
           avatar={
             <CommentInitialAvatar
@@ -386,11 +496,13 @@ function FloatingReviewCommentEditor({
           isReply
           metadata={
             <>
-              <span className="font-sans font-medium text-ink-900">
+              <span className="shrink-0 font-sans font-medium text-ink-900">
                 {draftMetadata.authorLogin}
               </span>
-              <span className="font-sans font-medium text-ink-900">{draftMetadata.label}</span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              <span className="min-w-0 truncate font-sans font-medium text-ink-900">
+                {draftMetadata.label}
+              </span>
+              <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                 Draft
               </span>
             </>
@@ -642,6 +754,13 @@ function ReviewThreadCardFull({
     const summaryBody = getCommentPreviewText(rootComment?.body ?? '');
     const eventLabel = getReviewEventLabel(thread);
     const actorName = rootComment?.authorName ?? rootComment?.authorLogin ?? 'Someone';
+    const expandAction: CommentAction = {
+      icon: ChevronDownIcon,
+      key: 'expand',
+      kind: 'button',
+      label: 'Expand',
+      onSelect: () => setThreadExpanded(patchViewerSessionKey, threadRefKey, true),
+    };
 
     return (
       <div
@@ -652,9 +771,9 @@ function ReviewThreadCardFull({
         }`}
         ref={setContainerNode}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 overflow-hidden [container-type:inline-size]">
           <button
-            className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs text-ink-500"
+            className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden whitespace-nowrap text-left text-xs text-ink-500"
             onClick={() => setThreadExpanded(patchViewerSessionKey, threadRefKey, true)}
             type="button"
           >
@@ -688,12 +807,12 @@ function ReviewThreadCardFull({
               </>
             )}
           </button>
-          <CommentActionButton
-            icon={ChevronDownIcon}
-            onClick={() => setThreadExpanded(patchViewerSessionKey, threadRefKey, true)}
-          >
-            Expand
-          </CommentActionButton>
+          <div className="hidden shrink-0 [@container(min-width:560px)]:block">
+            <CommentInlineAction action={expandAction} />
+          </div>
+          <div className="flex shrink-0 [@container(min-width:560px)]:hidden">
+            <CommentActionsMenu actions={[expandAction]} />
+          </div>
         </div>
       </div>
     );
@@ -772,11 +891,13 @@ function ReviewThreadCardFull({
       >
         <div className="flex items-center gap-3">
           <CommentAvatar comment={rootComment} size="sm" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-              <span className="font-sans font-medium text-ink-900">{actorName}</span>
-              <span className={`font-sans ${getReviewEventTone(thread)}`}>{eventLabel}</span>
-              <span className="text-xs text-ink-500">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden whitespace-nowrap text-sm">
+              <span className="shrink-0 font-sans font-medium text-ink-900">{actorName}</span>
+              <span className={`min-w-0 truncate font-sans ${getReviewEventTone(thread)}`}>
+                {eventLabel}
+              </span>
+              <span className="shrink-0 text-xs text-ink-500">
                 {formatRelativeTimestamp(rootComment.createdAt)}
               </span>
             </div>
@@ -820,139 +941,147 @@ function ReviewThreadCardFull({
               comment.id.length > 0 &&
               onDeleteComment != null &&
               !isDeleting;
+            const actions: CommentAction[] = [];
+
+            if (canEdit) {
+              actions.push({
+                icon: PencilIcon,
+                key: 'edit',
+                kind: 'button',
+                label: 'Edit',
+                onSelect: () => {
+                  openEditEditor(reviewEditorSessionKey, thread.id, comment.id, comment.body);
+                },
+              });
+            }
+
+            if (canDeletePending) {
+              actions.push({
+                disabled: isDeleting,
+                icon: Trash2Icon,
+                key: 'discard',
+                kind: 'button',
+                label: 'Discard',
+                onSelect: () => {
+                  if (onDeletePendingComment) {
+                    void onDeletePendingComment(comment).catch((error) => {
+                      console.error('failed to discard pending review comment', {
+                        commentId: comment.id,
+                        threadId: thread.id,
+                        error,
+                      });
+                    });
+                  }
+                },
+              });
+            }
+
+            if (canDeletePublished) {
+              actions.push({
+                disabled: isDeleting,
+                icon: Trash2Icon,
+                key: 'delete',
+                kind: 'button',
+                label: 'Delete',
+                onSelect: () => {
+                  if (onDeleteComment) {
+                    void onDeleteComment(thread, comment).catch((error) => {
+                      console.error('failed to delete review comment', {
+                        commentId: comment.id,
+                        threadId: thread.id,
+                        error,
+                      });
+                    });
+                  }
+                },
+              });
+            }
+
+            if (isLeadComment && canToggleResolved) {
+              actions.push({
+                disabled: isResolvePending,
+                icon: CheckIcon,
+                key: 'resolve',
+                kind: 'button',
+                label: thread.isResolved ? 'Unresolve' : 'Resolve',
+                onSelect: () => {
+                  if (onSetThreadResolved) {
+                    void onSetThreadResolved(thread, !thread.isResolved).catch((error) => {
+                      console.error('failed to update thread resolution', {
+                        threadId: thread.id,
+                        nextResolved: !thread.isResolved,
+                        error,
+                      });
+                    });
+                  }
+                },
+              });
+            }
+
+            if (isLeadComment && !isReviewEvent && thread.id.length > 0) {
+              actions.push({
+                disabled: isResolvePending,
+                icon: ChevronUpIcon,
+                key: 'collapse',
+                kind: 'button',
+                label: 'Collapse',
+                onSelect: () => setThreadExpanded(patchViewerSessionKey, threadRefKey, false),
+              });
+            }
+
+            if (!compact && comment.url) {
+              actions.push({
+                href: comment.url,
+                icon: ExternalLinkIcon,
+                key: 'open',
+                kind: 'link',
+                label: 'Open',
+              });
+            }
 
             return (
               <CommentRowShell
-                actions={
-                  <>
-                    {canEdit ? (
-                      <CommentActionButton
-                        icon={PencilIcon}
-                        onClick={() => {
-                          openEditEditor(
-                            reviewEditorSessionKey,
-                            thread.id,
-                            comment.id,
-                            comment.body,
-                          );
-                        }}
-                      >
-                        Edit
-                      </CommentActionButton>
-                    ) : null}
-                    {canDeletePending ? (
-                      <CommentActionButton
-                        disabled={isDeleting}
-                        icon={Trash2Icon}
-                        onClick={() => {
-                          if (onDeletePendingComment) {
-                            void onDeletePendingComment(comment).catch((error) => {
-                              console.error('failed to discard pending review comment', {
-                                commentId: comment.id,
-                                threadId: thread.id,
-                                error,
-                              });
-                            });
-                          }
-                        }}
-                      >
-                        Discard
-                      </CommentActionButton>
-                    ) : null}
-                    {canDeletePublished ? (
-                      <CommentActionButton
-                        disabled={isDeleting}
-                        icon={Trash2Icon}
-                        onClick={() => {
-                          if (onDeleteComment) {
-                            void onDeleteComment(thread, comment).catch((error) => {
-                              console.error('failed to delete review comment', {
-                                commentId: comment.id,
-                                threadId: thread.id,
-                                error,
-                              });
-                            });
-                          }
-                        }}
-                      >
-                        Delete
-                      </CommentActionButton>
-                    ) : null}
-                    {isLeadComment && canToggleResolved ? (
-                      <CommentActionButton
-                        disabled={isResolvePending}
-                        icon={CheckIcon}
-                        onClick={() => {
-                          if (onSetThreadResolved) {
-                            void onSetThreadResolved(thread, !thread.isResolved).catch((error) => {
-                              console.error('failed to update thread resolution', {
-                                threadId: thread.id,
-                                nextResolved: !thread.isResolved,
-                                error,
-                              });
-                            });
-                          }
-                        }}
-                      >
-                        {thread.isResolved ? 'Unresolve' : 'Resolve'}
-                      </CommentActionButton>
-                    ) : null}
-                    {isLeadComment && !isReviewEvent && thread.id.length > 0 ? (
-                      <CommentActionButton
-                        disabled={isResolvePending}
-                        icon={ChevronUpIcon}
-                        onClick={() =>
-                          setThreadExpanded(patchViewerSessionKey, threadRefKey, false)
-                        }
-                      >
-                        Collapse
-                      </CommentActionButton>
-                    ) : null}
-                    {!compact && comment.url ? (
-                      <CommentActionLink href={comment.url} icon={ExternalLinkIcon}>
-                        Open
-                      </CommentActionLink>
-                    ) : null}
-                  </>
-                }
+                actions={actions}
                 avatar={<CommentAvatar comment={comment} size={isReplyComment ? 'sm' : 'md'} />}
                 isDimmed={isDeleting}
                 isReply={isReplyComment}
                 key={comment.id}
                 metadata={
                   <>
-                    <span className="font-sans font-medium text-ink-900">
+                    <span className="shrink-0 font-sans font-medium text-ink-900">
                       {comment.authorLogin}
                     </span>
-                    <span>{formatTimestamp(comment.createdAt)}</span>
+                    <span className="shrink-0">{formatTimestamp(comment.createdAt)}</span>
                     {isLeadComment ? (
-                      <span className="font-sans font-medium text-ink-900">
+                      <span className="min-w-0 truncate font-sans font-medium text-ink-900">
                         {formatThreadLineLabel(thread)}
                       </span>
                     ) : null}
                     {isLeadComment && thread.isResolved ? (
-                      <span className="rounded-full bg-canvasDark px-2 py-0.5 font-sans text-ink-700">
+                      <span className="shrink-0 rounded-full bg-canvasDark px-2 py-0.5 font-sans text-ink-700">
                         Resolved
                       </span>
                     ) : null}
                     {isLeadComment && thread.isOutdated ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 font-sans text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                      <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-sans text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                         Outdated
                       </span>
                     ) : null}
                     {(isLeadComment && thread.isPending) || comment.isPending ? (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                      <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
                         Pending
                       </span>
                     ) : null}
                     {isLeadComment ? (
-                      <span className="font-sans">
+                      <span className="shrink-0 font-sans">
                         {thread.comments.length}{' '}
                         {thread.comments.length === 1 ? 'comment' : 'comments'}
                       </span>
                     ) : null}
-                    {isResolvePending ? <span className="font-sans">Updating...</span> : null}
-                    {isDeleting ? <span className="text-ink-500">Deleting...</span> : null}
+                    {isResolvePending ? (
+                      <span className="shrink-0 font-sans">Updating...</span>
+                    ) : null}
+                    {isDeleting ? <span className="shrink-0 text-ink-500">Deleting...</span> : null}
                   </>
                 }
               >
