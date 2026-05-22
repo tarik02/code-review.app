@@ -31,8 +31,7 @@ function ReviewRoute() {
     defaultMode: 'rich-text',
     floatingControls: false,
   } satisfies ReviewEditorSettings;
-  const reviewEditorSettings =
-    reviewEditorSettingsQuery.data ?? fallbackReviewEditorSettings;
+  const reviewEditorSettings = reviewEditorSettingsQuery.data ?? fallbackReviewEditorSettings;
   const reviewEditorSettingsMutation = useMutation({
     mutationFn: setReviewEditorSettings,
     onMutate: async () => {
