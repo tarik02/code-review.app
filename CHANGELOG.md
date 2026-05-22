@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+### Patch Changes
+
+- 960aca8: improve provider api partial diffs so context expansion hydrates full file contents lazily while preserving native diff controls.
+- 960aca8: fix review and quality popup scrolling, drag handling, and virtualized diff placeholder surfaces.
+- cf26520: add an off-by-default review setting for floating editor toolbar and footer controls.
+- fa74d9c: Improve low-width review comment headers by keeping metadata on one line and collapsing actions into a menu.
+
 ## 0.2.2
 
 ### Patch Changes
