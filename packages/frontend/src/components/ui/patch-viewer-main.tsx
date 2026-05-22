@@ -37,7 +37,7 @@ import type {
   SelectedLineRange,
   VirtualizerConfig,
 } from '@pierre/diffs';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { GitStatusEntry } from '@pierre/trees';
 import { FileDiff } from '@pierre/diffs/react';
 import { ChangedFilesTree } from './changed-files-tree';
@@ -66,6 +66,13 @@ import { useDiffNavigator } from '../../hooks/use-diff-navigator';
 import { getCaughtErrorMessage } from '../../lib/caught-error';
 import { cx } from '../../lib/cx';
 import { writeClipboardText } from '../../lib/clipboard';
+import {
+  canHydrateProviderFileDiff,
+  createExpandableProviderShellDiff,
+  installProviderShellExpandControls,
+  isExpandableProviderShellDiff,
+  PROVIDER_SHELL_COLLAPSED_CONTEXT_THRESHOLD,
+} from '../../lib/provider-diff-expansion';
 import {
   DraftIndicator,
   PullRequestStatusIcon,
@@ -123,7 +130,8 @@ import {
 } from '../../stores/review-comment-editor-store';
 
 const VIRTUALIZER_CONFIG: Partial<VirtualizerConfig> = {
-  overscrollSize: 1200,
+  intersectionObserverMargin: 8000,
+  overscrollSize: 2400,
   resizeDebugging: false,
 };
 
@@ -136,6 +144,7 @@ const REVIEW_SIDEBAR_MIN_SIZE = '260px';
 const REVIEW_SIDEBAR_MAX_SIZE = '560px';
 const PULL_REQUEST_ACTIONS_MENU_ITEM_CLASS =
   'flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-ink-700 outline-hidden select-none transition-colors data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-canvasDark data-highlighted:text-ink-900';
+const EMPTY_PROVIDER_DIFFS_BY_PATH: Record<string, FileDiffMetadata | undefined> = {};
 
 function stopToolbarDoubleClick(event: ReactMouseEvent<HTMLElement>) {
   event.preventDefault();
@@ -382,6 +391,7 @@ function CodeQualityDropdown({
     open,
     onOpenChange: setOpen,
     placement: 'bottom-end',
+    strategy: 'fixed',
     whileElementsMounted: autoUpdate,
     middleware: [
       offset(6),
@@ -442,11 +452,20 @@ function CodeQualityDropdown({
   const hasSummary =
     summaryProps.isLoading || Boolean(summaryProps.error) || Boolean(summaryProps.report);
   const toolbarState = qualityToolbarState(summaryProps);
+  const floatingStyle = useMemo(
+    () =>
+      ({
+        ...floatingStyles,
+        WebkitAppRegion: 'no-drag',
+      }) as CSSProperties & { WebkitAppRegion: string },
+    [floatingStyles],
+  );
 
   return (
     <>
       <span
         className="inline-flex h-7 items-center"
+        onDoubleClick={stopToolbarDoubleClick}
         onMouseDown={stopToolbarMouseDown}
         ref={setReference}
         style={style}
@@ -471,8 +490,10 @@ function CodeQualityDropdown({
         <FloatingPortal>
           <div
             className="z-50 w-[min(520px,calc(100vw-16px))] rounded-md border border-ink-200 bg-surface p-3 shadow-lg"
+            onDoubleClickCapture={stopToolbarDoubleClick}
+            onMouseDownCapture={stopToolbarMouseDown}
             ref={setFloating}
-            style={floatingStyles}
+            style={floatingStyle}
           >
             {hasSummary ? (
               <PullRequestQualitySummary {...summaryProps} />
@@ -509,10 +530,11 @@ type PatchFileDiffItemContextValue = {
   handleEditComment: (comment: ReviewComment, body: string) => Promise<void>;
   handleFileDiffPostRender: (
     node: HTMLElement,
-    instance: PierreFileDiffInstance<PatchLineAnnotation>,
+    instance: PatchPierreFileDiffInstance,
     fileDiff: FileDiffMetadata,
     normalizedFilePath: string,
   ) => void;
+  handleProviderShellExpansionRequest: (request: ProviderShellExpansionRequest) => void;
   handleReplyToThread: (thread: ReviewThread, body: string) => Promise<void>;
   handleReplyToThreadNow: (thread: ReviewThread, body: string) => Promise<void>;
   handleSetThreadResolved: (thread: ReviewThread, isResolved: boolean) => Promise<void>;
@@ -918,6 +940,18 @@ function getFileContentsInput(
     return null;
   }
 
+  return getFileContentsInputForFileDiff(selectedPatch, selectedBaseSha, fileDiff);
+}
+
+function getFileContentsInputForFileDiff(
+  selectedPatch: SelectedPatch | null,
+  selectedBaseSha: string | null,
+  fileDiff: FileDiffMetadata,
+) {
+  if (!selectedPatch) {
+    return null;
+  }
+
   return {
     providerId: selectedPatch.providerId,
     repoKey: selectedPatch.repoKey,
@@ -1035,7 +1069,7 @@ function FloatingLineDraftEditor({
         {hasReference && portalRoot ? (
           <div
             ref={setFloating}
-            className="pointer-events-auto z-50 px-3 py-2 font-sans"
+            className="pointer-events-auto z-50 font-sans"
             style={floatingStyles}
           >
             <ReviewCommentEditor
@@ -1247,6 +1281,38 @@ function getExpansionClick(event: MouseEvent): {
     lineCount: expandAll ? Number.POSITIVE_INFINITY : DIFF_EXPANSION_LINE_COUNT,
   };
 }
+
+function getExpansionAnchorTop(event: MouseEvent, hunkIndex: number) {
+  for (const target of event.composedPath()) {
+    if (!(target instanceof HTMLElement)) continue;
+    if (target.getAttribute('data-expand-index') === String(hunkIndex)) {
+      return target.getBoundingClientRect().top;
+    }
+  }
+
+  return null;
+}
+
+type ProviderExpansionLoadRequest = {
+  anchorTop: number | null;
+  expansion: {
+    hunkIndex: number;
+    direction: ExpansionDirections;
+    lineCount: number;
+  };
+  filePath: string;
+  sourceFileDiff: FileDiffMetadata;
+};
+
+type PatchPierreFileDiffInstance = PierreFileDiffInstance<PatchLineAnnotation>;
+
+type ProviderShellExpansionRequest = {
+  anchorTop: number | null;
+  direction: ExpansionDirections;
+  filePath: string;
+  hunkIndex: number;
+  lineCount: number;
+};
 
 type ReviewThreadsPanelProps = {
   threads: ReviewThread[];
@@ -1633,6 +1699,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
     handleEditComment,
     handleDeletePendingComment,
     handleFileDiffPostRender,
+    handleProviderShellExpansionRequest,
     handleReplyToThread,
     handleReplyToThreadNow,
     handleSubmitDraftComment,
@@ -2180,10 +2247,15 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
         '--diffs-bg-selection-override': 'rgb(245 158 11 / 0.22)',
         '--diffs-bg-selection-number-override': 'rgb(245 158 11 / 0.14)',
         '--diffs-selection-color-override': '#f59e0b',
+        backgroundColor: 'light-dark(white, rgb(var(--rgb-surface)))',
       }) as CSSProperties,
     [codeFontFamily, codeFontSizePx, codeLineHeightPx, ligatureFontFeatures],
   );
 
+  const isProviderShell = isExpandableProviderShellDiff(fileDiff);
+  const collapsedContextThreshold = isProviderShell
+    ? PROVIDER_SHELL_COLLAPSED_CONTEXT_THRESHOLD
+    : DIFF_COLLAPSED_CONTEXT_THRESHOLD;
   const fileDiffElement = (
     <FileDiff
       fileDiff={fileDiff}
@@ -2198,7 +2270,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
         lineDiffType: 'word',
         overflow: 'scroll',
         expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
-        collapsedContextThreshold: DIFF_COLLAPSED_CONTEXT_THRESHOLD,
+        collapsedContextThreshold,
         unsafeCSS: `
           [data-overflow='scroll'],
           [data-code] {
@@ -2258,6 +2330,16 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             box-shadow: inset -1px 0 0 rgb(245 158 11 / 0.45);
           }
 
+          [data-provider-shell-separator-wrapper] {
+            display: grid;
+            grid-template-columns: 34px auto;
+          }
+
+          [data-provider-shell-separator-wrapper] [data-separator-content] {
+            border-top-left-radius: unset;
+            border-bottom-left-radius: unset;
+          }
+
         `,
         enableLineSelection: true,
         enableGutterUtility: true,
@@ -2286,6 +2368,29 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             fileCommentsPortalHost,
           )
         : null}
+      {isProviderShell ? (
+        <div className="border-t border-ink-200 bg-canvas px-8 py-1.5">
+          <Button
+            className="h-6 gap-1 rounded-md px-2 text-xs text-ink-500 hover:text-ink-900"
+            data-expand-index={fileDiff.hunks.length}
+            onClick={(event) =>
+              handleProviderShellExpansionRequest({
+                anchorTop: event.currentTarget.getBoundingClientRect().top,
+                direction: 'up',
+                filePath: normalizedFilePath,
+                hunkIndex: fileDiff.hunks.length,
+                lineCount: event.shiftKey ? Number.POSITIVE_INFINITY : DIFF_EXPANSION_LINE_COUNT,
+              })
+            }
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            <ChevronDownIcon className="size-3" />
+            More context
+          </Button>
+        </div>
+      ) : null}
       <div id={lineDraftPortalRootId} className="pointer-events-none absolute inset-0 z-20" />
     </div>
   );
@@ -2332,6 +2437,7 @@ function PatchViewerMain({
   onRefreshPullRequest,
   onToggleRepoSidebar,
 }: PatchViewerMainProps) {
+  const queryClient = useQueryClient();
   const backgroundQuery = useQuery(appearanceBackgroundQueryOptions());
   const reviewEditorSettingsQuery = useQuery(reviewEditorSettingsQueryOptions());
   const defaultReviewEditorMode = reviewEditorSettingsQuery.data?.defaultMode ?? 'rich-text';
@@ -2349,6 +2455,13 @@ function PatchViewerMain({
   const setThreadExpanded = usePatchViewerStore((state) => state.setThreadExpanded);
   const recordHunkExpansion = usePatchViewerStore((state) => state.recordHunkExpansion);
   const resetPendingReviewInput = usePatchViewerStore((state) => state.resetPendingReviewInput);
+  const resetProviderExpansion = usePatchViewerStore((state) => state.resetProviderExpansion);
+  const clearProviderExpansionScrollAnchor = usePatchViewerStore(
+    (state) => state.clearProviderExpansionScrollAnchor,
+  );
+  const loadProviderDiffForExpansion = usePatchViewerStore(
+    (state) => state.loadProviderDiffForExpansion,
+  );
   const setEditorError = useReviewCommentEditorStore((state) => state.setEditorError);
   const setEditorSubmitting = useReviewCommentEditorStore((state) => state.setEditorSubmitting);
   const closeEditor = useReviewCommentEditorStore((state) => state.closeEditor);
@@ -2406,6 +2519,41 @@ function PatchViewerMain({
     (selectedProviderId ? providerFromProviderId(selectedProviderId) : 'github');
   const pullRequestUrl = selectedPullRequestSummary?.url ?? null;
   const selectedProviderLabel = selectedProvider === 'github' ? 'GitHub' : 'GitLab';
+  const providerExpansionScopeKey = selectedPatch
+    ? [
+        patchViewerSessionKey ?? '',
+        selectedPatch.providerId,
+        selectedPatch.repoKey,
+        selectedPatch.number,
+        selectedPatch.headSha,
+        selectedBaseSha ?? '',
+      ].join('::')
+    : '';
+  const hydratedProviderDiffsByPath = usePatchViewerStore(
+    useShallow((state) =>
+      state.providerExpansionScopeKey === providerExpansionScopeKey
+        ? state.hydratedProviderDiffsByPath
+        : EMPTY_PROVIDER_DIFFS_BY_PATH,
+    ),
+  );
+  const sourceFileDiffsByPath = useMemo(() => {
+    const map = new Map<string, FileDiffMetadata>();
+    for (const fileDiff of parsedPatch.fileDiffs) {
+      map.set(normalizePath(fileDiff.name), fileDiff);
+    }
+    return map;
+  }, [parsedPatch.fileDiffs]);
+  const renderFileDiffs = useMemo(() => {
+    if (isGitDiffMode) {
+      return parsedPatch.fileDiffs;
+    }
+
+    return parsedPatch.fileDiffs.map(
+      (fileDiff) =>
+        hydratedProviderDiffsByPath[normalizePath(fileDiff.name)] ??
+        createExpandableProviderShellDiff(fileDiff),
+    );
+  }, [hydratedProviderDiffsByPath, isGitDiffMode, parsedPatch.fileDiffs]);
 
   const isRightSidebarCollapsedVisible = hasSelection && isRightSidebarCollapsed;
   const isPullRequestUrlCopied = copiedPullRequestUrl === pullRequestUrl;
@@ -2456,6 +2604,9 @@ function PatchViewerMain({
     },
     [],
   );
+  useEffect(() => {
+    resetProviderExpansion(providerExpansionScopeKey);
+  }, [providerExpansionScopeKey, resetProviderExpansion]);
   const viewerToolbar = (
     <TopBar
       className={cx(
@@ -2687,6 +2838,109 @@ function PatchViewerMain({
       setScrollTop(patchViewerSessionKey, event.currentTarget.scrollTop);
     },
     [patchViewerSessionKey, setScrollTop],
+  );
+  const restoreProviderExpansionScrollAnchor = useCallback(
+    (node: HTMLElement, filePath: string) => {
+      const anchor = usePatchViewerStore.getState().providerExpansionScrollAnchor;
+      const root = scrollRootRef.current;
+      if (!anchor || anchor.filePath !== filePath || !root) {
+        return;
+      }
+
+      const target = node.shadowRoot?.querySelector(`[data-expand-index="${anchor.hunkIndex}"]`);
+      if (target instanceof HTMLElement && anchor.top !== null) {
+        const delta = target.getBoundingClientRect().top - anchor.top;
+        if (Math.abs(delta) > 1) {
+          root.scrollTop += delta;
+        }
+      }
+
+      clearProviderExpansionScrollAnchor(filePath);
+    },
+    [clearProviderExpansionScrollAnchor],
+  );
+  const loadProviderFullDiffForExpansion = useCallback(
+    (request: ProviderExpansionLoadRequest) => {
+      if (isGitDiffMode || !selectedPatch || !patchViewerSessionKey) {
+        return;
+      }
+
+      const input = getFileContentsInputForFileDiff(
+        selectedPatch,
+        selectedBaseSha,
+        request.sourceFileDiff,
+      );
+      if (!input) {
+        return;
+      }
+
+      void loadProviderDiffForExpansion({
+        ...request,
+        loadFileContents: () => queryClient.fetchQuery(pullRequestFileContentsQueryOptions(input)),
+        onError: (error) => {
+          appToastManager.add({
+            id: `provider-full-diff-context-failed:${providerExpansionScopeKey}:${request.filePath}`,
+            title: 'Could not load full diff context',
+            description: getCaughtErrorMessage(error),
+            type: 'error',
+            priority: 'high',
+            timeout: 7000,
+          });
+        },
+        onSuccess: (expansion) => {
+          recordHunkExpansion(
+            patchViewerSessionKey,
+            expansion.filePath,
+            expansion.hunkIndex,
+            expansion.direction,
+            expansion.lineCount,
+          );
+        },
+        scopeKey: providerExpansionScopeKey,
+      });
+    },
+    [
+      isGitDiffMode,
+      loadProviderDiffForExpansion,
+      patchViewerSessionKey,
+      providerExpansionScopeKey,
+      queryClient,
+      recordHunkExpansion,
+      selectedBaseSha,
+      selectedPatch,
+    ],
+  );
+  const handleProviderShellExpansionRequest = useCallback(
+    (request: ProviderShellExpansionRequest) => {
+      const sourceFileDiff = sourceFileDiffsByPath.get(request.filePath);
+      const providerExpansionState = usePatchViewerStore.getState();
+      if (
+        isGitDiffMode ||
+        !sourceFileDiff ||
+        !canHydrateProviderFileDiff(sourceFileDiff) ||
+        (providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
+          providerExpansionState.hydratedProviderDiffsByPath[request.filePath])
+      ) {
+        return;
+      }
+
+      loadProviderFullDiffForExpansion({
+        anchorTop: request.anchorTop,
+        expansion: {
+          hunkIndex: request.hunkIndex,
+          direction: request.direction,
+          lineCount: request.lineCount,
+        },
+        filePath: request.filePath,
+        sourceFileDiff,
+      });
+    },
+    [
+      isGitDiffMode,
+      loadProviderFullDiffForExpansion,
+      providerExpansionScopeKey,
+      sourceFileDiffsByPath,
+    ],
   );
   const expandedInactiveFileCommentsByPath = useMemo(
     () =>
@@ -2932,12 +3186,26 @@ function PatchViewerMain({
   const handleFileDiffPostRender = useCallback(
     (
       node: HTMLElement,
-      instance: PierreFileDiffInstance<PatchLineAnnotation>,
+      instance: PatchPierreFileDiffInstance,
       fileDiff: FileDiffMetadata,
       normalizedFilePath: string,
     ) => {
       node.dataset.patchViewerSessionKey = patchViewerSessionKey ?? '';
       node.dataset.patchViewerFilePath = normalizedFilePath;
+      restoreProviderExpansionScrollAnchor(node, normalizedFilePath);
+      const sourceFileDiff = sourceFileDiffsByPath.get(normalizedFilePath);
+      const providerExpansionState = usePatchViewerStore.getState();
+      const isUnhydratedProviderShell =
+        !isGitDiffMode &&
+        sourceFileDiff &&
+        canHydrateProviderFileDiff(sourceFileDiff) &&
+        !(
+          providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
+          providerExpansionState.hydratedProviderDiffsByPath[normalizedFilePath]
+        );
+      if (isUnhydratedProviderShell) {
+        installProviderShellExpandControls(node, fileDiff);
+      }
 
       if (!hunkExpansionNodesRef.current.has(node)) {
         const clickListener = (event: MouseEvent) => {
@@ -2946,6 +3214,30 @@ function PatchViewerMain({
           const sessionKey = node.dataset.patchViewerSessionKey || null;
           const filePath = node.dataset.patchViewerFilePath;
           if (!filePath) return;
+          const sourceFileDiff = sourceFileDiffsByPath.get(filePath);
+          const providerExpansionState = usePatchViewerStore.getState();
+          const hasHydratedProviderDiff = Boolean(
+            providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
+            providerExpansionState.hydratedProviderDiffsByPath[filePath],
+          );
+
+          if (
+            !isGitDiffMode &&
+            sourceFileDiff &&
+            canHydrateProviderFileDiff(sourceFileDiff) &&
+            !hasHydratedProviderDiff
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            loadProviderFullDiffForExpansion({
+              anchorTop: getExpansionAnchorTop(event, expansion.hunkIndex),
+              expansion,
+              filePath,
+              sourceFileDiff,
+            });
+            return;
+          }
 
           recordHunkExpansion(
             sessionKey,
@@ -2964,9 +3256,19 @@ function PatchViewerMain({
         usePatchViewerStore.getState(),
         patchViewerSessionKey,
       ).hunkExpansionsByFile[normalizedFilePath];
-      replayHunkExpansions(fileDiff, instance as unknown as HunkExpansionOwner, fileExpansions);
+      if (!isUnhydratedProviderShell) {
+        replayHunkExpansions(fileDiff, instance as unknown as HunkExpansionOwner, fileExpansions);
+      }
     },
-    [patchViewerSessionKey, recordHunkExpansion],
+    [
+      isGitDiffMode,
+      loadProviderFullDiffForExpansion,
+      patchViewerSessionKey,
+      providerExpansionScopeKey,
+      recordHunkExpansion,
+      restoreProviderExpansionScrollAnchor,
+      sourceFileDiffsByPath,
+    ],
   );
 
   const restoreScrollPosition = useCallback((sessionKey: string, scrollTop: number) => {
@@ -3100,7 +3402,7 @@ function PatchViewerMain({
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();
-  }, [navigator.actions, parsedPatch.fileDiffs, qualityFindingsByFile, reviewThreadsByFile]);
+  }, [navigator.actions, qualityFindingsByFile, renderFileDiffs, reviewThreadsByFile]);
 
   useEffect(() => {
     reviewThreadsRef.current = reviewThreads;
@@ -3535,6 +3837,7 @@ function PatchViewerMain({
       handleDeleteComment,
       handleEditComment,
       handleFileDiffPostRender,
+      handleProviderShellExpansionRequest,
       handleReplyToThread,
       handleReplyToThreadNow,
       handleSetThreadResolved,
@@ -3549,6 +3852,7 @@ function PatchViewerMain({
       handleDeletePendingComment,
       handleEditComment,
       handleFileDiffPostRender,
+      handleProviderShellExpansionRequest,
       handleReplyToThread,
       handleReplyToThreadNow,
       handleSetThreadResolved,
@@ -3699,12 +4003,12 @@ function PatchViewerMain({
                           <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-danger-600 md:min-h-full">
                             {parsedPatch.parseError}
                           </div>
-                        ) : parsedPatch.fileDiffs.length === 0 ? (
+                        ) : renderFileDiffs.length === 0 ? (
                           <div className="flex min-h-[50vh] items-center justify-center px-6 py-10 text-center text-ink-500 md:min-h-full">
                             No diff content.
                           </div>
                         ) : (
-                          parsedPatch.fileDiffs.map((fileDiff, fileIndex) => {
+                          renderFileDiffs.map((fileDiff, fileIndex) => {
                             const fileReviewThreads = getFileReviewThreadsForPath(
                               reviewThreadsByFile,
                               fileDiff.name,
@@ -3720,7 +4024,7 @@ function PatchViewerMain({
                                 fileIndex={fileIndex}
                                 fileQualityFindings={fileQualityFindings}
                                 fileReviewThreads={fileReviewThreads}
-                                key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}`}
+                                key={`${repoIdentityKey(selectedPatch)}-${selectedPatch.number}-${selectedPatch.headSha}-${normalizePath(fileDiff.name)}-${fileDiff.cacheKey ?? ''}-${fileDiff.isPartial ? 'partial' : 'full'}`}
                               />
                             );
                           })
@@ -3728,7 +4032,7 @@ function PatchViewerMain({
 
                         <div className="grow" />
 
-                        <div className="sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
+                        <div className="pointer-events-none sticky bottom-0 pb-3 z-40 mt-3 flex justify-center px-4">
                           <PendingReviewBar
                             approvalState={approvalState}
                             approvalStateError={approvalStateError}

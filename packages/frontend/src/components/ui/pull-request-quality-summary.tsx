@@ -1,5 +1,6 @@
 import type { PullRequestQualityFinding, PullRequestQualityReport } from '../../types/forge';
 import { cx } from '../../lib/cx';
+import { ScrollArea } from './scroll-area';
 
 type PullRequestQualitySummaryProps = {
   report: PullRequestQualityReport | null;
@@ -103,9 +104,16 @@ function PullRequestQualitySummary({
 
       {unmappedFindings.length > 0 ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-ink-200 pt-3">
-          <p className="text-xs font-medium text-ink-700">Unmapped findings</p>
-          <div className="flex flex-col gap-2">
-            {unmappedFindings.slice(0, 5).map((finding) => (
+          <ScrollArea
+            className="-m-3 max-h-[min(360px,calc(100vh-14rem))] pr-3"
+            contentClassName="flex flex-col gap-2 p-3"
+            orientation="vertical"
+            viewportClassName="max-h-[min(360px,calc(100vh-14rem))] overscroll-contain"
+          >
+            <p className="sticky top-0 z-10 -mx-3 -mt-3 bg-surface px-3 py-3 text-xs font-medium text-ink-700">
+              Unmapped findings
+            </p>
+            {unmappedFindings.map((finding) => (
               <div
                 className="rounded-md border border-ink-200 bg-canvas px-3 py-2 text-xs"
                 key={finding.id}
@@ -117,12 +125,7 @@ function PullRequestQualitySummary({
                 <p className="mt-1 text-ink-600">{finding.path || 'No file path provided'}</p>
               </div>
             ))}
-            {unmappedFindings.length > 5 ? (
-              <p className="text-xs text-ink-500">
-                {unmappedFindings.length - 5} more unmapped findings not shown.
-              </p>
-            ) : null}
-          </div>
+          </ScrollArea>
         </div>
       ) : null}
     </div>
