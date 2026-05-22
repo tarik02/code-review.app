@@ -17,6 +17,7 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   CheckIcon,
   ChevronDownIcon,
+  MessageSquarePlusIcon,
   CopyIcon,
   ExternalLinkIcon,
   MoreHorizontalIcon,
@@ -25,6 +26,7 @@ import {
   PanelRightOpenIcon,
   RefreshCwIcon,
   ShieldCheckIcon,
+  Trash2Icon,
 } from 'lucide-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import type {
@@ -976,6 +978,7 @@ type FloatingLineDraftEditorProps = {
   suggestionContext: ReturnType<typeof getDraftSuggestionContext>;
   target: DraftReviewCommentTarget | null;
   value: string;
+  viewerLogin: string | null;
   onCancel: () => void;
   onChange: (body: string) => void;
   onCursorPositionChange: (cursorPosition: ReviewCommentEditorState['cursorPosition']) => void;
@@ -995,6 +998,7 @@ function FloatingLineDraftEditor({
   suggestionContext,
   target,
   value,
+  viewerLogin,
   onCancel,
   onChange,
   onCursorPositionChange,
@@ -1061,6 +1065,21 @@ function FloatingLineDraftEditor({
     },
     [refs],
   );
+  const authorLogin = viewerLogin ?? 'You';
+  const authorInitial = authorLogin.slice(0, 1).toUpperCase();
+  const targetLabel =
+    target?.type === 'global'
+      ? 'Global comment'
+      : target?.type === 'file'
+        ? 'File comment'
+        : target?.type === 'line'
+          ? (target.startLine ?? target.line) === target.line
+            ? `Line ${target.line}`
+            : `Lines ${Math.min(target.startLine ?? target.line, target.line)}-${Math.max(
+                target.startLine ?? target.line,
+                target.line,
+              )}`
+          : 'Comment';
 
   return (
     <>
@@ -1072,25 +1091,55 @@ function FloatingLineDraftEditor({
             className="pointer-events-auto z-50 font-sans"
             style={floatingStyles}
           >
-            <ReviewCommentEditor
-              cursorPosition={cursorPosition}
-              defaultMode={defaultMode}
-              floatingControls={floatingControls}
-              error={error}
-              isPending={isPending}
-              provider={provider}
-              selectedText={selectedText}
-              suggestionContext={suggestionContext}
-              secondarySubmitLabel="Add comment now"
-              submitLabel="Add review comment"
-              target={target}
-              value={value}
-              onCancel={onCancel}
-              onChange={onChange}
-              onCursorPositionChange={onCursorPositionChange}
-              onSecondarySubmit={onSubmitNow}
-              onSubmit={onSubmit}
-            />
+            <div className="rounded-lg border border-ink-200 bg-canvas p-3 text-sm text-ink-800 shadow-xs">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink-200 text-[11px] font-semibold text-ink-700">
+                  {authorInitial}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-3 text-xs text-ink-500">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="font-sans font-medium text-ink-900">{authorLogin}</span>
+                      <span className="font-sans font-medium text-ink-900">{targetLabel}</span>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 font-sans text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        Draft
+                      </span>
+                    </div>
+                    <Button
+                      className="font-sans text-ink-600 hover:bg-transparent hover:text-ink-900"
+                      onClick={onCancel}
+                      size="inline"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2Icon data-icon="inline-start" />
+                      Delete
+                    </Button>
+                  </div>
+                  <div className="mt-1 min-w-0">
+                    <ReviewCommentEditor
+                      cursorPosition={cursorPosition}
+                      defaultMode={defaultMode}
+                      floatingControls={floatingControls}
+                      error={error}
+                      isPending={isPending}
+                      provider={provider}
+                      selectedText={selectedText}
+                      suggestionContext={suggestionContext}
+                      secondarySubmitLabel="Add comment now"
+                      submitLabel="Add review comment"
+                      target={target}
+                      value={value}
+                      onCancel={onCancel}
+                      onChange={onChange}
+                      onCursorPositionChange={onCursorPositionChange}
+                      onSecondarySubmit={onSubmitNow}
+                      onSubmit={onSubmit}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
       </FloatingPortal>
@@ -1107,6 +1156,7 @@ type FloatingLineDraftEditorForTargetProps = {
   provider: ForgeProviderKind;
   selectedBaseSha: string | null;
   selectedPatch: SelectedPatch | null;
+  viewerLogin: string | null;
   onCancel: () => void;
   onChange: (body: string) => void;
   onCursorPositionChange: (cursorPosition: ReviewCommentEditorState['cursorPosition']) => void;
@@ -1123,6 +1173,7 @@ function FloatingLineDraftEditorForTarget({
   provider,
   selectedBaseSha,
   selectedPatch,
+  viewerLogin,
   onCancel,
   onChange,
   onCursorPositionChange,
@@ -1171,6 +1222,7 @@ function FloatingLineDraftEditorForTarget({
       suggestionContext={suggestionContext}
       target={target}
       value={editor.body}
+      viewerLogin={viewerLogin}
       onCancel={onCancel}
       onChange={onChange}
       onCursorPositionChange={onCursorPositionChange}
@@ -1249,7 +1301,11 @@ function getExpansionClick(event: MouseEvent): {
   for (const target of event.composedPath()) {
     if (!(target instanceof Element)) continue;
 
-    if (target.hasAttribute('data-expand-button') || target.hasAttribute('data-unmodified-lines')) {
+    if (
+      target.hasAttribute('data-expand-button') ||
+      target.hasAttribute('data-provider-shell-expand-button') ||
+      target.hasAttribute('data-unmodified-lines')
+    ) {
       isExpansionClick = true;
       expandAll ||= target.hasAttribute('data-expand-all-button');
 
@@ -1282,6 +1338,15 @@ function getExpansionClick(event: MouseEvent): {
   };
 }
 
+function isProviderShellExpandClick(event: MouseEvent) {
+  return event
+    .composedPath()
+    .some(
+      (target) =>
+        target instanceof Element && target.hasAttribute('data-provider-shell-expand-button'),
+    );
+}
+
 function getExpansionAnchorTop(event: MouseEvent, hunkIndex: number) {
   for (const target of event.composedPath()) {
     if (!(target instanceof HTMLElement)) continue;
@@ -1291,6 +1356,35 @@ function getExpansionAnchorTop(event: MouseEvent, hunkIndex: number) {
   }
 
   return null;
+}
+
+function restoreHunkExpansionScrollAnchor(
+  node: HTMLElement,
+  root: HTMLElement | null,
+  hunkIndex: number,
+  anchorTop: number | null,
+) {
+  if (!root || anchorTop === null) {
+    return;
+  }
+
+  let attempts = 0;
+  const tick = () => {
+    const target = node.shadowRoot?.querySelector(`[data-expand-index="${hunkIndex}"]`);
+    if (target instanceof HTMLElement) {
+      const delta = target.getBoundingClientRect().top - anchorTop;
+      if (Math.abs(delta) > 1) {
+        root.scrollTop += delta;
+      }
+    }
+
+    attempts += 1;
+    if (attempts < 2) {
+      scheduleNextFrame(tick);
+    }
+  };
+
+  scheduleNextFrame(tick);
 }
 
 type ProviderExpansionLoadRequest = {
@@ -1496,6 +1590,7 @@ function GlobalCommentsSection({
             suggestionContext={null}
             target={editor.target}
             value={editor.body}
+            viewerLogin={viewerLogin}
             onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
             onChange={(body) => setEditorBody(reviewEditorSessionKey, editor.id, body)}
             onCursorPositionChange={(cursorPosition) =>
@@ -1909,13 +2004,16 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             {fileQualityFindings.totalCount} findings
           </span>
         ) : null}
-        <button
-          className="font-medium text-ink-600 underline-offset-2 hover:text-ink-900 hover:underline"
+        <Button
+          className="font-sans font-medium text-ink-600 hover:bg-transparent hover:text-ink-900"
           onClick={openFileCommentDraft}
+          size="inline"
           type="button"
+          variant="ghost"
         >
-          File comment
-        </button>
+          <MessageSquarePlusIcon data-icon="inline-start" />
+          Add comment
+        </Button>
       </div>
     );
   }
@@ -1927,32 +2025,9 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
 
     return (
       <div
-        className="mt-3 flex flex-col gap-3 border-t border-ink-200 pt-3"
+        className="mt-3 flex flex-col gap-3"
         ref={(node) => registerFileCommentsSection(normalizedFilePath, node)}
       >
-        {fileDraftEditors.map((editor) => (
-          <FloatingLineDraftEditor
-            key={editor.id}
-            cursorPosition={editor.cursorPosition}
-            defaultMode={defaultReviewEditorMode}
-            floatingControls={floatingReviewEditorControls}
-            error={editor.error}
-            isPending={editor.isSubmitting}
-            portalRootId={lineDraftPortalRootId}
-            provider={selectedProvider}
-            selectedText=""
-            suggestionContext={null}
-            target={editor.target}
-            value={editor.body}
-            onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
-            onChange={(body) => setEditorBody(reviewEditorSessionKey, editor.id, body)}
-            onCursorPositionChange={(cursorPosition) =>
-              setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
-            }
-            onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
-            onSubmitNow={(body) => handleSubmitDraftCommentNow(editor.id, body)}
-          />
-        ))}
         {fileQualityFindings.fileFindings.length > 0 ? (
           <div className="flex flex-col gap-2">
             {fileQualityFindings.fileFindings.map((finding) => (
@@ -2003,6 +2078,30 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
             reviewEditorSessionKey={reviewEditorSessionKey}
             thread={thread}
             viewerLogin={viewerLogin}
+          />
+        ))}
+        {fileDraftEditors.map((editor) => (
+          <FloatingLineDraftEditor
+            key={editor.id}
+            cursorPosition={editor.cursorPosition}
+            defaultMode={defaultReviewEditorMode}
+            floatingControls={floatingReviewEditorControls}
+            error={editor.error}
+            isPending={editor.isSubmitting}
+            portalRootId={lineDraftPortalRootId}
+            provider={selectedProvider}
+            selectedText=""
+            suggestionContext={null}
+            target={editor.target}
+            value={editor.body}
+            viewerLogin={viewerLogin}
+            onCancel={() => closeEditor(reviewEditorSessionKey, editor.id)}
+            onChange={(body) => setEditorBody(reviewEditorSessionKey, editor.id, body)}
+            onCursorPositionChange={(cursorPosition) =>
+              setEditorCursorPosition(reviewEditorSessionKey, editor.id, cursorPosition ?? null)
+            }
+            onSubmit={(body) => handleSubmitDraftComment(editor.id, body)}
+            onSubmitNow={(body) => handleSubmitDraftCommentNow(editor.id, body)}
           />
         ))}
         {inactiveFileThreads.length > 0 ? (
@@ -2171,6 +2270,7 @@ const PatchFileDiffItem = memo(function PatchFileDiffItem({
           provider={selectedProvider}
           selectedBaseSha={selectedBaseSha}
           selectedPatch={selectedPatch}
+          viewerLogin={viewerLogin}
           onCancel={() => closeEditor(reviewEditorSessionKey, draftAnnotation.editorId)}
           onChange={(body) => setEditorBody(reviewEditorSessionKey, draftAnnotation.editorId, body)}
           onCursorPositionChange={(cursorPosition) =>
@@ -2490,6 +2590,7 @@ function PatchViewerMain({
   const cancelThreadScrollRef = useRef<(() => void) | null>(null);
   const previousSessionKeyRef = useRef<string | null>(patchViewerSessionKey);
   const hunkExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
+  const providerShellExpansionNodesRef = useRef<WeakSet<HTMLElement>>(new WeakSet());
   const fileCommentsSectionNodesRef = useRef<Map<string, HTMLElement>>(new Map());
   const globalCommentsSectionNodeRef = useRef<HTMLDivElement | null>(null);
   const globalCommentsPortalRootId = selectedPatch
@@ -3205,6 +3306,35 @@ function PatchViewerMain({
         );
       if (isUnhydratedProviderShell) {
         installProviderShellExpandControls(node, fileDiff);
+        if (!providerShellExpansionNodesRef.current.has(node)) {
+          const clickListener = (event: Event) => {
+            if (!(event instanceof MouseEvent)) {
+              return;
+            }
+
+            if (!isProviderShellExpandClick(event)) {
+              return;
+            }
+
+            const expansion = getExpansionClick(event);
+            if (!expansion || !sourceFileDiff) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            loadProviderFullDiffForExpansion({
+              anchorTop: getExpansionAnchorTop(event, expansion.hunkIndex),
+              expansion,
+              filePath: normalizedFilePath,
+              sourceFileDiff,
+            });
+          };
+
+          node.addEventListener('click', clickListener, { capture: true });
+          providerShellExpansionNodesRef.current.add(node);
+        }
       }
 
       if (!hunkExpansionNodesRef.current.has(node)) {
@@ -3214,11 +3344,12 @@ function PatchViewerMain({
           const sessionKey = node.dataset.patchViewerSessionKey || null;
           const filePath = node.dataset.patchViewerFilePath;
           if (!filePath) return;
+          const anchorTop = getExpansionAnchorTop(event, expansion.hunkIndex);
           const sourceFileDiff = sourceFileDiffsByPath.get(filePath);
           const providerExpansionState = usePatchViewerStore.getState();
           const hasHydratedProviderDiff = Boolean(
             providerExpansionState.providerExpansionScopeKey === providerExpansionScopeKey &&
-            providerExpansionState.hydratedProviderDiffsByPath[filePath],
+              providerExpansionState.hydratedProviderDiffsByPath[filePath],
           );
 
           if (
@@ -3231,7 +3362,7 @@ function PatchViewerMain({
             event.stopPropagation();
             event.stopImmediatePropagation();
             loadProviderFullDiffForExpansion({
-              anchorTop: getExpansionAnchorTop(event, expansion.hunkIndex),
+              anchorTop,
               expansion,
               filePath,
               sourceFileDiff,
@@ -3239,6 +3370,12 @@ function PatchViewerMain({
             return;
           }
 
+          restoreHunkExpansionScrollAnchor(
+            node,
+            scrollRootRef.current,
+            expansion.hunkIndex,
+            anchorTop,
+          );
           recordHunkExpansion(
             sessionKey,
             filePath,
@@ -3398,7 +3535,7 @@ function PatchViewerMain({
     return () => {
       cancelScrollRestoreRef.current?.();
     };
-  }, [isDiffReady, parsedPatch.fileDiffs, patchViewerSessionKey, restoreScrollPosition]);
+  }, [isDiffReady, patchViewerSessionKey, restoreScrollPosition]);
 
   useEffect(() => {
     navigator.actions.notifyDiffContentChanged();

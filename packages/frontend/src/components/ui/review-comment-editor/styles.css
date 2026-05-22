@@ -18,6 +18,7 @@
   border-radius: 0.5rem;
   background: rgb(var(--rgb-surface));
   overflow: visible;
+  transition: border-radius 140ms ease;
 }
 
 .comment-editor-root--floating-controls:hover .comment-editor-shell,
@@ -52,9 +53,6 @@
   --code-font-features: var(--app-code-font-features);
 
   overflow: visible;
-  border: 0;
-  border-radius: 0.5rem 0.5rem 0 0;
-  background: rgb(var(--rgb-surface));
   color: rgb(var(--rgb-ink-900));
   cursor: text;
 }
@@ -192,7 +190,6 @@
   min-height: 4.5rem;
   overflow-y: visible;
   padding: 0.5rem 0.75rem;
-  background: rgb(var(--rgb-surface));
   caret-color: rgb(var(--rgb-ink-900));
   color: rgb(var(--rgb-ink-900));
   cursor: text;
