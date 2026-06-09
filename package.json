@@ -33,6 +33,14 @@
   },
   "packageManager": "pnpm@10.33.2",
   "pnpm": {
+    "peerDependencyRules": {
+      "ignoreOptionalPeerDependencies": [
+        "@libsql/client",
+        "@libsql/client-wasm",
+        "@types/better-sqlite3",
+        "better-sqlite3"
+      ]
+    },
     "supportedArchitectures": {
       "os": [
         "current",

@@ -13,8 +13,7 @@ const workspaceAliases = {
   '@code-review-app/shared': resolve(repoRoot, 'packages/shared/src/index.ts'),
 };
 const workspacePackages = ['@code-review-app/backend', '@code-review-app/shared'];
-const bundledMainPackages = [...workspacePackages, 'effect', '@libsql/client'];
-const nativeExternalPackages = ['libsql'];
+const bundledMainPackages = [...workspacePackages, 'effect'];
 const reactCompilerBabelPlugin = await babel({
   presets: [reactCompilerPreset()],
 });
@@ -31,7 +30,6 @@ export default defineConfig({
       externalizeDeps: false,
       sourcemap: true,
       rolldownOptions: {
-        external: nativeExternalPackages,
         input: resolve('src/main/index.ts'),
       },
     },

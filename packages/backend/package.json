@@ -16,7 +16,6 @@
     "@code-review-app/shared": "workspace:*",
     "@effect/platform": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@libsql/client": "catalog:",
     "@pierre/diffs": "catalog:",
     "@pierre/trees": "catalog:",
     "@trpc/server": "catalog:",

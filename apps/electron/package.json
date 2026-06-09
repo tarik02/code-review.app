@@ -27,13 +27,9 @@
     "@code-review-app/frontend": "workspace:*",
     "@code-review-app/shared": "workspace:*",
     "@hadeeb/trpc-worker": "catalog:",
-    "@libsql/client": "catalog:",
-    "@neon-rs/load": "catalog:",
     "@trpc/server": "catalog:",
-    "detect-libc": "catalog:",
     "effect": "catalog:",
     "electron-updater": "^6.8.3",
-    "libsql": "catalog:",
     "source-map-support": "^0.5.21"
   },
   "devDependencies": {
@@ -51,17 +47,6 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:"
-  },
-  "optionalDependencies": {
-    "@libsql/darwin-arm64": "catalog:",
-    "@libsql/darwin-x64": "catalog:",
-    "@libsql/linux-arm-gnueabihf": "catalog:",
-    "@libsql/linux-arm-musleabihf": "catalog:",
-    "@libsql/linux-arm64-gnu": "catalog:",
-    "@libsql/linux-arm64-musl": "catalog:",
-    "@libsql/linux-x64-gnu": "catalog:",
-    "@libsql/linux-x64-musl": "catalog:",
-    "@libsql/win32-x64-msvc": "catalog:"
   },
   "productName": "code-review.app"
 }
