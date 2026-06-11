@@ -740,8 +740,10 @@ function resolveDiffLinePosition(
   for (const hunk of fileDiff.hunks) {
     for (const content of hunk.hunkContent) {
       if (content.type === 'context') {
-        const additionStartLine = content.additionLineIndex + 1;
-        const deletionStartLine = content.deletionLineIndex + 1;
+        const additionStartLine =
+          hunk.additionStart + content.additionLineIndex - hunk.additionLineIndex;
+        const deletionStartLine =
+          hunk.deletionStart + content.deletionLineIndex - hunk.deletionLineIndex;
         const additionEndLine = additionStartLine + content.lines - 1;
         const deletionEndLine = deletionStartLine + content.lines - 1;
 
@@ -764,8 +766,10 @@ function resolveDiffLinePosition(
         continue;
       }
 
-      const additionStartLine = content.additionLineIndex + 1;
-      const deletionStartLine = content.deletionLineIndex + 1;
+      const additionStartLine =
+        hunk.additionStart + content.additionLineIndex - hunk.additionLineIndex;
+      const deletionStartLine =
+        hunk.deletionStart + content.deletionLineIndex - hunk.deletionLineIndex;
       const additionEndLine = additionStartLine + content.additions - 1;
       const deletionEndLine = deletionStartLine + content.deletions - 1;
 
