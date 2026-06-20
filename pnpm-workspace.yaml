@@ -8,7 +8,6 @@ onlyBuiltDependencies:
   - electron
   - electron-winstaller
   - esbuild
-  - libsql
   - msgpackr-extract
 catalog:
   '@changesets/cli': ^2.31.0
@@ -27,7 +26,6 @@ catalog:
   '@lexical/rich-text': 0.35.0
   '@mdxeditor/editor': ^3.55.0
   '@mdxeditor/gurx': 1.2.4
-  '@neon-rs/load': ^0.0.4
   '@pierre/diffs': ^1.1.17
   '@pierre/theme': ^0.0.29
   '@pierre/trees': 1.0.0-beta.3
@@ -50,23 +48,12 @@ catalog:
   '@types/ws': ^8.18.1
   '@vitejs/plugin-react': ^6.0.1
   babel-plugin-react-compiler: ^1.0.0
-  '@libsql/client': 0.17.3
-  '@libsql/darwin-arm64': ^0.5.29
-  '@libsql/darwin-x64': ^0.5.29
-  '@libsql/linux-arm-gnueabihf': ^0.5.29
-  '@libsql/linux-arm-musleabihf': ^0.5.29
-  '@libsql/linux-arm64-gnu': ^0.5.29
-  '@libsql/linux-arm64-musl': ^0.5.29
-  '@libsql/linux-x64-gnu': ^0.5.29
-  '@libsql/linux-x64-musl': ^0.5.29
-  '@libsql/win32-x64-msvc': ^0.5.29
   class-variance-authority: ^0.7.1
   cm6-theme-basic-light: 0.2.0
   codemirror: 6.0.2
   dotenv-cli: ^11.0.0
-  drizzle-kit: 0.31.10
-  drizzle-orm: 0.45.2
-  detect-libc: 2.0.2
+  drizzle-kit: 1.0.0-beta.22
+  drizzle-orm: 1.0.0-beta.22
   effect: ^3.21.2
   electron: ^41.3.0
   electron-builder: ^26.8.1
@@ -89,7 +76,6 @@ catalog:
   typescript: ~5.8.3
   vite: ^8.0.10
   vite-plus: ^0.1.20
-  libsql: ^0.5.29
   yaml: ^2.8.3
   zod: ^4.3.6
   zustand: ^5.0.12

@@ -1,17 +1,16 @@
-import { createClient, type Client } from '@libsql/client/sqlite3';
-import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
-import { migrate } from 'drizzle-orm/libsql/migrator';
+import { drizzle, type NodeSQLiteDatabase } from 'drizzle-orm/node-sqlite';
+import { migrate } from 'drizzle-orm/node-sqlite/migrator';
 import { Cause, Effect, Layer } from 'effect';
-import { pathToFileURL } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { BackendConfig, type BackendRuntimeConfig } from '../config.ts';
 import { CacheError } from '../errors.ts';
 import * as schema from './schema.ts';
 
-type Database = LibSQLDatabase<typeof schema>;
-type DatabaseTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type Database = NodeSQLiteDatabase<typeof schema>;
+type DatabaseTransaction = Database;
 
 type DatabaseHandle = {
-  client: Client;
+  client: DatabaseSync;
   db: Database;
 };
 
@@ -32,15 +31,36 @@ function toCacheError(cause: unknown) {
   return new CacheError(error.message, { cause: error });
 }
 
-async function initializeDatabase(config: BackendRuntimeConfig): Promise<DatabaseHandle> {
-  const client = createClient({ url: pathToFileURL(config.databasePath).href });
-  const db = drizzle(client, { schema });
+async function runTransaction<A>(
+  client: DatabaseSync,
+  db: Database,
+  operation: (database: DatabaseTransaction) => Promise<A>,
+): Promise<A> {
+  client.exec('BEGIN IMMEDIATE');
 
   try {
-    await client.execute('PRAGMA journal_mode = WAL');
-    await client.execute('PRAGMA synchronous = NORMAL');
-    await client.execute('PRAGMA busy_timeout = 5000');
-    await migrate(db, {
+    const result = await operation(db);
+    client.exec('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      client.exec('ROLLBACK');
+    } catch {
+      // Ignore rollback failures while surfacing the original error.
+    }
+
+    throw error;
+  }
+}
+
+function initializeDatabase(config: BackendRuntimeConfig): DatabaseHandle {
+  const client = new DatabaseSync(config.databasePath, { timeout: 5000 });
+  const db = drizzle({ client, schema });
+
+  try {
+    client.exec('PRAGMA journal_mode = WAL');
+    client.exec('PRAGMA synchronous = NORMAL');
+    migrate(db, {
       migrationsFolder: config.migrationsPath,
     });
 
@@ -54,7 +74,7 @@ async function initializeDatabase(config: BackendRuntimeConfig): Promise<Databas
 const makeDatabaseService = Effect.gen(function* () {
   const config = yield* BackendConfig;
   const handle = yield* Effect.acquireRelease(
-    Effect.tryPromise({
+    Effect.try({
       try: () => initializeDatabase(config),
       catch: toCacheError,
     }),
@@ -83,7 +103,7 @@ const makeDatabaseService = Effect.gen(function* () {
       }),
     transaction: <A>(operation: (database: DatabaseTransaction) => Promise<A>) =>
       Effect.tryPromise({
-        try: () => runQueued(() => handle.db.transaction(operation)),
+        try: () => runQueued(() => runTransaction(handle.client, handle.db, operation)),
         catch: toCacheError,
       }),
   } satisfies DatabaseServiceShape;
