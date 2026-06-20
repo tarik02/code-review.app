@@ -76,6 +76,8 @@ const makeAuthTokenStore = Effect.gen(function* () {
     if (!row) return null;
 
     const accessToken = yield* encryption.decryptString(row.token.accessToken);
+    if (!accessToken) return null;
+
     const refreshToken = row.token.refreshToken
       ? yield* encryption.decryptString(row.token.refreshToken)
       : null;
