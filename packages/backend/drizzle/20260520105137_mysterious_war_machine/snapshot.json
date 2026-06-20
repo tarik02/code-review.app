@@ -1,9 +1,7 @@
 {
   "dialect": "sqlite",
   "id": "1cbb9336-a2ef-485c-95ea-e77a3a5e0c13",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "version": "7",
   "ddl": [
     {
@@ -21,9 +19,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "key"
-      ],
+      "columns": ["key"],
       "nameExplicit": false,
       "name": "app_settings_pk",
       "table": "app_settings",
@@ -64,9 +60,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "auth_tokens_pk",
       "table": "auth_tokens",
@@ -231,11 +225,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "repo_row_id",
-        "pr_number",
-        "head_sha"
-      ],
+      "columns": ["repo_row_id", "pr_number", "head_sha"],
       "nameExplicit": false,
       "name": "pr_changed_files_cache_repo_row_id_pr_number_head_sha_pk",
       "table": "pr_changed_files_cache",
@@ -306,11 +296,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "repo_row_id",
-        "pr_number",
-        "head_sha"
-      ],
+      "columns": ["repo_row_id", "pr_number", "head_sha"],
       "nameExplicit": false,
       "name": "pr_patch_cache_repo_row_id_pr_number_head_sha_pk",
       "table": "pr_patch_cache",
@@ -331,9 +317,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "provider_profiles_pk",
       "table": "provider_profiles",
@@ -450,9 +434,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "pull_request_data_sources_pk",
       "table": "pull_request_data_sources",
@@ -901,9 +883,7 @@
       "entityType": "columns"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "repos_pk",
       "table": "repos",
