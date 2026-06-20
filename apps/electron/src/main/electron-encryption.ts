@@ -2,14 +2,30 @@ import { safeStorage } from 'electron';
 import { Cause, Effect, Layer } from 'effect';
 import { EncryptionService, type EncryptionServiceShape } from '@code-review-app/backend';
 
-function assertEncryptionAvailable() {
+const PLAINTEXT_PREFIX = 'plain:v1:';
+
+function canUseSafeStorage() {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('Secure credential storage is not available on this system.');
+    return false;
   }
 
   if (process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text') {
-    throw new Error('Secure credential storage is not available for this Linux session.');
+    return false;
   }
+
+  return true;
+}
+
+function plaintextEncode(value: string) {
+  return `${PLAINTEXT_PREFIX}${Buffer.from(value, 'utf8').toString('base64')}`;
+}
+
+function plaintextDecode(value: string) {
+  return Buffer.from(value.slice(PLAINTEXT_PREFIX.length), 'base64').toString('utf8');
+}
+
+function toEncryptionError(cause: unknown) {
+  return cause instanceof Error ? cause : new Cause.UnknownException(cause);
 }
 
 const makeElectronSafeStorageEncryption = Effect.sync(() => {
@@ -18,10 +34,13 @@ const makeElectronSafeStorageEncryption = Effect.sync(() => {
   )((value) =>
     Effect.try({
       try: () => {
-        assertEncryptionAvailable();
+        if (!canUseSafeStorage()) {
+          return plaintextEncode(value);
+        }
+
         return safeStorage.encryptString(value).toString('base64');
       },
-      catch: (cause) => new Cause.UnknownException(cause),
+      catch: toEncryptionError,
     }),
   );
 
@@ -30,10 +49,17 @@ const makeElectronSafeStorageEncryption = Effect.sync(() => {
   )((value) =>
     Effect.try({
       try: () => {
-        assertEncryptionAvailable();
+        if (value.startsWith(PLAINTEXT_PREFIX)) {
+          return plaintextDecode(value);
+        }
+
+        if (!canUseSafeStorage()) {
+          return '';
+        }
+
         return safeStorage.decryptString(Buffer.from(value, 'base64'));
       },
-      catch: (cause) => new Cause.UnknownException(cause),
+      catch: toEncryptionError,
     }),
   );
 

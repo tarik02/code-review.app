@@ -154,13 +154,22 @@ const wrapClientError =
 function githubAuthStatusFromError(
   error: GitHubClientError | GitHubProviderError,
 ): ProviderAuthStatus {
+  const storedCredentialUnavailable = (message: string) =>
+    message.includes('Stored credential requires secure storage') ||
+    message.includes('secure storage is unavailable');
+
   return Match.value(error).pipe(
     Match.tagsExhaustive({
       GitHubClientAccessTokenError: (clientError) =>
-        ({
-          status: 'unknown_error',
-          message: clientError.message,
-        }) satisfies ProviderAuthStatus,
+        storedCredentialUnavailable(clientError.message)
+          ? ({
+              status: 'not_authenticated',
+              message: `Sign in with GitHub again. ${clientError.message}`,
+            } satisfies ProviderAuthStatus)
+          : ({
+              status: 'unknown_error',
+              message: clientError.message,
+            } satisfies ProviderAuthStatus),
       GitHubClientGraphqlError: (clientError) =>
         ({
           status: 'unknown_error',
@@ -193,8 +202,8 @@ function githubAuthStatusFromError(
         }) satisfies ProviderAuthStatus,
       GitHubClientTokenStoreError: (clientError) =>
         ({
-          status: 'unknown_error',
-          message: clientError.message,
+          status: 'not_authenticated',
+          message: `Sign in with GitHub again. ${clientError.message}`,
         }) satisfies ProviderAuthStatus,
       GitHubClientTransportError: (clientError) =>
         ({

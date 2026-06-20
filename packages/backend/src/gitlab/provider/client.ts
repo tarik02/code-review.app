@@ -646,13 +646,22 @@ const wrapClientError =
 function gitlabAuthStatusFromError(
   error: GitLabClientError | GitLabProviderError,
 ): ProviderAuthStatus {
+  const storedCredentialUnavailable = (message: string) =>
+    message.includes('Stored credential requires secure storage') ||
+    message.includes('secure storage is unavailable');
+
   return Match.value(error).pipe(
     Match.tagsExhaustive({
       GitLabClientAccessTokenError: (clientError) =>
-        ({
-          status: 'unknown_error',
-          message: clientError.message,
-        }) satisfies ProviderAuthStatus,
+        storedCredentialUnavailable(clientError.message)
+          ? ({
+              status: 'not_authenticated',
+              message: `Sign in with GitLab again. ${clientError.message}`,
+            } satisfies ProviderAuthStatus)
+          : ({
+              status: 'unknown_error',
+              message: clientError.message,
+            } satisfies ProviderAuthStatus),
       GitLabClientGraphqlError: (clientError) =>
         ({
           status: 'unknown_error',
@@ -685,8 +694,8 @@ function gitlabAuthStatusFromError(
         }) satisfies ProviderAuthStatus,
       GitLabClientTokenStoreError: (clientError) =>
         ({
-          status: 'unknown_error',
-          message: clientError.message,
+          status: 'not_authenticated',
+          message: `Sign in with GitLab again. ${clientError.message}`,
         }) satisfies ProviderAuthStatus,
       GitLabClientTransportError: (clientError) =>
         ({

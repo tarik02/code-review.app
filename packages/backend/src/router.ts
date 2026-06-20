@@ -76,6 +76,7 @@ type BackendRouterPlatform = {
   subscribeToFullScreenStatus(listener: (value: boolean) => void): () => void;
   setNativeTheme(preference: ThemePreference): void;
   toggleMaximize(): void;
+  openExternalUrl(url: string): Promise<void>;
   writeClipboardText(value: string): void;
   checkForUpdate(): Promise<AvailableUpdate | null>;
   installUpdate(): Promise<void>;
@@ -1154,6 +1155,9 @@ function createAppRouter({ runtime, platform }: CreateAppRouterOptions) {
         }),
       ),
       toggleMaximize: t.procedure.mutation(() => platform.toggleMaximize()),
+      openExternalUrl: t.procedure.input(z.string().url()).mutation(({ input }) => {
+        return platform.openExternalUrl(input);
+      }),
       writeClipboardText: t.procedure.input(z.string()).mutation(({ input }) => {
         platform.writeClipboardText(input);
       }),

@@ -33,6 +33,19 @@ type AuthSessionValue = {
 
 const AuthSessionContext = createContext<AuthSessionValue | null>(null);
 
+function readableAuthQueryErrorMessage(error: Error | null) {
+  if (!error || error.message === 'An unknown error occurred') {
+    return null;
+  }
+
+  return error.message;
+}
+
+function readableCaughtAuthErrorMessage(error: unknown, fallback: string) {
+  const message = getCaughtErrorMessage(error);
+  return message === 'An unknown error occurred' ? fallback : message;
+}
+
 function AuthSessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -75,9 +88,11 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
   const providerStatusMessage =
     authMessage ??
     gateStatus.message ??
-    (providerAccountsQuery.error?.message || providerStatusesQuery.error?.message || null);
+    readableAuthQueryErrorMessage(providerAccountsQuery.error) ??
+    readableAuthQueryErrorMessage(providerStatusesQuery.error);
 
   const checkAgain = useCallback(() => {
+    setAuthMessage(null);
     void queryClient.invalidateQueries({
       queryKey: forgeKeys.providerAccounts(),
     });
@@ -136,7 +151,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
             intervalMs: result.intervalMs,
           });
           setAuthMessage(`Enter code ${result.userCode} in GitHub to finish signing in.`);
-          window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+          await trpc.window.openExternalUrl.mutate(result.authorizationUrl);
           return;
         }
 
@@ -147,11 +162,14 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
           startedAt: Date.now(),
         };
         setPendingOAuthStartedAt(pendingOAuthRef.current.startedAt);
-        window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+        await trpc.window.openExternalUrl.mutate(result.authorizationUrl);
       } catch (error) {
         pendingOAuthRef.current = null;
         setPendingOAuthStartedAt(null);
-        setAuthMessage(getCaughtErrorMessage(error));
+        const providerName = provider === 'github' ? 'GitHub' : 'GitLab';
+        setAuthMessage(
+          readableCaughtAuthErrorMessage(error, `Unable to start ${providerName} sign in.`),
+        );
       } finally {
         setIsSigningIn(false);
       }
@@ -192,7 +210,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         pendingOAuthRef.current = null;
         setPendingOAuthStartedAt(null);
-        setAuthMessage(getCaughtErrorMessage(error));
+        setAuthMessage(readableCaughtAuthErrorMessage(error, 'Unable to finish sign in.'));
       }
     },
     [refreshAuthQueries],
@@ -203,9 +221,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       onData(url) {
         void handleOAuthCallback(url);
       },
-      onError(error) {
-        setAuthMessage(error.message);
-      },
+      onError() {},
     });
 
     return () => subscription.unsubscribe();
@@ -228,7 +244,9 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
         await handleOAuthCallback(callback.url);
       } catch (error) {
         if (!isDisposed) {
-          setAuthMessage(getCaughtErrorMessage(error));
+          setAuthMessage(
+            readableCaughtAuthErrorMessage(error, 'Unable to check the latest sign in callback.'),
+          );
         }
       }
     }
@@ -283,7 +301,7 @@ function AuthSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (!isDisposed) {
           setPendingDeviceOAuth(null);
-          setAuthMessage(getCaughtErrorMessage(error));
+          setAuthMessage(readableCaughtAuthErrorMessage(error, 'Unable to finish device sign in.'));
         }
       }
     }
